@@ -153,4 +153,21 @@ jobs:
           ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
           ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            "$VPS_USER@$VPS_HOST" 'set -e; test "$(id -un)" = deploy; docker compose version >/dev/null; printf "NOVDA_VPS_SSH_CHECK_PASS\n"'
+            "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          test "$(id -un)" = deploy
+          docker compose version >/dev/null
+          for path in /srv/novda/repository/.git /srv/novda/secrets/compose.env /srv/novda/backups /srv/novda/import/comp_novda.sqlite; do
+            if test -e "$path"; then state=present; else state=missing; fi
+            printf 'NOVDA_PATH %s %s\n' "$path" "$state"
+          done
+          for service in novda-postgres novda-api novda-admin-bot novda-worker-bot; do
+            if docker inspect "$service" >/dev/null 2>&1; then
+              state="$(docker inspect --format '{{.State.Status}}' "$service")"
+            else
+              state=absent
+            fi
+            printf 'NOVDA_CONTAINER %s %s\n' "$service" "$state"
+          done
+          printf 'NOVDA_VPS_SSH_CHECK_PASS user=%s docker_compose=present\n' "$(id -un)"
+          REMOTE
