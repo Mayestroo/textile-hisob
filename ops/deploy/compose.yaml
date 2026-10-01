@@ -68,7 +68,7 @@ services:
     volumes:
       - type: bind
         source: /srv/novda/import/comp_novda.sqlite
-        target: /run/novda-import/hisob.sqlite
+        target: /tmp/comp_novda.sqlite
         read_only: true
         bind:
           create_host_path: false
@@ -85,7 +85,7 @@ services:
     security_opt:
       - no-new-privileges:true
     entrypoint: ["node", "ops/deploy/importSqliteBaseline.cjs"]
-    command: ["--source", "/run/novda-import/hisob.sqlite", "--company-id", "comp_novda"]
+    command: ["--source", "/tmp/comp_novda.sqlite", "--company-id", "comp_novda"]
 
   novda-api:
     build:
