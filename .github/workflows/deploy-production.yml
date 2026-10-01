@@ -173,6 +173,18 @@ jobs:
           ensure_directory /srv/novda/secrets root deploy 0750
           ensure_directory /srv/novda/backups root root 0700
           ensure_directory /srv/novda/import deploy deploy 0750
+          repo_key=/home/deploy/.ssh/novda-repository-read
+          if [[ ! -e "$repo_key" && ! -e "$repo_key.pub" ]]; then
+            runuser -u deploy -- ssh-keygen -q -t ed25519 -N '' -C novda-vps-repository-read -f "$repo_key"
+          elif [[ ! -s "$repo_key" || ! -s "$repo_key.pub" ]]; then
+            printf '%s\n' 'NOVDA_REPOSITORY_READ_KEY_INCOMPLETE' >&2
+            exit 1
+          fi
+          chown deploy:deploy "$repo_key" "$repo_key.pub"
+          chmod 0600 "$repo_key"
+          chmod 0644 "$repo_key.pub"
+          printf 'NOVDA_REPOSITORY_READ_KEY '
+          cat "$repo_key.pub"
           REMOTE
 
   verify-vps-access:
