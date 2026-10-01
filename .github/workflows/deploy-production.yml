@@ -173,6 +173,10 @@ jobs:
           ensure_directory /srv/novda/secrets root deploy 0750
           ensure_directory /srv/novda/backups root root 0700
           ensure_directory /srv/novda/import deploy deploy 0750
+
+          ssh_dir=/home/deploy/.ssh
+          [[ ! -L "$ssh_dir" ]] || { printf '%s\n' 'DEPLOY_SSH_DIRECTORY_SYMLINK_REFUSED' >&2; exit 1; }
+          if [[ ! -d "$ssh_dir" ]]; then install -d -o deploy -g deploy -m 0700 "$ssh_dir"; fi
           repo_key=/home/deploy/.ssh/novda-repository-read
           if [[ ! -e "$repo_key" && ! -e "$repo_key.pub" ]]; then
             runuser -u deploy -- ssh-keygen -q -t ed25519 -N '' -C novda-vps-repository-read -f "$repo_key"
@@ -183,6 +187,49 @@ jobs:
           chown deploy:deploy "$repo_key" "$repo_key.pub"
           chmod 0600 "$repo_key"
           chmod 0644 "$repo_key.pub"
+          ssh_config="$ssh_dir/config"
+          [[ ! -L "$ssh_config" ]] || { printf '%s\n' 'DEPLOY_SSH_CONFIG_SYMLINK_REFUSED' >&2; exit 1; }
+          if [[ ! -f "$ssh_config" ]]; then install -o deploy -g deploy -m 0600 /dev/null "$ssh_config"; fi
+          if ! grep -Fq 'Host github-novda-read' "$ssh_config"; then
+            cat >> "$ssh_config" <<'SSH_CONFIG'
+          Host github-novda-read
+            HostName github.com
+            HostKeyAlias github.com
+            User git
+            IdentityFile /home/deploy/.ssh/novda-repository-read
+            IdentitiesOnly yes
+          SSH_CONFIG
+          fi
+          chown deploy:deploy "$ssh_config"
+          chmod 0600 "$ssh_config"
+          known_hosts="$ssh_dir/known_hosts"
+          [[ ! -L "$known_hosts" ]] || { printf '%s\n' 'DEPLOY_KNOWN_HOSTS_SYMLINK_REFUSED' >&2; exit 1; }
+          if [[ ! -f "$known_hosts" ]]; then install -o deploy -g deploy -m 0600 /dev/null "$known_hosts"; fi
+          if ! ssh-keygen -F github.com -f "$known_hosts" >/dev/null; then
+            ssh-keyscan -H github.com >> "$known_hosts"
+          fi
+          chown deploy:deploy "$known_hosts"
+          chmod 0600 "$known_hosts"
+
+          repo_url='git@github-novda-read:Mayestroo/textile-hisob.git'
+          repo_dir=/srv/novda/repository
+          if runuser -u deploy -- env HOME=/home/deploy git ls-remote "$repo_url" HEAD >/dev/null 2>&1; then
+            if [[ ! -d "$repo_dir/.git" ]]; then
+              if [[ -n "$(ls -A "$repo_dir")" ]]; then
+                printf '%s\n' 'NOVDA_REPOSITORY_PATH_NOT_EMPTY' >&2
+                exit 1
+              fi
+              runuser -u deploy -- env HOME=/home/deploy git clone --branch main "$repo_url" "$repo_dir"
+            fi
+            if [[ ! -e /srv/novda/secrets/compose.env ]]; then
+              bash /srv/novda/repository/ops/deploy/create-secrets.sh
+              chown root:deploy /srv/novda/secrets/compose.env
+              chmod 0640 /srv/novda/secrets/compose.env
+            fi
+            printf 'NOVDA_REPOSITORY_AND_DATABASE_SECRETS_READY\n'
+          else
+            printf 'NOVDA_REPOSITORY_READ_ACCESS_PENDING %s\n' "$repo_url"
+          fi
           printf 'NOVDA_REPOSITORY_READ_KEY '
           cat "$repo_key.pub"
           REMOTE

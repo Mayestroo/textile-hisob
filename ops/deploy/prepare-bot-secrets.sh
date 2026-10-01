@@ -19,7 +19,7 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-install -d -o root -g root -m 0700 "$secret_root"
+install -d -o root -g deploy -m 0750 "$secret_root"
 install -d -o "$service_uid" -g "$service_gid" -m 0700 "$bot_secret_dir"
 
 ensure_empty_owner_slot() {
@@ -88,7 +88,8 @@ for name in admin-bot-token worker-bot-token admin-telegram-ids cloudflare-tunne
   [[ "$(stat -c '%u:%g' "$file")" == "$service_uid:$service_gid" ]] || { printf 'SECRET_OWNER_INVALID name=%s\n' "$name" >&2; exit 1; }
 done
 
-[[ "$(stat -c '%a' "$secret_root")" == 700 ]] || { printf '%s\n' 'SECRET_DIRECTORY_MODE_INVALID' >&2; exit 1; }
+[[ "$(stat -c '%a' "$secret_root")" == 750 ]] || { printf '%s\n' 'SECRET_DIRECTORY_MODE_INVALID' >&2; exit 1; }
+[[ "$(stat -c '%u:%g' "$secret_root")" == "0:$(getent group deploy | cut -d: -f3)" ]] || { printf '%s\n' 'SECRET_DIRECTORY_OWNER_INVALID' >&2; exit 1; }
 [[ "$(stat -c '%a' "$bot_secret_dir")" == 700 ]] || { printf '%s\n' 'BOT_SECRET_DIRECTORY_MODE_INVALID' >&2; exit 1; }
 
 if [[ "$unverified_token_blocked" -eq 0 ]]; then
@@ -98,6 +99,6 @@ if [[ "$unverified_token_blocked" -eq 0 ]]; then
 fi
 [[ -s "$bot_secret_dir/admin-bot-token" ]] || printf '%s\n' 'ADMIN_BOT_TOKEN=BLOCKED'
 [[ -s "$bot_secret_dir/worker-bot-token" ]] || printf '%s\n' 'WORKER_BOT_TOKEN=BLOCKED'
-printf 'NOVDA_BOT_SECRET_SLOTS_PREPARED directory_mode=700 file_mode=600 owner=%s:%s\n' "$service_uid" "$service_gid"
+printf 'NOVDA_BOT_SECRET_SLOTS_PREPARED secret_directory_mode=750 bot_directory_mode=700 file_mode=600 owner=%s:%s\n' "$service_uid" "$service_gid"
 if [[ "$signer_pin_match" -ne 1 ]]; then exit 2; fi
 if [[ "$unverified_token_blocked" -ne 0 ]]; then exit 3; fi
