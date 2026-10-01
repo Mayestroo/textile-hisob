@@ -50,9 +50,9 @@ describe('SQLite baseline import guardrails', () => {
   it('requires an absolute source and an exact hash before apply', () => {
     expect(() => parseArgs(['--source', 'relative.sqlite', '--company-id', 'comp_novda']))
       .toThrow('ABSOLUTE_SQLITE_SOURCE_REQUIRED');
-    expect(() => parseArgs(['--apply', '--source', 'C:/source.sqlite', '--company-id', 'comp_novda']))
+    expect(() => parseArgs(['--apply', '--source', path.resolve('source.sqlite'), '--company-id', 'comp_novda']))
       .toThrow('EXPECTED_SOURCE_SHA256_REQUIRED_FOR_APPLY');
-    expect(() => parseArgs(['--source', 'C:/source.sqlite', '--company-id', 'other_company']))
+    expect(() => parseArgs(['--source', path.resolve('source.sqlite'), '--company-id', 'other_company']))
       .not.toThrow();
   });
 
