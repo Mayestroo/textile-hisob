@@ -1,0 +1,45 @@
+name: Build Novda desktop candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-x64:
+    name: Build unsigned Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build local release candidate without publishing
+        run: npm run dist:rc
+      - name: Verify installer identity
+        shell: pwsh
+        run: |
+          $manifest = Get-Content package.json -Raw | ConvertFrom-Json
+          $artifactPath = "dist-build/Novda-hisob-kitob-Setup-$($manifest.version)-win10-11-x64.exe"
+          if (!(Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+            throw "Expected installer not found: $artifactPath"
+          }
+          $artifact = Get-Item -LiteralPath $artifactPath
+          $hash = Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256
+          $signature = Get-AuthenticodeSignature -LiteralPath $artifactPath
+          Write-Output "INSTALLER_FILE=$($artifact.Name)"
+          Write-Output "INSTALLER_SIZE_BYTES=$($artifact.Length)"
+          Write-Output "INSTALLER_SHA256=$($hash.Hash.ToLowerInvariant())"
+          Write-Output "INSTALLER_AUTHENTICODE=$($signature.Status)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: novda-desktop-windows-x64-candidate
+          path: dist-build/Novda-hisob-kitob-Setup-*-win10-11-x64.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
