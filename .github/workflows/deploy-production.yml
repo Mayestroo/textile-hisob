@@ -213,7 +213,7 @@ jobs:
 
           repo_url='git@github-novda-read:Mayestroo/textile-hisob.git'
           repo_dir=/srv/novda/repository
-          if runuser -u deploy -- env HOME=/home/deploy git ls-remote "$repo_url" HEAD >/dev/null 2>&1; then
+          if runuser -u deploy -- env HOME=/home/deploy git ls-remote "$repo_url" HEAD; then
             if [[ ! -d "$repo_dir/.git" ]]; then
               if [[ -n "$(ls -A "$repo_dir")" ]]; then
                 printf '%s\n' 'NOVDA_REPOSITORY_PATH_NOT_EMPTY' >&2
@@ -231,6 +231,8 @@ jobs:
             printf 'NOVDA_REPOSITORY_AND_DATABASE_SECRETS_READY\n'
           else
             printf 'NOVDA_REPOSITORY_READ_ACCESS_PENDING %s\n' "$repo_url"
+            runuser -u deploy -- env HOME=/home/deploy ssh-keygen -lf "$repo_key"
+            runuser -u deploy -- env HOME=/home/deploy ssh -vvT github-novda-read || true
           fi
           printf 'NOVDA_REPOSITORY_READ_KEY '
           cat "$repo_key.pub"
