@@ -61,11 +61,12 @@ async function getWorkerBindingByWorker(pool, companyId, workerId) {
   return result.rows[0] || null;
 }
 
-async function getWorkerForEnrollment(pool, companyId, workerId) {
+async function getWorkerForEnrollment(pool, companyId, workerId, options = {}) {
+  const pinRequired = options.pinRequired !== false;
   const normalized = normalizeWorkerParams({ companyId, workerId, telegramId: '0' });
   const result = await pool.query(
     `SELECT w.id AS worker_id, w.company_id, w.name AS worker_name, w.status, w.staj,
-            EXISTS (SELECT 1 FROM worker_credentials c WHERE c.company_id = w.company_id AND c.worker_id = w.id) AS pin_required
+            EXISTS (SELECT 1 FROM worker_credentials c WHERE c.company_id = w.company_id AND c.worker_id = w.id) AS pin_configured
      FROM workers w
      JOIN activation_companies company ON company.company_id = w.company_id AND company.is_active = TRUE
      WHERE w.company_id = $1 AND w.id = $2`,
@@ -73,7 +74,11 @@ async function getWorkerForEnrollment(pool, companyId, workerId) {
   );
   const worker = result.rows[0];
   if (!worker || worker.status !== 'ACTIVE') throw workerError('WORKER_NOT_FOUND', 404);
-  return worker;
+  return {
+    ...worker,
+    pin_required: pinRequired,
+    pin_configured: worker.pin_configured === true
+  };
 }
 
 function hashWorkerPin(pin, salt = crypto.randomBytes(16)) {
@@ -92,7 +97,8 @@ function verifyWorkerPin(pin, salt, expectedHash) {
   }
 }
 
-async function claimWorkerBinding(pool, input) {
+async function claimWorkerBinding(pool, input, options = {}) {
+  const pinRequired = options.pinRequired !== false;
   const params = normalizeWorkerParams(input);
   const username = String(input?.username || '').slice(0, 64);
   const result = await withTransaction(pool, async (client) => {
@@ -121,10 +127,10 @@ async function claimWorkerBinding(pool, input) {
     );
     const worker = workerResult.rows[0];
     if (!worker || worker.status !== 'ACTIVE') return { error: workerError('WORKER_NOT_FOUND', 404) };
-    if (!worker.pin_salt || !worker.pin_hash) {
+    if (pinRequired && (!worker.pin_salt || !worker.pin_hash)) {
       return { error: workerError('WORKER_ENROLLMENT_NOT_CONFIGURED', 409) };
     }
-    if (!verifyWorkerPin(input?.pin, worker.pin_salt, worker.pin_hash)) {
+    if (pinRequired && !verifyWorkerPin(input?.pin, worker.pin_salt, worker.pin_hash)) {
       const attempts = await client.query(
         `SELECT failed_count, window_started_at FROM worker_binding_limits
          WHERE telegram_id = $1 AND company_id = $2 FOR UPDATE`,

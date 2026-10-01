@@ -51,6 +51,7 @@ function registerWorkerRoutes(app, options = {}) {
   const env = options.env || process.env;
   const workerApiToken = options.workerApiToken ?? readSecret(env, 'NOVDA_WORKER_API_TOKEN');
   const workerHmacSecret = options.workerAuthHmacSecret ?? readSecret(env, 'WORKER_AUTH_HMAC_SECRET');
+  const workerPinRequired = String(env.NOVDA_WORKER_PIN_REQUIRED ?? 'true').toLowerCase() !== 'false';
   const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', 'worker-bot', 'webapp', 'index.html');
 
   app.get('/worker-app', async (_request, reply) => {
@@ -85,14 +86,16 @@ function registerWorkerRoutes(app, options = {}) {
 
     workerApi.get('/api/worker/enrollment', async (request, reply) => {
       try {
-        const worker = await workerService.getWorkerForEnrollment(pool, request.query.companyId, request.query.workerId);
+        const worker = await workerService.getWorkerForEnrollment(
+          pool, request.query.companyId, request.query.workerId, { pinRequired: workerPinRequired }
+        );
         return reply.send({ success: true, worker });
       } catch (error) { return sendWorkerError(reply, error); }
     });
 
     workerApi.post('/api/worker/bindings', async (request, reply) => {
       try {
-        const binding = await workerService.claimWorkerBinding(pool, request.body);
+        const binding = await workerService.claimWorkerBinding(pool, request.body, { pinRequired: workerPinRequired });
         return reply.code(201).send({ success: true, binding });
       } catch (error) { return sendWorkerError(reply, error); }
     });

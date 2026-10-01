@@ -33,7 +33,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 module.get_worker_id_binding = lambda _company_id, _worker_id: None
 module.get_worker_enrollment = lambda _company_id, _worker_id: {
-    'worker_id': 27, 'worker_name': 'Worker 27', 'pin_required': False
+    'worker_id': 27, 'worker_name': 'Worker 27', 'pin_required': True, 'pin_configured': False
 }
 messages = []
 module.send_message = lambda _chat_id, text, *_args: messages.append(text)
