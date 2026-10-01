@@ -175,6 +175,12 @@ jobs:
           ensure_directory /srv/novda/secrets root deploy 0750
           ensure_directory /srv/novda/backups root root 0700
           ensure_directory /srv/novda/import deploy deploy 0750
+          sqlite_source=/srv/novda/import/comp_novda.sqlite
+          if [[ -e "$sqlite_source" || -L "$sqlite_source" ]]; then
+            [[ -f "$sqlite_source" && ! -L "$sqlite_source" ]] || { printf '%s\n' 'NOVDA_SQLITE_SOURCE_INVALID' >&2; exit 1; }
+            chown 1000:1000 "$sqlite_source"
+            chmod 0400 "$sqlite_source"
+          fi
 
           bot_secret_dir=/srv/novda/secrets/bots
           signer_file="$bot_secret_dir/novda-license-ed25519-private-key"
