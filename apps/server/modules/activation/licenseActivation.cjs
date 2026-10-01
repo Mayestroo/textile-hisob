@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const { NOVDA_LICENSE_ED25519_PUBLIC_KEY } = require('../../../../packages/contracts/keys/licensePublicKey.cjs');
 
-const PINNED_PUBLIC_KEY_FINGERPRINT = '8b563c50537fc5b44852626f8da69bb69c1ce4a72d3dec3ae0af20a557bf314c';
+const PINNED_PUBLIC_KEY_FINGERPRINT = 'ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68';
 const ACTIVATION_FIELDS = Object.freeze([
   'activationId',
   'companyId',

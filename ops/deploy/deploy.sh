@@ -24,6 +24,9 @@ git submodule update --init --recursive --force
 [[ -f "$compose_file" ]] || die "Compose file missing: $checkout/$compose_file"
 
 compose=(docker compose --project-name novda-prod --env-file "$env_file" -f "$compose_file")
+if grep -Fxq 'NOVDA_ENABLE_PUBLIC_TLS=1' "$env_file"; then
+  compose+=(--profile public-tls)
+fi
 "${compose[@]}" config --quiet
 
 # Build the exact checked-out revision before applying its replay-safe migrations.

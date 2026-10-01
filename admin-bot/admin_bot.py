@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from license_payload import canonical_activation_payload
 
 
-PINNED_PUBLIC_KEY_FINGERPRINT = "8b563c50537fc5b44852626f8da69bb69c1ce4a72d3dec3ae0af20a557bf314c"
+PINNED_PUBLIC_KEY_FINGERPRINT = "ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68"
 ADMIN_WEBAPP_CANONICAL_URL = "https://sync.novdatextile.uz/admin-app"
 ACTIVATION_ROLES = {"admin", "type", "print"}
 BOT_TOKEN = ""

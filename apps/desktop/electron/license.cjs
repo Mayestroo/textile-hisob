@@ -6,7 +6,14 @@ const https = require('https');
 const { execSync } = require('child_process');
 const { DEFAULT__API_BASE_URL, resolveApiBaseUrl } = require('./apiConfig.cjs');
 const { authorizationUnavailable } = require('./licenseBoundary.cjs');
-const { NOVDA_LICENSE_ED25519_PUBLIC_KEY } = require('../../../packages/contracts/keys/licensePublicKey.cjs');
+const {
+  NOVDA_LICENSE_ED25519_PUBLIC_KEY,
+  NOVDA_LEGACY_LICENSE_ED25519_PUBLIC_KEY
+} = require('../../../packages/contracts/keys/licensePublicKey.cjs');
+const DEFAULT_LICENSE_VERIFICATION_KEYS = Object.freeze([
+  NOVDA_LICENSE_ED25519_PUBLIC_KEY,
+  NOVDA_LEGACY_LICENSE_ED25519_PUBLIC_KEY
+]);
 const {
   storeDeviceCredential,
   readDeviceCredential,
@@ -85,7 +92,7 @@ function validateActivationPayload(payload, machineId) {
   return null;
 }
 
-function verifyActivationRecord(machineId, record, publicKey = NOVDA_LICENSE_ED25519_PUBLIC_KEY) {
+function verifyActivationRecord(machineId, record, publicKey) {
   const activation = record?.activation || record;
   const payload = activation?.payload;
   const signature = activation?.signature;
@@ -100,19 +107,22 @@ function verifyActivationRecord(machineId, record, publicKey = NOVDA_LICENSE_ED2
   } catch {
     return { valid: false, reason: 'Litsenziya imzosi noto\'g\'ri' };
   }
-  try {
-    const valid = crypto.verify(null, Buffer.from(canonicalActivationPayload(payload), 'utf8'), publicKey, signatureBytes);
-    return valid ? { valid: true, payload, signature } : { valid: false, reason: 'Litsenziya imzosi tasdiqlanmadi' };
-  } catch {
-    return { valid: false, reason: 'Litsenziya imzosi noto\'g\'ri' };
+  const verificationKeys = publicKey === undefined ? DEFAULT_LICENSE_VERIFICATION_KEYS : [publicKey];
+  for (const candidateKey of verificationKeys) {
+    try {
+      if (crypto.verify(null, Buffer.from(canonicalActivationPayload(payload), 'utf8'), candidateKey, signatureBytes)) {
+        return { valid: true, payload, signature };
+      }
+    } catch {}
   }
+  return { valid: false, reason: 'Litsenziya imzosi tasdiqlanmadi' };
 }
 
 function getLicenseFilePath(userDataDir) {
   return path.join(userDataDir, 'license.lic');
 }
 
-function persistVerifiedActivation(userDataDir, machineId, record, publicKey = NOVDA_LICENSE_ED25519_PUBLIC_KEY) {
+function persistVerifiedActivation(userDataDir, machineId, record, publicKey) {
   const verified = verifyActivationRecord(machineId, record, publicKey);
   if (!verified.valid) return { success: false, error: verified.reason };
   if (verified.payload.status !== 'active') return { success: false, error: 'Litsenziya faol emas yoki bekor qilingan' };
@@ -138,7 +148,7 @@ function statusFromVerified(verified, machineId) {
   return { isActivated: true, isTrial: false, isBlocked: false, machineId, role: payload.role, companyId: payload.companyId, companyName: payload.companyName, isCompanyAssigned: true, requireTicketValidation: payload.requireTicketValidation, expiry: payload.expiresAt || 'LIFETIME', isLifetime: payload.expiresAt === null, activatedAt: payload.issuedAt, activationId: payload.activationId, message: 'Imzolangan litsenziya faol' };
 }
 
-function checkLicenseStatus(userDataDir, publicKey = NOVDA_LICENSE_ED25519_PUBLIC_KEY) {
+function checkLicenseStatus(userDataDir, publicKey) {
   const machineId = getHardwareId();
   try {
     const data = JSON.parse(fs.readFileSync(getLicenseFilePath(userDataDir), 'utf8'));
@@ -304,7 +314,7 @@ function requestJson(url, options = {}) {
 
 async function checkRemoteActivation(userDataDir, options = {}) {
   const machineId = getHardwareId();
-  const localStatus = checkLicenseStatus(userDataDir, options.publicKey || NOVDA_LICENSE_ED25519_PUBLIC_KEY);
+  const localStatus = checkLicenseStatus(userDataDir, options.publicKey);
   try {
     const baseUrl = resolveApiBaseUrl({
       baseUrl: options.baseUrl || process.env.NOVDA_SYNC_SERVER_URL || DEFAULT_ACTIVATION_API_URL,
@@ -359,10 +369,9 @@ async function checkRemoteActivation(userDataDir, options = {}) {
     if (!request || request.requestId !== state.requestId) return localStatus.isActivated ? localStatus : pendingStatus(machineId, 'Aktivatsiya holatini aniqlab bo‘lmadi');
 
     if (request.status === 'APPROVED') {
-      const persisted = persistVerifiedActivation(userDataDir, machineId, request.activation,
-        options.publicKey || NOVDA_LICENSE_ED25519_PUBLIC_KEY);
+      const persisted = persistVerifiedActivation(userDataDir, machineId, request.activation, options.publicKey);
       if (!persisted.success) return localStatus.isActivated ? localStatus : pendingStatus(machineId, persisted.error);
-      const activationStatus = checkLicenseStatus(userDataDir, options.publicKey || NOVDA_LICENSE_ED25519_PUBLIC_KEY);
+      const activationStatus = checkLicenseStatus(userDataDir, options.publicKey);
       try {
         const saveCredential = options.storeDeviceCredential || storeDeviceCredential;
         saveCredential(activationStatus.companyId, requestToken, { deviceId: machineId });

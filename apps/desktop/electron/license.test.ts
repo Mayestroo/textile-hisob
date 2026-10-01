@@ -31,13 +31,18 @@ describe('Ed25519 license verification', () => {
   afterEach(() => fs.rmSync(userData, { recursive: true, force: true }));
 
   it('uses the pinned public-key fingerprint', () => {
-    const publicKey = require('../../../packages/contracts/keys/licensePublicKey.cjs').NOVDA_LICENSE_ED25519_PUBLIC_KEY;
+    const keyring = require('../../../packages/contracts/keys/licensePublicKey.cjs');
+    const publicKey = keyring.NOVDA_LICENSE_ED25519_PUBLIC_KEY;
     const der = crypto.createPublicKey(publicKey).export({ type: 'spki', format: 'der' });
     expect(`sha256:${crypto.createHash('sha256').update(der).digest('hex')}`).toBe(
-      'sha256:8b563c50537fc5b44852626f8da69bb69c1ce4a72d3dec3ae0af20a557bf314c'
+      'sha256:ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68'
     );
+    const legacyDer = crypto.createPublicKey(keyring.NOVDA_LEGACY_LICENSE_ED25519_PUBLIC_KEY)
+      .export({ type: 'spki', format: 'der' });
+    expect(crypto.createHash('sha256').update(legacyDer).digest('hex'))
+      .toBe('8b563c50537fc5b44852626f8da69bb69c1ce4a72d3dec3ae0af20a557bf314c');
     const apiSigner = require('../../../apps/server/modules/activation/licenseActivation.cjs');
-    expect(apiSigner.publicKeyFingerprint()).toBe('8b563c50537fc5b44852626f8da69bb69c1ce4a72d3dec3ae0af20a557bf314c');
+    expect(apiSigner.publicKeyFingerprint()).toBe('ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68');
     expect(apiSigner.getPinnedPublicKey()).toBe(publicKey);
   });
 
