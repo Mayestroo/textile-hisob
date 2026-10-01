@@ -27,6 +27,7 @@ function getBootstrapFixture(companyId) {
     schemaVersion: 1,
     company: { companyId },
     models: [model], workers: [worker], periods: [period], parties: [party],
+    legacyPartyCollisionExceptions: [],
     workerAdjustments: [], tickets: [], productionAdjustments: [],
     batchSettings: { company: null, models: [] },
     periodArchives: []
@@ -37,6 +38,7 @@ function getBootstrapFixture(companyId) {
     cursor: '42',
     counts: {
       models: 1, workers: 1, periods: 1, parties: 1, workerAdjustments: 0,
+      legacyPartyCollisionExceptions: 0,
       tickets: 0, ticketEntries: 0, productionAdjustments: 0, periodArchives: 0
     }
   };

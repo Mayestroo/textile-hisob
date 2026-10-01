@@ -12,7 +12,7 @@ const PARTY_STATUSES = new Set(['ACTIVE', 'CLOSE_PENDING', 'CLOSED']);
 const TICKET_STATUSES = new Set(['CONFIRMED', 'PENDING_SYNC', 'CONFLICT', 'REJECTED', 'VOIDED']);
 const PRODUCTION_ADJUSTMENT_STATUSES = new Set(['APPROVED', 'PENDING_REVIEW', 'REVERSED']);
 const CANONICAL_TABLES = Object.freeze([
-  'models', 'workers', 'periods', 'parties', 'worker_adjustments', 'tickets',
+  'models', 'workers', 'periods', 'legacy_party_collision_exceptions', 'parties', 'worker_adjustments', 'tickets',
   'ticket_entries', 'production_adjustments', 'company_batch_settings',
   'patta_batch_settings', 'period_archives'
 ]);
@@ -106,7 +106,8 @@ function validateBootstrapResponse(response, companyId) {
     }
 
     const arrayFields = [
-      'models', 'workers', 'periods', 'parties', 'workerAdjustments', 'tickets', 'productionAdjustments', 'periodArchives'
+      'models', 'workers', 'periods', 'legacyPartyCollisionExceptions', 'parties',
+      'workerAdjustments', 'tickets', 'productionAdjustments', 'periodArchives'
     ];
     for (const field of arrayFields) requireCondition(Array.isArray(snapshot[field]));
     requireCondition(isObject(snapshot.batchSettings));
@@ -193,6 +194,36 @@ function validateBootstrapResponse(response, companyId) {
       partyById.set(party.id, party);
     }
 
+    const collisionExceptionIds = new Set();
+    const collisionPartyIds = new Set();
+    const collisionExceptionsByGroup = new Map();
+    for (const exception of snapshot.legacyPartyCollisionExceptions) {
+      requireCondition(isObject(exception) && exception.companyId === companyId);
+      requireCondition(requireString(exception.exceptionId)
+        && requireString(exception.partyNumber)
+        && requireString(exception.partyId)
+        && requireString(exception.collisionGroupId)
+        && requireString(exception.approvedBy)
+        && requireString(exception.reason)
+        && exception.status === 'ACTIVE'
+        && requireTimestamp(exception.approvedAt)
+        && requireOptionalTimestamp(exception.createdAt));
+      const party = partyById.get(exception.partyId);
+      requireCondition(party && party.partyNumber === exception.partyNumber && party.status !== 'CLOSED');
+      requireCondition(!collisionExceptionIds.has(exception.exceptionId));
+      requireCondition(!collisionPartyIds.has(exception.partyId));
+      collisionExceptionIds.add(exception.exceptionId);
+      collisionPartyIds.add(exception.partyId);
+      const groupKey = `${exception.partyNumber}:${exception.collisionGroupId}`;
+      const groupPartyIds = collisionExceptionsByGroup.get(groupKey) || new Set();
+      requireCondition(!groupPartyIds.has(exception.partyId));
+      groupPartyIds.add(exception.partyId);
+      collisionExceptionsByGroup.set(groupKey, groupPartyIds);
+    }
+    for (const groupPartyIds of collisionExceptionsByGroup.values()) {
+      requireCondition(groupPartyIds.size === 2);
+    }
+
     for (const adjustment of snapshot.workerAdjustments) {
       requireCondition(requireString(adjustment.id) && workerIds.has(Number(adjustment.workerId)));
       requireCondition(['AVANS', 'JARIMA'].includes(adjustment.type) && requireNumber(adjustment.amount));
@@ -268,6 +299,7 @@ function validateBootstrapResponse(response, companyId) {
       models: snapshot.models.length,
       workers: snapshot.workers.length,
       periods: snapshot.periods.length,
+      legacyPartyCollisionExceptions: snapshot.legacyPartyCollisionExceptions.length,
       parties: snapshot.parties.length,
       workerAdjustments: snapshot.workerAdjustments.length,
       tickets: snapshot.tickets.length,
@@ -349,6 +381,16 @@ function insertBootstrapRows(db, companyId, snapshot) {
       period.isClosed ? 1 : 0, period.closedAt || null, period.notes || null, period.archiveFilename || null,
       period.status, period.createdAt || new Date().toISOString(),
       period.updatedAt || period.createdAt || new Date().toISOString(), period.serverRevision);
+  }
+
+  const insertCollisionException = db.prepare(`INSERT INTO legacy_party_collision_exceptions (
+    exception_id, company_id, party_number, party_id, collision_group_id,
+    approved_by, approved_at, reason, status, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const exception of snapshot.legacyPartyCollisionExceptions) {
+    insertCollisionException.run(exception.exceptionId, companyId, exception.partyNumber, exception.partyId,
+      exception.collisionGroupId, exception.approvedBy, exception.approvedAt, exception.reason,
+      exception.status, exception.createdAt || new Date().toISOString());
   }
 
   const insertParty = db.prepare(`INSERT INTO parties (

@@ -88,6 +88,26 @@ async function readCompanySnapshot(client, companyId) {
     updatedAt: dateValue(row.updated_at)
   }));
 
+  const collisionExceptionResult = await client.query(`
+    SELECT exception_id, company_id, party_number, party_id, collision_group_id,
+      approved_by, approved_at, reason, status, created_at
+    FROM legacy_party_collision_exceptions
+    WHERE company_id = $1 AND status = 'ACTIVE'
+    ORDER BY party_number ASC, collision_group_id ASC, party_id ASC
+  `, [companyId]);
+  const legacyPartyCollisionExceptions = collisionExceptionResult.rows.map((row) => ({
+    exceptionId: row.exception_id,
+    companyId: row.company_id,
+    partyNumber: row.party_number,
+    partyId: row.party_id,
+    collisionGroupId: row.collision_group_id,
+    approvedBy: row.approved_by,
+    approvedAt: dateValue(row.approved_at),
+    reason: row.reason,
+    status: row.status,
+    createdAt: dateValue(row.created_at)
+  }));
+
   const partyResult = await client.query(`
     SELECT p.id, p.company_id, p.party_number, p.physical_party_number,
       COALESCE(a.canonical_model_id, p.model_id) AS model_id, p.model_name, p.color,
@@ -266,6 +286,7 @@ async function readCompanySnapshot(client, companyId) {
     models,
     workers,
     periods,
+    legacyPartyCollisionExceptions,
     parties,
     workerAdjustments,
     tickets,
@@ -277,6 +298,7 @@ async function readCompanySnapshot(client, companyId) {
     models: models.length,
     workers: workers.length,
     periods: periods.length,
+    legacyPartyCollisionExceptions: legacyPartyCollisionExceptions.length,
     parties: parties.length,
     workerAdjustments: workerAdjustments.length,
     tickets: tickets.length,
