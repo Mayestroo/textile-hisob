@@ -16,7 +16,8 @@ const EXPECTED_MIGRATIONS = Object.freeze({
   13: 'deploy_activation_policy_device_sync_migration.sql',
   14: 'deploy_free_mode_ticket_party_migration.sql',
   15: 'deploy_patta_work_quantity_migration.sql',
-  16: 'deploy_canonical_ids_global_patta_sequence.sql'
+  16: 'deploy_canonical_ids_global_patta_sequence.sql',
+  17: 'deploy_production_adjustment_provenance_migration.sql'
 });
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([

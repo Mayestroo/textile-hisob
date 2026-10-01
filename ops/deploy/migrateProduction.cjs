@@ -22,7 +22,8 @@ const MIGRATIONS = [
   'deploy_activation_policy_device_sync_migration.sql',
   'deploy_free_mode_ticket_party_migration.sql',
   'deploy_patta_work_quantity_migration.sql',
-  'deploy_canonical_ids_global_patta_sequence.sql'
+  'deploy_canonical_ids_global_patta_sequence.sql',
+  'deploy_production_adjustment_provenance_migration.sql'
 ];
 
 function requireDsn(env, name, requiredUsername) {

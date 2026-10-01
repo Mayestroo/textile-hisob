@@ -27,7 +27,8 @@ const exactMigrations = [
   'deploy_activation_policy_device_sync_migration.sql',
   'deploy_free_mode_ticket_party_migration.sql',
   'deploy_patta_work_quantity_migration.sql',
-  'deploy_canonical_ids_global_patta_sequence.sql'
+  'deploy_canonical_ids_global_patta_sequence.sql',
+  'deploy_production_adjustment_provenance_migration.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -329,7 +330,8 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       'deploy_activation_policy_device_sync_migration.sql',
       'deploy_free_mode_ticket_party_migration.sql',
       'deploy_patta_work_quantity_migration.sql',
-      'deploy_canonical_ids_global_patta_sequence.sql'
+      'deploy_canonical_ids_global_patta_sequence.sql',
+      'deploy_production_adjustment_provenance_migration.sql'
     ]) {
       await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
     }
@@ -346,7 +348,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
 
   it('verifies a fresh schema after applying all ordered deployment migrations', async () => {
     const freshReport = await verifyPostgresReleaseState(isolatedPool);
-    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
     expect(freshReport.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(freshReport.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(freshReport.baseline.scopePreserved).toBe(true);

@@ -1,4 +1,4 @@
-# Novda Hisob-Kitob — Production and Project Guide
+# Novda Hisob-Kitob â€” Production and Project Guide
 
 **Authoritative project document. Status captured 2026-10-01.**
 
@@ -26,9 +26,9 @@ and Docker build contexts within the main repository.
 - Never put secrets in source, reports, shell history, command-line arguments,
   logs, or browser storage. Only public verification keys may ship in the client.
 - Protected source files must remain byte-identical:
-  - `apps/desktop/renderer/store/helpers/syncMerger.ts` — SHA-256
+  - `apps/desktop/renderer/store/helpers/syncMerger.ts` â€” SHA-256
     `38c1b7457fc98ecc9ecbdf8643d97c201316568ba4ad8d3db59fad40f2e9e8ff`
-  - `apps/desktop/renderer/store/slices/createPattaBatchSlice.ts` — SHA-256
+  - `apps/desktop/renderer/store/slices/createPattaBatchSlice.ts` â€” SHA-256
     `b46d7b37b8284f6810ca84ba5cbb7f0549f1bfca43fc7d78a04618ace22a8d1d`
 
 ## 2. Current status
@@ -36,9 +36,9 @@ and Docker build contexts within the main repository.
 ### Repository and client
 
 - Canonical project package and lockfile version: **0.0.0**.
-- Git branch/HEAD at capture: `main`, `fc8b58b`, synchronized with `origin/main`.
+- Git branch/HEAD at capture: `main`, `981c63f`, synchronized with `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration
-  lineage is at migration 16. The supplied `comp_novda` SQLite candidate reports
+  lineage is at migration 17. The supplied `comp_novda` SQLite candidate reports
   schema version 15 and passes `PRAGMA integrity_check`.
 - Application identity remains `com.novda.hisob` / `Novda-hisob-kitob`, Electron
   44, Windows x64, per-user NSIS installation. Electron user data is under
@@ -64,6 +64,8 @@ Read-only local inspection on 2026-10-01 recorded:
   63 worker adjustments, and 22 production adjustments;
 - 2 active legacy Party #2 exceptions, 20 model ID aliases, and 52 party ID
   aliases;
+- 3 local ticket-form entries containing transient form defaults. These are
+  intentionally not part of the shared baseline import;
 - `local_outbox`: 231 `SYNCED` and 111 `DEAD_LETTER` records. The
   `DEAD_LETTER` records remain local and are excluded from the server baseline
   import; import the canonical business tables only.
@@ -250,7 +252,7 @@ make current source state appear applied.
 This continuation added or changed source for:
 
 - Strict bootstrap-response and persisted metadata validation.
-- Scoped Party #2 policy and PostgreSQL/SQLite migration 12.
+- Scoped Party #2 policy and PostgreSQL/SQLite migrations 12â€“17.
 - Electron window navigation restrictions and unverified-updater blocking.
 - Removal of the legacy release auto-publisher and unused dependency entries.
 - NSIS in-place upgrade recovery logging and a positive process-detection guard.
@@ -259,14 +261,15 @@ This continuation added or changed source for:
 - Worker WebApp display of the existing `staj` payroll deduction.
 - Canonical UUID model/party identities, company-wide patta ranges, per-patta
   quantity normalization, data-driven collision approvals, and removal of
-  closed/archived local history. PostgreSQL migration 16 must be applied before
+  closed/archived local history. PostgreSQL migrations 16â€“17 must be applied before
   clients using canonical IDs reconnect; execution on the VPS is not verified.
 
 The admin and worker bots are built from directories in the main repository;
 they are not Git submodules. The migration-16 production deploy-list correction
-is included in `fc8b58b`. Follow-up fixes for migration 16's optional
-SQLite-only quarantine tables and test-exclusion shell quoting are local and
-await isolated PostgreSQL verification.
+is included in `fc8b58b`. Current local work adds a guarded SQLite baseline
+importer, migration 17 for production-adjustment provenance, optional
+quarantine-table handling in migration 16, and corrected test exclusions. It
+needs isolated PostgreSQL CI verification before a production push.
 
 ## 8. Local verification commands
 

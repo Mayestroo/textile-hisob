@@ -199,7 +199,7 @@ async function readCompanySnapshot(client, companyId) {
 
   const productionResult = await client.query(`
     SELECT adjustment_id, company_id, model_id, worker_id, op_name, delta_qty, reason,
-      status, server_revision, created_at, created_by, original_adjustment_id
+      status, server_revision, created_at, created_by, original_adjustment_id, provenance
     FROM production_adjustments WHERE company_id = $1 ORDER BY created_at ASC, adjustment_id ASC
   `, [companyId]);
   const productionAdjustments = productionResult.rows.map((row) => ({
@@ -214,7 +214,8 @@ async function readCompanySnapshot(client, companyId) {
     serverRevision: numberValue(row.server_revision),
     createdAt: dateValue(row.created_at),
     createdBy: row.created_by,
-    originalAdjustmentId: row.original_adjustment_id
+    originalAdjustmentId: row.original_adjustment_id,
+    provenance: row.provenance
   }));
 
   const companySettingsResult = await client.query(`
