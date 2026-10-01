@@ -64,6 +64,13 @@ TO novda_app;
 
 GRANT SELECT ON TABLE schema_migrations TO novda_app;
 
+-- Bootstrap snapshots and canonical-ID resolution read these server-owned maps.
+GRANT SELECT ON TABLE
+  model_id_aliases,
+  party_id_aliases,
+  protected_party_patta_ranges
+TO novda_app;
+
 -- 5. Grant sequence usage for auto-incrementing change_log
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO novda_app;
 
