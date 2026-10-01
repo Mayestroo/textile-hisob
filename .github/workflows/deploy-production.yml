@@ -265,8 +265,17 @@ jobs:
             "root@$VPS_HOST" 'bash -s' < ops/deploy/prepare-bot-secrets.sh
           ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            "root@$VPS_HOST" 'bash -s' <<'STATUS'
+          "root@$VPS_HOST" 'bash -s' <<'STATUS'
           set -Eeuo pipefail
+          cloudflare_token=/srv/novda/secrets/bots/cloudflare-tunnel-token
+          compose_env=/srv/novda/secrets/compose.env
+          if [[ -s "$cloudflare_token" ]]; then
+            if ! grep -Fxq 'NOVDA_ENABLE_PUBLIC_TLS=1' "$compose_env"; then
+              printf '%s\n' 'NOVDA_ENABLE_PUBLIC_TLS=1' >> "$compose_env"
+            fi
+            chown root:deploy "$compose_env"
+            chmod 0640 "$compose_env"
+          fi
           for name in admin-bot-token worker-bot-token admin-telegram-ids cloudflare-tunnel-token novda-license-ed25519-private-key; do
             file="/srv/novda/secrets/bots/$name"
             if [[ -s "$file" ]]; then state=present; else state=empty; fi
