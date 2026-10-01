@@ -54,7 +54,7 @@ Novda database, run:
 docker compose --project-name novda-prod \
   --env-file /srv/novda/secrets/compose.env \
   -f ops/deploy/compose.yaml --profile import run --rm novda-import \
-  --source /run/novda-import/hisob.sqlite --company-id comp_novda \
+  --source /tmp/comp_novda.sqlite --company-id comp_novda \
   --apply --expected-sha256 EXPECTED_SOURCE_SHA256
 ```
 
