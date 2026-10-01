@@ -115,6 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
       - name: Create missing Novda paths only
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -128,6 +129,7 @@ jobs:
           : "${VPS_PORT:?Missing GitHub secret VPS_PORT}"
           : "${VPS_SSH_KEY:?Missing GitHub secret VPS_SSH_KEY}"
           : "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          expected_signer_fingerprint="$(node -e "const c=require('node:crypto');const {NOVDA_LICENSE_ED25519_PUBLIC_KEY}=require('./packages/contracts/keys/licensePublicKey.cjs');process.stdout.write(c.createHash('sha256').update(c.createPublicKey(NOVDA_LICENSE_ED25519_PUBLIC_KEY).export({type:'spki',format:'der'})).digest('hex'))")"
           install -d -m 700 "$HOME/.ssh"
           key_file="$HOME/.ssh/novda_vps_key"
           askpass_file="$RUNNER_TEMP/novda-ssh-askpass.sh"
@@ -151,7 +153,7 @@ jobs:
           ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
           ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            "root@$VPS_HOST" 'bash -s' <<'REMOTE'
+            "root@$VPS_HOST" "EXPECTED_SIGNER_FINGERPRINT=$expected_signer_fingerprint bash -s" <<'REMOTE'
           set -Eeuo pipefail
           [[ "$(id -un)" == root ]]
           id deploy >/dev/null
@@ -176,24 +178,22 @@ jobs:
 
           bot_secret_dir=/srv/novda/secrets/bots
           signer_file="$bot_secret_dir/novda-license-ed25519-private-key"
-          if [[ -e "$signer_file" ]]; then
-            if [[ -s "$signer_file" ]]; then
-              existing_fingerprint="$(openssl pkey -in "$signer_file" -pubout -outform DER 2>/dev/null | openssl dgst -sha256 -r | cut -d ' ' -f 1)"
-              printf 'NOVDA_SIGNER_ALREADY_PRESENT fingerprint=%s; preserving existing file\n' "$existing_fingerprint" >&2
-            else
-              printf 'NOVDA_SIGNER_PLACEHOLDER_ALREADY_PRESENT; preserving existing file\n' >&2
-            fi
-            exit 1
-          fi
+          [[ "$EXPECTED_SIGNER_FINGERPRINT" =~ ^[a-f0-9]{64}$ ]] || { printf '%s\n' 'NOVDA_EXPECTED_SIGNER_FINGERPRINT_INVALID' >&2; exit 1; }
           if [[ ! -d "$bot_secret_dir" ]]; then install -d -o 997 -g 988 -m 0700 "$bot_secret_dir"; fi
           [[ ! -L "$bot_secret_dir" ]] || { printf '%s\n' 'NOVDA_BOT_SECRET_DIRECTORY_SYMLINK_REFUSED' >&2; exit 1; }
-          umask 077
-          signer_temp="$signer_file.$$.tmp"
-          openssl genpkey -algorithm ED25519 -out "$signer_temp"
-          chown 997:988 "$signer_temp"
-          chmod 0600 "$signer_temp"
-          mv -- "$signer_temp" "$signer_file"
+          if [[ ! -e "$signer_file" ]]; then
+            umask 077
+            signer_temp="$signer_file.$$.tmp"
+            openssl genpkey -algorithm ED25519 -out "$signer_temp"
+            chown 997:988 "$signer_temp"
+            chmod 0600 "$signer_temp"
+            mv -- "$signer_temp" "$signer_file"
+          fi
+          [[ -s "$signer_file" && ! -L "$signer_file" ]] || { printf '%s\n' 'NOVDA_SIGNER_FILE_INVALID' >&2; exit 1; }
+          chown 997:988 "$signer_file"
+          chmod 0600 "$signer_file"
           signer_fingerprint="$(openssl pkey -in "$signer_file" -pubout -outform DER | openssl dgst -sha256 -r | cut -d ' ' -f 1)"
+          [[ "$signer_fingerprint" == "$EXPECTED_SIGNER_FINGERPRINT" ]] || { printf 'NOVDA_SIGNER_FINGERPRINT_MISMATCH expected=%s actual=%s\n' "$EXPECTED_SIGNER_FINGERPRINT" "$signer_fingerprint" >&2; exit 1; }
           printf 'NOVDA_NEW_SIGNER_FINGERPRINT=%s\n' "$signer_fingerprint"
           openssl pkey -in "$signer_file" -pubout
 

@@ -1,4 +1,4 @@
-# Novda Hisob-Kitob â€” Production and Project Guide
+# Novda Hisob-Kitob — Production and Project Guide
 
 **Authoritative project document. Status captured 2026-10-01.**
 
@@ -26,9 +26,9 @@ and Docker build contexts within the main repository.
 - Never put secrets in source, reports, shell history, command-line arguments,
   logs, or browser storage. Only public verification keys may ship in the client.
 - Protected source files must remain byte-identical:
-  - `apps/desktop/renderer/store/helpers/syncMerger.ts` â€” SHA-256
+  - `apps/desktop/renderer/store/helpers/syncMerger.ts` — SHA-256
     `38c1b7457fc98ecc9ecbdf8643d97c201316568ba4ad8d3db59fad40f2e9e8ff`
-  - `apps/desktop/renderer/store/slices/createPattaBatchSlice.ts` â€” SHA-256
+  - `apps/desktop/renderer/store/slices/createPattaBatchSlice.ts` — SHA-256
     `b46d7b37b8284f6810ca84ba5cbb7f0549f1bfca43fc7d78a04618ace22a8d1d`
 
 ## 2. Current status
@@ -36,7 +36,7 @@ and Docker build contexts within the main repository.
 ### Repository and client
 
 - Canonical project package and lockfile version: **0.0.0**.
-- Git branch/HEAD at capture: `main`, `981c63f`, synchronized with `origin/main`.
+- Git branch/HEAD at capture: `main`, `9b8bd07`, synchronized with `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration
   lineage is at migration 17. The supplied `comp_novda` SQLite candidate reports
   schema version 15 and passes `PRAGMA integrity_check`.
@@ -70,10 +70,20 @@ Read-only local inspection on 2026-10-01 recorded:
   `DEAD_LETTER` records remain local and are excluded from the server baseline
   import; import the canonical business tables only.
 
-The SQLite file was not modified. VPS emptiness is owner-reported but has not
-been independently verified: SSH authentication from this session was
-unsuccessful. No production deployment or database import has run. Confirm the
-target identity and backup before applying migrations or importing data.
+The SQLite file was not modified or transferred. A non-mutating GitHub Actions
+probe verified SSH as `deploy` and Docker Compose. The Novda-only VPS bootstrap
+created `/srv/novda` paths, cloned the repository, generated `compose.env`
+database credentials, and created a separate read-only GitHub repository key.
+The probe confirmed there are no Novda API, PostgreSQL, or bot containers and no
+staged SQLite import file. No service deployment or database import has run.
+
+An owner-approved license-signer rotation generated the new VPS private key at
+`/srv/novda/secrets/bots/novda-license-ed25519-private-key`; its public
+fingerprint is
+`ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68`. The
+source retains the previous public key for verifying existing licenses and pins
+new activations to the new signer. A desktop client update must be qualified
+and delivered before issuing licenses signed by the new key.
 
 ### Runtime classification
 
@@ -252,24 +262,29 @@ make current source state appear applied.
 This continuation added or changed source for:
 
 - Strict bootstrap-response and persisted metadata validation.
-- Scoped Party #2 policy and PostgreSQL/SQLite migrations 12â€“17.
+- Scoped Party #2 policy and PostgreSQL/SQLite migrations 12–17.
 - Electron window navigation restrictions and unverified-updater blocking.
 - Removal of the legacy release auto-publisher and unused dependency entries.
 - NSIS in-place upgrade recovery logging and a positive process-detection guard.
 - Admin form handling for a field that does not exist in its HTML form.
 - Worker binding fail-closed behavior when a PIN has not been provisioned.
 - Worker WebApp display of the existing `staj` payroll deduction.
+- Ed25519 activation signer rotation was approved because the previous private
+  key was unavailable. New private key material is stored only in the VPS secret
+  path. Updated public verification material retains the prior key for existing
+  licenses; do not issue new-key licenses until the refreshed desktop client is
+  built, qualified, and delivered.
 - Canonical UUID model/party identities, company-wide patta ranges, per-patta
   quantity normalization, data-driven collision approvals, and removal of
-  closed/archived local history. PostgreSQL migrations 16â€“17 must be applied before
+  closed/archived local history. PostgreSQL migrations 16–17 must be applied before
   clients using canonical IDs reconnect; execution on the VPS is not verified.
 
 The admin and worker bots are built from directories in the main repository;
 they are not Git submodules. The migration-16 production deploy-list correction
-is included in `fc8b58b`. Current local work adds a guarded SQLite baseline
-importer, migration 17 for production-adjustment provenance, optional
-quarantine-table handling in migration 16, and corrected test exclusions. It
-needs isolated PostgreSQL CI verification before a production push.
+is included in `fc8b58b`. Current local signer-rotation changes update the
+fingerprint and retain legacy license verification. They still need
+feature-branch CI, desktop RC qualification, and an authorized main deploy
+before production use.
 
 ## 8. Local verification commands
 
