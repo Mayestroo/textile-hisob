@@ -260,6 +260,9 @@ jobs:
           printf 'NOVDA_REPOSITORY_READ_KEY '
           cat "$repo_key.pub"
           REMOTE
+          ssh -i "$key_file" -p "$VPS_PORT" \
+            -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            "root@$VPS_HOST" 'bash -s' < ops/deploy/prepare-bot-secrets.sh
 
   verify-vps-access:
     name: Verify VPS access without deployment
