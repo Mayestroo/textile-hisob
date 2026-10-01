@@ -209,6 +209,7 @@ describe('trusted operator authentication primitives', () => {
     expect(roles).toContain('ALTER ROLE novda_app');
     expect(roles).toContain('NOCREATEDB');
     expect(roles).toContain('NOREPLICATION');
+    expect(roles).toMatch(/GRANT SELECT ON TABLE\s+model_id_aliases,\s+party_id_aliases,\s+protected_party_patta_ranges\s+TO novda_app/i);
     expect(roles).not.toMatch(/GRANT\s+(?:[^;\n]*\b)?(?:ALTER|DROP)\b/i);
   });
 });
