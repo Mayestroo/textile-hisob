@@ -1,0 +1,51 @@
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const packageJson = require('./package.json');
+
+export default defineConfig({
+  base: './',
+  plugins: [react()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version)
+  },
+  test: {
+    fileParallelism: false,
+    server: {
+      deps: {
+        inline: [/.*/]
+      }
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/lucide-react')) {
+            return 'icons-vendor';
+          }
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/zustand')
+          ) {
+            return 'framework-vendor';
+          }
+        }
+      }
+    }
+  },
+  server: {
+    port: 3000,
+    open: false,
+    host: '127.0.0.1',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      }
+    }
+  }
+});

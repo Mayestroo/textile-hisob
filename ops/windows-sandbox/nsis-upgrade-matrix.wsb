@@ -1,0 +1,29 @@
+<Configuration>
+  <Networking>Disable</Networking>
+  <ClipboardRedirection>Disable</ClipboardRedirection>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\Users\bekbo\Desktop\hisob\dist-build</HostFolder>
+      <SandboxFolder>C:\Installers</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\bekbo\AppData\Local\Temp\opencode\legacy-payload-1.7.13</HostFolder>
+      <SandboxFolder>C:\LegacyPayload</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\bekbo\AppData\Local\Temp\opencode\nsis-matrix-1.7.15-20260925-01</HostFolder>
+      <SandboxFolder>C:\TestOutput</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\bekbo\Desktop\hisob\ops\windows-sandbox</HostFolder>
+      <SandboxFolder>C:\Ops</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "&amp; { Set-Content -LiteralPath 'C:\TestOutput\sandbox-logon-started.txt' -Value 'started'; &amp; 'C:\Ops\nsis-upgrade-matrix.ps1' *&gt;&amp;1 | Tee-Object -FilePath 'C:\TestOutput\nsis-upgrade-matrix-transcript.txt' }"</Command>
+  </LogonCommand>
+</Configuration>

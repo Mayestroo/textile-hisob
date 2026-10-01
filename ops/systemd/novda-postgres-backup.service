@@ -1,0 +1,11 @@
+[Unit]
+Description=Create a protected Novda PostgreSQL 16 backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/bash /srv/novda/current/ops/deploy/backup-production.sh
+StandardOutput=journal
+StandardError=journal

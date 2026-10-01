@@ -1,0 +1,26 @@
+[Unit]
+Description=Novda Hisob-Kitob Authoritative Sync Service
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=novda
+Group=novda
+WorkingDirectory=/opt/novda
+EnvironmentFile=/etc/novda/server.env
+ExecStart=/usr/bin/node /opt/novda/apps/server/serve.cjs
+Restart=always
+RestartSec=5s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/novda
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

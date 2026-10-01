@@ -1,0 +1,116 @@
+{
+  "name": "novda-hisob-kitob",
+  "private": true,
+  "version": "0.0.0",
+  "main": "apps/desktop/electron/main.cjs",
+  "author": "Novda",
+  "description": "Novda Hisob-Kitob Tizimi",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"vite\"",
+    "start": "concurrently \"npm run server\" \"vite\" \"electron .\"",
+    "desktop": "electron .",
+    "server": "node apps/server/serve.cjs",
+    "client": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "test:non-pg": "vitest run --exclude apps/server/** --exclude apps/desktop/electron/sync/syncIntegration.test.ts --exclude apps/desktop/electron/sync/outboxRecovery.test.ts --exclude apps/desktop/electron/sync/bootstrapIntegration.test.ts",
+    "test:postgres": "node scripts/verify/verify-pg16-test-env.cjs && vitest run apps/server apps/desktop/electron/sync/syncIntegration.test.ts apps/desktop/electron/sync/outboxRecovery.test.ts apps/desktop/electron/sync/bootstrapIntegration.test.ts",
+    "verify:release-integrity": "node scripts/verify/verify-release-integrity.cjs",
+    "preview": "vite preview",
+    "dist:local": "tsc && vite build && electron-builder --win nsis --publish never",
+    "dist:rc": "node scripts/build/build-rc.cjs",
+    "verify:protected-integrity": "node scripts/verify/verify-protected-file-integrity.cjs",
+    "verify:secrets": "node scripts/verify/secret-scan.cjs",
+    "verify": "npm run verify:protected-integrity && npm run test:non-pg && npx tsc --noEmit && npm run build"
+  },
+  "build": {
+    "appId": "com.novda.hisob",
+    "productName": "Novda-hisob-kitob",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Mayestroo",
+        "repo": "hisob-releases"
+      }
+    ],
+    "electronVersion": "44.0.0",
+    "compression": "normal",
+    "asar": true,
+    "directories": {
+      "output": "dist-build"
+    },
+    "files": [
+      "dist/**/*",
+      "apps/desktop/electron/**/*",
+      "!apps/desktop/electron/**/*.test.*",
+      "!apps/desktop/electron/tests/**",
+      "packages/**/*",
+      "!packages/**/*.test.*",
+      "!packages/**/*.py",
+      "!**/*.py",
+      "!**/*.md",
+      "apps/desktop/build/icon.ico",
+      "!apps/desktop/build/installer.nsh",
+      "package.json",
+      "!node_modules/**",
+      {
+        "from": "node_modules/better-sqlite3",
+        "to": "node_modules/better-sqlite3",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "apps/desktop/build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "include": "apps/desktop/build/installer.nsh",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Novda Hisob-Kitob",
+      "artifactName": "Novda-hisob-kitob-Setup-${version}-win10-11-x64.exe",
+      "installerIcon": "apps/desktop/build/icon.ico",
+      "uninstallerIcon": "apps/desktop/build/icon.ico"
+    }
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.14.11",
+    "better-sqlite3": "^13.0.3",
+    "fastify": "^5.12.5",
+    "pg": "^8.23.0",
+    "xlsx-js-style": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "electron": "44.0.0",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^1.42.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0",
+    "zustand": "^5.0.15"
+  }
+}

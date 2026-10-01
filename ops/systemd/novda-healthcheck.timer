@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic Novda API, PostgreSQL, and disk health check
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+Persistent=true
+Unit=novda-healthcheck.service
+
+[Install]
+WantedBy=timers.target

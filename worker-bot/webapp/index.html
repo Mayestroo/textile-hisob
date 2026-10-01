@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Mening Hisobim — Shaxsiy Xodim Portali</title>
+  
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  
+  <!-- Modern Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      color-scheme: light;
+      --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f1f5f9;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent: #0284c7;
+      --accent-light: #e0f2fe;
+      --accent-border: #bae6fd;
+      --accent-glow: rgba(2, 132, 199, 0.12);
+      --success: #059669;
+      --success-dark: #064e3b;
+      --success-light: #ecfdf5;
+      --success-border: #a7f3d0;
+      --success-glow: rgba(5, 150, 105, 0.12);
+      --warning: #d97706;
+      --warning-light: #fffbeb;
+      --warning-border: #fde68a;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --danger-border: #fecaca;
+      --purple: #7c3aed;
+      --purple-light: #f5f3ff;
+      --purple-border: #ddd6fe;
+      --border: #e2e8f0;
+      --border-accent: rgba(2, 132, 199, 0.25);
+      --card-radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-bottom: 90px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Glass App Bar */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .worker-profile-brief {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .avatar-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #ffffff;
+      font-weight: 800;
+      box-shadow: 0 6px 18px rgba(5, 150, 105, 0.28);
+      flex-shrink: 0;
+      letter-spacing: -1px;
+    }
+
+    .worker-meta {
+      min-width: 0;
+    }
+
+    .worker-name-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.3;
+    }
+
+    .worker-subtitle {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .worker-id-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent-light);
+      border: 1px solid var(--accent-border);
+      color: #0369a1;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 20px;
+      margin-top: 3px;
+    }
+
+    .action-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s ease;
+    }
+
+    .icon-btn:hover {
+      background: #e2e8f0;
+      color: var(--text-primary);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.92);
+      background: #cbd5e1;
+    }
+
+    .icon-btn.spinning svg {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Container */
+    .container {
+      max-width: 580px;
+      margin: 0 auto;
+      padding: 14px 16px calc(80px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Period Ribbon */
+    .period-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 14px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    .period-badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--success-light);
+      color: var(--success);
+      border: 1px solid var(--success-border);
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .period-badge-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    /* Hero Net Pay Card */
+    .hero-kpi-card {
+      background: linear-gradient(140deg, #ecfdf5 0%, #f0fdf4 35%, #ffffff 100%);
+      border: 1.5px solid #a7f3d0;
+      border-radius: var(--card-radius);
+      padding: 20px 18px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+    }
+
+    .hero-kpi-card::after {
+      content: "";
+      position: absolute;
+      top: -30px;
+      right: -30px;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.14) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #047857;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .hero-amount {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--success-dark);
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+      margin-bottom: 6px;
+    }
+
+    .hero-amount.negative {
+      color: var(--danger);
+    }
+
+    .hero-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    /* Sub-grid under hero */
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      border-top: 1px solid #d1fae5;
+      padding-top: 14px;
+    }
+
+    .hero-grid-item {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .hero-grid-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+
+    .hero-grid-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .hero-grid-val.gross { color: var(--accent); }
+    .hero-grid-val.avans { color: var(--warning); }
+    .hero-grid-val.jarima { color: var(--danger); }
+    .hero-grid-val.staj { color: var(--purple); }
+
+    /* Navigation Pills / Tabs — hidden, replaced by bottom nav */
+    .nav-tabs { display: none !important; }
+
+    /* Section Title */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding: 0 2px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-count {
+      background: #e2e8f0;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    /* Model Cards */
+    .model-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s ease;
+    }
+
+    .model-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .model-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .model-total-badge {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: var(--success);
+      background: var(--success-light);
+      border: 1px solid var(--success-border);
+      padding: 3px 9px;
+      border-radius: 10px;
+    }
+
+    .op-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      font-size: 12px;
+      border-bottom: 1px dashed #e2e8f0;
+    }
+
+    .op-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .op-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .op-name {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .op-rate-note {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .op-calc {
+      text-align: right;
+    }
+
+    .op-qty-tag {
+      display: inline-block;
+      background: var(--accent-light);
+      color: #0369a1;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .op-sum-val {
+      font-weight: 700;
+      color: var(--success);
+      font-size: 13px;
+    }
+
+    /* Ticket Items */
+    .ticket-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    }
+
+    .ticket-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .ticket-badge-id {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .ticket-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .ticket-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .ticket-tag {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+
+    .ticket-my-op {
+      background: var(--success-light);
+      border: 1px solid var(--success-border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--success-dark);
+    }
+
+    /* Privacy Banner */
+    .privacy-banner {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin-top: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      color: #0369a1;
+      line-height: 1.45;
+    }
+
+    .privacy-banner svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--accent);
+    }
+
+    /* State messages */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .empty-state-icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+      opacity: 0.8;
+    }
+
+    /* Loading overlay */
+    .loading-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      gap: 12px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e0f2fe;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Mobile Fixed Bottom Navigation */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(68px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: #ffffff !important;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1.5px solid #e2e8f0;
+      display: flex !important;
+      align-items: center;
+      justify-content: space-around;
+      z-index: 9999 !important;
+      box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.08);
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+    .nav-item {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 10.5px;
+      font-weight: 700;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex: 1;
+      height: 100%;
+      padding: 8px 4px;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      text-align: center;
+      border-radius: 0;
+    }
+    .nav-item:active {
+      transform: scale(0.9);
+      background: #f8fafc;
+    }
+    .nav-item.active {
+      color: var(--accent) !important;
+    }
+    .nav-item-icon-wrap {
+      position: relative;
+      width: 44px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+    .nav-item.active .nav-item-icon-wrap {
+      background: var(--accent-light);
+    }
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+      stroke-width: 2.2;
+      transition: all 0.2s ease;
+    }
+    .nav-item.active svg {
+      stroke-width: 2.6;
+    }
+    .nav-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.1px;
+    }
+  </style>
+
+</head>
+<body>
+
+  <!-- Top Glass Bar -->
+  <header class="top-bar">
+    <div class="header-row">
+      <div class="worker-profile-brief">
+        <div class="avatar-badge" id="avatarBadge">👤</div>
+        <div class="worker-meta">
+          <div class="worker-name-title" id="workerNameHeader">Xush kelibsiz!</div>
+          <div class="worker-subtitle">Shaxsiy ishchi portali</div>
+          <div class="worker-id-pill" id="workerIdBadge">⏳ Yuklanmoqda...</div>
+        </div>
+      </div>
+      <div class="action-group">
+        <button class="icon-btn" id="refreshBtn" title="Yangilash">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- Period strip -->
+    <div class="period-strip">
+      <span id="periodNameText">Davr: Joriy oylik</span>
+      <span class="period-badge-status" id="periodStatusBadge">Faol oylik</span>
+    </div>
+
+    <!-- Hero Net Pay Card -->
+    <section class="hero-kpi-card" id="heroCard">
+      <div class="hero-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Joriy oylik sof maosh
+      </div>
+      <div class="hero-amount" id="netPayAmount">0 so'm</div>
+      <div class="hero-subtitle" id="netPaySubtitle">Avans, jarima va staj ushlanmalari ayirilgandan so'ng qo'lga tegadigan pul</div>
+
+      <div class="hero-grid">
+        <div class="hero-grid-item">
+          <div class="hero-grid-label">Jami hisoblangan</div>
+          <div class="hero-grid-val gross" id="grossPayAmount">0 so'm</div>
+        </div>
+        <div class="hero-grid-item">
+          <div class="hero-grid-label">Olingan Avans</div>
+          <div class="hero-grid-val avans" id="avansAmount">0 so'm</div>
+        </div>
+        <div class="hero-grid-item">
+          <div class="hero-grid-label">Jarima / Shtraf</div>
+          <div class="hero-grid-val jarima" id="jarimaAmount">0 so'm</div>
+        </div>
+        <div class="hero-grid-item">
+          <div class="hero-grid-label">Staj ushlanmasi</div>
+          <div class="hero-grid-val staj" id="stajAmount">0 so'm</div>
+        </div>
+        <div class="hero-grid-item">
+          <div class="hero-grid-label">Bajarilgan ish soni</div>
+          <div class="hero-grid-val pieces" id="totalPiecesCount">0 dona</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab-btn active" id="tabBtnOps" onclick="switchTab('ops')">
+        📋 Operatsiyalarim
+      </button>
+      <button class="nav-tab-btn" id="tabBtnTickets" onclick="switchTab('tickets')">
+        🎫 Pattalarim
+      </button>
+      <button class="nav-tab-btn" id="tabBtnAbout" onclick="switchTab('about')">
+        ℹ️ Profil & Qoidalar
+      </button>
+    </nav>
+
+    <!-- Tab 1: Operations -->
+    <section id="tabContentOps">
+      <div class="section-header">
+        <div class="section-title">
+          Modellar va tikilgan choklar
+          <span class="badge-count" id="modelsCountBadge">0</span>
+        </div>
+      </div>
+      <div id="modelsBreakdownList">
+        <div class="loading-wrap">
+          <div class="spinner"></div>
+          <div style="font-size: 12px; color: var(--text-secondary);">Hisobotlar yuklanmoqda...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Tickets -->
+    <section id="tabContentTickets" style="display: none;">
+      <div class="section-header">
+        <div class="section-title">
+          Topshirilgan pattalar tarixi
+          <span class="badge-count" id="ticketsCountBadge">0</span>
+        </div>
+      </div>
+      <div id="ticketsList">
+        <div class="loading-wrap">
+          <div class="spinner"></div>
+          <div style="font-size: 12px; color: var(--text-secondary);">Pattalar yuklanmoqda...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: About & Privacy -->
+    <section id="tabContentAbout" style="display: none;">
+      <div class="model-card">
+        <div class="model-title" style="margin-bottom: 8px;">🔒 Maxfiylik va Xavfsizlik Kafolati</div>
+        <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
+          Ushbu bot va portal faqat sizning shaxsiy ishbay hisob-kitoblaringizni ko'rsatish uchun mo'ljallangan. 
+          Boshqa biror xodim sizning oyligingizni, siz esa boshqa ishchilar va korxonaning umumiy ko'rsatkichlarini ko'ra olmaysiz.
+        </p>
+        <div style="border-top: 1px solid var(--border); padding-top: 10px; font-size: 12px;">
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">Sizning ID:</span>
+            <span style="font-weight: 700;" id="aboutWorkerId">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">F.I.O:</span>
+            <span style="font-weight: 700;" id="aboutWorkerName">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">Korxona:</span>
+            <span style="font-weight: 700;" id="aboutCompanyId">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">Oylik formula:</span>
+            <span style="font-weight: 700; color: var(--accent);">Sof = Jami - Avans - Jarima - Staj</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="privacy-banner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div>
+          Agar hisob-kitoblarda noaniqlik sezsangiz yoki patta skaner qilinmagan bo'lsa, korxona ustasi yoki buxgalteriga murojaat qiling.
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Initialize Telegram WebApp strictly in Light Mode
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      try {
+        tg.setHeaderColor('#ffffff');
+        tg.setBackgroundColor('#f8fafc');
+        if (tg.headerColor) tg.headerColor = '#ffffff';
+        if (tg.backgroundColor) tg.backgroundColor = '#f8fafc';
+      } catch (e) {}
+    }
+
+    function triggerHaptic(type = 'light') {
+      try {
+        if (tg?.HapticFeedback) {
+          if (type === 'light') tg.HapticFeedback.impactOccurred('light');
+          else if (type === 'medium') tg.HapticFeedback.impactOccurred('medium');
+          else if (type === 'success') tg.HapticFeedback.notificationOccurred('success');
+        }
+      } catch (e) {}
+    }
+
+    // Signed worker context is validated by the V2 API; no client-side database credentials exist.
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetWorkerId = urlParams.get('workerId');
+    const companyId = urlParams.get('companyId');
+    const paramTelegramId = urlParams.get('telegramId');
+    const expiresAt = urlParams.get('expiresAt');
+    const workerAuthToken = urlParams.get('authToken');
+
+    function workerApiUrl(path) {
+      const url = new URL(path, window.location.origin);
+      url.searchParams.set('companyId', companyId || '');
+      url.searchParams.set('workerId', targetWorkerId || '');
+      url.searchParams.set('telegramId', paramTelegramId || '');
+      url.searchParams.set('expiresAt', expiresAt || '');
+      return url.toString();
+    }
+
+    function fetchWorkerApi(path) {
+      return fetch(workerApiUrl(path), {
+        headers: { 'x-worker-auth-token': workerAuthToken || '' },
+        cache: 'no-store',
+        referrerPolicy: 'no-referrer'
+      });
+    }
+
+    const state = {
+      workerId: targetWorkerId ? Number(targetWorkerId) : null,
+      companyId: companyId,
+      worker: null,
+      models: [],
+      currentPeriod: null,
+      submittedTickets: [],
+      calculations: {
+        gross: 0,
+        avans: 0,
+        jarima: 0,
+        staj: 0,
+        net: 0,
+        pieces: 0,
+        modelsBreakdown: {}
+      },
+      isLoading: false
+    };
+
+    function formatMoney(num) {
+      return (Number(num) || 0).toLocaleString('uz-UZ') + " so'm";
+    }
+
+    function formatNumber(num) {
+      return (Number(num) || 0).toLocaleString('uz-UZ');
+    }
+
+    function escapeHtml(str) {
+      if (str == null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Switch Tabs
+    window.switchTab = function(tabName) {
+      try {
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+      } catch(e) {}
+
+      document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      document.getElementById('tabContentOps').style.display = 'none';
+      document.getElementById('tabContentTickets').style.display = 'none';
+      document.getElementById('tabContentAbout').style.display = 'none';
+
+      if (tabName === 'ops') {
+        const b1 = document.getElementById('tabBtnOps'); if (b1) b1.classList.add('active');
+        const n1 = document.getElementById('botNavOps'); if (n1) n1.classList.add('active');
+        document.getElementById('tabContentOps').style.display = 'block';
+      } else if (tabName === 'tickets') {
+        const b2 = document.getElementById('tabBtnTickets'); if (b2) b2.classList.add('active');
+        const n2 = document.getElementById('botNavTickets'); if (n2) n2.classList.add('active');
+        document.getElementById('tabContentTickets').style.display = 'block';
+      } else if (tabName === 'about') {
+        const b3 = document.getElementById('tabBtnAbout'); if (b3) b3.classList.add('active');
+        const n3 = document.getElementById('botNavAbout'); if (n3) n3.classList.add('active');
+        document.getElementById('tabContentAbout').style.display = 'block';
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Load the bound worker projection and activity from PostgreSQL-backed V2 API.
+    async function loadWorkerData() {
+      if (state.isLoading) return;
+      state.isLoading = true;
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) refreshBtn.classList.add('spinning');
+      try {
+        const tgUser = tg?.initDataUnsafe?.user;
+        const currentTgId = tgUser?.id ? String(tgUser.id) : paramTelegramId;
+
+        if (!currentTgId || !companyId || !/^\d+$/.test(targetWorkerId || '') || !/^\d{1,24}$/.test(currentTgId)
+          || !/^\d+$/.test(expiresAt || '') || !/^[a-f0-9]{64}$/.test(workerAuthToken || '')) {
+          renderError("Xavfsizlik cheklovi: Ushbu sahifaga faqat rasmiy Telegram botdagi tugma orqali kirish mumkin.");
+          return;
+        }
+
+        if (tgUser?.id && String(tgUser.id) !== String(paramTelegramId)) {
+          renderError("Xavfsizlik cheklovi: Ushbu havola boshqa Telegram akkauntiga tegishli! Birovning hisobiga kirish taqiqlangan.");
+          return;
+        }
+
+        const profileResponse = await fetchWorkerApi('/v2/worker/profile');
+        const profileResult = await profileResponse.json();
+        if (!profileResponse.ok || !profileResult?.success || !profileResult.profile) {
+          renderError("Shaxsiy ma'lumotlarni yuklab bo'lmadi. Bot orqali qayta kiring.");
+          return;
+        }
+        const profile = profileResult.profile;
+        if (String(profile.worker_id) !== String(targetWorkerId) || profile.company_id !== companyId) {
+          renderError("Xavfsizlik cheklovi: server qaytargan ishchi yoki korxona mos kelmadi.");
+          return;
+        }
+
+        state.workerId = Number(profile.worker_id);
+        state.companyId = profile.company_id;
+        state.worker = { id: profile.worker_id, name: profile.worker_name };
+        state.models = Object.values(profile.models_breakdown || {});
+        state.currentPeriod = profile.period ? {
+          name: profile.period_name,
+          isClosed: Boolean(profile.period.isClosed)
+        } : { name: profile.period_name, isClosed: false };
+        state.calculations = {
+          gross: Number(profile.gross) || 0,
+          avans: Number(profile.avans) || 0,
+          jarima: Number(profile.jarima) || 0,
+          staj: Number(profile.staj) || 0,
+          net: Number(profile.net) || 0,
+          pieces: Number(profile.pieces) || 0,
+          modelsBreakdown: profile.models_breakdown || {}
+        };
+
+        // Render UI
+        renderHeader();
+        renderHero();
+        renderOperations();
+
+        // Fetch tickets in background
+        await fetchWorkerTickets();
+
+      } catch (err) {
+        console.warn('Worker V2 data request failed.');
+        renderError("Ma'lumotlarni yuklashda xatolik yuz berdi. Internet aloqasini tekshiring.");
+      } finally {
+        state.isLoading = false;
+        if (refreshBtn) refreshBtn.classList.remove('spinning');
+      }
+    }
+
+    function renderHeader() {
+      const w = state.worker;
+      const initial = (w.name || 'X').charAt(0).toUpperCase();
+      document.getElementById('avatarBadge').textContent = initial;
+      document.getElementById('workerNameHeader').textContent = w.name || `Ishchi #${w.id}`;
+      document.getElementById('workerIdBadge').textContent = `✅ ID: #${w.id}`;
+      const subtitleEl = document.getElementById('workerSubtitle');
+      if (subtitleEl) subtitleEl.textContent = 'Shaxsiy ishchi portali';
+
+      const p = state.currentPeriod;
+      if (p && p.name) {
+        document.getElementById('periodNameText').textContent = `Davr: ${p.name}`;
+      }
+      if (p?.isClosed) {
+        const badge = document.getElementById('periodStatusBadge');
+        badge.textContent = "Yopilgan";
+        badge.style.color = "var(--danger)";
+        badge.style.borderColor = "var(--danger-border)";
+        badge.style.background = "var(--danger-light)";
+      }
+
+      document.getElementById('aboutWorkerId').textContent = `#${w.id}`;
+      document.getElementById('aboutWorkerName').textContent = w.name;
+      document.getElementById('aboutCompanyId').textContent = state.companyId;
+    }
+
+    function renderHero() {
+      const c = state.calculations;
+      const netEl = document.getElementById('netPayAmount');
+      netEl.textContent = formatMoney(c.net);
+      if (c.net < 0) {
+        netEl.classList.add('negative');
+      } else {
+        netEl.classList.remove('negative');
+      }
+
+      document.getElementById('grossPayAmount').textContent = formatMoney(c.gross);
+      document.getElementById('avansAmount').textContent = formatMoney(c.avans);
+      document.getElementById('jarimaAmount').textContent = formatMoney(c.jarima);
+      document.getElementById('stajAmount').textContent = formatMoney(c.staj);
+      document.getElementById('totalPiecesCount').textContent = `${formatNumber(c.pieces)} dona`;
+    }
+
+    function renderOperations() {
+      const listEl = document.getElementById('modelsBreakdownList');
+      const mb = state.calculations.modelsBreakdown;
+      const keys = Object.keys(mb);
+      document.getElementById('modelsCountBadge').textContent = keys.length;
+
+      if (!keys.length) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🧵</div>
+            <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Hali ishlar kiritilmagan</div>
+            <div>Joriy oylikda sizga biriktirilgan operatsiyalar topilmadi.</div>
+          </div>
+        `;
+        return;
+      }
+
+        let html = '';
+        for (const mId of keys) {
+          const m = mb[mId];
+          let opsHtml = '';
+          for (const op of m.operations) {
+            opsHtml += `
+              <div class="op-row">
+                <div class="op-info">
+                  <span class="op-name">${escapeHtml(op.name)}</span>
+                  <span class="op-rate-note">${formatNumber(op.rate)} so'm / dona</span>
+                </div>
+                <div class="op-calc">
+                  <div><span class="op-qty-tag">${formatNumber(op.qty)} dona</span></div>
+                  <div class="op-sum-val">${formatMoney(op.amount)}</div>
+                </div>
+              </div>
+            `;
+          }
+
+          html += `
+            <div class="model-card">
+              <div class="model-header">
+                <div class="model-title">
+                  <span>👗</span>
+                  <span>${escapeHtml(m.name)}</span>
+                </div>
+                <div class="model-total-badge">${formatMoney(m.earnings)}</div>
+              </div>
+              <div>${opsHtml}</div>
+            </div>
+          `;
+        }
+        listEl.innerHTML = html;
+      }
+
+      // Fetch and render tickets that belong to this worker
+      async function fetchWorkerTickets() {
+        const ticketsListEl = document.getElementById('ticketsList');
+        try {
+          const res = await fetchWorkerApi('/v2/worker/tickets?limit=50');
+          const response = await res.json();
+          if (!res.ok || !response?.success) throw new Error('WORKER_TICKETS_UNAVAILABLE');
+          const myTickets = Array.isArray(response.tickets) ? response.tickets : [];
+          state.submittedTickets = myTickets;
+          document.getElementById('ticketsCountBadge').textContent = myTickets.length;
+
+          if (!myTickets.length) {
+            ticketsListEl.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-state-icon">🎫</div>
+                <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Topshirilgan pattalar yo'q</div>
+                <div>Hozircha sizning ID raqamingiz bilan skanerlangan chiptalar mavjud emas.</div>
+              </div>
+            `;
+            return;
+          }
+
+          let html = '';
+          for (const t of myTickets.slice(0, 50)) { // show latest 50
+            html += `
+              <div class="ticket-item">
+                <div class="ticket-top">
+                  <span class="ticket-badge-id">${escapeHtml(t.model_id || 'Model')} &bull; Patta #${escapeHtml(t.patta_number || 1)}</span>
+                  <span class="ticket-time">⏱️ ${escapeHtml(t.submitted_at || '')}</span>
+                </div>
+                <div class="ticket-tags">
+                  <span class="ticket-tag">Partiya: ${escapeHtml(t.party_number || '-')}</span>
+                  <span class="ticket-tag">Razmer: ${escapeHtml(t.size || '-')}</span>
+                  <span class="ticket-tag">Rang: ${escapeHtml(t.color || '-')}</span>
+                  <span class="ticket-tag" style="color: var(--success); font-weight: 700;">Soni: ${formatNumber(t.qty || 0)} dona</span>
+                </div>
+                <div class="ticket-my-op">
+                  <span>Bajarilgan chok:</span>
+                  <span style="font-weight: 700; color: var(--accent);">${escapeHtml(t.my_operations || 'Tikuv')}</span>
+                </div>
+              </div>
+            `;
+          }
+          ticketsListEl.innerHTML = html;
+
+        } catch (e) {
+          console.warn('Tickets error:', e);
+          ticketsListEl.innerHTML = '<div class="empty-state">Pattalarni yuklashda xatolik yuz berdi.</div>';
+        }
+      }
+
+      function renderError(msg) {
+        document.getElementById('modelsBreakdownList').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div style="font-weight: 700; color: var(--danger); margin-bottom: 6px;">Xatolik</div>
+            <div>${escapeHtml(msg)}</div>
+          </div>
+        `;
+      }
+
+    // Event Listeners
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      triggerHaptic('medium');
+      loadWorkerData();
+    });
+
+    // Auto-boot
+    loadWorkerData();
+  </script>
+  <!-- FIXED BOTTOM NAVIGATION BAR FOR WORKERS -->
+  <nav class="bottom-nav">
+    <a class="nav-item active" id="botNavOps" onclick="switchTab('ops')">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
+      </div>
+      <span class="nav-label">Ishlarim</span>
+    </a>
+    <a class="nav-item" id="botNavTickets" onclick="switchTab('tickets')">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>
+      </div>
+      <span class="nav-label">Pattalarim</span>
+    </a>
+    <a class="nav-item" id="botNavAbout" onclick="switchTab('about')">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M6 20v-1a6 6 0 0 1 12 0v1"/></svg>
+      </div>
+      <span class="nav-label">Profilim</span>
+    </a>
+  </nav>
+</body>
+</html>

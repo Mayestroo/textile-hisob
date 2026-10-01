@@ -1,0 +1,21 @@
+# Environment & Secrets (Eng muhimi: .env hech qachon GitHubga chiqmaydi!)
+.env
+.env.*
+!.env.example
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Local runtime data
+bindings.json
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+    

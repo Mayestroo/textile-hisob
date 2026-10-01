@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novda Hisob-Kitob — To'liq Dasturiy Taqdimot & Yo'riqnoma</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #059669;
+      --primary-dark: #047857;
+      --primary-light: #ecfdf5;
+      --secondary: #0284c7;
+      --secondary-light: #f0f9ff;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --dark: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-500: #64748b;
+      --slate-200: #e2e8f0;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --white: #ffffff;
+      --border: #e2e8f0;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f8fafc;
+      color: var(--dark);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Fixed Navigation Bar */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .top-bar .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.2rem;
+      color: var(--primary-dark);
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .top-bar .brand .badge-tag {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .nav-link {
+      color: var(--slate-700);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .nav-link:hover {
+      background: var(--slate-100);
+      color: var(--primary);
+    }
+
+    .btn-print {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: var(--white);
+      border: none;
+      padding: 10px 22px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+    }
+
+    .btn-print:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(5, 150, 105, 0.35);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px 100px;
+    }
+
+    /* Hero Banner */
+    .hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: var(--white);
+      border-radius: 24px;
+      padding: 56px 48px;
+      margin-bottom: 48px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-xl);
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -15%;
+      width: 550px;
+      height: 550px;
+      background: radial-gradient(circle, rgba(5, 150, 105, 0.3) 0%, rgba(0,0,0,0) 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(5, 150, 105, 0.25);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      padding: 6px 16px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 18px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .hero h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.85rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      font-size: 1.15rem;
+      color: #94a3b8;
+      max-width: 820px;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .hero-stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 18px 20px;
+    }
+
+    .hero-stat-card .val {
+      font-size: 1.9rem;
+      font-weight: 800;
+      color: #34d399;
+      font-family: 'Space Grotesk', sans-serif;
+      margin-bottom: 4px;
+    }
+
+    .hero-stat-card .lbl {
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    /* Table of Contents */
+    .toc-box {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 56px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .toc-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--slate-800);
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .toc-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--slate-50);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--slate-700);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+
+    .toc-item:hover {
+      background: var(--primary-light);
+      border-color: rgba(5, 150, 105, 0.3);
+      color: var(--primary-dark);
+      transform: translateX(4px);
+    }
+
+    .toc-num {
+      width: 24px;
+      height: 24px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    /* Section Component */
+    .feature-section {
+      margin-bottom: 64px;
+      scroll-margin-top: 80px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .badge-pill.green { background: var(--primary-light); color: var(--primary-dark); border: 1px solid #a7f3d0; }
+    .badge-pill.blue { background: var(--secondary-light); color: var(--secondary); border: 1px solid #bae6fd; }
+    .badge-pill.amber { background: var(--accent-light); color: #b45309; border: 1px solid #fde68a; }
+    .badge-pill.purple { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: var(--slate-800);
+      letter-spacing: -0.01em;
+    }
+
+    .section-desc {
+      font-size: 1.05rem;
+      color: var(--slate-500);
+      margin-top: 4px;
+      max-width: 900px;
+    }
+
+    /* Screenshot Container */
+    .screenshot-wrapper {
+      background: var(--slate-800);
+      border: 1px solid #cbd5e1;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05);
+      margin-bottom: 28px;
+    }
+
+    .screenshot-header {
+      background: #1e293b;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .window-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+
+    .screenshot-url {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 2px 14px;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-family: 'JetBrains Mono', monospace;
+      margin-left: 10px;
+    }
+
+    .screenshot-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      transition: transform 0.2s ease;
+    }
+
+    /* Breakdown Box */
+    .details-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+
+    .details-card h4 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--slate-800);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Table Styles */
+    .table-container {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-top: 14px;
+      margin-bottom: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      padding: 12px 18px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--slate-700);
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 18px;
+      font-size: 0.92rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--slate-700);
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f8fafc;
+    }
+
+    .tag-key {
+      display: inline-block;
+      background: var(--slate-100);
+      color: var(--dark);
+      border: 1px solid var(--slate-200);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag-input {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag-formula {
+      display: inline-block;
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #bbf7d0;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag-action {
+      display: inline-block;
+      background: #fef3c7;
+      color: #b45309;
+      border: 1px solid #fde68a;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* Key Insights list */
+    .insight-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .insight-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.93rem;
+      color: var(--slate-700);
+    }
+
+    .insight-list li .bullet {
+      width: 20px;
+      height: 20px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 800;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Top Titlebar Explanation Card */
+    .titlebar-card {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 48px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* Call to Action Box */
+    .cta-box {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: var(--white);
+      border-radius: 24px;
+      padding: 56px 48px;
+      text-align: center;
+      box-shadow: var(--shadow-xl);
+      margin-top: 60px;
+    }
+
+    .cta-box h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.4rem;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+
+    .cta-box p {
+      font-size: 1.15rem;
+      opacity: 0.92;
+      max-width: 720px;
+      margin: 0 auto 32px;
+    }
+
+    .btn-white-cta {
+      background: var(--white);
+      color: var(--primary-dark);
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 1rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+      border: none;
+      transition: transform 0.2s ease;
+    }
+
+    .btn-white-cta:hover {
+      transform: translateY(-2px);
+    }
+
+    /* Print Formatting */
+    @media print {
+      .top-bar, .nav-links, .btn-print, .toc-box, .btn-white-cta {
+        display: none !important;
+      }
+      body {
+        background: #fff !important;
+      }
+      .container {
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .hero {
+        background: #0f172a !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        padding: 28px;
+      }
+      .feature-section, .details-card, .screenshot-wrapper {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none !important;
+      }
+      .screenshot-wrapper {
+        border: 1px solid #ccc !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fixed Top Header -->
+  <header class="top-bar">
+    <div class="brand">
+      <span>🌿 NOVDA HISOB-KITOB</span>
+      <span class="badge-tag">INTERAKTIV TAQDIMOT & YO'RIQNOMA</span>
+    </div>
+
+    <nav class="nav-links">
+      <a href="#umumiy" class="nav-link">Umumiy</a>
+      <a href="#patta" class="nav-link">Patta Pechati</a>
+      <a href="#patta-hisob" class="nav-link">Patta-Hisob</a>
+      <a href="#konveyer" class="nav-link">Konveyer</a>
+      <a href="#model-kiritish" class="nav-link">Chipta Kiritish</a>
+      <a href="#model-hisob" class="nav-link">Model Hisob</a>
+      <a href="#modallar" class="nav-link">Modallar & Oyna</a>
+    </nav>
+
+    <button class="btn-print" onclick="window.print()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+      </svg>
+      PDF Saqlash / Chop Etish
+    </button>
+  </header>
+
+  <div class="container">
+
+    <!-- Hero Banner -->
+    <section class="hero">
+      <div class="hero-badge">Tikuvchilik Ishlab Chiqarishi Tizimi</div>
+      <h1>Novda Hisob-Kitob Dasturi</h1>
+      <p>Tikuvchilik fabrikalari va sexlari uchun ishlab chiqarish, konveyer liniyalari monitoringi, patta (bichuv/tikuv chiptalari) generatsiyasi hamda 199+ ishchilarning ishbay maoshini 100% xatosiz va shaffof hisoblovchi to'liq tizim yo'riqnomasi.</p>
+
+      <div class="hero-stats">
+        <div class="hero-stat-card">
+          <div class="val">80%</div>
+          <div class="lbl">Hisob-kitob vaqtining tejalishi</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="val">0%</div>
+          <div class="lbl">Formulalar xatosi & qo'shib yozish</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="val">100%</div>
+          <div class="lbl">Offline mustaqil ishlash kafolati</div>
+        </div>
+        <div class="hero-stat-card">
+          <div class="val">1 Soniyada</div>
+          <div class="lbl">Har bir ishchining batafsil dosyesi</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <div class="toc-box">
+      <div class="toc-title">
+        <span>📑 Taqdimot Mundarijasi (Har Bir Qism Bo'yicha Batafsil Ko'rsatma)</span>
+      </div>
+      <div class="toc-grid">
+        <a href="#top-titlebar" class="toc-item"><span class="toc-num">0</span> Yuqori Boshqaruv Paneli (TitleBar)</a>
+        <a href="#umumiy" class="toc-item"><span class="toc-num">1</span> «Umumiy» — Bosh Oylik Hisob Varaqi</a>
+        <a href="#patta" class="toc-item"><span class="toc-num">2</span> «Patta» — Partiyalar & Pechat Markazi</a>
+        <a href="#patta-print" class="toc-item"><span class="toc-num">3</span> «Patta Pechati» — Termo & A4 Chop Oynasi</a>
+        <a href="#patta-hisob" class="toc-item"><span class="toc-num">4</span> «Patta-Hisob» — Partiyalar Auditi & Taqqoslash</a>
+        <a href="#konveyer" class="toc-item"><span class="toc-num">5</span> «Konveyer» — Liniyalar Jonli Matrisasi</a>
+        <a href="#model-kiritish" class="toc-item"><span class="toc-num">6</span> Model «Patta Kiritish» Varaqi</a>
+        <a href="#model-hisob" class="toc-item"><span class="toc-num">7</span> Model «Hisob-Kitob» Varaqi (Tariflar)</a>
+        <a href="#worker-manager" class="toc-item"><span class="toc-num">8</span> «Ishchilar Boshqaruvi» Modali</a>
+        <a href="#worker-detail" class="toc-item"><span class="toc-num">9</span> «Ishchi Shaxsiy Kartochkasi» Modali</a>
+        <a href="#period-manager" class="toc-item"><span class="toc-num">10</span> «Oylik Davr & Arxiv» Modali</a>
+        <a href="#backup-manager" class="toc-item"><span class="toc-num">11</span> «Zaxiralar (Backup) Tarixi» Modali</a>
+        <a href="#new-model" class="toc-item"><span class="toc-num">12</span> «Yangi Model Qo'shish» Modali</a>
+      </div>
+    </div>
+
+    <!-- 0. TOP TITLEBAR -->
+    <section id="top-titlebar" class="titlebar-card">
+      <div class="badge-pill green">Boshqaruv Elementlari</div>
+      <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 800; margin-bottom: 8px;">Dasturning Eng Yuqori Paneli (TitleBar Tugmalari)</h3>
+      <p style="color: var(--slate-500); font-size: 0.95rem; margin-bottom: 20px;">Dasturning eng yuqorisida joylashgan tezkor boshqaruv tugmalari barcha varaqlarda doim ko'rinib turadi:</p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 25%;">Tugma / Element</th>
+              <th style="width: 25%;">Nomi & Ko'rsatkichi</th>
+              <th style="width: 50%;">Nima vazifa bajaradi va bosilganda nima bo'ladi?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag-action">📅 Kalendar Tugmasi</span></td>
+              <td><strong>Joriy Oylik</strong> (masalan: <em>2026-08-26 oyligi</em>)</td>
+              <td>Bosilganda <strong>«PeriodManagerModal»</strong> ochiladi. Ushbu oy qachon boshlanganini ko'rsatadi, oylik davrni bitta tugma bilan yopish va arxivlashni amalga oshiradi.</td>
+            </tr>
+            <tr>
+              <td><span class="tag-action">👥 Ishchilar Tugmasi</span></td>
+              <td><strong>Ishchilar (199)</strong></td>
+              <td>Hozir korxonada ro'yxatdan o'tgan barcha ishchilar sonini ko'rsatadi. Bosilganda <strong>«WorkerManagerModal»</strong> ochilib, yangi ishchi qo'shish yoki stajini o'zgartirish mumkin.</td>
+            </tr>
+            <tr>
+              <td><span class="tag-action">⬇️ Excel Tugmasi</span></td>
+              <td><strong>Excel (.xlsx) Yuklab Olish</strong></td>
+              <td>1 soniya ichida butun fabrikadagi barcha modellarni, operatsiyalarni va ishchilarning oyliklarini Excel formatiga eksport qiladi.</td>
+            </tr>
+            <tr>
+              <td><span class="tag-action">💾 Diskka Saqlash</span></td>
+              <td><strong>Saqlash (Save / Ctrl+S)</strong></td>
+              <td>Barcha yangi o'zgarishlarni kompyuter xotirasidagi ma'lumotlar bazasiga darhol muhrlaydi.</td>
+            </tr>
+            <tr>
+              <td><span class="tag-action">🗄️ Baza Tugmasi</span></td>
+              <td><strong>Zaxiralar va Baza Tarixi</strong></td>
+              <td>Bosilganda avtomatik olingan xavfsiz Backup (zaxira nusxalar) ro'yxati chiqadi. Bir tugma bilan o'tmishdagi istalgan holatga qaytish mumkin.</td>
+            </tr>
+            <tr>
+              <td><span class="tag-action">🛡️ Litsenziya</span></td>
+              <td><strong>Litsenziya Holati</strong></td>
+              <td>Dasturning faol muddati va qolgan vaqtini ko'rsatadi. Administrator Telegram boti orqali nazorat qilinadi.</td>
+            </tr>
+            <tr>
+              <td><span class="tag-action">🌓 Kun/Tun</span></td>
+              <td><strong>Mavzu (Theme)</strong></td>
+              <td>Interfeysni Dark Mode (qorong'i) yoki Light Mode (yorug') ko'rinishiga bir zumda o'tkazadi.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 1. UMUMIY SHEET -->
+    <section id="umumiy" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill green">1-Varaq: Master Buxgalteriya</div>
+          <h2 class="section-title">«Umumiy» — Ishbay Oylik, Avans va Yakuniy Hisob Varaqi</h2>
+          <p class="section-desc">Ushbu varaq fabrikadagi barcha xodimlarning yakuniy ish haqini, olingan avanslarini, jarima va doimiy stajlarini 1 tiyingacha hisoblab beruvchi asosiy sahifadir.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Varaq: Umumiy (Master Payroll Table & Formula Bar)</span>
+        </div>
+        <img src="../assets/screenshots/01_umumiy_sheet.png" alt="Umumiy Varaqi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>📋 «Umumiy» Varaqidagi Ustunlar va Kiritiladigan Ma'lumotlar</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 15%;">Ustun / Katak</th>
+                <th style="width: 25%;">Nomi & Turi</th>
+                <th style="width: 25%;">Kiritiladigan Qiymat</th>
+                <th style="width: 35%;">Hisoblash qoidasi va vazifasi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="tag-key">A ustuni</span></td>
+                <td><strong>Ishchi ID</strong> (Tizim kodi)</td>
+                <td>Avtomatik (1, 2, 3...)</td>
+                <td><strong>Muhim!</strong> Ushbu katakchaga <strong>2 marta tez bosilsa (Double-click)</strong>, ushbu ishchining shaxsiy kartochkasi ochiladi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-key">B ustuni</span></td>
+                <td><strong>Ishchilar F.I.SH</strong></td>
+                <td>Xodimning ismi-sharifi</td>
+                <td>Ishchilar ro'yxatidan avtomatik olinadi, ustiga bosilganda yuqori Formula satrida ko'rinadi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-formula">C ustuni</span></td>
+                <td><strong>Qo'lga Tegadi</strong> (Sof Maosh)</td>
+                <td>Avtomatik Formula: <code>=G-F-E-D</code></td>
+                <td>Ishchining jami ishlagan summasidan avans va jarimalar chegirilib, staj bonusi qo'shilgan holda unga beriladigan sof pul.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-key">D ustuni</span></td>
+                <td><strong>Doimiy Staj</strong></td>
+                <td>So'mda (masalan: 140,000)</td>
+                <td>Ishchiga fabrikada uzoq ishlagani uchun beriladigan kafolatlangan bonus. Oylik davr yopilganda o'chmaydi, saqlanadi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">E ustuni</span></td>
+                <td><strong>Avans</strong> (Kiritiladigan Input)</td>
+                <td><strong>Operator kiritadi</strong> (masalan: 500000)</td>
+                <td>Oy davomida ishchiga berilgan naqd yoki kartaga tashlangan bo'nak (avans). Yozilishi bilan C ustundagi pul darhol kamayadi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">F ustuni</span></td>
+                <td><strong>Jarima</strong> (Kiritiladigan Input)</td>
+                <td><strong>Operator kiritadi</strong> (masalan: 50000)</td>
+                <td>Brak yoki qoidabuzarlik uchun ushlab qolinadigan jarima summasi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-formula">G ustuni</span></td>
+                <td><strong>Jami Ishlagani</strong></td>
+                <td>Avtomatik Summa</td>
+                <td>Ishchi barcha modellarning barcha operatsiyalaridan jami qancha pul ishlab topgani (H + I + J + ...).</td>
+              </tr>
+              <tr>
+                <td><span class="tag-key">H, I, J...</span></td>
+                <td><strong>Modellar Kesimi</strong> (Basiman, Polo...)</td>
+                <td>Avtomatik to'planadi</td>
+                <td>Har bir modeldan ushbu tikuvchi aynan qancha summa ishlagani ko'rinadi.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">✓</span>
+            <div><strong>Formula Satri (Formula Bar):</strong> Excel kabi har qanday katakchani tanlaganda yuqorida uning manzili (masalan <code>C12</code>) va ichidagi jonli matematik formulasi chiqadi.</div>
+          </li>
+          <li>
+            <span class="bullet">✓</span>
+            <div><strong>Rangli Farqlar:</strong> Avans olgan ishchilar yoki puli yetmay qolganlar darhol ranglar bilan yaqqol ajratiladi.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 2. PATTA BATCH SHEET -->
+    <section id="patta" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill blue">2-Varaq: Partiyalar & Pechat</div>
+          <h2 class="section-title">«Patta» — Partiyalar Yaratish va Chop Etish Markazi</h2>
+          <p class="section-desc">Bichuv sexidan chiqqan mato partiyalarini ro'yxatga olish, razmerlar bo'yicha patta sonlarini kiritish va bitta tugma bilan termo-chek qog'ozlarini chop etish bo'limi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Varaq: Patta (Batch Size Distribution & Model Cards)</span>
+        </div>
+        <img src="../assets/screenshots/02_patta_batch_sheet.png" alt="Patta Varaqi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>📦 Har Bir Model Kartochkasidagi Inputlar va Elementlar</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Maydon / Tugma</th>
+                <th style="width: 25%;">Kiritiladigan Qiymat</th>
+                <th style="width: 50%;">Bajaradigan vazifasi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="tag-input">Ish soni:</span></td>
+                <td>Raqam (masalan: <strong>50</strong> yoki <strong>100</strong>)</td>
+                <td><strong>Har bir patta (pachka) ichida necha dona kiyim borligi.</strong> Masalan 50 kiritilsa, 1 ta patta 50 dona mahsulot hisoblanadi. Kiritilmasa tizim qizil ogohlantirish beradi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Partiya raqami:</span></td>
+                <td>Raqam (masalan: <strong>101</strong>)</td>
+                <td>Tizim avtomatik navbatdagi unikal partiya raqamini qo'yadi. Agar xohlasangiz qo'lda o'zgartirish mumkin.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Rangi:</span></td>
+                <td>Matn (masalan: <em>Кора, Ок, Сum</em>)</td>
+                <td>Mato partiyasining rangi. Ushbu rang barcha patta chiptalariga avtomatik yoziladi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Razmerlar (S, M, L, XL...):</span></td>
+                <td>Patta soni (masalan: <strong>M - 10 ta, L - 15 ta</strong>)</td>
+                <td>Ushbu razmerdan necha dona patta chop etilishi. Tizim avtomatik <code>10 ta patta × 50 dona = 500 dona ish</code> deb hisoblab beradi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-action">+ Razmer qo'shish</span></td>
+                <td>Maxsus tugma</td>
+                <td>Yangi o'lcham kerak bo'lsa (masalan 6XL, 7XL yoki bolalar razmerlari), tizimga darhol yangi razmer ustuni qo'shadi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-action">🖨️ Pechat Tugmasi</span></td>
+                <td>Boshqaruv tugmasi</td>
+                <td>Kamida bitta model to'ldirilgach, yashil rangda faollashadi. Bosilganda pechat oynasi ochiladi va barcha chiptalar chop etiladi.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. PATTA PRINT MODAL -->
+    <section id="patta-print" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill amber">3-Oyna: Termo & A4 Chop Etish</div>
+          <h2 class="section-title">«Patta Pechati» — Chop Etiladigan Chiptalar Ko'rinishi</h2>
+          <p class="section-desc">Termo-printer (kassir cheki formati) yoki standart A4 qog'oz formatiga moslashtirilgan, operatsiyalar ro'yxati va tartib raqami aks etgan chiroyli chiptalar.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Modal: PattaPrintModal (Thermal / A4 Ticket Preview)</span>
+        </div>
+        <img src="../assets/screenshots/02b_patta_print_modal.png" alt="Patta Pechat Modali Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>🏷️ Chop Etiladigan Har Bir Patta Qog'ozining Tarkibi</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">1</span>
+            <div><strong>Sarlavha qismi:</strong> Model nomi, Partiya raqami va unikal Patta tartib raqami (masalan: <em>№1, №2, №3...</em>).</div>
+          </li>
+          <li>
+            <span class="bullet">2</span>
+            <div><strong>Tavsif qismi:</strong> Kiyimning rangi, Razmeri (masalan: <em>XL</em>) va Pachkadagi ish soni (masalan: <em>50 dona</em>).</div>
+          </li>
+          <li>
+            <span class="bullet">3</span>
+            <div><strong>Operatsiyalar ro'yxati:</strong> Bichuvdan to qadoqlashgacha bo'lgan barcha texnologik operatsiyalar ketma-ket chiqadi. Tikuvchi qaysi operatsiyani bajarsa, o'sha qatorga o'z ID raqamini yozadi yoki imzo qo'yadi.</div>
+          </li>
+          <li>
+            <span class="bullet">4</span>
+            <div><strong>Avtomatik Arxiv:</strong> «Chop etish» bosilishi bilan ushbu partiya avtomatik tarzda «Patta-hisob» bo'limiga topshirish kutilayotgan partiya sifatida saqlanadi.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 4. PATTA-HISOB SHEET -->
+    <section id="patta-hisob" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill purple">4-Varaq: Nazorat & Audit</div>
+          <h2 class="section-title">«Patta-Hisob» — Chiqarilgan va Topshirilgan Pattalar Solishtirmasi</h2>
+          <p class="section-desc">Chop etilgan partiyalar bilan tikuvchilar tomonidan amalda topshirilgan pattalarni solishtirish, qolib ketgan chiptalarni va yo'qotishlarni aniqlash bo'limi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Varaq: Patta-hisob (Reconciliation, Auditing & Health Status)</span>
+        </div>
+        <img src="../assets/screenshots/03_patta_hisob_sheet.png" alt="Patta-hisob Varaqi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>🔍 Audit Holatlari va Filtrlar</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Holat / Filtr</th>
+                <th style="width: 25%;">Indikator Rangi</th>
+                <th style="width: 50%;">Nimani bildiradi?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>🟢 To'liq Yopilgan</strong></td>
+                <td>Yashil belgi</td>
+                <td>Ushbu partiyadagi barcha pattalar (100%) tikuvchilar tomonidan tikilib topshirilgan va hisob-kitobi yopilgan.</td>
+              </tr>
+              <tr>
+                <td><strong>🟡 Jarayonda</strong></td>
+                <td>Sariq belgi</td>
+                <td>Partiya hozir konveyerda tikilmoqda, pattalar qisman topshirilmoqda.</td>
+              </tr>
+              <tr>
+                <td><strong>🔴 Farq bor (Mismatch)</strong></td>
+                <td>Qizil ogohlantirish</td>
+                <td><strong>Eng muhim audit!</strong> Qaysidir patta yo'qolgan, topshirilmay qolib ketgan yoki sonida nomuvofiqlik borligini ko'rsatadi.</td>
+              </tr>
+              <tr>
+                <td><strong>🔎 Qidiruv Paneli</strong></td>
+                <td>Matnli input</td>
+                <td>Partiya raqami yoki model nomi bo'yicha kerakli partiyani 1 soniyada topib beradi.</td>
+              </tr>
+              <tr>
+                <td><strong>📁 Arxivni Ko'rish</strong></td>
+                <td>Oylar menyusi</td>
+                <td>Oldingi oylardagi partiyalarni ochib, o'sha oyda nimalar tikilganini tekshirish.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. KONVEYER SHEET -->
+    <section id="konveyer" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill green">5-Varaq: Ishlab Chiqarish Monitoringi</div>
+          <h2 class="section-title">«Konveyer» — Liniyalarning Real-Vaqt Jonli Matrisasi</h2>
+          <p class="section-desc">Fabrikadagi barcha konveyerlarning (1, 2, 3...) kunlik va partiyaviy unumdorligini, qaysi liniya qancha mahsulot chiqarganini ko'rsatuvchi interaktiv monitoring paneli.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Varaq: Konveyer (Real-time Line Matrix & Performance)</span>
+        </div>
+        <img src="../assets/screenshots/04_konveyer_sheet.png" alt="Konveyer Varaqi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>🏭 Konveyer Varaqining Imkoniyatlari</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">📊</span>
+            <div><strong>Matrisa Ko'rinishi (Matrix View):</strong> Har bir konveyer qatorida modellar bo'yicha nechta chipta kiritilgani, tikilgan ishlar soni va umumiy qiymati (so'mda) ko'rinadi.</div>
+          </li>
+          <li>
+            <span class="bullet">📋</span>
+            <div><strong>Batafsil Ro'yxat (Details Tab):</strong> Har bir topshirilgan pattaning vaqti, konveyeri, modeli, partiyasi, razmeri va tikuvchilar ro'yxatini jadval ko'rinishida ko'rish.</div>
+          </li>
+          <li>
+            <span class="bullet">🎯</span>
+            <div><strong>Liniyalar Filtratsiyasi:</strong> Qaysi konveyer qanday ishlayotganini alohida tanlab ko'rish va kam ishlayotgan liniyani darhol aniqlash.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 6. MODEL PATTA ENTRY SHEET -->
+    <section id="model-kiritish" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill blue">6-Varaq: Ish Qabul Qilish</div>
+          <h2 class="section-title">Model «Patta Kiritish» — Tikuvchilardan Chiptalarni Qabul Qilish</h2>
+          <p class="section-desc">Tikuvchilar tikib bo'lib olib kelgan qog'oz chiptalarni operator tomonidan soniyalarda bazaga kiritish va xodimlarning hisobiga yozish sahifasi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Varaq: Basiman (Ticket Entry, Worker ID mapping & Validation)</span>
+        </div>
+        <img src="../assets/screenshots/05_model_patta_entry.png" alt="Model Patta Kiritish Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>📝 Chipta Kiritish Maydonlari va Xatoliklardan Himoya</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Maydon / Input</th>
+                <th style="width: 25%;">Nima kiritiladi?</th>
+                <th style="width: 50%;">Avtomatika va himoya qoidalari</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="tag-input">Sana (Date):</span></td>
+                <td>Sana (YYYY-MM-DD)</td>
+                <td>Bugungi sana avtomatik turadi, xohlagan sanaga o'zgartirish mumkin.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Konveyer:</span></td>
+                <td>Konveyer raqami (1, 2...)</td>
+                <td>Ish qaysi konveyerda tikilganini bildiradi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Partiya (Party):</span></td>
+                <td>Partiya raqami (masalan: 6632)</td>
+                <td>Agar bu partiya bazada bo'lmasa yoki boshqa modelga tegishli bo'lsa, tizim <strong>qizil xatolik bilan bloklaydi</strong>!</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Patta raqami:</span></td>
+                <td>Chipta tartib raqami (1, 2...)</td>
+                <td>Patta raqami kiritilishi bilan uning <strong>Rangi, Razmeri va Soni avtomatik chiqadi</strong>!</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Ishchi ID (Operatsiyalar):</span></td>
+                <td>Ishchi raqami (masalan: 5, 12, 45)</td>
+                <td>Har bir operatsiyaga ishchi ID si yoziladi. Yozilishi bilan yonida <strong>ishchining to'liq ismi chiqadi</strong> (xato yozishning oldi olinadi).</td>
+              </tr>
+              <tr>
+                <td><span class="tag-action">🚀 Jo'natish Tugmasi</span></td>
+                <td>Tasdiqlash tugmasi</td>
+                <td>Bosilganda barcha ishchilarning hisobiga operatsiya pullari avtomatik yoziladi va forma keyingi patta uchun tozanadi.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. MODEL HISOB SHEET -->
+    <section id="model-hisob" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill amber">7-Varaq: Operatsiyalar & Tariflar</div>
+          <h2 class="section-title">Model «Hisob-Kitob» — Operatsiyalar Stavkalari va Ish Hajmlari</h2>
+          <p class="section-desc">Ushbu model bo'yicha har bir operatsiyaning donabay narxi (stavkasi) va har bir xodim qaysi operatsiyadan qancha dona tikkanini ko'rsatuvchi master varaq.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Varaq: Basiman-hisob (Piece-Rates & Operations Quantities)</span>
+        </div>
+        <img src="../assets/screenshots/06_model_hisob_sheet.png" alt="Model Hisob Varaqi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>💰 Stavka va Miqdorlar Jadvali</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">1</span>
+            <div><strong>1-qator (Operatsiya nomlari):</strong> Modelning barcha texnologik qismlari (masalan: <em>Гулфи тахлов, Резинка қўйиш, Дазмол, Контроль...</em>).</div>
+          </li>
+          <li>
+            <span class="bullet">2</span>
+            <div><strong>2-qator (Tarif / Stavka):</strong> Har bir operatsiya uchun 1 dona kiyimga to'lanadigan pul (masalan: <em>30 so'm, 150 so'm, 250 so'm...</em>). Agar narx o'zgarsa, shu yerning o'zida o'zgartiriladi va barcha oyliklar avtomatik qayta hisoblanadi.</div>
+          </li>
+          <li>
+            <span class="bullet">3</span>
+            <div><strong>Katakchalar (Miqdorlar):</strong> Ishchilar qaysi operatsiyadan necha dona tikkani ko'rsatiladi.</div>
+          </li>
+          <li>
+            <span class="bullet">4</span>
+            <div><strong>Jami Ustun:</strong> Xodimning faqat ushbu modeldan ishlagan jami summasi.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 8. WORKER MANAGER MODAL -->
+    <section id="worker-manager" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill green">8-Oyna: Xodimlar Boshqaruvi</div>
+          <h2 class="section-title">«Ishchilar Boshqaruvi» — Xodimlar Ro'yxati va Doimiy Stajlar</h2>
+          <p class="section-desc">Korxona xodimlarini ro'yxatdan o'tkazish, ularga unikal ID berish, lavozimlarini belgilash va oylik staj bonuslarini kiritish markazi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Modal: WorkerManagerModal (199 Employees, Search & Tenure Bonus)</span>
+        </div>
+        <img src="../assets/screenshots/07_worker_manager_modal.png" alt="Ishchilar Modali Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>👥 Boshqaruv Elementlari</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">🔍</span>
+            <div><strong>Tezkor Qidiruv:</strong> 199 ta ishchi ichidan ism yoki ID raqami bo'yicha 1 soniyada xodimni topish.</div>
+          </li>
+          <li>
+            <span class="bullet">➕</span>
+            <div><strong>Yangi Ishchi Qo'shish:</strong> Yangi xodim kelganda uning ismi, lavozimi va oylik staj summasini kiritib ro'yxatga qo'shish.</div>
+          </li>
+          <li>
+            <span class="bullet">⭐</span>
+            <div><strong>Doimiy Staj Ustuni:</strong> Xodimga har oy kafolatlangan ustama puli (masalan 140,000 so'm). Bu summa har oy o'chib ketmaydi, doim saqlanadi.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 9. WORKER DETAIL MODAL -->
+    <section id="worker-detail" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill blue">9-Oyna: Ishchi Dosyesi</div>
+          <h2 class="section-title">«Ishchi Shaxsiy Kartochkasi» — 100% Shaffof Ish Haqi Isboti</h2>
+          <p class="section-desc">Ishchi bilan oylik hisob-kitob bo'yicha har qanday savol tug'ilganda, uning bajargan har bir operatsiyasini, qaysi konveyerda, qaysi partiyada va qaysi soatda tikkanini ko'rsatib beruvchi shaxsiy dosye.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Modal: WorkerDetailModal (Full Operation History & Export)</span>
+        </div>
+        <img src="../assets/screenshots/08_worker_detail_modal.png" alt="Ishchi Shaxsiy Kartochkasi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>📜 Kartochkada Aks Etuvchi Ma'lumotlar</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">📌</span>
+            <div><strong>Umumiy Kartochka:</strong> Xodimning ID raqami, To'liq ismi, Jami ishlagan summasi va Jami bajargan operatsiyalari soni.</div>
+          </li>
+          <li>
+            <span class="bullet">⏱️</span>
+            <div><strong>Xronologik Tarix:</strong> Ish qabul qilingan sana va soat, Konveyer raqami, Model nomi, Partiya raqami, Patta raqami, Razmer, Rang, Operatsiya nomi, Stavka narxi, Tikilgan soni va Ishlab topilgan summa.</div>
+          </li>
+          <li>
+            <span class="bullet">📥</span>
+            <div><strong>Eksport Qilish:</strong> Ushbu hisobotni ishchining qo'liga berish uchun alohida qog'ozga chiqarish yoki Excel qilib tashlab berish imkoniyati.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 10. PERIOD MANAGER MODAL -->
+    <section id="period-manager" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill purple">10-Oyna: Oylik Yopish & Arxiv</div>
+          <h2 class="section-title">«Oylik Davr Boshqaruvi» — Oyni Yopish va Cheksiz Arxiv</h2>
+          <p class="section-desc">Har oy yakunlanganda bitta tugma bilan oyni yopish, barcha hisoblarni arxivga muhrlash va yangi oyni toza balans bilan boshlash oynasi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Modal: PeriodManagerModal (Close Month, Reset Advances, Archive History)</span>
+        </div>
+        <img src="../assets/screenshots/09_period_manager_modal.png" alt="Oylik Davr Boshqaruvi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>🔒 Oylik Yopilganda Tizimda Nimalar Yuz Beradi?</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">1</span>
+            <div><strong>Arxiv Yaratiladi:</strong> Ushbu oyning barcha oyliklari, tikilgan pattalari va konveyer tarixi alohida o'zgarmas arxiv fayliga muhrlanadi.</div>
+          </li>
+          <li>
+            <span class="bullet">2</span>
+            <div><strong>Avans va Jarimalar Nolga Qaytadi:</strong> Yangi oy boshlangani uchun barcha xodimlarning avans va jarimalari avtomatik 0 so'm bo'ladi.</div>
+          </li>
+          <li>
+            <span class="bullet">3</span>
+            <div><strong>Staj Saqlanadi:</strong> Xodimlarning belgilangan staj pullari yangi oyga avtomatik o'tadi.</div>
+          </li>
+          <li>
+            <span class="bullet">4</span>
+            <div><strong>O'tgan Oylarni Ko'rish:</strong> Istalgan o'tgan oyni tanlab, o'sha oyda kim qancha oylik olganini ko'rish va yuklab olish mumkin.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 11. BACKUP MANAGER MODAL -->
+    <section id="backup-manager" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill amber">11-Oyna: Xavfsizlik & Zaxira</div>
+          <h2 class="section-title">«Zaxiralar (Backup) Boshqaruvi» — Ma'lumotlarning 100% Xavfsizligi</h2>
+          <p class="section-desc">Kompyuter o'chib qolsa, nosozlik bo'lsa yoki tasodifan biror ma'lumot o'chib ketsa ham, barcha hisobotlarni 1 soniyada qaytarib beruvchi avtomatik zaxira tizimi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Modal: BackupManagerModal (Auto Backups & Point-in-Time Restore)</span>
+        </div>
+        <img src="../assets/screenshots/10_backup_manager_modal.png" alt="Zaxiralar Boshqaruvi Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>🛡️ Zaxira Tizimining Xususiyatlari</h4>
+        <ul class="insight-list">
+          <li>
+            <span class="bullet">💾</span>
+            <div><strong>Avtomatik Zaxira:</strong> Tizim har bir muhim amalda (masalan oylik kiritilganda, partiya qo'shilganda) o'zi mustaqil zaxira nusxa olib boradi.</div>
+          </li>
+          <li>
+            <span class="bullet">⏪</span>
+            <div><strong>Qayta Tiklash (Restore):</strong> Agar operator adashib biror partiyani o'chirib yuborsa, zaxiralar ro'yxatidan o'sha vaqtdagi nusxani tanlab «Tiklash» tugmasini bosish kifoya.</div>
+          </li>
+          <li>
+            <span class="bullet">📊</span>
+            <div><strong>Excel Bilan Sinxronizatsiya:</strong> Dastur barcha ma'lumotlarni parallel ravishda kompyuterdagi <code>Buxoro_Hisob_Oxirgi.xlsx</code> fayliga ham saqlab boradi.</div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 12. NEW MODEL MODAL -->
+    <section id="new-model" class="feature-section">
+      <div class="section-header">
+        <div>
+          <div class="badge-pill green">12-Oyna: Yangi Mahsulot Qo'shish</div>
+          <h2 class="section-title">«Yangi Model Qo'shish» — Yangi Kiyim va Operatsiyalar Konstruktori</h2>
+          <p class="section-desc">Korxonaga yangi buyurtma yoki yangi kiyim modeli kelganda, uning barcha operatsiyalari va stavkalarini kiritib tizimga ulash ustasi.</p>
+        </div>
+      </div>
+
+      <div class="screenshot-wrapper">
+        <div class="screenshot-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <span class="screenshot-url">Modal: NewModelModal (Model Creator, Operations Sequence & Rates)</span>
+        </div>
+        <img src="../assets/screenshots/11_new_model_modal.png" alt="Yangi Model Qo'shish Skrinshoti" class="screenshot-img">
+      </div>
+
+      <div class="details-card">
+        <h4>👕 Yangi Model Qo'shish Bosqichlari</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Maydon / Input</th>
+                <th style="width: 25%;">Misol</th>
+                <th style="width: 50%;">Vazifasi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="tag-input">Model nomi:</span></td>
+                <td><em>Polo Futbolka Long</em></td>
+                <td>Mahsulotning nomi. Ushbu nom bilan pastda yangi 2 ta varaq ochiladi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Mato Partiyasi & Rang:</span></td>
+                <td><em>6632 / Qora</em></td>
+                <td>Boshlang'ich partiya raqami va rangi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-input">Operatsiyalar:</span></td>
+                <td><em>Yoqa tikish (120 so'm)</em></td>
+                <td>Kiyim tikilishidagi barcha operatsiyalar ro'yxati va ularning donabay ish haqi narxi belgilanadi.</td>
+              </tr>
+              <tr>
+                <td><span class="tag-action">Saqlash</span></td>
+                <td>Yaratish tugmasi</td>
+                <td>Dasturda bir zumda yangi kiyim modeli uchun barcha jadvallar va formulalar tayyor bo'ladi.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Final CTA -->
+    <div class="cta-box">
+      <h2>Ishlab Chiqarishingizni Bugunoq Avtomatlashtiring!</h2>
+      <p>«Novda Hisob-Kitob» tizimi fabrikangiz hisob-kitobini o'g'riliklardan, xatoliklardan va ortiqcha to'lovlardan 100% himoya qiladi hamda xodimlarning ishonchini oshiradi.</p>
+
+      <button class="btn-white-cta" onclick="window.print()">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        Ushbu To'liq Qo'llanmani PDF Sifatida Saqlash
+      </button>
+    </div>
+
+  </div>
+
+</body>
+</html>

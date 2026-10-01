@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Novda PostgreSQL backup restore verification
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+Unit=novda-postgres-restore-drill.service
+
+[Install]
+WantedBy=timers.target
