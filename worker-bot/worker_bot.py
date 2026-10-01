@@ -295,6 +295,10 @@ def finish_registration(chat_id, user, telegram_id, state, pin=None):
 
 def handle_text(chat_id, user, text, message_id=None):
     telegram_id = str(user.get("id", ""))
+    if text.strip().lower() == "/start":
+        USER_STATES.pop(telegram_id, None)
+        begin_registration(chat_id, user)
+        return
     state = USER_STATES.get(telegram_id, {})
     binding = state.get("binding") if state.get("step") == "BOUND" else get_worker_binding(telegram_id)
     if binding:
