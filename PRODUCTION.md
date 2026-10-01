@@ -1,12 +1,12 @@
 # Novda Hisob-Kitob — Production and Project Guide
 
-**Authoritative project document. Status captured 2026-09-25.**
+**Authoritative project document. Status captured 2026-10-01.**
 
 This document combines current operating guidance, product usage, architecture,
 release history, verification commands, and outstanding qualification gates. Older
 root-level plans, audit reports, transcripts, and runbooks were reviewed and
-consolidated here. The `admin-bot` and `worker-bot` applications are maintained
-in separate Git repositories with separate runtime code and configuration.
+consolidated here. The `admin-bot` and `worker-bot` are separate runtime services
+and Docker build contexts within the main repository.
 
 ## 1. Safety and data authority
 
@@ -19,9 +19,9 @@ in separate Git repositories with separate runtime code and configuration.
   operation says otherwise. Do not use broad cleanup, reset, or restore commands.
 - Do not modify the IELTS project, its services, data, network, TLS, Nginx, or
   volumes. This session did not access or modify IELTS.
-- Do not import business data, apply source-only migrations, change production
-  policy, deploy services, enable an unqualified writer, or distribute an
-  unsigned candidate as part of routine source work.
+- Business-data import and production deployment require a specifically
+  authorized operation, an independently verified target, a backup, and
+  post-import reconciliation. Routine source work alone does not authorize them.
 - Production services run on the VPS using Docker Compose, systemd, and Nginx.
 - Never put secrets in source, reports, shell history, command-line arguments,
   logs, or browser storage. Only public verification keys may ship in the client.
@@ -36,13 +36,10 @@ in separate Git repositories with separate runtime code and configuration.
 ### Repository and client
 
 - Canonical project package and lockfile version: **0.0.0**.
-- Git branch/HEAD at capture: `master`, `ea6c0d46fd10eb12306c90733f905f6436684ec3`;
-  the branch is one commit ahead of `origin/master`. That commit was already at
-  HEAD when this work resumed. The worktree remains dirty and no commit was made
-  during this session.
-- SQLite schema source lineage is at migration 12. PostgreSQL source migration
-  lineage is at migration 12. Migration 12 is source-only and has **not** been
-  applied to production.
+- Git branch/HEAD at capture: `main`, `fc8b58b`, synchronized with `origin/main`.
+- SQLite schema source lineage is at migration 15. PostgreSQL source migration
+  lineage is at migration 16. The supplied `comp_novda` SQLite candidate reports
+  schema version 15 and passes `PRAGMA integrity_check`.
 - Application identity remains `com.novda.hisob` / `Novda-hisob-kitob`, Electron
   44, Windows x64, per-user NSIS installation. Electron user data is under
   `%APPDATA%\novda-hisob-kitob`; do not uninstall or clear it as a troubleshooting
@@ -52,41 +49,29 @@ in separate Git repositories with separate runtime code and configuration.
   removed. Do not reintroduce a build command that commits, pushes, publishes, or
   writes hosting-provider metadata.
 
-### Last verified production baseline
+### Authorized initial data source and deployment status
 
-The last read-only production evidence available to this session was captured
-2026-09-24:
+The owner identified `C:\Users\bekbo\Desktop\baza\hisob.sqlite` as the
+corrected in-progress database for `comp_novda`, and reported that the VPS is
+empty. This supersedes the older 2026-09-24 baseline as the intended initial
+business-data source; those earlier counts are historical evidence, not current
+truth.
 
-- 201 workers, 18 models, 42 parties, and 2 periods.
-- Worker 200's existing Telegram binding is preserved. Worker 201 remains
-  unbound. The next worker ID is 202.
-- The opening ledger contains 4 AVANS facts totaling 2,020,000 and 7 JARIMA
-  facts totaling 550,000.
-- No tickets, ticket entries, individual printed-patta facts, production
-  adjustments, or baseline change-log events were present in the clean baseline.
-- The five historical tally candidates totaling 747 units were excluded by the
-  owner-approved clean-ledger baseline decision. They must not be converted into
-  tickets or adjustments without new explicit business authority.
-- The two existing Party #2 records are the exact IDs
-  `rec_1788774889449_vrbkv` and `rec_1788930871307_cg1iv`. The exception is
-  limited to these IDs in `comp_novda`; no third active Party #2 is allowed.
-  Display numbers are not canonical identities. Tickets reference a party UUID.
-- The production API health endpoint last returned healthy at
-  `https://sync.novdatextile.uz/api/health`; the Admin WebApp is served at
-  `https://sync.novdatextile.uz/admin-app`. Recheck externally before an
-  operational action.
-- Read-only public GETs during this session returned healthy API status
-  `status=ok` (reported timestamp `2026-09-24T20:49:29.651Z`) and
-  HTML for `/admin-app` and `/worker-app`. These public checks do not verify
-  authenticated flows or the deployed PostgreSQL migration revision.
-- The last recorded production PostgreSQL migration set was 1–10. Current source
-  migrations 11–12 have not been verified/applied on the VPS.
+Read-only local inspection on 2026-10-01 recorded:
 
-SSH verification during this session failed with `Permission denied
-(publickey,password)`. Therefore current production schema/revision, worker-bot
-deployment state, and current IELTS before/after state could not be freshly
-confirmed. No deployment, database mutation, or Telegram action
-was performed.
+- SHA-256 `7db7b8f2cbf2c9104107ce2a29b5d1d71ce36bfd0ac6db57a1adc317eb9b75b3`;
+- 209 workers, 20 models, 54 parties, 1 period, 3 tickets, 36 ticket entries,
+  63 worker adjustments, and 22 production adjustments;
+- 2 active legacy Party #2 exceptions, 20 model ID aliases, and 52 party ID
+  aliases;
+- `local_outbox`: 231 `SYNCED` and 111 `DEAD_LETTER` records. The
+  `DEAD_LETTER` records remain local and are excluded from the server baseline
+  import; import the canonical business tables only.
+
+The SQLite file was not modified. VPS emptiness is owner-reported but has not
+been independently verified: SSH authentication from this session was
+unsuccessful. No production deployment or database import has run. Confirm the
+target identity and backup before applying migrations or importing data.
 
 ### Runtime classification
 
@@ -274,18 +259,14 @@ This continuation added or changed source for:
 - Worker WebApp display of the existing `staj` payroll deduction.
 - Canonical UUID model/party identities, company-wide patta ranges, per-patta
   quantity normalization, data-driven collision approvals, and removal of
-  closed/archived local history. PostgreSQL migration 16 is source-only and must
-  be applied to the authoritative server before clients using the canonical IDs
-  reconnect; it has not been executed on production.
+  closed/archived local history. PostgreSQL migration 16 must be applied before
+  clients using canonical IDs reconnect; execution on the VPS is not verified.
 
-Root source/documentation changes remain uncommitted. The bot submodules already
-had local commits ahead of their remotes. Their verified origin URLs are now in
-`.gitmodules`, and both submodule worktrees are clean at local commits:
-`admin-bot` `72a6736` and `worker-bot` `95e0d89`. The worker commit contains the
-PIN fail-closed registration and staj display fixes; both submodule commits
-remove their old Markdown guides as part of the single-document consolidation.
-Neither submodule commit was pushed. Push the two submodule commits before
-publishing any root commit that points to them.
+The admin and worker bots are built from directories in the main repository;
+they are not Git submodules. The migration-16 production deploy-list correction
+is included in `fc8b58b`. Follow-up fixes for migration 16's optional
+SQLite-only quarantine tables and test-exclusion shell quoting are local and
+await isolated PostgreSQL verification.
 
 ## 8. Local verification commands
 

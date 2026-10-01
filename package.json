@@ -13,7 +13,7 @@
     "client": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
-    "test:non-pg": "vitest run --exclude apps/server/** --exclude apps/desktop/electron/sync/syncIntegration.test.ts --exclude apps/desktop/electron/sync/outboxRecovery.test.ts --exclude apps/desktop/electron/sync/bootstrapIntegration.test.ts",
+    "test:non-pg": "vitest run --exclude \"apps/server/**\" --exclude \"apps/desktop/electron/sync/syncIntegration.test.ts\" --exclude \"apps/desktop/electron/sync/outboxRecovery.test.ts\" --exclude \"apps/desktop/electron/sync/bootstrapIntegration.test.ts\"",
     "test:postgres": "node scripts/verify/verify-pg16-test-env.cjs && vitest run apps/server apps/desktop/electron/sync/syncIntegration.test.ts apps/desktop/electron/sync/outboxRecovery.test.ts apps/desktop/electron/sync/bootstrapIntegration.test.ts",
     "verify:release-integrity": "node scripts/verify/verify-release-integrity.cjs",
     "preview": "vite preview",

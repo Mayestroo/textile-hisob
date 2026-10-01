@@ -214,10 +214,18 @@ UPDATE patta_batch_settings b SET model_id = m.new_id FROM model_id_remap m
 WHERE b.company_id = m.company_id AND b.model_id = m.old_id;
 UPDATE printed_pattas p SET model_id = m.new_id FROM model_id_remap m
 WHERE p.company_id = m.company_id AND p.model_id = m.old_id;
-UPDATE migration_quarantine_parties q SET model_id = m.new_id FROM model_id_remap m
-WHERE q.company_id = m.company_id AND q.model_id = m.old_id;
-UPDATE migration_quarantine_tickets q SET model_id = m.new_id FROM model_id_remap m
-WHERE q.company_id = m.company_id AND q.model_id = m.old_id;
+-- These migration-only quarantine tables exist in the desktop SQLite schema,
+-- but are intentionally not part of the authoritative PostgreSQL schema.
+-- Keep compatibility with installations that may have explicitly provisioned
+-- them without requiring them for a fresh PostgreSQL deployment.
+DO $$ BEGIN
+  IF to_regclass('public.migration_quarantine_parties') IS NOT NULL THEN
+    EXECUTE 'UPDATE migration_quarantine_parties q SET model_id = m.new_id FROM model_id_remap m WHERE q.company_id = m.company_id AND q.model_id = m.old_id';
+  END IF;
+  IF to_regclass('public.migration_quarantine_tickets') IS NOT NULL THEN
+    EXECUTE 'UPDATE migration_quarantine_tickets q SET model_id = m.new_id FROM model_id_remap m WHERE q.company_id = m.company_id AND q.model_id = m.old_id';
+  END IF;
+END $$;
 UPDATE migration_reconciliation_candidates q SET model_id = m.new_id FROM model_id_remap m
 WHERE q.company_id = m.company_id AND q.model_id = m.old_id;
 
@@ -231,8 +239,11 @@ UPDATE printed_pattas p SET party_record_id = r.new_id FROM party_id_remap r
 WHERE p.company_id = r.company_id AND p.party_record_id = r.old_id;
 UPDATE migration_party_resolutions q SET party_id = r.new_id FROM party_id_remap r
 WHERE q.company_id = r.company_id AND q.party_id = r.old_id;
-UPDATE migration_quarantine_parties q SET resolved_party_id = r.new_id FROM party_id_remap r
-WHERE q.company_id = r.company_id AND q.resolved_party_id = r.old_id;
+DO $$ BEGIN
+  IF to_regclass('public.migration_quarantine_parties') IS NOT NULL THEN
+    EXECUTE 'UPDATE migration_quarantine_parties q SET resolved_party_id = r.new_id FROM party_id_remap r WHERE q.company_id = r.company_id AND q.resolved_party_id = r.old_id';
+  END IF;
+END $$;
 UPDATE parties p SET id = r.new_id FROM party_id_remap r
 WHERE p.company_id = r.company_id AND p.id = r.old_id;
 
