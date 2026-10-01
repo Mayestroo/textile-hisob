@@ -12,7 +12,7 @@ const migrator = require('../desktop/electron/database/migrator.cjs');
 // @ts-ignore
 const databaseManager = require('../desktop/electron/database/databaseManager.cjs');
 
-describe('Phase 2 — Active-Party Uniqueness Owner Exception Policy Tests (INV-05)', () => {
+describe('Phase 2 â€” Active-Party Uniqueness Owner Exception Policy Tests (INV-05)', () => {
   let app: any;
   let pool: any;
 
@@ -41,21 +41,24 @@ describe('Phase 2 — Active-Party Uniqueness Owner Exception Policy Tests (INV-
     // Seed test models
     await pool.query(
       `INSERT INTO models (id, company_id, name, operations_json) 
-       VALUES ($1, $2, 'BODY-T-SHRIT', '[]'), ($3, $2, 'Aleksandr-Приталинний', '[]')`,
+       VALUES ($1, $2, 'BODY-T-SHRIT', '[]'), ($3, $2, 'Aleksandr-ÐŸÑ€Ð¸Ñ‚Ð°Ð»Ð¸Ð½Ð½Ð¸Ð¹', '[]')`,
       ['model-body-t', COMPANY, 'model-alex-prit']
     );
   });
 
   function makePartyOp(opId: string, commandType: 'CreateParty' | 'CloseParty', payload: any) {
-    const canonical = canonicalStringify(payload);
+    const normalizedPayload = commandType === 'CreateParty' && payload.pattaCount === undefined
+      ? { ...payload, pattaCount: 1 }
+      : payload;
+    const canonical = canonicalStringify(normalizedPayload);
     const hash = computePayloadHash(canonical);
     return {
       operationId: opId,
       companyId: COMPANY,
       commandType,
       entityType: 'party',
-      entityId: payload.partyRecordId || payload.id,
-      payload,
+      entityId: normalizedPayload.partyRecordId || normalizedPayload.id,
+      payload: normalizedPayload,
       payloadHash: hash
     };
   }
