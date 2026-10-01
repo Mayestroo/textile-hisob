@@ -52,7 +52,7 @@ function registerWorkerRoutes(app, options = {}) {
   const workerApiToken = options.workerApiToken ?? readSecret(env, 'NOVDA_WORKER_API_TOKEN');
   const workerHmacSecret = options.workerAuthHmacSecret ?? readSecret(env, 'WORKER_AUTH_HMAC_SECRET');
   const workerPinRequired = String(env.NOVDA_WORKER_PIN_REQUIRED ?? 'true').toLowerCase() !== 'false';
-  const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', 'worker-bot', 'webapp', 'index.html');
+  const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', '..', '..', 'worker-bot', 'webapp', 'index.html');
 
   app.get('/worker-app', async (_request, reply) => {
     try {
