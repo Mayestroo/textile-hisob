@@ -8,6 +8,7 @@ const {
   RESTRICTIVE_FOREIGN_KEYS,
   verifyPostgresReleaseState
 } = require('./postgresIntegrity.cjs');
+const { MIGRATIONS: productionMigrations } = require('../../../ops/deploy/migrateProduction.cjs');
 const { verifyFreshPostgres16TestEnvironment } = require('../../../scripts/verify/verify-pg16-test-env.cjs');
 
 const exactMigrations = [
@@ -25,7 +26,8 @@ const exactMigrations = [
   'deploy_exact_party_2_company_scope_migration.sql',
   'deploy_activation_policy_device_sync_migration.sql',
   'deploy_free_mode_ticket_party_migration.sql',
-  'deploy_patta_work_quantity_migration.sql'
+  'deploy_patta_work_quantity_migration.sql',
+  'deploy_canonical_ids_global_patta_sequence.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -123,6 +125,10 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
 }
 
 describe('PostgreSQL release-integrity evidence', () => {
+  it('deploys exactly the migration lineage required by release verification', () => {
+    expect(productionMigrations).toEqual(exactMigrations.map(({ name }) => name));
+  });
+
   it('returns named PostgreSQL evidence for the complete ordered schema', async () => {
     const client = createEvidenceClient();
 
@@ -322,7 +328,8 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       'deploy_exact_party_2_company_scope_migration.sql',
       'deploy_activation_policy_device_sync_migration.sql',
       'deploy_free_mode_ticket_party_migration.sql',
-      'deploy_patta_work_quantity_migration.sql'
+      'deploy_patta_work_quantity_migration.sql',
+      'deploy_canonical_ids_global_patta_sequence.sql'
     ]) {
       await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
     }
@@ -339,7 +346,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
 
   it('verifies a fresh schema after applying all ordered deployment migrations', async () => {
     const freshReport = await verifyPostgresReleaseState(isolatedPool);
-    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
     expect(freshReport.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(freshReport.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(freshReport.baseline.scopePreserved).toBe(true);
