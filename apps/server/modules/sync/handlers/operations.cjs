@@ -633,11 +633,11 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
     `SELECT p.id, p.company_id, p.party_number, p.model_id, p.status,
             e.collision_group_id
      FROM parties p
-     LEFT JOIN legacy_party_collision_exceptions e
-       ON e.company_id = p.company_id AND e.party_id = p.id
-      AND e.party_number = p.party_number AND e.status = 'ACTIVE'
-     WHERE p.company_id = $1 AND p.party_number = $2 AND p.status != 'CLOSED'
-     FOR UPDATE`,
+      LEFT JOIN legacy_party_collision_exceptions e
+        ON e.company_id = p.company_id AND e.party_id = p.id
+       AND e.party_number = p.party_number AND e.status = 'ACTIVE'
+      WHERE p.company_id = $1 AND p.party_number = $2 AND p.status != 'CLOSED'
+      FOR UPDATE OF p`,
     [companyId, partyNumber]
   );
   const candidateException = await client.query(

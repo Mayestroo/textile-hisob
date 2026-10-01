@@ -48,15 +48,18 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
   }
 
   function partyOperation(operationId: string, commandType: 'CreateParty' | 'CloseParty', payload: any, companyId = COMPANY) {
-    const canonical = canonicalStringify(payload);
+    const normalizedPayload = commandType === 'CreateParty' && payload.pattaCount === undefined
+      ? { ...payload, pattaCount: 1 }
+      : payload;
+    const canonical = canonicalStringify(normalizedPayload);
     return {
       operationId,
       companyId,
       commandType,
       entityType: 'party',
-      entityId: payload.partyRecordId,
+      entityId: normalizedPayload.partyRecordId,
       payloadHash: computePayloadHash(canonical),
-      payload
+      payload: normalizedPayload
     };
   }
 
@@ -234,14 +237,16 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
     const payloadA = {
       partyRecordId: 'uuid-concurrent-p5-a',
       partyNumber: partyNum,
-      modelId: 'm_concurrent'
+      modelId: 'm_concurrent',
+      pattaCount: 1
     };
     const hashA = computePayloadHash(canonicalStringify(payloadA));
 
     const payloadB = {
       partyRecordId: 'uuid-concurrent-p5-b',
       partyNumber: partyNum,
-      modelId: 'm_concurrent'
+      modelId: 'm_concurrent',
+      pattaCount: 1
     };
     const hashB = computePayloadHash(canonicalStringify(payloadB));
 
