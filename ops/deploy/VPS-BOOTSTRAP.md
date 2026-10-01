@@ -48,11 +48,13 @@ root.
 
 These keys serve different purposes:
 
-1. **GitHub Actions → VPS:** generate a dedicated SSH key pair. Add its public
-   key to `/home/deploy/.ssh/authorized_keys` (mode `0600`, owned by deploy).
-   Store the private key as GitHub Actions secret `VPS_SSH_KEY`; set `VPS_HOST`,
-   `VPS_USER=deploy` and `VPS_PORT` as repository/environment secrets too.
-2. **VPS → GitHub repository:** generate a different key pair on the VPS for
+1. **GitHub Actions â†’ VPS:** add the Actions public key to
+   `/home/deploy/.ssh/authorized_keys` (mode `0600`, owned by deploy). Store
+   the encrypted private key as GitHub Actions secret `VPS_SSH_KEY` and its
+   passphrase as `VPS_SSH_PASSPHRASE`; set `VPS_HOST`, `VPS_USER=deploy` and
+   `VPS_PORT` as repository/environment secrets too. The workflow loads the key
+   through a short-lived SSH agent and does not print the passphrase.
+2. **VPS â†’ GitHub repository:** generate a different key pair on the VPS for
    `deploy`, register its public key as a read-only deploy key on this private
    repository, and configure SSH to use that key for the repository host. Never
    copy the Actions key into the VPS or use the repository read key for Actions.
@@ -60,22 +62,20 @@ These keys serve different purposes:
 For example, create the repository-read key as deploy with
 `ssh-keygen -t ed25519 -f ~/.ssh/novda-repository-read -N ''`, then add its
 public half to GitHub. Configure `~/.ssh/config` for `github.com` to use that
-identity and verify `ssh -T git@github.com`. Restrict the VPS key to
-`command="..."` only if the chosen forced-command setup supports the Git SSH
-submodule operations; otherwise keep the key read-only at repository scope.
+identity and verify `ssh -T git@github.com`. Keep this repository-read key
+read-only and separate from the Actions-to-VPS key.
 
 ## 3. Clone the canonical repository
 
 As deploy, with the repository-read key configured:
 
 ```sh
-git clone --branch main --recurse-submodules git@github.com:OWNER/REPOSITORY.git /srv/novda/repository
+git clone --branch main git@github.com:Mayestroo/textile-hisob.git /srv/novda/repository
 ```
 
-Replace `OWNER/REPOSITORY` with the private repository's actual GitHub path.
-Private `admin-bot` and `worker-bot` submodules also need read access for this
-deploy key (or an equivalent least-privilege GitHub App credential). Ensure
-`git submodule update --init --recursive` succeeds before enabling automation.
+The `admin-bot` and `worker-bot` are directories in this repository and are
+built as separate Docker services; they are not Git submodules. No separate
+bot-repository key or submodule token is needed.
 
 ## 4. Configure persistent production environment and credentials
 
@@ -118,8 +118,8 @@ docker compose --env-file /srv/novda/secrets/compose.env \
 ```
 
 The script fetches and resets only `/srv/novda/repository` to the fetched
-`origin/main` commit, updates submodules, builds the candidate images, applies
-replay-safe migrations, and starts PostgreSQL,
+`origin/main` commit, builds the candidate images, applies replay-safe migrations,
+and starts PostgreSQL,
 the canonical API, `admin-bot`, and `worker-bot`, removes Compose orphans without
 removing persistent volumes, and checks `/health` plus service health. Configure
 the public ingress route to the API as appropriate and check the external health
@@ -135,11 +135,11 @@ environment):
 - `VPS_USER` (normally `deploy`)
 - `VPS_PORT`
 - `VPS_SSH_KEY` (the Actions-to-VPS private key, not the repository-read key)
+- `VPS_SSH_PASSPHRASE` (the encrypted Actions key's passphrase)
 
-If either bot submodule is private and the workflow's `GITHUB_TOKEN` cannot read
-it, also add `SUBMODULES_READ_TOKEN` as a narrowly scoped, read-only GitHub token
-for those submodule repositories. This credential is used only by Actions to
-check out test sources; it is distinct from both SSH key relationships above.
+The private VPS-to-GitHub repository key is installed only on the VPS and is
+not a GitHub Actions secret. Keep bot tokens and the pinned license-signing key
+in `/srv/novda/secrets/bots`, never in the repository.
 
 Push or merge to `main`. The workflow installs from `package-lock.json` with
 `npm ci`, runs configured lint (if any), TypeScript typecheck, unit and isolated
