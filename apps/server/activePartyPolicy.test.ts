@@ -672,7 +672,14 @@ describe('Phase 2 â€” Active-Party Uniqueness Owner Exception Policy Tests 
       };
       fs.writeFileSync(jsonPath, JSON.stringify(payload));
 
-      const res = migrator.migrateLegacyData(tempDir, compTarget, { explicitSourcePath: jsonPath });
+      const partyResolutions = [GRANDFATHERED_A, GRANDFATHERED_B].map((partyId) => ({
+        partyId,
+        decision: 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED',
+        operatorId: 'OWNER_BUSINESS_DECISION',
+        decidedAt: '2026-10-01T00:00:00.000Z',
+        reason: 'Owner-approved exact existing comp_novda Party #2 pair'
+      }));
+      const res = migrator.migrateLegacyData(tempDir, compTarget, { explicitSourcePath: jsonPath, partyResolutions });
       expect(res.counts.quarantine).toBe(0); // Zero unresolved quarantine!
       expect(res.counts.parties).toBe(2);
       expect(res.migrationReady).toBe(true);

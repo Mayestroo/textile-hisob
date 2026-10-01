@@ -267,6 +267,9 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   `, [companyId]);
   const companyPolicy = activationPolicy.rows[0];
   if (companyPolicy && !companyPolicy.is_active) throw createOpError('COMPANY_POLICY_INACTIVE', 'The company activation policy is inactive');
+  if (companyPolicy?.require_ticket_validation !== false && !partyRecordId) {
+    throw createOpError('PARTY_RECORD_REQUIRED', 'A printed party is required while strict ticket validation is enabled');
+  }
 
   // 1. Canonical Ticket ID uniqueness check (Approach A: Canonical UUID Identity)
   const idRes = await client.query(

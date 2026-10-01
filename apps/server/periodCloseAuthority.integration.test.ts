@@ -77,7 +77,7 @@ describe('authoritative period-close enforcement', () => {
       modelId: 'model-period',
       partyNumber: '1',
       partyRecordId: 'party-period',
-      pattaNumber: 1,
+      pattaNumber: Number(ticketId.slice(-3)),
       qty: 1,
       entries: [{ opName: 'Bichish', workerId: 1, qty: 1 }],
       ...(effectiveDate ? { effectiveDate } : {}),
