@@ -66,7 +66,7 @@ async function getWorkerForEnrollment(pool, companyId, workerId, options = {}) {
   const normalized = normalizeWorkerParams({ companyId, workerId, telegramId: '0' });
   const result = await pool.query(
     `SELECT w.id AS worker_id, w.company_id, w.name AS worker_name, w.status, w.staj,
-            EXISTS (SELECT 1 FROM worker_credentials c WHERE c.company_id = w.company_id AND c.worker_id = w.id) AS pin_required
+            EXISTS (SELECT 1 FROM worker_credentials c WHERE c.company_id = w.company_id AND c.worker_id = w.id) AS pin_configured
      FROM workers w
      JOIN activation_companies company ON company.company_id = w.company_id AND company.is_active = TRUE
      WHERE w.company_id = $1 AND w.id = $2`,
@@ -74,7 +74,11 @@ async function getWorkerForEnrollment(pool, companyId, workerId, options = {}) {
   );
   const worker = result.rows[0];
   if (!worker || worker.status !== 'ACTIVE') throw workerError('WORKER_NOT_FOUND', 404);
-  return { ...worker, pin_required: pinRequired && worker.pin_required === true };
+  return {
+    ...worker,
+    pin_required: pinRequired,
+    pin_configured: worker.pin_configured === true
+  };
 }
 
 function hashWorkerPin(pin, salt = crypto.randomBytes(16)) {
