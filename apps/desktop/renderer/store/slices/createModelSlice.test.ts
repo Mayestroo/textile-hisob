@@ -64,7 +64,10 @@ describe(' model mutation boundary', () => {
     const api = {
       getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
       WorkbookCommand: vi.fn().mockResolvedValue({ success: true, result: { committed: true } }),
-      dbRead: vi.fn().mockResolvedValue({ success: true, data: { companyId: 'company-a', models: [model], workers: [], printedPartyHistory: [], submittedTickets: [], periods: [] } }),
+      dbRead: vi.fn().mockImplementation(async () => {
+        const created = api.WorkbookCommand.mock.calls[0][0].payload;
+        return { success: true, data: { companyId: 'company-a', models: [{ ...model, id: created.id }], workers: [], printedPartyHistory: [], submittedTickets: [], periods: [] } };
+      }),
       SyncReconnect: vi.fn().mockResolvedValue({ success: false })
     };
     vi.stubGlobal('window', { electronAPI: api });
@@ -72,13 +75,15 @@ describe(' model mutation boundary', () => {
 
     await slice.addModel('Model B', { templateType: 'blank' });
 
+    const modelId = api.WorkbookCommand.mock.calls[0][0].payload.id;
+    expect(modelId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(api.WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
-      commandType: 'UpsertModel', companyId: 'company-a', entityId: 'Model-B',
-      payload: expect.objectContaining({ id: 'Model-B', name: 'Model-B', operations: [] })
+      commandType: 'UpsertModel', companyId: 'company-a', entityId: modelId,
+      payload: expect.objectContaining({ id: modelId, name: 'Model-B', operations: [] })
     }));
     expect(api.dbRead).toHaveBeenCalledWith('company-a');
     expect(api.SyncReconnect).toHaveBeenCalledWith('company-a');
-    expect(state.models).toEqual([expect.objectContaining({ id: 'Model-B', name: 'Model-B' })]);
+    expect(state.models).toEqual([expect.objectContaining({ id: modelId, name: 'Model-B' })]);
     expect(state.saveToDisk).not.toHaveBeenCalled();
   });
 

@@ -238,17 +238,25 @@ async function processSingleOperation(pool, req, op, options = {}) {
 async function executeSubmitTicket(client, companyId, operationId, payload, canonicalJson) {
   const {
     ticketId,
-    modelId,
+    modelId: requestedModelId,
     partyNumber,
     pattaNumber,
     qty,
     entries,
-    partyRecordId,
+    partyRecordId: requestedPartyRecordId,
     konveyer,
     size,
     color,
     submittedAt
   } = payload;
+  const modelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, requestedModelId]);
+  const modelId = modelAlias.rows[0]?.canonical_model_id || requestedModelId;
+  const partyAlias = requestedPartyRecordId
+    ? await client.query(`SELECT canonical_party_id FROM party_id_aliases
+      WHERE company_id = $1 AND legacy_party_id = $2`, [companyId, requestedPartyRecordId])
+    : null;
+  const partyRecordId = partyAlias?.rows[0]?.canonical_party_id || requestedPartyRecordId;
 
   await assertServerPeriodOpen(client, companyId, payload.effectiveDate, submittedAt);
   const effectiveDate = businessDate(payload.effectiveDate, submittedAt);
@@ -259,10 +267,6 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   `, [companyId]);
   const companyPolicy = activationPolicy.rows[0];
   if (companyPolicy && !companyPolicy.is_active) throw createOpError('COMPANY_POLICY_INACTIVE', 'The company activation policy is inactive');
-  const requireTicketValidation = companyPolicy ? Boolean(companyPolicy.require_ticket_validation) : true;
-  if (requireTicketValidation && !partyRecordId) {
-    throw createOpError('PARTY_RECORD_REQUIRED', 'Strict-mode tickets require a printed party record');
-  }
 
   // 1. Canonical Ticket ID uniqueness check (Approach A: Canonical UUID Identity)
   const idRes = await client.query(
@@ -315,10 +319,26 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
 
   if (partyRecordId) {
     const partyRes = await client.query(
-      `SELECT id FROM parties WHERE company_id = $1 AND id = $2`, [companyId, partyRecordId]
+      `SELECT p.id, p.party_number, p.model_id, p.patta_count,
+        COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+        COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number
+       FROM parties p
+       LEFT JOIN protected_party_patta_ranges r ON r.company_id = p.company_id AND r.party_record_id = p.id
+       WHERE p.company_id = $1 AND p.id = $2`, [companyId, partyRecordId]
     );
     if (partyRes.rows.length === 0) {
       throw createOpError('PARTY_NOT_FOUND', `Party "${partyRecordId}" not found for company "${companyId}"`);
+    }
+    const party = partyRes.rows[0];
+    const partyModelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+      WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, party.model_id]);
+    const canonicalPartyModelId = partyModelAlias.rows[0]?.canonical_model_id || party.model_id;
+    if (party.party_number !== partyNumber || canonicalPartyModelId !== modelId) {
+      throw createOpError('PARTY_IDENTITY_MISMATCH', 'Ticket party identity does not match its printed party record');
+    }
+    if (party.patta_start_number !== null && party.patta_end_number !== null
+      && (Number(pattaNumber) < Number(party.patta_start_number) || Number(pattaNumber) > Number(party.patta_end_number))) {
+      throw createOpError('PATTA_NUMBER_OUT_OF_RANGE', 'Ticket patta number is outside the assigned company-wide range');
     }
   }
 
@@ -583,11 +603,18 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
 }
 
 async function executeCreateParty(client, companyId, operationId, payload, canonicalJson) {
-  const partyRecordId = payload.partyRecordId;
+  const partyAlias = await client.query(`SELECT canonical_party_id FROM party_id_aliases
+    WHERE company_id = $1 AND legacy_party_id = $2`, [companyId, payload.partyRecordId]);
+  const partyRecordId = partyAlias.rows[0]?.canonical_party_id || payload.partyRecordId;
   const partyNumber = payload.partyNumber;
-  const modelId = payload.modelId;
+  const modelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, payload.modelId]);
+  const modelId = modelAlias.rows[0]?.canonical_model_id || payload.modelId;
   if (Number(payload.baseRevision || 0) !== 0) {
     throw createOpError('REVISION_CONFLICT', 'A new party must start at revision zero');
+  }
+  if (!Number.isSafeInteger(Number(payload.pattaCount)) || Number(payload.pattaCount) < 1) {
+    throw createOpError('INVALID_PATTA_COUNT', 'A printed party must contain at least one patta');
   }
 
   // Serialize all authoritative reads and the insert for this company/number.
@@ -601,19 +628,29 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
     throw createOpError('MODEL_NOT_FOUND', `Model "${modelId}" not found for company "${companyId}"`);
   }
 
-  // Every status other than CLOSED reserves the number. The only exception is
-  // the exact pair proven by the persisted rows and fixed historical IDs.
+  // Existing exceptions are represented by persisted, company-scoped approval rows.
   const activePartyRes = await client.query(
-    `SELECT id, company_id, party_number, model_id, status FROM parties
-     WHERE company_id = $1 AND party_number = $2 AND status != 'CLOSED' 
+    `SELECT p.id, p.company_id, p.party_number, p.model_id, p.status,
+            e.collision_group_id
+     FROM parties p
+     LEFT JOIN legacy_party_collision_exceptions e
+       ON e.company_id = p.company_id AND e.party_id = p.id
+      AND e.party_number = p.party_number AND e.status = 'ACTIVE'
+     WHERE p.company_id = $1 AND p.party_number = $2 AND p.status != 'CLOSED'
      FOR UPDATE`,
     [companyId, partyNumber]
+  );
+  const candidateException = await client.query(
+    `SELECT collision_group_id FROM legacy_party_collision_exceptions
+     WHERE company_id = $1 AND party_id = $2 AND party_number = $3 AND status = 'ACTIVE'`,
+    [companyId, partyRecordId, partyNumber]
   );
   const candidate = {
     id: partyRecordId,
     company_id: companyId,
     party_number: partyNumber,
-    status: 'ACTIVE'
+    status: 'ACTIVE',
+    collision_group_id: candidateException.rows[0]?.collision_group_id || null
   };
   if (activePartyRes.rows.length > 0 && !isAllowedGrandfatheredPair(activePartyRes.rows, candidate)) {
     throw createOpError(
@@ -632,19 +669,37 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
   }
 
   const serverRevision = 1;
+  let pattaStartNumber = null;
+  let pattaEndNumber = null;
+  let cumulativePattaCount = 0;
+  if (Number(payload.pattaCount || 0) > 0) {
+    await client.query(`INSERT INTO company_patta_sequences(company_id, next_patta_number)
+      VALUES ($1, 1) ON CONFLICT (company_id) DO NOTHING`, [companyId]);
+    const sequence = await client.query(`SELECT next_patta_number FROM company_patta_sequences
+      WHERE company_id = $1 FOR UPDATE`, [companyId]);
+    pattaStartNumber = Number(sequence.rows[0].next_patta_number);
+    pattaEndNumber = pattaStartNumber + Number(payload.pattaCount) - 1;
+    if (!Number.isSafeInteger(pattaEndNumber)) {
+      throw createOpError('INVALID_PATTA_COUNT', 'Patta sequence exceeds the safe integer range');
+    }
+    cumulativePattaCount = pattaEndNumber;
+    await client.query(`UPDATE company_patta_sequences SET next_patta_number = $2, updated_at = NOW()
+      WHERE company_id = $1`, [companyId, pattaEndNumber + 1]);
+  }
 
   // 4. Insert Authoritative Party Fact
   await client.query(
     `INSERT INTO parties (
       id, company_id, party_number, physical_party_number, model_id, model_name, color,
-      patta_count, cumulative_patta_count, ish_soni_per_patta, total_ish_soni,
+      patta_count, cumulative_patta_count, patta_start_number, patta_end_number,
+      ish_soni_per_patta, total_ish_soni,
       ish_soni, cumulative_ish_soni, sizes_json, printed_at, is_closed, status,
       server_revision, created_at, updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7,
-      $8, $9, $10, $11,
-      $12, $13, $14, $15, 0, 'ACTIVE',
-      $16, NOW(), NOW()
+      $8, $9, $10, $11, $12, $13,
+      $14, $15, $16, $17, 0, 'ACTIVE',
+      $18, NOW(), NOW()
     )`,
     [
       partyRecordId,
@@ -655,7 +710,9 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
       payload.modelName || null,
       payload.color || null,
       payload.pattaCount ?? 0,
-      payload.cumulativePattaCount ?? 0,
+      cumulativePattaCount,
+      pattaStartNumber,
+      pattaEndNumber,
       payload.ishSoniPerPatta !== undefined ? payload.ishSoniPerPatta : null,
       payload.totalIshSoni !== undefined ? payload.totalIshSoni : null,
       payload.ishSoni ?? 0,
@@ -672,7 +729,12 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
       company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at
     ) VALUES ($1, 'party', $2, $3, $4, 'INSERT', $5, NOW())
     RETURNING change_id, committed_at`,
-    [companyId, partyRecordId, serverRevision, operationId, canonicalJson]
+    [companyId, partyRecordId, serverRevision, operationId, JSON.stringify({
+      ...payload,
+      cumulativePattaCount,
+      pattaStartNumber,
+      pattaEndNumber
+    })]
   );
 
   return {
@@ -684,7 +746,9 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
 }
 
 async function executeCloseParty(client, companyId, operationId, payload, canonicalJson) {
-  const partyRecordId = payload.partyRecordId;
+  const partyAlias = await client.query(`SELECT canonical_party_id FROM party_id_aliases
+    WHERE company_id = $1 AND legacy_party_id = $2`, [companyId, payload.partyRecordId]);
+  const partyRecordId = partyAlias.rows[0]?.canonical_party_id || payload.partyRecordId;
 
   // Serialize identity reads before resolving the number used by the shared
   // company/number lock. The identity lock avoids reading a row while another

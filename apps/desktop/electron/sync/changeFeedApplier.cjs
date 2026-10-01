@@ -31,6 +31,23 @@ function setLocalCursor(db, cursor) {
   `).run(String(cursor), now);
 }
 
+function resolveEntityAlias(db, table, legacyColumn, canonicalColumn, companyId, value) {
+  if (value === null || value === undefined) return value;
+  const alias = db.prepare(`SELECT "${canonicalColumn}" AS canonical_id FROM "${table}"
+    WHERE company_id = ? AND "${legacyColumn}" = ?`).get(companyId, String(value));
+  return alias?.canonical_id || value;
+}
+
+function advancePattaSequence(db, companyId, pattaEndNumber) {
+  const end = Number(pattaEndNumber);
+  if (!Number.isSafeInteger(end) || end < 1) return;
+  db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(company_id) DO UPDATE SET
+      next_patta_number = MAX(company_patta_sequences.next_patta_number, excluded.next_patta_number),
+      updated_at = excluded.updated_at`).run(companyId, end + 1, new Date().toISOString());
+}
+
 /**
  * Applies a batch of pulled changes to local SQLite transactionally.
  *
@@ -54,8 +71,24 @@ function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
 
   db.transaction(() => {
     for (const item of items) {
-      const { entityType, entityId, changeType, payload } = item;
-      if (!payload) continue;
+      const { entityType, changeType } = item;
+      if (!item.payload) continue;
+      let entityId = item.entityId;
+      const payload = { ...item.payload };
+      if (entityType === 'model' || payload.modelId) {
+        entityId = resolveEntityAlias(db, 'model_id_aliases', 'legacy_model_id', 'canonical_model_id', companyId, entityId);
+        if (payload.modelId) payload.modelId = resolveEntityAlias(db, 'model_id_aliases', 'legacy_model_id', 'canonical_model_id', companyId, payload.modelId);
+      }
+      if (Array.isArray(payload.configs)) {
+        payload.configs = payload.configs.map((config) => ({
+          ...config,
+          ...(config.modelId ? { modelId: resolveEntityAlias(db, 'model_id_aliases', 'legacy_model_id', 'canonical_model_id', companyId, config.modelId) } : {})
+        }));
+      }
+      if (entityType === 'party' || payload.partyRecordId) {
+        entityId = resolveEntityAlias(db, 'party_id_aliases', 'legacy_party_id', 'canonical_party_id', companyId, entityId);
+        if (payload.partyRecordId) payload.partyRecordId = resolveEntityAlias(db, 'party_id_aliases', 'legacy_party_id', 'canonical_party_id', companyId, payload.partyRecordId);
+      }
 
       if (entityType === 'ticket') {
         applyTicketChange(db, companyId, entityId, changeType, payload, item.entityRevision);
@@ -395,10 +428,25 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
       .run(JSON.stringify(payload.archivedPattaNumbers), entityRevision, now, companyId, partyId);
     return;
   }
+  if (!hasFullPartyPayload && current && (
+    Object.prototype.hasOwnProperty.call(payload, 'ishSoniPerPatta')
+    || Object.prototype.hasOwnProperty.call(payload, 'totalIshSoni')
+    || Object.prototype.hasOwnProperty.call(payload, 'ishSoni')
+  )) {
+    const isProtectedCollision = db.prepare(`SELECT 1 FROM legacy_party_collision_exceptions
+      WHERE company_id = ? AND party_id = ? AND status = 'ACTIVE' LIMIT 1`).get(companyId, partyId);
+    if (!isProtectedCollision) throw new Error('PARTIAL_PARTY_CHANGE_NOT_ALLOWED');
+    db.prepare(`UPDATE parties SET ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?,
+      cumulative_ish_soni = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
+      .run(payload.ishSoniPerPatta ?? null, payload.totalIshSoni ?? null, Number(payload.ishSoni || 0),
+        Number(payload.cumulativeIshSoni || 0), entityRevision, now, companyId, partyId);
+    return;
+  }
   if (!hasFullPartyPayload) throw new Error('REMOTE_PARTY_CHANGE_INVALID');
   const values = [
     partyId, companyId, payload.partyNumber, payload.physicalPartyNumber || payload.partyNumber, payload.modelId,
     payload.modelName || null, payload.color || null, Number(payload.pattaCount || 0), Number(payload.cumulativePattaCount || 0),
+    payload.pattaStartNumber ?? null, payload.pattaEndNumber ?? null,
     payload.ishSoniPerPatta ?? null, payload.totalIshSoni ?? null, Number(payload.ishSoni || 0),
     Number(payload.cumulativeIshSoni || 0), JSON.stringify(payload.sizes || {}), payload.printedAt || now, 0,
     JSON.stringify(payload.archivedPattaNumbers || []), 'ACTIVE', now, now, entityRevision
@@ -410,9 +458,11 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
     const payloadIsClosed = payload.status === 'CLOSED' || payload.isClosed === true || payload.isArchived === true;
     const updateParty = preserveClosedState
       ? `UPDATE parties SET model_name = ?, color = ?, patta_count = ?, cumulative_patta_count = ?,
+        patta_start_number = ?, patta_end_number = ?,
         ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?, sizes_json = ?,
         printed_at = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`
       : `UPDATE parties SET model_name = ?, color = ?, patta_count = ?, cumulative_patta_count = ?,
+      patta_start_number = ?, patta_end_number = ?,
       ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?, sizes_json = ?,
       printed_at = ?, archived_patta_numbers_json = ?, status = ?, is_closed = ?,
       closed_at = CASE WHEN ? THEN ? ELSE closed_at END,
@@ -420,6 +470,7 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
       WHERE company_id = ? AND id = ?`;
     const partyValues = [
       payload.modelName || null, payload.color || null, Number(payload.pattaCount || 0), Number(payload.cumulativePattaCount || 0),
+      payload.pattaStartNumber ?? null, payload.pattaEndNumber ?? null,
       payload.ishSoniPerPatta ?? null, payload.totalIshSoni ?? null, Number(payload.ishSoni || 0),
       Number(payload.cumulativeIshSoni || 0), JSON.stringify(payload.sizes || {}), payload.printedAt || now
     ];
@@ -434,16 +485,18 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
       );
     }
     partyValues.push(entityRevision, now, companyId, partyId);
-    db.prepare(updateParty).run(...partyValues);
+      db.prepare(updateParty).run(...partyValues);
   } else {
     db.prepare(`INSERT INTO parties (
       id, company_id, party_number, physical_party_number, model_id, model_name, color, patta_count,
-      cumulative_patta_count, ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni,
+      cumulative_patta_count, patta_start_number, patta_end_number,
+      ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni,
       sizes_json, printed_at, is_closed, archived_patta_numbers_json, status, created_at, updated_at,
       provenance, server_revision
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_SYNC', ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_SYNC', ?)`)
       .run(...values);
   }
+  advancePattaSequence(db, companyId, payload.pattaEndNumber);
 }
 
 function applyBatchSettingsChange(db, companyId, payload, entityRevision = 1) {

@@ -4,6 +4,7 @@ import { ModelPattaBatchConfig, PrintedPartyRecord } from '../../types/workbook'
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { formatDateTime } from '../../utils/formatters';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
+import { createRecordId } from '../pattaBatch';
 
 export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBatchSlice> = (set, get) => ({
   availableSizes: [...DEFAULT_BATCH_SIZES],
@@ -119,15 +120,24 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     const existingIndex = history.findIndex(
       (h) => !h.isClosed && h.modelId === item.modelId && String(h.partyNumber).trim() === String(item.partyNumber).trim()
     );
+    const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
+    const lastReservedPatta = history.reduce((last, party) => Math.max(
+      last,
+      Number(party.pattaEndNumber || party.cumulativePattaCount || 0)
+    ), 0);
+    const pattaStartNumber = existing?.pattaStartNumber ?? (lastReservedPatta + 1);
+    const pattaEndNumber = existing?.pattaEndNumber ?? (pattaStartNumber + Number(item.pattaCount || 0) - 1);
 
     const newRecord: PrintedPartyRecord = {
-      id: existingIndex >= 0 ? history[existingIndex].id : `rec_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: existingIndex >= 0 ? history[existingIndex].id : createRecordId(),
       partyNumber: item.partyNumber,
       modelId: item.modelId,
       modelName: item.modelName,
       color: item.color,
       pattaCount: item.pattaCount || 0,
-      cumulativePattaCount: 0,
+      cumulativePattaCount: Math.max(0, pattaEndNumber),
+      pattaStartNumber: item.pattaCount ? pattaStartNumber : undefined,
+      pattaEndNumber: item.pattaCount ? pattaEndNumber : undefined,
       ishSoni: item.ishSoni || 0,
       cumulativeIshSoni: 0,
       printedAt: formattedDate
@@ -143,6 +153,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     let cumPattas = 0;
     let cumIshs = 0;
     for (const r of working) {
+      if (r.pattaEndNumber && r.pattaEndNumber > cumPattas) cumPattas = r.pattaEndNumber;
       if (r.cumulativePattaCount && r.cumulativePattaCount > cumPattas) {
         cumPattas = r.cumulativePattaCount;
       }
@@ -151,6 +162,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       }
     }
     const updatedHistory = working.map((r) => {
+      if (r.pattaStartNumber && r.pattaEndNumber) return r;
       if (r.cumulativePattaCount && r.cumulativePattaCount > 0) {
         return r;
       }
@@ -187,6 +199,10 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     }
 
     let maxPrintedParty = Math.max(state.nextPartyNumber || 1, highestActiveParty + 1);
+    let nextGlobalPatta = workingHistory.reduce((next, party) => Math.max(
+      next,
+      Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1
+    ), 1);
 
     for (const p of printedItems) {
       let resolvedPartyNumber = String(p.partyNumber).trim();
@@ -210,15 +226,21 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       const existingIndex = workingHistory.findIndex(
         (h) => !h.isClosed && h.modelId === p.modelId && String(h.partyNumber).trim() === resolvedPartyNumber
       );
+      const existingRecord = existingIndex >= 0 ? workingHistory[existingIndex] : undefined;
+      const pattaStartNumber = existingRecord?.pattaStartNumber ?? nextGlobalPatta;
+      const pattaEndNumber = existingRecord?.pattaEndNumber ?? (pattaStartNumber + p.pattaCount - 1);
+      if (!existingRecord) nextGlobalPatta = pattaEndNumber + 1;
 
       const recordData: PrintedPartyRecord = {
-        id: existingIndex >= 0 ? workingHistory[existingIndex].id : `rec_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        id: existingIndex >= 0 ? workingHistory[existingIndex].id : createRecordId(),
         partyNumber: resolvedPartyNumber,
         modelId: p.modelId,
         modelName: model?.title || model?.name || p.modelId,
         color: p.color,
         pattaCount: p.pattaCount,
-        cumulativePattaCount: 0,
+        cumulativePattaCount: pattaEndNumber,
+        pattaStartNumber,
+        pattaEndNumber,
         ishSoniPerPatta: p.ishSoniPerPatta || 0,
         totalIshSoni: p.totalIshSoni || p.ishSoni,
         ishSoni: p.totalIshSoni || p.ishSoni,
@@ -241,6 +263,9 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     let globalCumPattas = 0;
     let globalCumIshs = 0;
     for (const r of workingHistory) {
+      if (r.pattaEndNumber && r.pattaEndNumber > globalCumPattas) {
+        globalCumPattas = r.pattaEndNumber;
+      }
       if (r.cumulativePattaCount && r.cumulativePattaCount > globalCumPattas) {
         globalCumPattas = r.cumulativePattaCount;
       }
@@ -250,6 +275,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     }
 
     const updatedHistory = workingHistory.map((r) => {
+      if (r.pattaStartNumber && r.pattaEndNumber) return r;
       if (r.cumulativePattaCount && r.cumulativePattaCount > 0) {
         return r;
       }

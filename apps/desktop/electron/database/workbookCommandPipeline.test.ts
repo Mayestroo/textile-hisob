@@ -202,17 +202,37 @@ describe(' workbook local command pipeline', () => {
 
     const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, command);
     const replay = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, command);
-    const parties = db.prepare('SELECT id, party_number, patta_count, status FROM parties WHERE company_id = ? ORDER BY id').all(companyId);
+    const parties = db.prepare('SELECT id, party_number, patta_count, patta_start_number, patta_end_number, status FROM parties WHERE company_id = ? ORDER BY id').all(companyId);
 
     expect(result).toMatchObject({ committed: true, status: 'PENDING_SYNC' });
     expect(replay.isReplay).toBe(true);
     expect(parties).toEqual([
-      { id: 'party_21', party_number: '21', patta_count: 2, status: 'ACTIVE' },
-      { id: 'party_22', party_number: '22', patta_count: 1, status: 'ACTIVE' }
+      { id: 'party_21', party_number: '21', patta_count: 2, patta_start_number: 1, patta_end_number: 2, status: 'ACTIVE' },
+      { id: 'party_22', party_number: '22', patta_count: 1, patta_start_number: 3, patta_end_number: 3, status: 'ACTIVE' }
     ]);
     expect(JSON.parse(db.prepare('SELECT available_sizes_json FROM company_batch_settings WHERE company_id = ?').get(companyId).available_sizes_json))
       .toEqual(['M', 'L']);
     expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(1);
+
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('model_two', ?, 'Model Two', '[]', datetime('now'), datetime('now'))`).run(companyId);
+    const nextBatch = {
+      ...command,
+      commandId: 'cmd_batch_2',
+      operationId: 'op_batch_2',
+      entityId: 'batch_2',
+      payload: {
+        ...command.payload,
+        batchId: 'batch_2',
+        parties: [{ id: 'party_23', partyNumber: '23', modelId: 'model_two', modelName: 'Model Two',
+          pattaCount: 2, ishSoniPerPatta: 65, totalIshSoni: 130, ishSoni: 130,
+          sizes: { M: 2 }, printedAt: '2026-09-24T10:00:00.000Z' }],
+        configs: [{ modelId: 'model_two', partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizes: { M: '', L: '' } }]
+      }
+    };
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, nextBatch);
+    expect(db.prepare(`SELECT model_id, patta_start_number, patta_end_number FROM parties WHERE id = 'party_23'`).get())
+      .toEqual({ model_id: 'model_two', patta_start_number: 4, patta_end_number: 5 });
   });
 
   it('rolls back a partially applied batch and archive when period closure fails', () => {
@@ -353,8 +373,8 @@ describe(' workbook local command pipeline', () => {
     }).committed).toBe(true);
     expect(apply('UpdateParty', 'op_party_update', 'party', 'party_current', {
       partyRecordId: 'party_current', partyNumber: '41', modelId: 'model_one', modelName: 'Model One',
-      pattaCount: 2, cumulativePattaCount: 2, ishSoniPerPatta: 10, totalIshSoni: 20, ishSoni: 20,
-      cumulativeIshSoni: 20, sizes: { M: 2 }, printedAt: '2026-09-23T10:00:00.000Z'
+      pattaCount: 1, cumulativePattaCount: 1, ishSoniPerPatta: 12, totalIshSoni: 12, ishSoni: 12,
+      cumulativeIshSoni: 12, sizes: { M: 1 }, printedAt: '2026-09-23T10:00:00.000Z'
     }).committed).toBe(true);
     expect(apply('UpdateBatchSettings', 'op_batch_settings', 'batch_settings', companyId, {
       availableSizes: ['M', 'L'], configs: [{ modelId: 'model_one', partyNumber: '41', isCustomParty: false, totalIshSoni: '10', color: 'Qora', sizes: { M: '2', L: '' } }]

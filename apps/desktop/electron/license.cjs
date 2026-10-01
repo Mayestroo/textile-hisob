@@ -63,20 +63,24 @@ function canonicalActivationPayload(payload) {
 }
 
 function isIsoDate(value) {
-  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+  return typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value));
 }
 
 function validateActivationPayload(payload, machineId) {
-  if (!payload || typeof payload !== 'object' || payload.schema !== LICENSE_SCHEMA) return 'Litsenziya sxemasi noto\'g\'ri';
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.schema !== LICENSE_SCHEMA) return 'Litsenziya sxemasi noto\'g\'ri';
+  const expectedFields = ['activationId', 'companyId', 'companyName', 'expiresAt', 'issuedAt', 'machineId', 'requireTicketValidation', 'role', 'schema', 'status'].sort();
+  const actualFields = Object.keys(payload).sort();
+  if (actualFields.length !== expectedFields.length || actualFields.some((field, index) => field !== expectedFields[index])) return 'Litsenziya maydonlari noto\'g\'ri';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.activationId || '')) return 'Litsenziya identifikatori noto\'g\'ri';
   if (payload.machineId !== machineId) return 'Litsenziya boshqa qurilma uchun berilgan';
+  if (typeof payload.machineId !== 'string' || !/^[A-F0-9]{4}(?:-[A-F0-9]{4}){3}$/.test(payload.machineId)) return 'Qurilma identifikatori noto\'g\'ri';
   if (!isValidCompanyId(payload.companyId)) return 'Tasdiqlangan litsenziyada korxona biriktirilmagan';
-  if (typeof payload.companyName !== 'string' || !payload.companyName.trim()) return 'Tasdiqlangan litsenziyada korxona nomi yo\'q';
+  if (typeof payload.companyName !== 'string' || !payload.companyName.trim() || payload.companyName.length > 160) return 'Tasdiqlangan litsenziyada korxona nomi yo\'q';
   if (!VALID_ROLES.has(payload.role)) return 'Tasdiqlangan litsenziyada rol noto\'g\'ri';
   if (!isIsoDate(payload.issuedAt)) return 'Litsenziya berilgan vaqti noto\'g\'ri';
-  if (payload.expiresAt !== null && !isIsoDate(payload.expiresAt)) return 'Litsenziya muddati noto\'g\'ri';
+  if (payload.expiresAt !== null && (!isIsoDate(payload.expiresAt) || Date.parse(payload.expiresAt) <= Date.parse(payload.issuedAt))) return 'Litsenziya muddati noto\'g\'ri';
   if (payload.expiresAt && Date.parse(payload.expiresAt) < Date.now()) return 'Litsenziya muddati tugagan';
   if (typeof payload.requireTicketValidation !== 'boolean') return 'Litsenziya siyosati noto\'g\'ri';
-  if (typeof payload.activationId !== 'string' || !payload.activationId.trim()) return 'Litsenziya identifikatori noto\'g\'ri';
   if (payload.status !== 'active' && payload.status !== 'revoked') return 'Litsenziya holati noto\'g\'ri';
   return null;
 }
@@ -88,10 +92,11 @@ function verifyActivationRecord(machineId, record, publicKey = NOVDA_LICENSE_ED2
   const validationError = validateActivationPayload(payload, machineId);
   if (validationError) return { valid: false, reason: validationError };
   if (typeof signature !== 'string' || !signature) return { valid: false, reason: 'Litsenziya imzosi yo\'q' };
+  if (!/^[A-Za-z0-9+/]{86}==$/.test(signature)) return { valid: false, reason: 'Litsenziya imzosi noto\'g\'ri' };
   let signatureBytes;
   try {
     signatureBytes = Buffer.from(signature, 'base64');
-    if (!signatureBytes.length) throw new Error('empty');
+    if (signatureBytes.length !== 64 || signatureBytes.toString('base64') !== signature) throw new Error('invalid');
   } catch {
     return { valid: false, reason: 'Litsenziya imzosi noto\'g\'ri' };
   }

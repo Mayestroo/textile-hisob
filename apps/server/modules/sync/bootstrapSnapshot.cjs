@@ -89,11 +89,18 @@ async function readCompanySnapshot(client, companyId) {
   }));
 
   const partyResult = await client.query(`
-    SELECT id, company_id, party_number, physical_party_number, model_id, model_name, color,
-      patta_count, cumulative_patta_count, ish_soni_per_patta, total_ish_soni, ish_soni,
-      cumulative_ish_soni, sizes_json, printed_at, is_closed, closed_at,
-      archived_patta_numbers_json, status, is_archived, server_revision, created_at, updated_at
-    FROM parties WHERE company_id = $1 ORDER BY created_at ASC, id ASC
+    SELECT p.id, p.company_id, p.party_number, p.physical_party_number,
+      COALESCE(a.canonical_model_id, p.model_id) AS model_id, p.model_name, p.color,
+      p.patta_count, p.cumulative_patta_count,
+      COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+      COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number,
+      p.ish_soni_per_patta, p.total_ish_soni, p.ish_soni,
+      p.cumulative_ish_soni, p.sizes_json, p.printed_at, p.is_closed, p.closed_at,
+      p.archived_patta_numbers_json, p.status, p.is_archived, p.server_revision, p.created_at, p.updated_at
+    FROM parties p
+    LEFT JOIN model_id_aliases a ON a.company_id = p.company_id AND a.legacy_model_id = p.model_id
+    LEFT JOIN protected_party_patta_ranges r ON r.company_id = p.company_id AND r.party_record_id = p.id
+    WHERE p.company_id = $1 ORDER BY p.created_at ASC, p.id ASC
   `, [companyId]);
   const parties = partyResult.rows.map((row) => ({
     id: row.id,
@@ -105,6 +112,8 @@ async function readCompanySnapshot(client, companyId) {
     color: row.color,
     pattaCount: numberValue(row.patta_count),
     cumulativePattaCount: numberValue(row.cumulative_patta_count),
+    pattaStartNumber: numberValue(row.patta_start_number, null),
+    pattaEndNumber: numberValue(row.patta_end_number, null),
     ishSoniPerPatta: numberValue(row.ish_soni_per_patta, null),
     totalIshSoni: numberValue(row.total_ish_soni, null),
     ishSoni: numberValue(row.ish_soni),

@@ -3,178 +3,738 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#111a20" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="novda-admin-webapp-version" content="-20260924" />
     <title>Novda — Admin Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/admin-app/admin.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/admin-app/admin.js" defer></script>
   </head>
   <body>
+    <!-- Auth Gate Modal Screen -->
     <div id="authGate" class="auth-gate" role="status" aria-live="polite">
       <div class="auth-card">
-        <div class="brand-mark" aria-hidden="true"><span>N</span><i></i></div>
-        <p class="eyebrow">NOVDA ·  CONTROL</p>
-        <h1>Administrator access</h1>
+        <div class="auth-brand-wrapper">
+          <div class="brand-mark" aria-hidden="true">
+            <span>N</span>
+            <i></i>
+          </div>
+          <span class="auth-pulse-dot"></span>
+        </div>
+        <p class="eyebrow">NOVDA · CONTROL SUITE</p>
+        <h1>Administrator Access</h1>
         <p id="authMessage" class="muted">Telegram administrator identity tekshirilmoqda…</p>
         <div id="authError" class="notice notice-error" hidden></div>
         <button id="retryAuth" class="button button-primary" type="button" hidden>Qayta urinish</button>
       </div>
     </div>
 
+    <!-- Main Admin Shell -->
     <div id="adminApp" class="app-shell" hidden>
+      <!-- Sidebar Navigation -->
       <aside class="sidebar" aria-label="Asosiy navigatsiya">
         <div class="sidebar-brand">
           <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
-          <div><strong>NOVDA</strong><span>ADMIN CONSOLE · </span></div>
+          <div class="brand-text">
+            <strong>NOVDA</strong>
+            <span>ADMIN CONSOLE</span>
+          </div>
         </div>
-        <p class="nav-caption">OPERATIONS</p>
+
+        <p class="nav-caption">OPERATIONS & DATA</p>
         <nav id="mainNav" class="main-nav">
-          <button class="nav-button is-active" data-view="overview" type="button" aria-current="page"><span class="nav-glyph">◫</span> Umumiy</button>
-          <button class="nav-button" data-view="devices" type="button"><span class="nav-glyph">⌘</span> Qurilmalar</button>
-          <button class="nav-button" data-view="companies" type="button"><span class="nav-glyph">▤</span> Korxonalar</button>
-          <button class="nav-button" data-view="workers" type="button"><span class="nav-glyph">♧</span> Ishchilar</button>
-          <button class="nav-button" data-view="bindings" type="button">Bog‘lanishlar</button>
-          <button class="nav-button" data-view="models" type="button">Modellar</button>
-          <button class="nav-button" data-view="parties" type="button">Partiyalar</button>
-          <button class="nav-button" data-view="tickets" type="button">Ishlab chiqarish</button>
-          <button class="nav-button" data-view="balances" type="button">Balanslar</button>
-          <button class="nav-button" data-view="activations" type="button"><span class="nav-glyph">⌑</span> Kalitlar & aktivatsiya</button>
-          <button class="nav-button" data-view="system" type="button">Tizim</button>
-          <button class="nav-button" data-view="admin" type="button"><span class="nav-glyph">◉</span> Admin sessiyasi</button>
+          <button class="nav-button is-active" data-view="overview" type="button" aria-current="page">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
+            <span>Umumiy</span>
+          </button>
+          <button class="nav-button" data-view="devices" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
+            <span>Qurilmalar</span>
+          </button>
+          <button class="nav-button" data-view="companies" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></span>
+            <span>Korxonalar</span>
+          </button>
+          <button class="nav-button" data-view="workers" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span>Ishchilar</span>
+          </button>
+          <button class="nav-button" data-view="bindings" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+            <span>Bog‘lanishlar</span>
+          </button>
+          <button class="nav-button" data-view="models" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+            <span>Modellar</span>
+          </button>
+          <button class="nav-button" data-view="parties" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
+            <span>Partiyalar</span>
+          </button>
+          <button class="nav-button" data-view="tickets" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>
+            <span>Ishlab chiqarish</span>
+          </button>
+          <button class="nav-button" data-view="balances" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span>
+            <span>Balanslar</span>
+          </button>
+          <button class="nav-button" data-view="activations" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg></span>
+            <span>Kalitlar & aktivatsiya</span>
+          </button>
+          <button class="nav-button" data-view="system" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></span>
+            <span>Tizim</span>
+          </button>
+          <button class="nav-button" data-view="admin" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+            <span>Admin sessiyasi</span>
+          </button>
         </nav>
+
         <div class="sidebar-foot">
           <span class="status-dot"></span>
-          <div><strong>PostgreSQL authority</strong><span> API · TLS</span></div>
+          <div>
+            <strong>PostgreSQL Authority</strong>
+            <span>API v1 · TLS SECURE</span>
+          </div>
         </div>
       </aside>
 
+      <!-- Main Content Panel -->
       <main class="main-panel">
         <header class="topbar">
-          <div class="mobile-brand"><div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div><strong>NOVDA / ADMIN</strong></div>
-          <div class="breadcrumb"><span>CONTROL ROOM</span><b>/</b><strong id="currentViewLabel">Umumiy ko‘rinish</strong></div>
+          <div class="mobile-brand">
+            <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
+            <strong>NOVDA ADMIN</strong>
+          </div>
+          <div class="breadcrumb">
+            <span class="breadcrumb-badge">CONTROL ROOM</span>
+            <b>/</b>
+            <strong id="currentViewLabel">Umumiy ko‘rinish</strong>
+          </div>
           <div class="topbar-right">
-            <span class="connection-pill"><i></i><span> ulangan</span></span>
+            <span class="connection-pill">
+              <i></i>
+              <span>Ulangan</span>
+            </span>
             <span id="adminBadge" class="admin-badge">Admin</span>
-            <button id="refreshButton" class="icon-button" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">↻</button>
+            <button id="refreshButton" class="icon-button" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+            </button>
           </div>
         </header>
 
         <div id="globalNotice" class="global-notice" role="status" aria-live="polite" hidden></div>
 
+        <!-- Section: Overview -->
         <section class="view-section is-visible" data-section="overview" aria-labelledby="overviewTitle">
           <div class="view-heading">
-            <div><p class="eyebrow">LIVE LEDGER · POSTGRESQL</p><h1 id="overviewTitle">Umumiy ko‘rinish</h1><p class="view-subtitle"> bazasida saqlangan joriy ishlab chiqarish va qurilma holati.</p></div>
-            <div class="updated-at"><span class="status-dot"></span><span id="lastUpdated">Yangilanmagan</span></div>
+            <div>
+              <p class="eyebrow">LIVE LEDGER · POSTGRESQL</p>
+              <h1 id="overviewTitle">Umumiy ko‘rinish</h1>
+              <p class="view-subtitle">Bazada saqlangan joriy ishlab chiqarish va qurilma holati.</p>
+            </div>
+            <div class="updated-at">
+              <span class="status-dot"></span>
+              <span id="lastUpdated">Yangilanmagan</span>
+            </div>
           </div>
+
           <div class="metric-grid">
-            <article class="metric-card metric-accent"><span class="metric-label">KORXONALAR</span><strong id="metricCompanies">—</strong><small>PostgreSQL scope</small></article>
-            <article class="metric-card"><span class="metric-label">ISHCHILAR</span><strong id="metricWorkers">—</strong><small>faol roster</small></article>
-            <article class="metric-card"><span class="metric-label">MODELLAR</span><strong id="metricModels">—</strong><small>faol model</small></article>
-            <article class="metric-card"><span class="metric-label">PARTIYALAR</span><strong id="metricParties">—</strong><small>yopilmagan</small></article>
-            <article class="metric-card"><span class="metric-label">QURILMALAR</span><strong id="metricDevices">—</strong><small>ro‘yxatdan o‘tgan</small></article>
-            <article class="metric-card metric-alert"><span class="metric-label">KUTILAYOTGAN</span><strong id="metricPending">—</strong><small>aktivatsiya so‘rovi</small></article>
-            <article class="metric-card"><span class="metric-label">TELEGRAM</span><strong id="metricBindings">—</strong><small>ishchi bog‘lanishi</small></article>
+            <article class="metric-card metric-card-companies">
+              <span class="metric-label">KORXONALAR</span>
+              <strong id="metricCompanies">—</strong>
+              <small>PostgreSQL scope</small>
+            </article>
+            <article class="metric-card metric-card-workers">
+              <span class="metric-label">ISHCHILAR</span>
+              <strong id="metricWorkers">—</strong>
+              <small>Faol roster</small>
+            </article>
+            <article class="metric-card metric-card-models">
+              <span class="metric-label">MODELLAR</span>
+              <strong id="metricModels">—</strong>
+              <small>Faol model</small>
+            </article>
+            <article class="metric-card metric-card-parties">
+              <span class="metric-label">PARTIYALAR</span>
+              <strong id="metricParties">—</strong>
+              <small>Yopilmagan</small>
+            </article>
+            <article class="metric-card metric-card-devices">
+              <span class="metric-label">QURILMALAR</span>
+              <strong id="metricDevices">—</strong>
+              <small>Ro‘yxatdan o‘tgan</small>
+            </article>
+            <article class="metric-card metric-alert metric-card-pending">
+              <span class="metric-label">KUTILAYOTGAN</span>
+              <strong id="metricPending">—</strong>
+              <small>Aktivatsiya so‘rovi</small>
+            </article>
+            <article class="metric-card metric-card-bindings">
+              <span class="metric-label">TELEGRAM</span>
+              <strong id="metricBindings">—</strong>
+              <small>Ishchi bog‘lanishi</small>
+            </article>
           </div>
+
           <div class="panel-grid overview-grid">
             <article class="surface-card">
-              <div class="card-heading"><div><p class="eyebrow"> QUEUE</p><h2>Kutilayotgan aktivatsiyalar</h2></div><button class="text-button" data-go="activations" type="button">Barchasi →</button></div>
-              <div class="table-wrap"><table><thead><tr><th>SO‘ROV</th><th>QURILMA</th><th>VERSIYA</th><th>VAQT</th></tr></thead><tbody id="overviewActivationRows"></tbody></table></div>
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">QUEUE</p>
+                  <h2>Kutilayotgan aktivatsiyalar</h2>
+                </div>
+                <button class="text-button" data-go="activations" type="button">Barchasi →</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>SO‘ROV</th>
+                      <th>QURILMA</th>
+                      <th>VERSIYA</th>
+                      <th>VAQT</th>
+                      <th>AMAL</th>
+                    </tr>
+                  </thead>
+                  <tbody id="overviewActivationRows"></tbody>
+                </table>
+              </div>
               <p id="overviewActivationEmpty" class="empty-state" hidden>Yangi aktivatsiya so‘rovi yo‘q.</p>
             </article>
+
             <article class="surface-card ledger-note">
-              <div class="card-heading"><div><p class="eyebrow">AUTHORITY</p><h2>Ma’lumot manbai</h2></div><span class="ledger-seal"></span></div>
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">AUTHORITY</p>
+                  <h2>Ma’lumot manbai</h2>
+                </div>
+                <span class="ledger-seal">✓</span>
+              </div>
               <p>Ushbu panel faqat API orqali PostgreSQL’dan o‘qiydi. Qurilma telemetriyasi va egalar ro‘yxati canonical server ma’lumotlar modeliga kirmaydi.</p>
               <div class="fact-line"><span>Biznes bazasi</span><strong>PostgreSQL</strong></div>
-              <div class="fact-line"><span>Admin autentifikatsiyasi</span><strong>Telegram · allowlist</strong></div>
-              <div class="fact-line"><span>Aktivatsiya imzosi</span><strong>Ed25519 · server-side</strong></div>
+              <div class="fact-line"><span>Admin autentifikatsiyasi</span><strong>Telegram · Allowlist</strong></div>
+              <div class="fact-line"><span>Aktivatsiya imzosi</span><strong>Ed25519 · Server-side</strong></div>
               <div class="fact-line"><span>So‘nggi sync yozuvi</span><strong id="recentSyncAt">Hali mavjud emas</strong></div>
             </article>
           </div>
         </section>
 
+        <!-- Section: Devices -->
         <section class="view-section" data-section="devices" aria-labelledby="devicesTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">REGISTERED CLIENTS</p><h1 id="devicesTitle">Qurilmalar</h1><p class="view-subtitle">Server ro‘yxati va aktivatsiya holatlari.</p></div></div>
-          <article class="surface-card"><div class="card-heading"><div><p class="eyebrow">SERVER DEVICES</p><h2>Ro‘yxatdan o‘tgan qurilmalar</h2></div></div><div class="table-wrap"><table><thead><tr><th>QURILMA ID</th><th>KORXONA</th><th>VERSIYA</th><th>HOLAT</th><th>RO‘YXAT VAQTI</th></tr></thead><tbody id="registeredDeviceRows"></tbody></table></div><p id="registeredDeviceEmpty" class="empty-state" hidden>PostgreSQL’da ro‘yxatdan o‘tgan qurilma yo‘q.</p></article>
-          <article class="surface-card section-gap"><div class="card-heading"><div><p class="eyebrow">ACTIVATION LIFECYCLE</p><h2>Aktivatsiya so‘rovlari</h2></div></div><div class="table-wrap"><table><thead><tr><th>QURILMA</th><th>HOLAT</th><th>KORXONA</th><th>ROL</th><th>SO‘ROV VAQTI</th></tr></thead><tbody id="deviceActivationRows"></tbody></table></div><p id="deviceActivationEmpty" class="empty-state" hidden>Aktivatsiya yozuvlari yo‘q.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">REGISTERED CLIENTS</p>
+              <h1 id="devicesTitle">Qurilmalar</h1>
+              <p class="view-subtitle">Server ro‘yxati va aktivatsiya holatlari.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">SERVER DEVICES</p>
+                <h2>Ro‘yxatdan o‘tgan qurilmalar</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>QURILMA ID</th>
+                    <th>KORXONA</th>
+                    <th>VERSIYA</th>
+                    <th>HOLAT</th>
+                    <th>RO‘YXAT VAQTI</th>
+                  </tr>
+                </thead>
+                <tbody id="registeredDeviceRows"></tbody>
+              </table>
+            </div>
+            <p id="registeredDeviceEmpty" class="empty-state" hidden>PostgreSQL’da ro‘yxatdan o‘tgan qurilma yo‘q.</p>
+          </article>
+          <article class="surface-card section-gap">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">ACTIVATION LIFECYCLE</p>
+                <h2>Aktivatsiya so‘rovlari</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>QURILMA</th>
+                    <th>HOLAT</th>
+                    <th>KORXONA</th>
+                    <th>ROL</th>
+                    <th>SO‘ROV VAQTI</th>
+                  </tr>
+                </thead>
+                <tbody id="deviceActivationRows"></tbody>
+              </table>
+            </div>
+            <p id="deviceActivationEmpty" class="empty-state" hidden>Aktivatsiya yozuvlari yo‘q.</p>
+          </article>
         </section>
 
+        <!-- Section: Companies -->
         <section class="view-section" data-section="companies" aria-labelledby="companiesTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow"> COMPANY REGISTRY</p><h1 id="companiesTitle">Korxonalar</h1><p class="view-subtitle">Nom va aktivatsiya siyosati PostgreSQL’da saqlanadi. Nomi yo‘q scope ID bilan ko‘rsatiladi.</p></div></div>
-          <article class="surface-card"><div class="table-wrap"><table><thead><tr><th>ID</th><th>NOMI</th><th>ISHCHI</th><th>MODEL</th><th>PARTIYA</th><th>O‘LCHAMLAR</th><th>REVIZIYA</th><th>AKTIVATSIYA</th><th>RUXSATLAR</th><th>PATTA VALIDATSIYASI</th></tr></thead><tbody id="companyRows"></tbody></table></div><p id="companyEmpty" class="empty-state" hidden>PostgreSQL’da korxona topilmadi.</p></article>
-           <article class="surface-card section-gap activation-policy"><div class="card-heading"><div><p class="eyebrow">ALLOWLISTED ACTION</p><h2>Activation policy</h2></div></div><form id="companyForm" class="form-grid">
-             <label>Mavjud biznes scope<select name="companyId" id="companyPolicySelect" required><option value="">Mavjud korxonani tanlang</option></select></label>
-             <label>Aktivatsiyada ko‘rinadigan nom<input name="companyName" id="companyPolicyName" maxlength="160" autocomplete="organization" required /></label>
-               <fieldset class="role-fieldset"><legend>Ruxsat etilgan rollar</legend><label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked /> Admin</label><label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked /> Type</label><label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked /> Print</label></fieldset>
-               <label class="check-label policy-check"><input type="checkbox" name="isActive" checked /> Aktivatsiya siyosati faol</label>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">COMPANY REGISTRY</p>
+              <h1 id="companiesTitle">Korxonalar</h1>
+              <p class="view-subtitle">Nom va aktivatsiya siyosati PostgreSQL’da saqlanadi. Nomi yo‘q scope ID bilan ko‘rsatiladi.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>NOMI</th>
+                    <th>ISHCHI</th>
+                    <th>MODEL</th>
+                    <th>PARTIYA</th>
+                    <th>O‘LCHAMLAR</th>
+                    <th>REVIZIYA</th>
+                    <th>AKTIVATSIYA</th>
+                    <th>RUXSATLAR</th>
+                    <th>PATTA VALIDATSIYASI</th>
+                    <th>AMAL</th>
+                  </tr>
+                </thead>
+                <tbody id="companyRows"></tbody>
+              </table>
+            </div>
+            <p id="companyEmpty" class="empty-state" hidden>PostgreSQL’da korxona topilmadi.</p>
+          </article>
+          <article class="surface-card section-gap activation-policy">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">ALLOWLISTED ACTION</p>
+                <h2>Activation policy</h2>
+              </div>
+            </div>
+            <form id="companyForm" class="form-grid">
+              <label>Mavjud biznes scope
+                <select name="companyId" id="companyPolicySelect" required>
+                  <option value="">Mavjud korxonani tanlang</option>
+                </select>
+              </label>
+              <label>Aktivatsiyada ko‘rinadigan nom
+                <input name="companyName" id="companyPolicyName" maxlength="160" autocomplete="organization" required />
+              </label>
+              <fieldset class="role-fieldset">
+                <legend>Ruxsat etilgan rollar</legend>
+                <label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked /> Admin</label>
+                <label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked /> Type</label>
+                <label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked /> Print</label>
+              </fieldset>
+              <label class="check-label policy-check">
+                <input type="checkbox" name="isActive" checked /> Aktivatsiya siyosati faol
+              </label>
               <button class="button button-primary" type="submit">Save activation policy</button>
-            </form><p class="helper-text">Bu amal faqat mavjud biznes scope uchun aktivatsiya siyosatini saqlaydi; yangi biznes korxona yaratmaydi.</p></article>
-           <article class="surface-card section-gap mode-card"><div class="card-heading"><div><p class="eyebrow">COMPANY VALIDATION MODE</p><h2>Qat'iy / erkin rejim</h2></div><span id="strictModeRevision" class="count-label">Revision —</span></div>
-             <label class="mode-switch"><span><strong id="strictModeState">Qat'iy rejim</strong><small id="strictModeDescription">Mavjud strict business validation ishlaydi.</small></span><input id="strictModeToggle" type="checkbox" role="switch" aria-label="Qat'iy rejim" disabled /></label>
-             <button id="strictModeReapply" class="button button-secondary section-gap" type="button" disabled>Joriy rejimni aktiv qurilmalarga qayta yuborish</button>
-             <p class="helper-text">ON — Qat'iy rejim. OFF — Erkin rejim. Mavjud ticket validation semantikasi ishlatiladi; o‘zgarish admin tomonidan audit qilinadi.</p>
-           </article>
+            </form>
+            <p class="helper-text">Bu amal faqat mavjud biznes scope uchun aktivatsiya siyosatini saqlaydi; yangi biznes korxona yaratmaydi.</p>
+          </article>
         </section>
 
+        <!-- Section: Workers -->
         <section class="view-section" data-section="workers" aria-labelledby="workersTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">ROSTER & PAYROLL</p><h1 id="workersTitle">Ishchilar va hisob-kitob</h1><p class="view-subtitle">Ishchi bog‘lanishi, joriy davr va ish haqi  faktlaridan tuziladi.</p></div></div>
-          <article class="surface-card filter-card"><form id="workerFilterForm" class="filter-row"><label>Korxona ID<input name="companyId" maxlength="64" placeholder="Barchasi" autocomplete="off" /></label><label>Ishchi qidirish<input name="search" maxlength="100" placeholder="ID, ism yoki Telegram ID" /></label><button class="button button-primary" type="submit">Ko‘rsatish</button></form></article>
-          <article class="surface-card section-gap"><div class="card-heading"><div><p class="eyebrow">WORKER ROSTER</p><h2>Ishchilar</h2></div><span id="workerCount" class="count-label"></span></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>ISM</th><th>KORXONA</th><th>HOLAT</th><th>STAJ</th><th>TELEGRAM BOG‘LANISHI</th></tr></thead><tbody id="workerRows"></tbody></table></div><p id="workerEmpty" class="empty-state" hidden>Tanlangan filtrda ishchi topilmadi.</p><div class="button-row pager"><button id="workerPrevious" class="button button-secondary" type="button">Oldingi</button><span id="workerPage" class="count-label"></span><button id="workerNext" class="button button-secondary" type="button">Keyingi</button></div></article>
-          <article class="surface-card section-gap"><div class="card-heading"><div><p class="eyebrow">PAYROLL PROJECTION</p><h2>Davr bo‘yicha hisob</h2></div><form id="payrollForm" class="inline-filter"><label>Korxona ID<input name="companyId" maxlength="64" required /></label><label>Davr ID<input name="periodId" maxlength="128" placeholder="Joriy ochiq davr" /></label><button class="button button-secondary" type="submit">Hisoblash</button></form></div><p id="payrollPeriod" class="period-caption">Davr tanlanmagan</p><div class="table-wrap"><table><thead><tr><th>ID</th><th>ISHCHI</th><th>JAMI</th><th>AVANS</th><th>JARIMA</th><th>STAJ</th><th>SOF</th><th>SONI</th></tr></thead><tbody id="payrollRows"></tbody></table></div><p id="payrollEmpty" class="empty-state" hidden>PostgreSQL’da davr yoki ish haqi faktlari yo‘q.</p><p class="formula-note">Sof = Jami − Avans − Jarima − Staj · Har bir qiymat  yozuvlaridan hisoblanadi.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">ROSTER & PAYROLL</p>
+              <h1 id="workersTitle">Ishchilar va hisob-kitob</h1>
+              <p class="view-subtitle">Ishchi bog‘lanishi, joriy davr va ish haqi faktlaridan tuziladi.</p>
+            </div>
+          </div>
+          <article class="surface-card filter-card">
+            <form id="workerFilterForm" class="filter-row">
+              <label>Korxona ID
+                <input name="companyId" maxlength="64" placeholder="Barchasi" autocomplete="off" />
+              </label>
+              <label>Ishchi qidirish
+                <input name="search" maxlength="100" placeholder="ID, ism yoki Telegram ID" />
+              </label>
+              <button class="button button-primary" type="submit">Ko‘rsatish</button>
+            </form>
+          </article>
+          <article class="surface-card section-gap">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">WORKER ROSTER</p>
+                <h2>Ishchilar</h2>
+              </div>
+              <span id="workerCount" class="count-label"></span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>ISM</th>
+                    <th>KORXONA</th>
+                    <th>HOLAT</th>
+                    <th>STAJ</th>
+                    <th>TELEGRAM BOG‘LANISHI</th>
+                  </tr>
+                </thead>
+                <tbody id="workerRows"></tbody>
+              </table>
+            </div>
+            <p id="workerEmpty" class="empty-state" hidden>Tanlangan filtrda ishchi topilmadi.</p>
+            <div class="button-row pager">
+              <button id="workerPrevious" class="button button-secondary" type="button">Oldingi</button>
+              <span id="workerPage" class="count-label"></span>
+              <button id="workerNext" class="button button-secondary" type="button">Keyingi</button>
+            </div>
+          </article>
+          <article class="surface-card section-gap">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">PAYROLL PROJECTION</p>
+                <h2>Davr bo‘yicha hisob</h2>
+              </div>
+              <form id="payrollForm" class="inline-filter">
+                <label>Korxona ID
+                  <input name="companyId" maxlength="64" required />
+                </label>
+                <label>Davr ID
+                  <input name="periodId" maxlength="128" placeholder="Joriy ochiq davr" />
+                </label>
+                <button class="button button-secondary" type="submit">Hisoblash</button>
+              </form>
+            </div>
+            <p id="payrollPeriod" class="period-caption">Davr tanlanmagan</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>ISHCHI</th>
+                    <th>JAMI</th>
+                    <th>AVANS</th>
+                    <th>JARIMA</th>
+                    <th>STAJ</th>
+                    <th>SOF</th>
+                    <th>SONI</th>
+                  </tr>
+                </thead>
+                <tbody id="payrollRows"></tbody>
+              </table>
+            </div>
+            <p id="payrollEmpty" class="empty-state" hidden>PostgreSQL’da davr yoki ish haqi faktlari yo‘q.</p>
+            <p class="formula-note">Sof = Jami − Avans − Jarima − Staj · Har bir qiymat yozuvlaridan hisoblanadi.</p>
+          </article>
         </section>
 
+        <!-- Section: Bindings -->
         <section class="view-section" data-section="bindings" aria-labelledby="bindingsTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">TELEGRAM IDENTITY LINKS</p><h1 id="bindingsTitle">Ishchi bog‘lanishlari</h1><p class="view-subtitle">Mavjud server bog‘lanishlari ko‘rsatiladi. Bu sahifada bog‘lanish yasash yoki boshqa shaxs nomidan amal bajarish mumkin emas.</p></div></div>
-          <article class="surface-card"><div class="table-wrap"><table><thead><tr><th>ISHCHI ID</th><th>ISM</th><th>KORXONA</th><th>HOLAT</th><th>TELEGRAM ID</th><th>USERNAME</th><th>BOG‘LANGAN VAQT</th></tr></thead><tbody id="bindingRows"></tbody></table></div><p id="bindingEmpty" class="empty-state" hidden>Telegram bog‘lanishi mavjud emas.</p><div class="button-row pager"><button id="bindingPrevious" class="button button-secondary" type="button">Oldingi</button><span id="bindingPage" class="count-label"></span><button id="bindingNext" class="button button-secondary" type="button">Keyingi</button></div></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">TELEGRAM IDENTITY LINKS</p>
+              <h1 id="bindingsTitle">Ishchi bog‘lanishlari</h1>
+              <p class="view-subtitle">Mavjud server bog‘lanishlari ko‘rsatiladi. Bu sahifada bog‘lanish yasash yoki boshqa shaxs nomidan amal bajarish mumkin emas.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ISHCHI ID</th>
+                    <th>ISM</th>
+                    <th>KORXONA</th>
+                    <th>HOLAT</th>
+                    <th>TELEGRAM ID</th>
+                    <th>USERNAME</th>
+                    <th>BOG‘LANGAN VAQT</th>
+                  </tr>
+                </thead>
+                <tbody id="bindingRows"></tbody>
+              </table>
+            </div>
+            <p id="bindingEmpty" class="empty-state" hidden>Telegram bog‘lanishi mavjud emas.</p>
+            <div class="button-row pager">
+              <button id="bindingPrevious" class="button button-secondary" type="button">Oldingi</button>
+              <span id="bindingPage" class="count-label"></span>
+              <button id="bindingNext" class="button button-secondary" type="button">Keyingi</button>
+            </div>
+          </article>
         </section>
 
+        <!-- Section: Activations -->
         <section class="view-section" data-section="activations" aria-labelledby="activationsTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">ED25519 SIGNED LICENSES</p><h1 id="activationsTitle">Kalitlar va aktivatsiya</h1><p class="view-subtitle">Tasdiqlash va bekor qilish serverda imzolanadi; imzolanmagan fallback mavjud emas.</p></div></div>
-          <article class="surface-card action-card"><div class="card-heading"><div><p class="eyebrow">AUTHORIZED ADMIN ACTION</p><h2>Aktivatsiya so‘rovini boshqarish</h2></div></div><form id="activationForm" class="form-grid activation-form">
-            <label>So‘rov<select name="requestId" id="activationRequestSelect" required><option value="">So‘rovni tanlang</option></select></label>
-            <label>Kompaniya<select name="companyId" id="activationCompanySelect"><option value="">Kompaniyani tanlang</option></select></label>
-            <label>Rol<select name="role"><option value="admin">Admin</option><option value="type">Type</option><option value="print">Print</option></select></label>
-            <label>Rad etish sababi<input name="reason" maxlength="500" /></label>
-            <div class="button-row"><button id="approveActivation" class="button button-primary" type="button">Tasdiqlash · Ed25519</button><button id="rejectActivation" class="button button-danger" type="button">Rad etish</button><button id="revokeActivation" class="button button-secondary" type="button">Bekor qilish</button></div>
-          </form><p class="helper-text">So‘rov va siyosat PostgreSQL’dan tekshiriladi. Brauzer imzo kalitini olmaydi.</p></article>
-          <article class="surface-card section-gap"><div class="card-heading"><div><p class="eyebrow">ACTIVATION LEDGER</p><h2>So‘rovlar va imzolar</h2></div><label class="compact-filter">Holat<select id="activationStatusFilter"><option value="">Barchasi</option><option value="PENDING">Kutilmoqda</option><option value="APPROVED">Tasdiqlangan</option><option value="REJECTED">Rad etilgan</option><option value="REVOKED">Bekor qilingan</option></select></label></div><div class="table-wrap"><table><thead><tr><th>QURILMA</th><th>HOLAT</th><th>KOMPANIYA</th><th>ROL</th><th>SO‘ROV</th><th>IMZO</th></tr></thead><tbody id="activationRows"></tbody></table></div><p id="activationEmpty" class="empty-state" hidden>Aktivatsiya so‘rovi topilmadi.</p><div id="activationEvents" class="event-list" hidden></div></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">ED25519 SIGNED LICENSES</p>
+              <h1 id="activationsTitle">Kalitlar va aktivatsiya</h1>
+              <p class="view-subtitle">Tasdiqlash va bekor qilish serverda imzolanadi; imzolanmagan fallback mavjud emas.</p>
+            </div>
+          </div>
+          <article class="surface-card action-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">AUTHORIZED ADMIN ACTION</p>
+                <h2>Aktivatsiya so‘rovini boshqarish</h2>
+              </div>
+            </div>
+            <form id="activationForm" class="form-grid activation-form">
+              <label>So‘rov
+                <select name="requestId" id="activationRequestSelect" required>
+                  <option value="">So‘rovni tanlang</option>
+                </select>
+              </label>
+              <label>Kompaniya
+                <select name="companyId" id="activationCompanySelect">
+                  <option value="">Kompaniyani tanlang</option>
+                </select>
+              </label>
+              <label>Rol
+                <select name="role">
+                  <option value="admin">Admin</option>
+                  <option value="type">Type</option>
+                  <option value="print">Print</option>
+                </select>
+              </label>
+              <label>Rad etish sababi
+                <input name="reason" maxlength="500" placeholder="Sabab ko‘rsating" />
+              </label>
+              <div class="button-row">
+                <button id="approveActivation" class="button button-primary" type="button">Tasdiqlash · Ed25519</button>
+                <button id="rejectActivation" class="button button-danger" type="button">Rad etish</button>
+                <button id="revokeActivation" class="button button-secondary" type="button">Bekor qilish</button>
+              </div>
+            </form>
+            <p class="helper-text">So‘rov va siyosat PostgreSQL’dan tekshiriladi. Brauzer imzo kalitini olmaydi.</p>
+          </article>
+          <article class="surface-card section-gap">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">ACTIVATION LEDGER</p>
+                <h2>So‘rovlar va imzolar</h2>
+              </div>
+              <label class="compact-filter">Holat
+                <select id="activationStatusFilter">
+                  <option value="">Barchasi</option>
+                  <option value="PENDING">Kutilmoqda</option>
+                  <option value="APPROVED">Tasdiqlangan</option>
+                  <option value="REJECTED">Rad etilgan</option>
+                  <option value="REVOKED">Bekor qilingan</option>
+                </select>
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>QURILMA</th>
+                    <th>HOLAT</th>
+                    <th>KOMPANIYA</th>
+                    <th>ROL</th>
+                    <th>SO‘ROV</th>
+                    <th>IMZO</th>
+                  </tr>
+                </thead>
+                <tbody id="activationRows"></tbody>
+              </table>
+            </div>
+            <p id="activationEmpty" class="empty-state" hidden>Aktivatsiya so‘rovi topilmadi.</p>
+            <div id="activationEvents" class="event-list" hidden></div>
+          </article>
         </section>
 
+        <!-- Section: Models -->
         <section class="view-section" data-section="models" aria-labelledby="modelsTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">CANONICAL  DATA</p><h1 id="modelsTitle">Modellar</h1><p class="view-subtitle">Model konfiguratsiyasi va o‘lchamlar PostgreSQL’dan faqat o‘qiladi.</p></div></div>
-          <article class="surface-card"><div class="table-wrap"><table><thead><tr><th>KORXONA</th><th>ID</th><th>NOMI</th><th>AMALLAR / NARXLAR</th><th>O‘LCHAMLAR</th><th>REVIZIYA</th></tr></thead><tbody id="modelRows"></tbody></table></div><p id="modelEmpty" class="empty-state" hidden>Model yozuvlari topilmadi.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">CANONICAL DATA</p>
+              <h1 id="modelsTitle">Modellar</h1>
+              <p class="view-subtitle">Model konfiguratsiyasi va o‘lchamlar PostgreSQL’dan faqat o‘qiladi.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>KORXONA</th>
+                    <th>ID</th>
+                    <th>NOMI</th>
+                    <th>AMALLAR / NARXLAR</th>
+                    <th>O‘LCHAMLAR</th>
+                    <th>REVIZIYA</th>
+                  </tr>
+                </thead>
+                <tbody id="modelRows"></tbody>
+              </table>
+            </div>
+            <p id="modelEmpty" class="empty-state" hidden>Model yozuvlari topilmadi.</p>
+          </article>
         </section>
 
+        <!-- Section: Parties -->
         <section class="view-section" data-section="parties" aria-labelledby="partiesTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">PARTY LEDGER</p><h1 id="partiesTitle">Partiyalar</h1><p class="view-subtitle">Patta soni saqlangan jamlanma ko‘rsatkichidir; alohida patta yozuvlari deb talqin qilinmaydi.</p></div></div>
-          <article class="surface-card"><div class="table-wrap"><table><thead><tr><th>YOZUV ID</th><th>№</th><th>KORXONA</th><th>MODEL</th><th>HOLAT</th><th>PATTA JAMLANMASI</th><th>ISH SONI</th><th>YANGILANGAN</th></tr></thead><tbody id="partyRows"></tbody></table></div><p id="partyEmpty" class="empty-state" hidden>Partiya yozuvlari topilmadi.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">PARTY LEDGER</p>
+              <h1 id="partiesTitle">Partiyalar</h1>
+              <p class="view-subtitle">Patta soni saqlangan jamlanma ko‘rsatkichidir; alohida patta yozuvlari deb talqin qilinmaydi.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>YOZUV ID</th>
+                    <th>№</th>
+                    <th>KORXONA</th>
+                    <th>MODEL</th>
+                    <th>HOLAT</th>
+                    <th>PATTA JAMLANMASI</th>
+                    <th>ISH SONI</th>
+                    <th>YANGILANGAN</th>
+                  </tr>
+                </thead>
+                <tbody id="partyRows"></tbody>
+              </table>
+            </div>
+            <p id="partyEmpty" class="empty-state" hidden>Partiya yozuvlari topilmadi.</p>
+          </article>
         </section>
 
+        <!-- Section: Tickets -->
         <section class="view-section" data-section="tickets" aria-labelledby="ticketsTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">PRODUCTION FACTS</p><h1 id="ticketsTitle">Ishlab chiqarish</h1><p class="view-subtitle">Faqat saqlangan  ticket faktlari. Bo‘sh boshlang‘ich holat ham to‘g‘ri natijadir.</p></div></div>
-          <article class="surface-card"><div class="table-wrap"><table><thead><tr><th>TICKET ID</th><th>ISHCHI</th><th>PARTIYA</th><th>MODEL</th><th>AMAL</th><th>MIQDOR</th><th>HOLAT</th><th>SANA</th></tr></thead><tbody id="ticketRows"></tbody></table></div><p id="ticketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">PRODUCTION FACTS</p>
+              <h1 id="ticketsTitle">Ishlab chiqarish</h1>
+              <p class="view-subtitle">Faqat saqlangan ticket faktlari. Bo‘sh boshlang‘ich holat ham to‘g‘ri natijadir.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>TICKET ID</th>
+                    <th>ISHCHI</th>
+                    <th>PARTIYA</th>
+                    <th>MODEL</th>
+                    <th>AMAL</th>
+                    <th>MIQDOR</th>
+                    <th>HOLAT</th>
+                    <th>SANA</th>
+                  </tr>
+                </thead>
+                <tbody id="ticketRows"></tbody>
+              </table>
+            </div>
+            <p id="ticketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p>
+          </article>
         </section>
 
+        <!-- Section: Balances -->
         <section class="view-section" data-section="balances" aria-labelledby="balancesTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">CANONICAL ADJUSTMENT FACTS</p><h1 id="balancesTitle">Avans va jarima</h1><p class="view-subtitle">Boshlang‘ich balans faktlari tarixiy tranzaksiya sifatida ko‘rsatilmaydi. Bu ko‘rinish faqat o‘qish uchun.</p></div></div>
-          <article class="surface-card filter-card"><label>Biznes scope<select id="balanceCompanySelect"><option value="">Mavjud scope tanlang</option></select></label></article>
-          <article class="surface-card"><div class="table-wrap"><table><thead><tr><th>ISHCHI</th><th>NOMI</th><th>TURI</th><th>JAMI</th><th>FAKTLAR</th><th>SHUNDAN BOSHLANG‘ICH</th></tr></thead><tbody id="balanceRows"></tbody></table></div><p id="balanceEmpty" class="empty-state" hidden>Balans faktlari topilmadi.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">CANONICAL ADJUSTMENT FACTS</p>
+              <h1 id="balancesTitle">Avans va jarima</h1>
+              <p class="view-subtitle">Boshlang‘ich balans faktlari tarixiy tranzaksiya sifatida ko‘rsatilmaydi. Bu ko‘rinish faqat o‘qish uchun.</p>
+            </div>
+          </div>
+          <article class="surface-card filter-card">
+            <label>Biznes scope
+              <select id="balanceCompanySelect">
+                <option value="">Mavjud scope tanlang</option>
+              </select>
+            </label>
+          </article>
+          <article class="surface-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ISHCHI</th>
+                    <th>NOMI</th>
+                    <th>TURI</th>
+                    <th>JAMI</th>
+                    <th>FAKTLAR</th>
+                    <th>SHUNDAN BOSHLANG‘ICH</th>
+                  </tr>
+                </thead>
+                <tbody id="balanceRows"></tbody>
+              </table>
+            </div>
+            <p id="balanceEmpty" class="empty-state" hidden>Balans faktlari topilmadi.</p>
+          </article>
         </section>
 
+        <!-- Section: System -->
         <section class="view-section" data-section="system" aria-labelledby="systemTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">SAFE OPERATIONS</p><h1 id="systemTitle">Tizim holati</h1><p class="view-subtitle">Faqat API tomonidan xavfsiz taqdim etilgan operatsion ma’lumotlar.</p></div></div>
-          <article class="surface-card"><dl class="session-facts"><div><dt> API</dt><dd id="systemApi">Kutilmoqda</dd></div><div><dt>PostgreSQL</dt><dd id="systemDatabase">Kutilmoqda</dd></div><div><dt>Schema migration</dt><dd id="systemMigration">—</dd></div><div><dt>Server revision</dt><dd id="systemRevision">—</dd></div><div><dt>Tekshirilgan vaqt</dt><dd id="systemChecked">—</dd></div><div><dt>Bot / backup</dt><dd id="systemExternal">API’dan taqdim etilmaydi</dd></div></dl></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">SAFE OPERATIONS</p>
+              <h1 id="systemTitle">Tizim holati</h1>
+              <p class="view-subtitle">Faqat API tomonidan xavfsiz taqdim etilgan operatsion ma’lumotlar.</p>
+            </div>
+          </div>
+          <article class="surface-card">
+            <dl class="session-facts">
+              <div><dt>API</dt><dd id="systemApi">Kutilmoqda</dd></div>
+              <div><dt>PostgreSQL</dt><dd id="systemDatabase">Kutilmoqda</dd></div>
+              <div><dt>Schema Migration</dt><dd id="systemMigration">—</dd></div>
+              <div><dt>Server Revision</dt><dd id="systemRevision">—</dd></div>
+              <div><dt>Tekshirilgan vaqt</dt><dd id="systemChecked">—</dd></div>
+              <div><dt>Bot / Backup</dt><dd id="systemExternal">API’dan taqdim etilmaydi</dd></div>
+            </dl>
+          </article>
         </section>
 
+        <!-- Section: Admin Session -->
         <section class="view-section" data-section="admin" aria-labelledby="adminTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">IDENTITY & ACCESS</p><h1 id="adminTitle">Admin sessiyasi</h1><p class="view-subtitle">Telegram imzosi serverda tekshiriladi; ushbu panel admin allowlistini o‘zgartirmaydi.</p></div></div>
-          <article class="surface-card session-card"><div class="session-stamp">AUTHENTICATED</div><dl class="session-facts"><div><dt>Telegram ID</dt><dd id="sessionTelegramId">—</dd></div><div><dt>Admin nomi</dt><dd id="sessionName">—</dd></div><div><dt>Session tugashi</dt><dd id="sessionExpires">—</dd></div><div><dt>Ruxsat manbai</dt><dd>VPS secret · ADMIN_TELEGRAM_IDS</dd></div><div><dt>API authority</dt><dd> authenticated routes</dd></div></dl><button id="signOutButton" class="button button-secondary" type="button">Sessiyani yopish</button></article>
-          <article class="surface-card section-gap retired-card"><p class="eyebrow">UNSUPPORTED CONTROLS RETIRED</p><h2>Serverda mavjud bo‘lmagan ma’lumotlar</h2><p>Qurilma telemetriyasi, korxona egasini tayinlash, kutilayotgan telefon egasi va ixtiyoriy kalit yaratish boshqaruvlari bu panelga kiritilmaydi. PostgreSQL’da mos authority bo‘lmasa, ma’lumot ko‘rsatilmaydi yoki amal rad etiladi.</p></article>
+          <div class="view-heading">
+            <div>
+              <p class="eyebrow">IDENTITY & ACCESS</p>
+              <h1 id="adminTitle">Admin sessiyasi</h1>
+              <p class="view-subtitle">Telegram imzosi serverda tekshiriladi; ushbu panel admin allowlistini o‘zgartirmaydi.</p>
+            </div>
+          </div>
+          <article class="surface-card session-card">
+            <div class="session-stamp">AUTHENTICATED</div>
+            <dl class="session-facts">
+              <div><dt>Telegram ID</dt><dd id="sessionTelegramId">—</dd></div>
+              <div><dt>Admin nomi</dt><dd id="sessionName">—</dd></div>
+              <div><dt>Session tugashi</dt><dd id="sessionExpires">—</dd></div>
+              <div><dt>Ruxsat manbai</dt><dd>VPS secret · ADMIN_TELEGRAM_IDS</dd></div>
+              <div><dt>API authority</dt><dd>Authenticated routes</dd></div>
+            </dl>
+            <button id="signOutButton" class="button button-secondary" type="button">Sessiyani yopish</button>
+          </article>
+          <article class="surface-card section-gap retired-card">
+            <p class="eyebrow">UNSUPPORTED CONTROLS RETIRED</p>
+            <h2>Serverda mavjud bo‘lmagan ma’lumotlar</h2>
+            <p>Qurilma telemetriyasi, korxona egasini tayinlash, kutilayotgan telefon egasi va ixtiyoriy kalit yaratish boshqaruvlari bu panelga kiritilmaydi. PostgreSQL’da mos authority bo‘lmasa, ma’lumot ko‘rsatilmaydi yoki amal rad etiladi.</p>
+          </article>
         </section>
 
-        <footer class="page-footer"><span>Novda  · PostgreSQL authoritative</span><span id="footerVersion">ADMIN WEBAPP / </span></footer>
+        <!-- Footer -->
+        <footer class="page-footer">
+          <span>Novda · PostgreSQL authoritative</span>
+          <span id="footerVersion">ADMIN WEBAPP / LIGHT</span>
+        </footer>
       </main>
     </div>
+
+    <!-- Toast Notification -->
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </body>
 </html>

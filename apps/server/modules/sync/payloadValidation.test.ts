@@ -85,6 +85,8 @@ describe(' payload and authority validation', () => {
     };
     expect(validateCommandPayload('UpsertModel', model, context(workbookEnvelope('UpsertModel', 'model', model.modelId, model))))
       .toMatchObject({ modelId: model.modelId, operations: [{ name: 'Cut', rate: 12 }] });
+    expect(validateCommandPayload('UpsertModel', { ...model, party: '' }, context(workbookEnvelope('UpsertModel', 'model', model.modelId, { ...model, party: '' }))))
+      .toMatchObject({ modelId: model.modelId, party: '' });
     expect(() => validateOperationEnvelope(workbookEnvelope('UpsertModel', 'model', model.modelId, model))).not.toThrow();
     expectCode(() => validateCommandPayload('UpsertModel', { ...model, status: 'DELETED' }, context(workbookEnvelope('UpsertModel', 'model', model.modelId, { ...model, status: 'DELETED' }))), 'FORBIDDEN_AUTHORITY_FIELD');
 
@@ -746,13 +748,18 @@ describe(' payload and authority validation', () => {
       companyId: COMPANY,
       partyRecordId: 'party-lock-create',
       partyNumber: '5',
-      modelId: 'model-1'
+      modelId: 'model-1',
+      pattaCount: 1,
+      ishSoniPerPatta: 10,
+      totalIshSoni: 10,
+      ishSoni: 10
     };
     const createPool = {
       connect: async () => ({
         query: async (sql: string) => {
           createQueries.push(sql);
           if (/FROM models/i.test(sql)) return { rows: [{ id: 'model-1' }] };
+          if (/FROM company_patta_sequences/i.test(sql)) return { rows: [{ next_patta_number: 1 }] };
           if (/FROM parties/i.test(sql) && /status != 'CLOSED'/i.test(sql)) return { rows: [] };
           if (/INSERT INTO change_log/i.test(sql)) return { rows: [{ change_id: 1, committed_at: '2026-09-22T00:00:00.000Z' }] };
           return { rows: [] };

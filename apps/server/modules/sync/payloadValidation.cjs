@@ -790,6 +790,9 @@ function validateModelCommand(payload, context, commandType) {
   for (const field of ['name', 'hisobSheetName', 'title', 'party', 'color', 'size']) {
     if (field === 'name' && commandType === 'UpsertModel') {
       normalized.name = normalizeText(payload.name, field, { maxLength: 160 });
+    } else if (field === 'party' && hasOwn(payload, field)
+      && (payload[field] === undefined || payload[field] === null || String(payload[field]).trim() === '')) {
+      normalized.party = '';
     } else if (hasOwn(payload, field) && payload[field] !== undefined && payload[field] !== null) {
       normalized[field] = normalizeText(String(payload[field]), field, { maxLength: field === 'title' ? 256 : 160 });
     }

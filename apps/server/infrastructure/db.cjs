@@ -79,6 +79,10 @@ async function resetServerDatabase() {
   const p = getServerPool();
   await p.query(`
     DROP TABLE IF EXISTS period_archives CASCADE;
+    DROP TABLE IF EXISTS party_id_aliases CASCADE;
+    DROP TABLE IF EXISTS model_id_aliases CASCADE;
+    DROP TABLE IF EXISTS protected_party_patta_ranges CASCADE;
+    DROP TABLE IF EXISTS company_patta_sequences CASCADE;
     DROP TABLE IF EXISTS patta_batch_settings CASCADE;
     DROP TABLE IF EXISTS company_batch_settings CASCADE;
     DROP TABLE IF EXISTS schema_migrations CASCADE;
@@ -132,7 +136,8 @@ async function resetServerDatabase() {
     'deploy_exact_party_2_company_scope_migration.sql',
     'deploy_activation_policy_device_sync_migration.sql',
     'deploy_free_mode_ticket_party_migration.sql',
-    'deploy_patta_work_quantity_migration.sql'
+    'deploy_patta_work_quantity_migration.sql',
+    'deploy_canonical_ids_global_patta_sequence.sql'
   ];
   for (const filename of migrations) {
     await p.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));

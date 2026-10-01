@@ -38,8 +38,10 @@ export const LicenseActivationModal: React.FC = () => {
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      await useWorkbookStore.getState().checkLicense();
-      setSuccessMsg('Aktivatsiya holati yangilandi.');
+      const status = await useWorkbookStore.getState().checkLicense();
+      setSuccessMsg(status?.isActivated
+        ? 'Litsenziya faollashtirilgan.'
+        : status?.message || 'Aktivatsiya hali tasdiqlanmadi. Birozdan so‘ng qayta tekshiring.');
     } catch (error: any) {
       setErrorMsg(error?.message || 'Server bilan bog\'lanib bo\'lmadi.');
     } finally {

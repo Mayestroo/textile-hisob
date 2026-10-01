@@ -182,6 +182,12 @@
       cell(row, item.machineId, 'mono');
       cell(row, item.clientContext?.appVersion || '—');
       cell(row, timestamp(item.requestedAt));
+      const actionCell = node('td');
+      const actBtn = node('button', 'small-action button-accent-action', 'Tasdiqlash →');
+      actBtn.type = 'button';
+      actBtn.dataset.selectActivation = item.requestId;
+      actionCell.appendChild(actBtn);
+      row.appendChild(actionCell);
       tbody.appendChild(row);
     }
     setText('lastUpdated', `Yangilandi ${timestamp(new Date().toISOString())}`);
@@ -250,27 +256,10 @@
       }
   }
 
-  function syncStrictModeControl() {
-    const toggle = byId('strictModeToggle');
-    if (!toggle) return;
-    const companyId = byId('companyPolicySelect').value;
-    const company = state.companies.find((item) => item.companyId === companyId && item.businessScopeExists);
-    const configured = Boolean(company?.activationConfigured && typeof company.strictMode === 'boolean');
-    toggle.disabled = !configured;
-    byId('strictModeReapply').disabled = !configured;
-    toggle.checked = company?.strictMode !== false;
-    setText('strictModeState', !configured ? 'Siyosat sozlanmagan' : company.strictMode ? "Qat'iy rejim" : 'Erkin rejim');
-    setText('strictModeDescription', !configured
-      ? 'Avval ushbu mavjud scope uchun activation policy saqlang.'
-      : company.strictMode ? 'Mavjud strict business validation ishlaydi.' : 'Mavjud free-mode ticket validation ishlaydi.');
-    setText('strictModeRevision', `Revision ${company?.policyRevision ?? '—'}`);
-  }
-
   async function loadCompanies() {
     const result = await request(`${API}/companies`);
     state.companies = result.companies || [];
     refreshCompanySelectors();
-    syncStrictModeControl();
     const tbody = tableMessage('companyRows', 'companyEmpty', state.companies);
     for (const company of state.companies) {
       const row = node('tr');
@@ -286,6 +275,14 @@
       row.appendChild(configured);
       cell(row, company.allowedRoles?.length ? company.allowedRoles.join(', ') : '—');
       cell(row, company.requireTicketValidation == null ? '—' : company.requireTicketValidation ? 'Talab qilinadi' : 'Ixtiyoriy');
+      const actionCell = node('td');
+      if (company.businessScopeExists) {
+        const editBtn = node('button', 'small-action', 'Siyosat');
+        editBtn.type = 'button';
+        editBtn.dataset.editCompany = company.companyId;
+        actionCell.appendChild(editBtn);
+      }
+      row.appendChild(actionCell);
       tbody.appendChild(row);
     }
   }
@@ -356,6 +353,35 @@
     if (workers.length === 0) byId('payrollEmpty').textContent = 'PostgreSQL’da davr yoki ish haqi faktlari yo‘q.';
   }
 
+  function syncActivationControls() {
+    const selected = selectedActivation();
+    const approveBtn = byId('approveActivation');
+    const rejectBtn = byId('rejectActivation');
+    const revokeBtn = byId('revokeActivation');
+    const companySelect = byId('activationCompanySelect');
+    const roleSelect = byId('activationForm')?.elements?.role;
+
+    if (!selected) {
+      if (approveBtn) approveBtn.disabled = true;
+      if (rejectBtn) rejectBtn.disabled = true;
+      if (revokeBtn) revokeBtn.disabled = true;
+      return;
+    }
+
+    if (approveBtn) approveBtn.disabled = selected.status !== 'PENDING';
+    if (rejectBtn) rejectBtn.disabled = selected.status !== 'PENDING';
+    if (revokeBtn) revokeBtn.disabled = selected.status !== 'APPROVED';
+
+    if (selected.companyId && companySelect) {
+      if ([...companySelect.options].some((opt) => opt.value === selected.companyId)) {
+        companySelect.value = selected.companyId;
+      }
+    }
+    if (selected.role && roleSelect) {
+      roleSelect.value = selected.role;
+    }
+  }
+
   async function loadActivations() {
     if (state.companies.length === 0) await loadCompanies();
     const status = byId('activationStatusFilter').value;
@@ -371,23 +397,32 @@
       option.dataset.status = item.status;
       requestSelect.appendChild(option);
     }
-    if ([...requestSelect.options].some((option) => option.value === oldRequest)) requestSelect.value = oldRequest;
-    byId('approveActivation').disabled = pendingRequests.length === 0;
-    byId('rejectActivation').disabled = pendingRequests.length === 0;
-    byId('revokeActivation').disabled = !state.activations.some((item) => item.status === 'APPROVED');
+    if (oldRequest && [...requestSelect.options].some((option) => option.value === oldRequest)) {
+      requestSelect.value = oldRequest;
+    } else if (pendingRequests.length > 0) {
+      requestSelect.value = pendingRequests[0].requestId;
+    } else if (state.activations.length > 0) {
+      requestSelect.value = state.activations[0].requestId;
+    }
     refreshCompanySelectors();
+    syncActivationControls();
 
     const tbody = tableMessage('activationRows', 'activationEmpty', state.activations);
     for (const item of state.activations) {
       const row = node('tr');
       cell(row, item.machineId, 'mono');
-      const status = node('td'); status.appendChild(statusBadge(item.status)); row.appendChild(status);
+      const statusTd = node('td'); statusTd.appendChild(statusBadge(item.status)); row.appendChild(statusTd);
       cell(row, item.companyName || item.companyId || '—');
       cell(row, item.role || '—');
       cell(row, timestamp(item.requestedAt));
       const actionCell = node('td');
+      actionCell.className = 'actions-cell';
       actionCell.appendChild(node('span', item.signedActivation ? 'signature-state is-signed' : 'signature-state', item.signedActivation ? 'Ed25519 ✓' : '—'));
-      const events = node('button', 'small-action', 'Voqealar');
+      const selectBtn = node('button', item.status === 'PENDING' ? 'small-action button-accent-action' : 'small-action', item.status === 'PENDING' ? '⚡ Boshqarish' : 'Tanlash');
+      selectBtn.type = 'button';
+      selectBtn.dataset.selectRequest = item.requestId;
+      actionCell.appendChild(selectBtn);
+      const events = node('button', 'small-action', 'Audit');
       events.type = 'button';
       events.dataset.eventsRequest = item.requestId;
       actionCell.appendChild(events);
@@ -458,8 +493,12 @@
   }
 
   async function loadBalances() {
-    const companyId = byId('balanceCompanySelect').value || state.companies.find((item) => item.businessScopeExists)?.companyId;
+    const select = byId('balanceCompanySelect');
+    const companyId = select?.value || state.companies.find((item) => item.businessScopeExists)?.companyId;
     if (!companyId) { tableMessage('balanceRows', 'balanceEmpty', [], 'Mavjud biznes scope topilmadi.'); return; }
+    if (select && select.value !== companyId) {
+      select.value = companyId;
+    }
     const result = await request(withQuery(`${API}/balances`, { companyId }));
     const rows = result.facts || [];
     const body = tableMessage('balanceRows', 'balanceEmpty', rows, 'Balans faktlari topilmadi.');
@@ -588,61 +627,6 @@
     }
   }
 
-  async function changeStrictMode(event) {
-    const toggle = event.currentTarget;
-    const companyId = byId('companyPolicySelect').value;
-    const company = state.companies.find((item) => item.companyId === companyId && item.businessScopeExists && item.activationConfigured);
-    if (!company) { syncStrictModeControl(); return; }
-    const strictMode = toggle.checked;
-    const confirmation = strictMode
-      ? `“${company.companyName}” uchun Qat'iy rejimni yoqasizmi? Mavjud strict validation qoidalari ishlaydi.`
-      : `“${company.companyName}” uchun Erkin rejimga o‘tasizmi? Mavjud free-mode qoidalari ishlaydi.`;
-    if (!window.confirm(confirmation)) { toggle.checked = !strictMode; return; }
-    toggle.disabled = true;
-    try {
-      const result = await request(`${API}/companies/${encodeURIComponent(companyId)}/strict-mode`, {
-        method: 'PUT', body: { strictMode }
-      });
-      company.strictMode = result.mode.strictMode;
-      company.requireTicketValidation = result.mode.strictMode;
-      company.policyRevision = result.mode.policyRevision;
-      syncStrictModeControl();
-      const modeLabel = strictMode ? "Qat'iy rejim" : 'Erkin rejim';
-      toast(result.mode.synchronizedDevices > 0
-        ? `${modeLabel} saqlandi. ${number(result.mode.synchronizedDevices)} qurilma litsenziyasi yangilandi; dasturlarni qayta oching.`
-        : `${modeLabel} saqlandi.`);
-    } catch (error) {
-      toggle.checked = !strictMode;
-      syncStrictModeControl();
-      toast(`Rejim saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`);
-    } finally {
-      syncStrictModeControl();
-    }
-  }
-
-  async function reapplyStrictModeToDevices() {
-    const companyId = byId('companyPolicySelect').value;
-    const company = state.companies.find((item) => item.companyId === companyId && item.businessScopeExists && item.activationConfigured);
-    if (!company) { syncStrictModeControl(); return; }
-    const button = byId('strictModeReapply');
-    const modeLabel = company.strictMode ? "Qat'iy rejim" : 'Erkin rejim';
-    if (!window.confirm(`${company.companyName} uchun ${modeLabel} rejimini mavjud aktiv qurilmalarga qayta imzolaysizmi? Dasturlarni qayta ochish talab qilinadi.`)) return;
-    button.disabled = true;
-    byId('strictModeToggle').disabled = true;
-    try {
-      const result = await request(`${API}/companies/${encodeURIComponent(companyId)}/strict-mode`, {
-        method: 'PUT', body: { strictMode: company.strictMode }
-      });
-      company.policyRevision = result.mode.policyRevision;
-      setText('strictModeRevision', `Revision ${company.policyRevision}`);
-      toast(`${number(result.mode.synchronizedDevices)} aktiv qurilma litsenziyasi ${modeLabel} rejimiga qayta imzolandi. Dasturlarni qayta oching.`);
-    } catch (error) {
-      toast(`Qayta yuborilmadi: ${error.code || 'API_UNAVAILABLE'}`);
-    } finally {
-      syncStrictModeControl();
-    }
-  }
-
   async function submitWorkerFilter(event) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -712,6 +696,39 @@
     document.addEventListener('click', (event) => {
       const target = event.target.closest('[data-go]');
       if (target) showView(target.dataset.go);
+      const selectActBtn = event.target.closest('[data-select-activation]');
+      if (selectActBtn) {
+        const reqId = selectActBtn.dataset.selectActivation;
+        showView('activations');
+        window.setTimeout(() => {
+          const select = byId('activationRequestSelect');
+          if (select) {
+            select.value = reqId;
+            syncActivationControls();
+            byId('activationForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 120);
+      }
+      const selectRequestBtn = event.target.closest('[data-select-request]');
+      if (selectRequestBtn) {
+        const reqId = selectRequestBtn.dataset.selectRequest;
+        const select = byId('activationRequestSelect');
+        if (select) {
+          select.value = reqId;
+          syncActivationControls();
+          byId('activationForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+      const editCompanyBtn = event.target.closest('[data-edit-company]');
+      if (editCompanyBtn) {
+        const compId = editCompanyBtn.dataset.editCompany;
+        const select = byId('companyPolicySelect');
+        if (select) {
+          select.value = compId;
+          select.dispatchEvent(new Event('change'));
+          byId('companyForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
       const eventButton = event.target.closest('[data-events-request]');
       if (eventButton) void showActivationEvents(eventButton.dataset.eventsRequest).catch((error) => toast(`Audit olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
     });
@@ -722,10 +739,10 @@
       byId('companyPolicyName').value = company?.companyName || companyId;
       for (const checkbox of document.querySelectorAll('input[name="allowedRoles"]')) checkbox.checked = !company?.activationConfigured || Boolean(company?.allowedRoles?.includes(checkbox.value));
       byId('companyForm').elements.isActive.checked = company?.activationConfigured ? company.activationActive : true;
-      syncStrictModeControl();
     });
-    byId('strictModeToggle').addEventListener('change', (event) => { void changeStrictMode(event); });
-    byId('strictModeReapply').addEventListener('click', () => { void reapplyStrictModeToDevices(); });
+    byId('activationRequestSelect').addEventListener('change', () => {
+      syncActivationControls();
+    });
     byId('workerFilterForm').addEventListener('submit', (event) => { void submitWorkerFilter(event); });
     byId('workerPrevious').addEventListener('click', () => { state.workerOffset = Math.max(0, state.workerOffset - 50); void loadWorkers(); });
     byId('workerNext').addEventListener('click', () => { state.workerOffset += 50; void loadWorkers(); });

@@ -147,7 +147,7 @@ export interface LicenseSlice {
   licenseStatus: LicenseStatus | null;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
-  checkLicense: () => Promise<void>;
+  checkLicense: () => Promise<LicenseStatus>;
   activateWithKey: (key: string) => Promise<{ success: boolean; error?: string }>;
 }
 

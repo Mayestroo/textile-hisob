@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const license = require('./license.cjs');
@@ -54,7 +55,7 @@ print(json.dumps({
 describe('Python Ed25519 signer compatibility', () => {
   it('uses Electron canonical bytes for the  admin-bot signer', () => {
     const payload = {
-      activationId: 'activation-test-1',
+      activationId: '22222222-2222-4222-8222-222222222222',
       companyId: 'novda-test',
       companyName: 'Novda — Sinov',
       expiresAt: null,
@@ -71,6 +72,10 @@ describe('Python Ed25519 signer compatibility', () => {
       input: JSON.stringify(payload),
       env: {
         ...process.env,
+        ...(process.platform === 'win32' ? {
+          USERPROFILE: process.env.USERPROFILE || os.homedir(),
+          APPDATA: process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+        } : {}),
         ADMIN_BOT_TOKEN: '',
         NOVDA_ADMIN_API_TOKEN: '',
         NOVDA_ADMIN_TELEGRAM_IDS: '',

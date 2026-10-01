@@ -353,18 +353,39 @@ function insertBootstrapRows(db, companyId, snapshot) {
 
   const insertParty = db.prepare(`INSERT INTO parties (
     id, company_id, party_number, physical_party_number, model_id, model_name, color, patta_count,
-    cumulative_patta_count, ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni,
+    cumulative_patta_count, patta_start_number, patta_end_number,
+    ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni,
     sizes_json, printed_at, is_closed, closed_at, archived_patta_numbers_json, status, created_at,
     updated_at, provenance, server_revision, is_archived
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?)`);
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?)`);
+  const partyIsProtected = db.prepare(`SELECT 1 FROM legacy_party_collision_exceptions
+    WHERE company_id = ? AND party_id = ? AND status = 'ACTIVE' LIMIT 1`);
+  const saveProtectedRange = db.prepare(`INSERT INTO protected_party_patta_ranges(
+    company_id, party_record_id, patta_start_number, patta_end_number
+  ) VALUES (?, ?, ?, ?) ON CONFLICT(company_id, party_record_id) DO UPDATE SET
+    patta_start_number = excluded.patta_start_number, patta_end_number = excluded.patta_end_number`);
   for (const party of snapshot.parties) {
+    const protectedRow = Boolean(partyIsProtected.get(companyId, party.id));
     insertParty.run(party.id, companyId, party.partyNumber, party.physicalPartyNumber, party.modelId,
       party.modelName || null, party.color || null, party.pattaCount, party.cumulativePattaCount,
+      protectedRow ? null : party.pattaStartNumber ?? null,
+      protectedRow ? null : party.pattaEndNumber ?? null,
       party.ishSoniPerPatta ?? null, party.totalIshSoni ?? null, party.ishSoni, party.cumulativeIshSoni,
       JSON.stringify(party.sizes), party.printedAt || null, party.isClosed ? 1 : 0, party.closedAt || null,
       JSON.stringify(party.archivedPattaNumbers), party.status, party.createdAt || new Date().toISOString(),
       party.updatedAt || party.createdAt || new Date().toISOString(), party.serverRevision, party.isArchived ? 1 : 0);
+    if (protectedRow && Number.isSafeInteger(party.pattaStartNumber) && Number.isSafeInteger(party.pattaEndNumber)) {
+      saveProtectedRange.run(companyId, party.id, party.pattaStartNumber, party.pattaEndNumber);
+    }
   }
+  const nextPattaNumber = snapshot.parties.reduce((next, party) => Math.max(
+    next,
+    Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1
+  ), 1);
+  db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(company_id) DO UPDATE SET next_patta_number = excluded.next_patta_number, updated_at = excluded.updated_at`)
+    .run(companyId, nextPattaNumber, new Date().toISOString());
 
   const insertBalance = db.prepare(`INSERT INTO worker_adjustments (
     id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at

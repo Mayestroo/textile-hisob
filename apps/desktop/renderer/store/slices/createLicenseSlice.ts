@@ -18,13 +18,14 @@ export const createLicenseSlice: StateCreator<WorkbookStore, [], [], LicenseSlic
 
   checkLicense: async () => {
     const eAPI = (window as any).electronAPI;
-    if (eAPI && eAPI.getLicenseStatus) {
-      try {
-        const status = await eAPI.getLicenseStatus();
-        set({ licenseStatus: status });
-      } catch (err) {
-        console.error('License check error:', err);
-      }
+    if (!eAPI?.getLicenseStatus) throw new Error('Aktivatsiya holatini tekshirish faqat Desktop dasturida mavjud.');
+    try {
+      const status = await eAPI.getLicenseStatus();
+      set({ licenseStatus: status });
+      return status;
+    } catch (err: any) {
+      console.error('License check error:', err);
+      throw new Error(err?.message || 'Server bilan bog\'lanib bo\'lmadi.');
     }
   },
 

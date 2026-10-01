@@ -16,24 +16,37 @@ type PrintedItem = {
   color: string;
 };
 
-function createRecordId() {
+export function createRecordId() {
   const randomUUID = (globalThis.crypto as Crypto & { randomUUID?: () => string } | undefined)?.randomUUID;
-  if (typeof randomUUID === 'function') return `rec_${randomUUID.call(globalThis.crypto).replace(/-/g, '')}`;
-  return `rec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  if (typeof randomUUID !== 'function') throw new Error('_COMMAND_REQUIRED: UUID generation is unavailable');
+  return randomUUID.call(globalThis.crypto);
 }
 
 function computeCumulative(history: PrintedPartyRecord[]) {
   let cumulativePattas = 0;
   let cumulativeIsh = 0;
   for (const party of history) {
-    cumulativePattas = Math.max(cumulativePattas, Number(party.cumulativePattaCount || 0));
+    cumulativePattas = Math.max(cumulativePattas, Number(party.pattaEndNumber || party.cumulativePattaCount || 0));
     cumulativeIsh = Math.max(cumulativeIsh, Number(party.cumulativeIshSoni || 0));
   }
   return history.map((party) => {
-    if (party.cumulativePattaCount && party.cumulativePattaCount > 0) return party;
-    cumulativePattas += Number(party.pattaCount || 0);
+    const hasExplicitRange = Number.isSafeInteger(party.pattaStartNumber) && Number.isSafeInteger(party.pattaEndNumber);
+    const hasPattaEnd = Number(party.pattaEndNumber || party.cumulativePattaCount || 0) > 0;
+    if (hasExplicitRange) cumulativePattas = Math.max(cumulativePattas, Number(party.pattaEndNumber));
+    else if (hasPattaEnd) cumulativePattas = Math.max(cumulativePattas, Number(party.cumulativePattaCount));
+    else cumulativePattas += Number(party.pattaCount || 0);
+    if (party.cumulativeIshSoni && party.cumulativeIshSoni > 0) {
+      cumulativeIsh = Math.max(cumulativeIsh, party.cumulativeIshSoni);
+      if (hasExplicitRange) return party;
+      return { ...party, cumulativePattaCount: hasPattaEnd ? Number(party.cumulativePattaCount) : cumulativePattas };
+    }
     cumulativeIsh += Number(party.totalIshSoni || party.ishSoni || 0);
-    return { ...party, cumulativePattaCount: cumulativePattas, cumulativeIshSoni: cumulativeIsh };
+    return {
+      ...party,
+      cumulativePattaCount: hasExplicitRange ? party.cumulativePattaCount
+        : hasPattaEnd ? Number(party.cumulativePattaCount) : cumulativePattas,
+      cumulativeIshSoni: cumulativeIsh
+    };
   });
 }
 
@@ -77,6 +90,10 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   let nextSequential = Math.max(state.nextPartyNumber || 1, highestActiveParty + 1);
   const working = [...history];
   const changedPartyIds = new Set<string>();
+  let nextGlobalPatta = working.reduce((next, party) => Math.max(
+    next,
+    Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1
+  ), 1);
   for (const item of printedItems) {
     let partyNumber = String(item.partyNumber).trim();
     const conflictingModel = working.find((party) => !party.isClosed && party.modelId !== item.modelId && String(party.partyNumber).trim() === partyNumber);
@@ -87,6 +104,11 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
     const model = state.models.find((candidate) => candidate.id === item.modelId);
     if (!model) throw new Error(`MODEL_NOT_FOUND: ${item.modelId}`);
     const existingIndex = working.findIndex((party) => !party.isClosed && party.modelId === item.modelId && String(party.partyNumber).trim() === partyNumber);
+    const existing = existingIndex >= 0 ? working[existingIndex] : undefined;
+    const pattaCount = Number(item.pattaCount || 0);
+    const pattaStartNumber = existing?.pattaStartNumber ?? nextGlobalPatta;
+    const pattaEndNumber = existing?.pattaEndNumber ?? (pattaStartNumber + pattaCount - 1);
+    if (!existing) nextGlobalPatta = pattaEndNumber + 1;
     const totalIshSoni = Number(item.totalIshSoni ?? item.ishSoni ?? 0);
     const party: PrintedPartyRecord = {
       id: existingIndex >= 0 ? working[existingIndex].id : createRecordId(),
@@ -95,7 +117,9 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
       modelName: model.title || model.name || item.modelId,
       color: item.color,
       pattaCount: Number(item.pattaCount || 0),
-      cumulativePattaCount: existingIndex >= 0 ? Number(working[existingIndex].cumulativePattaCount || 0) : 0,
+      cumulativePattaCount: Math.max(0, pattaEndNumber),
+      pattaStartNumber: pattaCount ? pattaStartNumber : undefined,
+      pattaEndNumber: pattaCount ? pattaEndNumber : undefined,
       ishSoniPerPatta: Number(item.ishSoniPerPatta || 0),
       totalIshSoni,
       ishSoni: totalIshSoni,
@@ -131,7 +155,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   const printedKeys = new Set(printedItems.map((item) => `${item.modelId}#${item.partyNumber}`));
   const deletedPartyIds = (state.deletedPartyIds || []).filter((id) => !printedKeys.has(id));
   return {
-    batchId: createRecordId().replace(/^rec_/, 'batch_'),
+    batchId: `batch_${createRecordId()}`,
     parties: updatedHistory.filter((party) => changedPartyIds.has(party.id)),
     settings: buildBatchSettingsPayload(state, configs),
     nextPartyNumber,

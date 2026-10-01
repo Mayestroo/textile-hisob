@@ -173,7 +173,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     }
 
     const newModel: ModelConfig = {
-      id: cleanName,
+      id: createUuid(),
       name: cleanName,
       hisobSheetName: `${cleanName}-hisob`,
       title: options?.title || `Модел- ${cleanName}`,
@@ -188,7 +188,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     const updatedModels = [...state.models, newModel];
     const updatedTicketForms = {
       ...state.ticketForms,
-      [cleanName]: {
+      [newModel.id]: {
         date: new Date().toISOString().slice(0, 10),
         party: options?.party || '',
         color: options?.color || 'Кора',
@@ -200,7 +200,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     };
     const updatedPattaBatches = {
       ...state.pattaBatchConfigs,
-      [cleanName]: {
+      [newModel.id]: {
         partyNumber: '',
         isCustomParty: false,
         totalIshSoni: '',
@@ -304,7 +304,6 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
       if (m.id !== oldId) return m;
       return {
         ...m,
-        id: cleanName,
         name: cleanName,
         hisobSheetName: `${cleanName}-hisob`,
         title: `Модел- ${cleanName}`
@@ -314,29 +313,20 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     // Migrate ticket forms
     const updatedTicketForms = { ...state.ticketForms };
     if (updatedTicketForms[oldId]) {
-      updatedTicketForms[cleanName] = updatedTicketForms[oldId];
-      if (oldId !== cleanName) delete updatedTicketForms[oldId];
+      updatedTicketForms[oldId] = { ...updatedTicketForms[oldId] };
     }
 
     // Migrate patta batch configs
     const updatedPattaBatches = { ...state.pattaBatchConfigs };
     if (updatedPattaBatches[oldId]) {
-      updatedPattaBatches[cleanName] = updatedPattaBatches[oldId];
-      if (oldId !== cleanName) delete updatedPattaBatches[oldId];
+      updatedPattaBatches[oldId] = { ...updatedPattaBatches[oldId] };
     }
 
     // Migrate submitted tickets
-    const updatedTickets = (state.submittedTickets || []).map((t) => {
-      if (t.modelId === oldId) {
-        return { ...t, modelId: cleanName };
-      }
-      return t;
-    });
-
     // Migrate printed party history
     const updatedHistory = (state.printedPartyHistory || []).map((h) => {
       if (h.modelId === oldId) {
-        return { ...h, modelId: cleanName, modelName: cleanName };
+        return { ...h, modelName: cleanName };
       }
       return h;
     });
@@ -352,18 +342,12 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
       currentActive = `${cleanName}-hisob`;
     }
 
-    const filteredDeleted = (state.deletedModelIds || []).filter(
-      (id) => id.toLowerCase() !== cleanName.toLowerCase()
-    );
-    const updatedDeletedModelIds = oldId.toLowerCase() !== cleanName.toLowerCase()
-      ? Array.from(new Set([...filteredDeleted, oldId]))
-      : filteredDeleted;
+    const updatedDeletedModelIds = state.deletedModelIds || [];
 
     set({
       models: updatedModels,
       ticketForms: updatedTicketForms,
       pattaBatchConfigs: updatedPattaBatches,
-      submittedTickets: updatedTickets,
       printedPartyHistory: updatedHistory,
       deletedModelIds: updatedDeletedModelIds,
       activeSheet: currentActive
@@ -373,7 +357,6 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
       models: updatedModels,
       ticketForms: updatedTicketForms,
       pattaBatchConfigs: updatedPattaBatches,
-      submittedTickets: updatedTickets,
       printedPartyHistory: updatedHistory,
       deletedModelIds: updatedDeletedModelIds,
       companyId: state.licenseStatus?.companyId

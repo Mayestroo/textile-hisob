@@ -10,10 +10,175 @@ const {
   getReconciliationCandidateId,
   getQuarantineId,
   NOVDA_NAMESPACE,
+  createCanonicalEntityUuid,
   resolveEntityId
 } = require('./identifierPolicy.cjs');
 const { isSafeCompanyId } = require('./companyPath.cjs');
-const { EXACT_PARTY_TWO_COMPANY_ID, isExactPartyTwoId } = require('../../../../packages/domain/partyPolicy.cjs');
+
+function isCanonicalUuid(value) {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function normalizeImportedCompanyIds(db, companyId) {
+  db.pragma('defer_foreign_keys = ON');
+  const now = new Date().toISOString();
+  const map = (rows) => new Map(rows.map(({ oldId, newId }) => [oldId, newId]));
+  const modelRows = db.prepare('SELECT id FROM models WHERE company_id = ? ORDER BY id').all(companyId);
+  const modelIdMap = map(modelRows.filter((row) => !isCanonicalUuid(row.id))
+    .map((row) => ({ oldId: row.id, newId: createCanonicalEntityUuid('model', companyId, row.id) })));
+  const partyRows = db.prepare(`
+    SELECT p.id FROM parties p
+    WHERE p.company_id = ? AND p.status != 'CLOSED' AND p.is_archived = 0
+      AND NOT EXISTS (
+        SELECT 1 FROM legacy_party_collision_exceptions e
+        WHERE e.company_id = p.company_id AND e.party_id = p.id
+          AND e.party_number = p.party_number AND e.status = 'ACTIVE'
+      )
+    ORDER BY p.id
+  `).all(companyId);
+  const partyIdMap = map(partyRows.filter((row) => !isCanonicalUuid(row.id))
+    .map((row) => ({ oldId: row.id, newId: createCanonicalEntityUuid('party', companyId, row.id) })));
+
+  const updateScoped = (table, column, idMap) => {
+    const tableColumns = new Set(db.prepare(`PRAGMA table_info("${table}")`).all().map((row) => row.name));
+    if (!tableColumns.has(column) || !tableColumns.has('company_id')) return;
+    const rows = db.prepare(`SELECT rowid, "${column}" AS value FROM "${table}" WHERE company_id = ?`)
+      .all(companyId);
+    const update = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`);
+    for (const row of rows) {
+      const newId = idMap.get(row.value);
+      if (newId) update.run(newId, row.rowid);
+    }
+  };
+
+  for (const [oldId, newId] of modelIdMap) {
+    db.prepare(`INSERT INTO model_id_aliases(company_id, legacy_model_id, canonical_model_id, created_at)
+      VALUES (?, ?, ?, ?) ON CONFLICT(company_id, legacy_model_id)
+      DO UPDATE SET canonical_model_id = excluded.canonical_model_id`).run(companyId, oldId, newId, now);
+    for (const table of [
+      'tickets', 'production_adjustments', 'patta_batch_settings', 'local_ticket_forms',
+      'migration_quarantine_parties', 'migration_quarantine_tickets',
+      'migration_reconciliation_candidates'
+    ]) updateScoped(table, 'model_id', new Map([[oldId, newId]]));
+    db.prepare(`UPDATE parties SET model_id = ? WHERE company_id = ? AND model_id = ?
+      AND NOT EXISTS (SELECT 1 FROM legacy_party_collision_exceptions e
+        WHERE e.company_id = parties.company_id AND e.party_id = parties.id
+          AND e.party_number = parties.party_number AND e.status = 'ACTIVE')`).run(newId, companyId, oldId);
+    db.prepare('UPDATE models SET id = ? WHERE company_id = ? AND id = ?').run(newId, companyId, oldId);
+  }
+
+  const partyTriggers = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'parties'`).all();
+  for (const trigger of partyTriggers) {
+    if (trigger.name === 'trg_parties_identity_immutable_update'
+      || trigger.name === 'trg_parties_identity_immutable'
+      || trigger.name === 'trg_parties_exact_party_2_update') {
+      db.exec(`DROP TRIGGER IF EXISTS "${trigger.name}"`);
+    }
+  }
+  updateScoped('tickets', 'party_record_id', partyIdMap);
+  updateScoped('migration_party_resolutions', 'party_id', partyIdMap);
+  updateScoped('migration_quarantine_parties', 'resolved_party_id', partyIdMap);
+  for (const [oldId, newId] of partyIdMap) {
+    db.prepare(`INSERT INTO party_id_aliases(company_id, legacy_party_id, canonical_party_id, created_at)
+      VALUES (?, ?, ?, ?) ON CONFLICT(company_id, legacy_party_id)
+      DO UPDATE SET canonical_party_id = excluded.canonical_party_id`).run(companyId, oldId, newId, now);
+    db.prepare('UPDATE parties SET id = ? WHERE company_id = ? AND id = ?').run(newId, companyId, oldId);
+  }
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS trg_parties_identity_immutable_update
+    BEFORE UPDATE ON parties FOR EACH ROW
+    WHEN NEW.id IS NOT OLD.id OR NEW.company_id IS NOT OLD.company_id
+    BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_PARTY_IDENTITY: parties.id and parties.company_id cannot be modified'); END;
+    CREATE TRIGGER IF NOT EXISTS trg_parties_exact_party_2_update
+    BEFORE UPDATE OF id, company_id, status, party_number ON parties
+    FOR EACH ROW
+    WHEN NEW.status != 'CLOSED' OR NEW.id IS NOT OLD.id OR NEW.company_id IS NOT OLD.company_id
+    BEGIN
+      SELECT CASE WHEN NEW.id IS NOT OLD.id OR NEW.company_id IS NOT OLD.company_id
+        THEN RAISE(ABORT, 'IMMUTABLE_PARTY_IDENTITY: parties.id and parties.company_id cannot be modified') END;
+      SELECT CASE WHEN NEW.status != 'CLOSED' AND EXISTS (
+        SELECT 1 FROM parties p WHERE p.company_id = NEW.company_id
+          AND p.party_number = NEW.party_number AND p.status != 'CLOSED' AND p.id != NEW.id
+      ) AND NOT EXISTS (
+        SELECT 1 FROM legacy_party_collision_exceptions e
+        WHERE e.company_id = NEW.company_id AND e.party_id = NEW.id
+          AND e.party_number = NEW.party_number AND e.status = 'ACTIVE'
+          AND e.collision_group_id IN (
+            SELECT e2.collision_group_id FROM legacy_party_collision_exceptions e2
+            WHERE e2.company_id = NEW.company_id AND e2.party_number = NEW.party_number
+              AND e2.status = 'ACTIVE' GROUP BY e2.collision_group_id HAVING COUNT(*) = 2
+          )
+      ) THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Cannot reopen party; another active party already exists') END;
+    END;
+  `);
+
+  db.prepare(`DELETE FROM tickets WHERE company_id = ? AND party_record_id IN (
+    SELECT id FROM parties WHERE company_id = ? AND (status = 'CLOSED' OR is_archived = 1)
+  )`).run(companyId, companyId);
+  db.prepare(`DELETE FROM migration_party_resolutions WHERE company_id = ? AND party_id IN (
+    SELECT id FROM parties WHERE company_id = ? AND (status = 'CLOSED' OR is_archived = 1)
+  )`).run(companyId, companyId);
+  db.prepare(`DELETE FROM legacy_party_collision_exceptions WHERE company_id = ? AND party_id IN (
+    SELECT id FROM parties WHERE company_id = ? AND (status = 'CLOSED' OR is_archived = 1)
+  )`).run(companyId, companyId);
+  db.prepare(`DELETE FROM parties WHERE company_id = ? AND (status = 'CLOSED' OR is_archived = 1)`).run(companyId);
+  db.prepare(`DELETE FROM tickets WHERE company_id = ? AND period_id IN (
+    SELECT id FROM periods WHERE company_id = ? AND (is_closed = 1 OR status = 'CLOSED')
+  )`).run(companyId, companyId);
+  db.prepare(`DELETE FROM worker_adjustments WHERE company_id = ? AND period_id IN (
+    SELECT id FROM periods WHERE company_id = ? AND (is_closed = 1 OR status = 'CLOSED')
+  )`).run(companyId, companyId);
+  db.prepare(`DELETE FROM period_archives WHERE company_id = ? AND period_id IN (
+    SELECT id FROM periods WHERE company_id = ? AND (is_closed = 1 OR status = 'CLOSED')
+  )`).run(companyId, companyId);
+  db.prepare(`DELETE FROM periods WHERE company_id = ? AND (is_closed = 1 OR status = 'CLOSED')`).run(companyId);
+
+  const protectedIds = new Set(db.prepare(`SELECT party_id FROM legacy_party_collision_exceptions
+    WHERE company_id = ? AND status = 'ACTIVE'`).all(companyId).map((row) => row.party_id));
+  const parties = db.prepare(`SELECT id, patta_count, printed_at, created_at FROM parties
+    WHERE company_id = ? ORDER BY COALESCE(printed_at, created_at), id`).all(companyId);
+  const updateRange = db.prepare(`UPDATE parties SET patta_start_number = ?, patta_end_number = ?, cumulative_patta_count = ?
+    WHERE company_id = ? AND id = ?`);
+  const saveProtectedRange = db.prepare(`INSERT INTO protected_party_patta_ranges(
+    company_id, party_record_id, patta_start_number, patta_end_number
+  ) VALUES (?, ?, ?, ?) ON CONFLICT(company_id, party_record_id) DO UPDATE SET
+    patta_start_number = excluded.patta_start_number, patta_end_number = excluded.patta_end_number`);
+  let nextPattaNumber = 1;
+  for (const party of parties) {
+    const count = Number(party.patta_count || 0);
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error(`PATTA_SEQUENCE_MIGRATION_BLOCKED: invalid patta_count for ${party.id}`);
+    if (count === 0) continue;
+    const start = nextPattaNumber;
+    const end = start + count - 1;
+    if (!Number.isSafeInteger(end)) throw new Error('PATTA_SEQUENCE_MIGRATION_BLOCKED: sequence exceeds safe integer range');
+    if (protectedIds.has(party.id)) saveProtectedRange.run(companyId, party.id, start, end);
+    else updateRange.run(start, end, end, companyId, party.id);
+    nextPattaNumber = end + 1;
+  }
+  db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+    VALUES (?, ?, ?) ON CONFLICT(company_id) DO UPDATE SET
+    next_patta_number = excluded.next_patta_number, updated_at = excluded.updated_at`)
+    .run(companyId, nextPattaNumber, now);
+
+  db.prepare(`UPDATE tickets SET patta_number = (
+    SELECT r.patta_start_number + tickets.patta_number - 1
+    FROM (
+      SELECT id AS party_record_id, company_id, patta_count, patta_start_number FROM parties
+      WHERE company_id = ? AND patta_start_number IS NOT NULL
+      UNION ALL
+      SELECT party_record_id, company_id,
+        (patta_end_number - patta_start_number + 1) AS patta_count, patta_start_number
+      FROM protected_party_patta_ranges WHERE company_id = ?
+    ) r WHERE r.company_id = tickets.company_id AND r.party_record_id = tickets.party_record_id
+      AND tickets.patta_number BETWEEN 1 AND r.patta_count
+  ) WHERE company_id = ? AND party_record_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM parties p WHERE p.company_id = tickets.company_id AND p.id = tickets.party_record_id
+      AND tickets.patta_number BETWEEN 1 AND p.patta_count
+      AND COALESCE(p.patta_start_number, (SELECT pr.patta_start_number FROM protected_party_patta_ranges pr
+        WHERE pr.company_id = p.company_id AND pr.party_record_id = p.id)) > 1
+  )`).run(companyId, companyId, companyId);
+}
 
 /**
  * Discovers the authoritative legacy V1 JSON file for a given company.
@@ -550,9 +715,9 @@ function migrateLegacyData(baseUserDataPath, companyId, options = {}) {
         const quarId = ps.quarId;
         const res = ps.resolution;
 
-        const isAuthorizedGrandfather = companyId === EXACT_PARTY_TWO_COMPANY_ID
-          && num === '2'
-          && isExactPartyTwoId(legacyId);
+        const isAuthorizedGrandfather = partyStates.length === 2
+          && partyStates.every((state) => !state.sourceIsClosed
+            && state.resolution?.decision === 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED');
 
         if (res) {
           if (res.decision === 'CONFIRM_HISTORICALLY_CLOSED') {
@@ -1052,6 +1217,8 @@ function migrateLegacyData(baseUserDataPath, companyId, options = {}) {
       totalReconstructedHisob += qty;
     }
 
+    normalizeImportedCompanyIds(db, companyId);
+
     // G. Determine Migration Readiness
     // Migration is NOT ready for cutover if there are unhandled errors, unresolved quarantine items, or candidate discrepancies
     const migrationReady = (errors.length === 0 && quarantineCount === 0 && candidateCount === 0);
@@ -1188,9 +1355,9 @@ function recordPartyResolution(db, resolution) {
     throw new Error(`Invalid operator resolution decision: "${decision}". Must be one of: ${validDecisions.join(', ')}`);
   }
   if (decision === 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED'
-    && (companyId !== EXACT_PARTY_TWO_COMPANY_ID || !isExactPartyTwoId(partyId))) {
-    const error = new Error('EXACT_PARTY_2_GRANDFATHER_POLICY_REQUIRED');
-    error.code = 'EXACT_PARTY_2_GRANDFATHER_POLICY_REQUIRED';
+    && (typeof companyId !== 'string' || !companyId.trim() || typeof partyId !== 'string' || !partyId.trim())) {
+    const error = new Error('LEGACY_COLLISION_EXCEPTION_REQUIRED');
+    error.code = 'LEGACY_COLLISION_EXCEPTION_REQUIRED';
     throw error;
   }
 
@@ -1369,9 +1536,13 @@ function applyPartyQuarantineResolution(db, resolution) {
       `).run(other.legacy_record_id, operatorId, decidedAt || nowIso, other.quarantine_id);
     }
   } else if (decision === 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED') {
-    if (originalPartyNumber !== '2' || !isExactPartyTwoId(targetPartyId)) {
-      const error = new Error('EXACT_PARTY_2_POLICY_REQUIRED: generic grandfather decisions cannot create an active Party row');
-      error.code = 'EXACT_PARTY_2_POLICY_REQUIRED';
+    const activeCollisionRows = db.prepare(`
+      SELECT id FROM parties WHERE company_id = ? AND party_number = ? AND status != 'CLOSED'
+    `).all(companyId, originalPartyNumber);
+    if (activeCollisionRows.length !== 1
+      || (activeCollisionRows[0].id !== targetPartyId && !quarRow)) {
+      const error = new Error('LEGACY_COLLISION_EXCEPTION_REQUIRED: a grandfathered collision must match persisted active rows');
+      error.code = 'LEGACY_COLLISION_EXCEPTION_REQUIRED';
       throw error;
     }
 

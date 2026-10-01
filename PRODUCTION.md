@@ -272,6 +272,11 @@ This continuation added or changed source for:
 - Admin form handling for a field that does not exist in its HTML form.
 - Worker binding fail-closed behavior when a PIN has not been provisioned.
 - Worker WebApp display of the existing `staj` payroll deduction.
+- Canonical UUID model/party identities, company-wide patta ranges, per-patta
+  quantity normalization, data-driven collision approvals, and removal of
+  closed/archived local history. PostgreSQL migration 16 is source-only and must
+  be applied to the authoritative server before clients using the canonical IDs
+  reconnect; it has not been executed on production.
 
 Root source/documentation changes remain uncommitted. The bot submodules already
 had local commits ahead of their remotes. Their verified origin URLs are now in

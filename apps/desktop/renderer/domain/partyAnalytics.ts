@@ -55,12 +55,19 @@ export function buildPartyTicketsList(
 
   let currentPattaIndex = 1;
   const sizesObj = partyRecord.sizes || {};
-  const ishSoniPerPatta = partyRecord.ishSoniPerPatta || partyRecord.ishSoni || 1;
+  const storedPerPatta = Number(partyRecord.ishSoniPerPatta);
+  const legacyPartyTotal = Number(partyRecord.totalIshSoni ?? partyRecord.ishSoni);
+  const ishSoniPerPatta = Number.isFinite(storedPerPatta) && storedPerPatta > 0
+    ? storedPerPatta
+    : partyRecord.pattaCount > 0 && Number.isFinite(legacyPartyTotal)
+      ? legacyPartyTotal / partyRecord.pattaCount
+      : 0;
   const archivedSet = new Set(partyRecord.archivedPattaNumbers || []);
 
-  const startPatta = (partyRecord.cumulativePattaCount > partyRecord.pattaCount)
-    ? (partyRecord.cumulativePattaCount - partyRecord.pattaCount + 1)
-    : 1;
+  const startPatta = partyRecord.pattaStartNumber
+    ?? (partyRecord.cumulativePattaCount > partyRecord.pattaCount
+      ? partyRecord.cumulativePattaCount - partyRecord.pattaCount + 1
+      : 1);
 
   // Combine activeSizes with any keys in sizesObj to ensure all printed sizes are evaluated
   const allSizes = Array.from(new Set([...activeSizes, ...Object.keys(sizesObj)]));

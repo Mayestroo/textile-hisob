@@ -161,14 +161,13 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const initialLicenseStatus = state.licenseStatus;
     const currentForm = state.ticketForms[modelId];
     if (!currentForm) return;
-    const requireTicketValidation = state.licenseStatus?.requireTicketValidation !== false;
     const updatedForms = {
       ...state.ticketForms,
       [modelId]: {
         ...currentForm,
-        konveyer: requireTicketValidation ? (currentForm.konveyer || '') : '',
-        party: requireTicketValidation ? (currentForm.party || '') : '',
-        patta: requireTicketValidation ? (currentForm.patta || '') : '',
+        konveyer: currentForm.konveyer || '',
+        party: currentForm.party || '',
+        patta: currentForm.patta || '',
         qty: '',
         entries: {}
       }
@@ -191,14 +190,16 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       return Promise.resolve(false);
     }
 
-    const requireTicketValidation = state.licenseStatus?.requireTicketValidation !== false;
+    const defaultStrictValidation = state.licenseStatus?.requireTicketValidation !== false;
+    const strictParty = form.strictParty ?? defaultStrictValidation;
+    const strictPatta = form.strictPatta ?? defaultStrictValidation;
     const validation = validateTicketForSubmission(
       form,
       model,
       state.workers,
       state.printedPartyHistory,
       state.submittedTickets,
-      { requireTicketValidation }
+      { strictParty, strictPatta }
     );
 
     if (!validation.isValid) {
@@ -284,9 +285,9 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       ...state.ticketForms,
       [modelId]: {
         ...form,
-        konveyer: requireTicketValidation ? (form.konveyer || '') : '',
-        party: requireTicketValidation ? nextPartyStr : '',
-        patta: requireTicketValidation ? String(nextPattaNum) : '',
+        konveyer: form.konveyer || '',
+        party: strictParty ? nextPartyStr : (form.party || ''),
+        patta: strictPatta ? String(nextPattaNum) : '',
         qty: '',
         entries: {}
       }
@@ -324,10 +325,10 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
           return false;
         }
 
-        if (!companyId || (requireTicketValidation && !partyRecordId) || typeof eAPI?.SubmitTicketCommand !== 'function') {
+        if (!companyId || (strictParty && !partyRecordId) || typeof eAPI?.SubmitTicketCommand !== 'function') {
           const rejected = makeMutationResult(
             '_COMMAND_REQUIRED',
-            requireTicketValidation
+            strictParty
               ? 'Strict-mode  ticket submission requires an active company, printed party, and command bridge.'
               : 'Free-mode  ticket submission requires an active company and command bridge.'
           );

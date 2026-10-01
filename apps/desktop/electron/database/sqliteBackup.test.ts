@@ -5,6 +5,7 @@ import * as os from 'os';
 const { getCompanyDatabase, closeCompanyDatabase } = require('./databaseManager.cjs');
 const { backupCompanyDatabase, restoreCompanyDatabase, computeFileSha256 } = require('./sqliteBackup.cjs');
 const { sanitizeCompanyDbPath } = require('./companyPath.cjs');
+const { MIGRATIONS } = require('./schema.cjs');
 const Database = require('better-sqlite3');
 const nativeFs = require('fs');
 
@@ -68,7 +69,7 @@ describe('SQLite Backup & Restore Procedure (Step 4 / Gate 6)', () => {
     expect(backupResult.integrity).toBe('ok');
     expect(backupResult.integrityCheck).toBe('ok');
     expect(backupResult.foreignKeyCheck).toEqual([]);
-    expect(backupResult.schemaVersion).toBe(13);
+    expect(backupResult.schemaVersion).toBe(MIGRATIONS[MIGRATIONS.length - 1].version);
     expect(fs.existsSync(backupFile)).toBe(true);
     expect(backupResult.byteSize).toBeGreaterThan(0);
     expect(backupResult.sha256).toMatch(/^[a-f0-9]{64}$/);
@@ -81,7 +82,7 @@ describe('SQLite Backup & Restore Procedure (Step 4 / Gate 6)', () => {
     expect(restoreResult.integrity).toBe('ok');
     expect(restoreResult.integrityCheck).toBe('ok');
     expect(restoreResult.foreignKeyCheck).toEqual([]);
-    expect(restoreResult.schemaVersion).toBe(13);
+    expect(restoreResult.schemaVersion).toBe(MIGRATIONS[MIGRATIONS.length - 1].version);
     expect(restoreResult.sha256).toBe(backupResult.sha256);
 
     // 4. Verify restored database contents

@@ -95,6 +95,25 @@ describe(' workbook change-feed application', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM parties WHERE company_id = ? AND is_archived = 0').get(companyId).count).toBe(0);
   });
 
+  it('resolves an in-flight old model ID to its canonical UUID without creating a duplicate model', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    const canonicalId = '00000000-0000-4000-8000-000000000111';
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES (?, ?, 'Model A', '[]', ?, ?)`).run(canonicalId, companyId, now, now);
+    db.prepare(`INSERT INTO model_id_aliases(company_id, legacy_model_id, canonical_model_id, created_at)
+      VALUES (?, ?, ?, ?)`).run(companyId, 'Model A', canonicalId, now);
+
+    applyChangesBatch(db, companyId, [{
+      changeId: '10', companyId, entityType: 'model', entityId: 'Model A',
+      entityRevision: 2, changeType: 'UPDATE',
+      payload: { modelId: 'Model A', name: 'Model A', operations: [{ id: 'op-1', name: 'Sew', rate: 4 }], pattaOpsOrder: ['Sew'] }
+    }], '10');
+
+    expect(db.prepare('SELECT id, server_revision FROM models WHERE company_id = ?').all(companyId))
+      .toEqual([{ id: canonicalId, server_revision: 2 }]);
+  });
+
   it('applies a full quantity correction to a closed party without reopening or unarchiving it', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = '2026-09-24T10:00:00.000Z';

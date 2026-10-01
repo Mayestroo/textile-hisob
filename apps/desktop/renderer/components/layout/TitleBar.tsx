@@ -127,43 +127,6 @@ export const TitleBar: React.FC = () => {
         {/* Role Badge (RBAC) */}
         <RoleBadge />
 
-        {/* Strict / Free Mode Indicator Badge */}
-        {licenseStatus?.isActivated && !licenseStatus?.isBlocked && (
-          <div
-            title={licenseStatus?.requireTicketValidation !== false 
-              ? "Qat'iy tekshiruv rejimi (Majburiy): Model va chop etilgan partiya tekshiriladi" 
-              : "Erkin rejim (Ixtiyoriy): Model va partiya tekshiruvisiz erkin kiritish mumkin"}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              fontSize: '11px',
-              fontWeight: 600,
-              padding: '3px 9px',
-              borderRadius: 'var(--radius-full)',
-              background: licenseStatus?.requireTicketValidation !== false
-                ? 'rgba(16, 185, 129, 0.12)'
-                : 'rgba(234, 179, 8, 0.15)',
-              border: licenseStatus?.requireTicketValidation !== false
-                ? '1px solid rgba(52, 211, 153, 0.3)'
-                : '1px solid rgba(250, 204, 21, 0.4)',
-              color: licenseStatus?.requireTicketValidation !== false
-                ? '#34d399'
-                : '#facc15',
-              cursor: 'default',
-              userSelect: 'none'
-            }}
-          >
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: licenseStatus?.requireTicketValidation !== false ? '#10b981' : '#eab308'
-            }} />
-            <span>{licenseStatus?.requireTicketValidation !== false ? "Qat'iy" : "Erkin"}</span>
-          </div>
-        )}
-
         {/* Real-time Connection Status & Offline Queue */}
         <ConnectionStatus />
 

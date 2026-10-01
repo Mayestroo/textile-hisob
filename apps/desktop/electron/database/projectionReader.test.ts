@@ -95,11 +95,12 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
 
     // Execute pure projection engine
     const projections = buildHisobProjections({ tickets: facts });
+    const canonicalModelId = facts[0].modelId;
 
-    expect(getAccountingQuantity(projections, 'model_hoodie', 1, 'Bichish')).toBe(150);
-    expect(getAccountingQuantity(projections, 'model_hoodie', 2, 'Tikish')).toBe(150);
-    expect(getOptimisticQuantity(projections, 'model_hoodie', 1, 'Bichish')).toBe(150);
-    expect(getOptimisticQuantity(projections, 'model_hoodie', 2, 'Tikish')).toBe(150);
+    expect(getAccountingQuantity(projections, canonicalModelId, 1, 'Bichish')).toBe(150);
+    expect(getAccountingQuantity(projections, canonicalModelId, 2, 'Tikish')).toBe(150);
+    expect(getOptimisticQuantity(projections, canonicalModelId, 1, 'Bichish')).toBe(150);
+    expect(getOptimisticQuantity(projections, canonicalModelId, 2, 'Tikish')).toBe(150);
   });
 
   it('handles empty production adjustments gracefully when table does not exist', () => {

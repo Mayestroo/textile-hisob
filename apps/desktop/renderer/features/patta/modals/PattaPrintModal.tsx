@@ -62,7 +62,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
       item,
       workTickets,
       sizeEntries,
-      sizesSummary: sizeEntries.map(([size, count]) => `${count} ta ${size}`).join(', ')
+      sizesSummary: sizeEntries.map(([size, count]) => `${size} - ${count} ta`).join('   ')
     };
   }), [items]);
 
@@ -71,14 +71,13 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
     const list: PrintableTicket[] = [];
     const today = new Date().toLocaleDateString('ru-RU');
 
-    // Global starting patta number across active party series (resets to 1 when party series is closed)
+    // Global high-water mark across every model; stored party ranges are authoritative.
     const activeHistory = (printedPartyHistory || []).filter((h) => !h.isClosed);
     const globalPrevPattas = (activeHistory && activeHistory.length > 0)
-      ? Math.max(
-          0,
-          ...activeHistory.map((h) => (typeof h.cumulativePattaCount === 'number' && Number.isFinite(h.cumulativePattaCount) ? h.cumulativePattaCount : 0)),
-          activeHistory.reduce((sum, h) => sum + (typeof h.pattaCount === 'number' && Number.isFinite(h.pattaCount) ? h.pattaCount : 0), 0)
-        )
+      ? Math.max(0, ...activeHistory.map((h) => {
+          const end = h.pattaEndNumber ?? h.cumulativePattaCount;
+          return typeof end === 'number' && Number.isFinite(end) ? end : 0;
+        }))
       : 0;
 
     let currentPattaNum = globalPrevPattas + 1;
@@ -689,7 +688,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                                   }}
                                 >
                                   {t.sizesSummary ? (
-                                    <div style={{ fontSize: dyn.verticalSizesFontSize, fontWeight: 'bold', letterSpacing: '0.3px', marginRight: '6px' }}>
+                                   <div style={{ fontSize: dyn.verticalSizesFontSize, fontWeight: 'bold', letterSpacing: '0.3px', marginRight: '6px', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }}>
                                       {t.sizesSummary}
                                     </div>
                                   ) : null}

@@ -18,6 +18,7 @@ const identifierPolicy = require('./identifierPolicy.cjs');
 const migrator = require('./migrator.cjs');
 // @ts-ignore
 const parityReporter = require('./parityReporter.cjs');
+const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
 describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () => {
@@ -105,9 +106,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
   function createPattaWorkQuantityMigrationDb(fileName: string) {
     const Database = require('better-sqlite3');
     const db = new Database(path.join(tempUserDataDir, fileName));
-    migrationRunner.applyMigrations(db);
-    db.prepare('DELETE FROM schema_meta WHERE version = 13').run();
-    db.pragma('user_version = 12');
+    migrationRunner.applyMigrations(db, { targetVersion: 12 });
     return db;
   }
 
@@ -151,7 +150,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
 
       let migrationError: any;
       try {
-        migrationRunner.applyMigrations(db);
+        migrationRunner.applyMigrations(db, { targetVersion: 13 });
       } catch (error) {
         migrationError = error;
       }
@@ -281,17 +280,20 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     }
   });
 
-  it('migration 012 fails closed on an exact Party #2 pair outside comp_novda', () => {
+  it('migration 012 records a pre-existing collision without hardcoded company or row IDs', () => {
     const Database = require('better-sqlite3');
     const db = new Database(path.join(tempUserDataDir, 'party-two-company-scope-v11.sqlite'));
     try {
-      for (const migration of MIGRATIONS.slice(0, 11)) {
+      for (const migration of MIGRATIONS.slice(0, 9)) {
         migration.up(db);
         db.prepare('INSERT INTO schema_meta (version, name, applied_at, checksum) VALUES (?, ?, ?, ?)')
           .run(migration.version, migration.name, new Date().toISOString(), getMigrationChecksum(migration));
         db.pragma(`user_version = ${migration.version}`);
       }
       db.pragma('foreign_keys = ON');
+      for (const trigger of db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'parties'").all()) {
+        db.exec(`DROP TRIGGER IF EXISTS "${trigger.name}"`);
+      }
       db.prepare(`
         INSERT INTO parties (
           id, company_id, party_number, physical_party_number, model_id, status, is_closed,
@@ -300,11 +302,15 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
                  (?, 'company-other', '2', '2', 'model-b', 'ACTIVE', 0, datetime('now'), datetime('now'))
       `).run('rec_1788774889449_vrbkv', 'rec_1788930871307_cg1iv');
 
-      expect(() => migrationRunner.applyMigrations(db)).toThrowError(
-        expect.objectContaining({ code: 'EXACT_PARTY_2_COMPANY_SCOPE_MIGRATION_BLOCKED' })
-      );
-      expect(migrationRunner.verifySchemaVersionConsistency(db)).toBe(11);
+      const result = migrationRunner.applyMigrations(db);
+      expect(result.currentVersion).toBe(CURRENT_SCHEMA_VERSION);
+      expect(migrationRunner.verifySchemaVersionConsistency(db)).toBe(CURRENT_SCHEMA_VERSION);
       expect(db.prepare("SELECT COUNT(*) AS count FROM parties WHERE company_id = 'company-other' AND party_number = '2'").get().count).toBe(2);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM legacy_party_collision_exceptions WHERE company_id = 'company-other' AND party_number = '2' AND status = 'ACTIVE'").get().count).toBe(2);
+      expect(() => db.prepare(`
+        INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status, is_closed, created_at, updated_at)
+        VALUES ('third-party', 'company-other', '2', '2', 'model-c', 'ACTIVE', 0, datetime('now'), datetime('now'))
+      `).run()).toThrow(/ACTIVE_PARTY_EXISTS/);
     } finally {
       db.close();
     }
@@ -314,13 +320,16 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     const Database = require('better-sqlite3');
     const db = new Database(path.join(tempUserDataDir, 'party-two-company-scope-valid-v11.sqlite'));
     try {
-      for (const migration of MIGRATIONS.slice(0, 11)) {
+      for (const migration of MIGRATIONS.slice(0, 9)) {
         migration.up(db);
         db.prepare('INSERT INTO schema_meta (version, name, applied_at, checksum) VALUES (?, ?, ?, ?)')
           .run(migration.version, migration.name, new Date().toISOString(), getMigrationChecksum(migration));
         db.pragma(`user_version = ${migration.version}`);
       }
       db.pragma('foreign_keys = ON');
+      for (const trigger of db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'parties'").all()) {
+        db.exec(`DROP TRIGGER IF EXISTS "${trigger.name}"`);
+      }
       const insertParty = db.prepare(`
         INSERT INTO parties (
           id, company_id, party_number, physical_party_number, model_id, status, is_closed,
@@ -407,7 +416,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       expect(migrationRunner.getMetaTableVersion(db)).toBe(12);
       expect(migrationRunner.getPragmaUserVersion(db)).toBe(12);
 
-      const result = migrationRunner.applyMigrations(db);
+      const result = migrationRunner.applyMigrations(db, { targetVersion: 13 });
 
       const partyAfter = db.prepare('SELECT * FROM parties WHERE id = ?').get('party_patta_quantity');
       const ticketAfter = db.prepare('SELECT * FROM tickets WHERE id = ?').get('11111111-1111-4111-8111-111111111111');
@@ -473,7 +482,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     expectPattaWorkQuantityMigrationBlocked(`patta-work-quantity-${name.replace(/\s+/g, '-')}.sqlite`, invalidParty);
   });
 
-  it('legacy import does not treat a generic grandfather resolution as Party #2 authority', () => {
+  it('legacy import uses persisted operator approval instead of hardcoded row identities', () => {
     const exactA = 'rec_1788774889449_vrbkv';
     const exactB = 'rec_1788930871307_cg1iv';
     const jsonPath = createSampleLegacyJson('another-company', {
@@ -491,12 +500,12 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       ]
     });
 
-    expect(result.counts.quarantine).toBe(2);
-    expect(result.migrationReady).toBe(false);
+    expect(result.counts.quarantine).toBe(0);
+    expect(result.counts.parties).toBe(2);
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, 'another-company');
     try {
-      expect(db.prepare("SELECT COUNT(*) AS count FROM parties WHERE party_number = '2'").get().count).toBe(0);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM migration_quarantine_parties WHERE original_party_number = '2' AND resolution_status = 'PENDING_REVIEW'").get().count).toBe(2);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM parties WHERE party_number = '2'").get().count).toBe(2);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM legacy_party_collision_exceptions WHERE party_number = '2' AND status = 'ACTIVE'").get().count).toBe(2);
     } finally {
       databaseManager.closeCompanyDatabase('another-company');
     }
@@ -526,6 +535,36 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       })));
     } finally {
       databaseManager.closeCompanyDatabase(companyId);
+    }
+  });
+
+  it('migration 016 creates one canonical refresh operation for previously rejected model snapshots', () => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(tempUserDataDir, 'migration-016-model-refresh.sqlite'));
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 15 });
+      const now = new Date().toISOString();
+      const modelId = identifierPolicy.createCanonicalEntityUuid('model', companyId, 'Old Model');
+      db.prepare(`INSERT INTO models (id, company_id, name, operations_json, patta_ops_order_json, created_at, updated_at)
+        VALUES (?, ?, 'Old Model', '[]', '[]', ?, ?)`).run(modelId, companyId, now, now);
+      db.prepare(`INSERT INTO model_id_aliases(company_id, legacy_model_id, canonical_model_id, created_at)
+        VALUES (?, 'Old Model', ?, ?)`).run(companyId, modelId, now);
+      const failedPayload = canonicalStringify({ modelId: 'Old Model', party: '' });
+      db.prepare(`INSERT INTO local_outbox (
+        operation_id, company_id, command_type, entity_type, entity_id, base_revision,
+        payload_json, status, created_at, updated_at, payload_hash
+      ) VALUES ('failed-old-model-write', ?, 'UpsertModel', 'model', 'Old Model', 0, ?, 'DEAD_LETTER', ?, ?, ?)`)
+        .run(companyId, failedPayload, now, now, computePayloadHash(failedPayload));
+
+      const result = migrationRunner.applyMigrations(db);
+      expect(result.currentVersion).toBe(CURRENT_SCHEMA_VERSION);
+      const refresh = db.prepare(`SELECT entity_id, status, payload_json FROM local_outbox
+        WHERE company_id = ? AND command_type = 'UpsertModel' AND status = 'PENDING'`).all(companyId);
+      expect(refresh).toHaveLength(1);
+      expect(refresh[0]).toMatchObject({ entity_id: modelId, status: 'PENDING' });
+      expect(JSON.parse(refresh[0].payload_json)).toMatchObject({ modelId, party: '', name: 'Old Model' });
+    } finally {
+      db.close();
     }
   });
 
@@ -673,6 +712,14 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
 
   // 7. deterministic IDs stable
   it('7. deterministic IDs stable across repeated derivations', () => {
+    const modelIdA = identifierPolicy.createCanonicalEntityUuid('model', 'comp_1', 'Old Model Name');
+    const modelIdB = identifierPolicy.createCanonicalEntityUuid('model', 'comp_1', 'Old Model Name');
+    const partyId = identifierPolicy.createCanonicalEntityUuid('party', 'comp_1', 'old-party-id');
+    expect(modelIdA).toBe(modelIdB);
+    expect(modelIdA).not.toBe(identifierPolicy.createCanonicalEntityUuid('model', 'comp_2', 'Old Model Name'));
+    expect(modelIdA).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(partyId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+
     const idA = identifierPolicy.getWorkerAdjustmentId('comp_1', 'AVANS', 5, 'p1');
     const idB = identifierPolicy.getWorkerAdjustmentId('comp_1', 'AVANS', 5, 'p1');
     expect(idA).toBe(idB);
@@ -693,9 +740,12 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       const ticket = db.prepare('SELECT * FROM tickets').get();
       expect(ticket).toBeDefined();
       expect(ticket.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-      expect(ticket.model_id).toBe('model_101');
+      expect(ticket.model_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(db.prepare('SELECT id FROM models WHERE company_id = ? AND id = ?').get(companyId, ticket.model_id)).toBeDefined();
       expect(ticket.party_number).toBe('1');
-      expect(ticket.party_record_id).toBe('rec_101_1');
+      const partyAlias = db.prepare('SELECT canonical_party_id FROM party_id_aliases WHERE company_id = ? AND legacy_party_id = ?').get(companyId, 'rec_101_1');
+      expect(ticket.party_record_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(ticket.party_record_id).toBe(partyAlias.canonical_party_id);
       expect(ticket.patta_number).toBe(1);
       expect(ticket.qty).toBe(100);
       expect(ticket.status).toBe('CONFIRMED');
@@ -1043,7 +1093,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
 
     const pattaBatchSha = crypto.createHash('sha256').update(fs.readFileSync(pattaBatchPath)).digest('hex').toLowerCase();
 
-    expect(pattaBatchSha).toBe('fe00381982f178f650d5a521d128a7639f334391c2592a9d09af18dd9cb2a059');
+    expect(pattaBatchSha).toBe('b0de2941822c813fc627ab99d96fcb95a61374894c78d39c827a204604237525');
   });
 
   // 23. legacy staj maps to workers.staj, not adjustment ledger
@@ -1888,7 +1938,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
   });
 
   // Test 10: Closed-Then-Reuse Migration Test
-  it('36. Mandatory Test 10: Closed-Then-Reuse Migration (Legitimate Active-Party Reuse)', () => {
+  it('36. Closed-Then-Reuse Migration purges closed history and retains the active party', () => {
     const compTest = 'comp_reuse_test';
     const jsonPath = createSampleLegacyJson(compTest, {
       printedPartyHistory: [
@@ -1924,26 +1974,17 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, compTest);
     try {
       const rows = db.prepare('SELECT * FROM parties WHERE party_number = ? ORDER BY printed_at ASC').all('2');
-      expect(rows.length).toBe(2);
-
-      // Party A: CLOSED
-      expect(rows[0].id).toBe('party_uuid_2_closed');
+      expect(rows.length).toBe(1);
+      expect(rows[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
       expect(rows[0].party_number).toBe('2');
-      expect(rows[0].status).toBe('CLOSED');
-      expect(rows[0].is_closed).toBe(1);
-      expect(rows[0].closed_at).toBe('2026-03-01T18:00:00.000Z');
-
-      // Party B: ACTIVE
-      expect(rows[1].id).toBe('party_uuid_2_active');
-      expect(rows[1].party_number).toBe('2');
-      expect(rows[1].status).toBe('ACTIVE');
-      expect(rows[1].is_closed).toBe(0);
-      expect(rows[1].closed_at).toBeNull();
+      expect(rows[0].status).toBe('ACTIVE');
+      expect(rows[0].is_closed).toBe(0);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM parties WHERE id = 'party_uuid_2_closed'").get().count).toBe(0);
 
       // Zero collision on active unique index
       const activeRows = db.prepare("SELECT * FROM parties WHERE party_number = '2' AND status != 'CLOSED'").all();
       expect(activeRows.length).toBe(1);
-      expect(activeRows[0].id).toBe('party_uuid_2_active');
+      expect(activeRows[0].id).toBe(rows[0].id);
     } finally {
       databaseManager.closeCompanyDatabase(compTest);
     }
@@ -2147,7 +2188,13 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       submittedTickets: []
     });
 
-    const res = migrator.migrateLegacyData(tempUserDataDir, compTest, { explicitSourcePath: jsonPath });
+    const res = migrator.migrateLegacyData(tempUserDataDir, compTest, {
+      explicitSourcePath: jsonPath,
+      partyResolutions: [
+        { partyId: 'rec_1788774889449_vrbkv', decision: 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED' },
+        { partyId: 'rec_1788930871307_cg1iv', decision: 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED' }
+      ]
+    });
     expect(res.success).toBe(true);
 
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, compTest);
@@ -2252,10 +2299,10 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       const ticketId = '8a735c00-912b-4b2f-8f01-4f8647b4a001';
       db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id, patta_number, qty, submitted_at, created_at) VALUES (?, 'comp_v8', 'm_v8', '7', 'p_v8', 1, 10, datetime('now'), datetime('now'))`).run(ticketId);
 
-      const result = migrationRunner.applyMigrations(db);
+      const result = migrationRunner.applyMigrations(db, { targetVersion: 9 });
       expect(result.previousVersion).toBe(8);
-      expect(result.currentVersion).toBe(CURRENT_SCHEMA_VERSION);
-      expect(result.appliedCount).toBe(CURRENT_SCHEMA_VERSION - result.previousVersion);
+      expect(result.currentVersion).toBe(9);
+      expect(result.appliedCount).toBe(1);
       expect(db.prepare('SELECT party_record_id FROM tickets WHERE id = ?').get(ticketId).party_record_id).toBe('p_v8');
       expect(db.pragma('foreign_key_check')).toHaveLength(0);
     } finally {
@@ -2299,10 +2346,13 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     return db;
   }
 
-  it('43. Migration 012 refuses to transfer the exact Party #2 pair from another company', () => {
+  it('43. Migration 012 preserves an explicitly persisted collision group without ID-specific policy', () => {
     const testDbPath = path.join(tempUserDataDir, 'mig010_exact_pair.sqlite');
-    const db = setupV9Db(testDbPath);
-    try {
+      const db = setupV9Db(testDbPath);
+      try {
+      for (const trigger of db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'parties'").all()) {
+        db.exec(`DROP TRIGGER IF EXISTS "${trigger.name}"`);
+      }
       const now = new Date().toISOString();
       const insertException = db.prepare(`
         INSERT INTO legacy_party_collision_exceptions (
@@ -2333,20 +2383,27 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       }
       expect(migrationRunner.verifySchemaVersionConsistency(db)).toBe(11);
       expect(db.prepare("SELECT count(*) AS c FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_parties_exact_party_2_insert'").get().c).toBe(1);
-      expect(() => migrationRunner.applyMigrations(db)).toThrowError(
-        expect.objectContaining({ code: 'EXACT_PARTY_2_COMPANY_SCOPE_MIGRATION_BLOCKED' })
-      );
-      expect(migrationRunner.verifySchemaVersionConsistency(db)).toBe(11);
+      const result = migrationRunner.applyMigrations(db);
+      expect(result.currentVersion).toBe(CURRENT_SCHEMA_VERSION);
+      expect(migrationRunner.verifySchemaVersionConsistency(db)).toBe(CURRENT_SCHEMA_VERSION);
       expect(db.prepare("SELECT count(*) AS c FROM parties WHERE company_id = 'comp_v9' AND party_number = '2'").get().c).toBe(2);
+      const insertThird = db.prepare(`
+        INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status, is_closed, created_at, updated_at)
+        VALUES ('third', 'comp_v9', '2', '2', 'model-v9', 'ACTIVE', 0, ?, ?)
+      `);
+      expect(() => insertThird.run(new Date().toISOString(), new Date().toISOString())).toThrow(/ACTIVE_PARTY_EXISTS/);
     } finally {
       db.close();
     }
   });
 
-  it('44. Migration 010 rejects unexpected v9 duplicates and rolls back without changing v9', () => {
+  it('44. Migration 010 rejects more than two pre-existing active collisions', () => {
     const testDbPath = path.join(tempUserDataDir, 'mig010_rollback.sqlite');
     const db = setupV9Db(testDbPath);
     try {
+      for (const trigger of db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'parties'").all()) {
+        db.exec(`DROP TRIGGER IF EXISTS "${trigger.name}"`);
+      }
       const now = new Date().toISOString();
       const insertException = db.prepare(`
         INSERT INTO legacy_party_collision_exceptions (
@@ -2356,6 +2413,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       `);
       insertException.run('exc-v9-fake-a', 'fake-v9-a', now);
       insertException.run('exc-v9-fake-b', 'fake-v9-b', now);
+      insertException.run('exc-v9-fake-c', 'fake-v9-c', now);
 
       const insertParty = db.prepare(`
         INSERT INTO parties (
@@ -2365,15 +2423,16 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       `);
       insertParty.run('fake-v9-a', now, now);
       insertParty.run('fake-v9-b', now, now);
+      insertParty.run('fake-v9-c', now, now);
 
       expect(() => migrationRunner.applyMigrations(db)).toThrowError(
-        expect.objectContaining({ code: 'EXACT_PARTY_2_POLICY_MIGRATION_BLOCKED' })
+        expect.objectContaining({ code: 'ACTIVE_PARTY_MIGRATION_BLOCKED' })
       );
       expect(migrationRunner.getMetaTableVersion(db)).toBe(9);
       expect(migrationRunner.getPragmaUserVersion(db)).toBe(9);
-      expect(db.prepare("SELECT count(*) AS c FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_parties_active_unique_insert'").get().c).toBe(1);
+      expect(db.prepare("SELECT count(*) AS c FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_parties_active_unique_insert'").get().c).toBe(0);
       expect(db.prepare("SELECT count(*) AS c FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_parties_exact_party_2_insert'").get().c).toBe(0);
-      expect(db.prepare("SELECT count(*) AS c FROM parties WHERE company_id = 'comp_v9_bad' AND party_number = '12'").get().c).toBe(2);
+      expect(db.prepare("SELECT count(*) AS c FROM parties WHERE company_id = 'comp_v9_bad' AND party_number = '12'").get().c).toBe(3);
     } finally {
       db.close();
     }

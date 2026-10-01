@@ -138,17 +138,18 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       scheduleBatchSettings(context);
     },
     updatePattaBatchSize: async (modelId: string, size: string, count: string) => {
+      // Keep the controlled input responsive while the sync context is being
+      // resolved. Multiple keystrokes can otherwise complete out of order and
+      // overwrite newer values with an older snapshot.
+      const immediateState = get();
+      const immediateModel = immediateState.models.find((item) => item.id === modelId);
+      if (immediateModel) {
+        const current = immediateState.pattaBatchConfigs[modelId] || { partyNumber: '', totalIshSoni: '', color: immediateModel.color || 'Кора', sizes: {} };
+        set({ pattaBatchConfigs: { ...immediateState.pattaBatchConfigs, [modelId]: { ...current, sizes: { ...(current.sizes || {}), [size]: count } } } });
+      }
       const context = await getContext();
       if (!context) return slices.updatePattaBatchSize(modelId, size, count);
       if (!context.success) return;
-      const state = get();
-      const model = state.models.find((item) => item.id === modelId);
-      if (!model) {
-        get().addNotification('error', 'MODEL_NOT_FOUND', `Model "${modelId}" was not found.`);
-        return;
-      }
-      const current = state.pattaBatchConfigs[modelId] || { partyNumber: '', totalIshSoni: '', color: model.color || 'Кора', sizes: {} };
-      set({ pattaBatchConfigs: { ...state.pattaBatchConfigs, [modelId]: { ...current, sizes: { ...(current.sizes || {}), [size]: count } } } });
       scheduleBatchSettings(context);
     },
     addPrintedPartyRecord: async (item: Parameters<WorkbookStore['addPrintedPartyRecord']>[0]) => {

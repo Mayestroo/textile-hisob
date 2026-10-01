@@ -15,7 +15,7 @@ const requestTokenStorage = {
 
 function record(overrides: Record<string, unknown> = {}, key = privateKey) {
   const payload = {
-    activationId: 'activation-1', companyId: 'company-a', companyName: 'Company A', expiresAt: null,
+    activationId: '11111111-1111-4111-8111-111111111111', companyId: 'company-a', companyName: 'Company A', expiresAt: null,
     issuedAt: '2026-09-21T12:00:00.000Z', machineId: 'A588-F0E4-DE9A-59A2', requireTicketValidation: true,
     role: 'admin', schema: 'novda-license-v1', status: 'active', ...overrides
   };
@@ -57,6 +57,26 @@ describe('Ed25519 license verification', () => {
     expect(license.verifyActivationRecord('A588-F0E4-DE9A-59A2', { payload: record().payload }, publicPem).valid).toBe(false);
     const other = crypto.generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }).toString();
     expect(license.verifyActivationRecord('A588-F0E4-DE9A-59A2', record(), other).valid).toBe(false);
+  });
+
+  it('rejects non-canonical signatures and payloads with unsigned extra fields', () => {
+    const signed = record();
+    expect(license.verifyActivationRecord('A588-F0E4-DE9A-59A2', {
+      ...signed,
+      signature: `${signed.signature}\n`
+    }, publicPem).valid).toBe(false);
+    expect(license.verifyActivationRecord('A588-F0E4-DE9A-59A2', {
+      ...signed,
+      payload: { ...signed.payload, isLifetime: true }
+    }, publicPem).valid).toBe(false);
+  });
+
+  it('rejects licenses whose expiry is not after issuance', () => {
+    const issuedAt = '2026-09-21T12:00:00.000Z';
+    expect(license.verifyActivationRecord('A588-F0E4-DE9A-59A2', record({
+      issuedAt,
+      expiresAt: issuedAt
+    }), publicPem).valid).toBe(false);
   });
 
   it('fails closed when company or role is missing', () => {

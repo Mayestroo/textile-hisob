@@ -205,14 +205,20 @@ function loadWorkersFromSqlite(db, companyId, periodId = null) {
 
 function loadPartiesFromSqlite(db, companyId) {
   const rows = db.prepare(`
-    SELECT id, company_id, party_number, model_id, model_name, color,
-           patta_count, cumulative_patta_count, ish_soni_per_patta,
-           total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json,
-           printed_at, is_closed, closed_at, archived_patta_numbers_json,
-            status, server_revision
-    FROM parties
-    WHERE company_id = ? AND is_archived = 0
-    ORDER BY created_at ASC, id ASC
+     SELECT p.id, p.company_id, p.party_number,
+            COALESCE(a.canonical_model_id, p.model_id) AS model_id,
+            p.model_name, p.color,
+            patta_count, cumulative_patta_count, ish_soni_per_patta,
+            total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json,
+            printed_at, is_closed, closed_at, archived_patta_numbers_json,
+            status, server_revision,
+            COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+            COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number
+     FROM parties p
+     LEFT JOIN model_id_aliases a ON a.company_id = p.company_id AND a.legacy_model_id = p.model_id
+     LEFT JOIN protected_party_patta_ranges r ON r.company_id = p.company_id AND r.party_record_id = p.id
+     WHERE p.company_id = ? AND p.is_archived = 0
+     ORDER BY p.created_at ASC, p.id ASC
   `).all(companyId);
 
   return rows.map((row) => ({
@@ -224,6 +230,8 @@ function loadPartiesFromSqlite(db, companyId) {
     color: row.color || '',
     pattaCount: Number(row.patta_count || 0),
     cumulativePattaCount: Number(row.cumulative_patta_count || 0),
+    pattaStartNumber: row.patta_start_number === null ? undefined : Number(row.patta_start_number),
+    pattaEndNumber: row.patta_end_number === null ? undefined : Number(row.patta_end_number),
     ishSoniPerPatta: row.ish_soni_per_patta === null ? undefined : Number(row.ish_soni_per_patta),
     totalIshSoni: row.total_ish_soni === null ? undefined : Number(row.total_ish_soni),
     ishSoni: Number(row.ish_soni || 0),

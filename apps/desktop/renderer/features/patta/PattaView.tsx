@@ -9,19 +9,19 @@ interface PattaViewProps {
 }
 
 export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
-  const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
-  const requireTicketValidation = licenseStatus?.requireTicketValidation !== false;
   const workers = useWorkbookStore((s) => s.workers);
 
   const form = useWorkbookStore((s) => s.ticketForms[model.id]) || {
     date: new Date().toISOString().slice(0, 10),
-    party: requireTicketValidation ? (model.party || '') : '',
+    party: model.party || '',
     color: model.color || '',
     size: model.size || '',
     qty: '',
     patta: '',
     entries: {}
   };
+  const strictParty = form.strictParty ?? true;
+  const strictPatta = form.strictPatta ?? true;
   const printedPartyHistory = useWorkbookStore((s) => s.printedPartyHistory);
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
@@ -36,26 +36,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
   const currentPartyStr = String(form.party || '1');
   const { isNonExistentParty, isWrongModelParty, hasBlockingError, errorBannerText } =
-    getTicketPartyStatus(form, model, printedPartyHistory, submittedTickets, { requireTicketValidation });
-
-  // When strict mode is OFF (free mode), clear default pre-filled party and patta
-  useEffect(() => {
-    if (!requireTicketValidation) {
-      const cur = useWorkbookStore.getState().ticketForms[model.id];
-      if (cur) {
-        if (cur.party === (model.party || '1') || cur.party === '1') {
-          updateTicketField(model.id, 'party', '');
-        }
-        if (cur.patta === '1') {
-          updateTicketField(model.id, 'patta', '');
-        }
-      }
-    }
-  }, [requireTicketValidation, model.id, model.party, updateTicketField]);
+    getTicketPartyStatus(form, model, printedPartyHistory, submittedTickets, { strictParty, strictPatta });
 
   // Auto fill size & qty from printed history if available (ONLY in strict mode)
   useEffect(() => {
-    if (!requireTicketValidation) return;
+    if (!strictParty || !strictPatta) return;
     if (!form.party || !form.patta) return;
     const pNum = parseInt(form.patta, 10);
     if (isNaN(pNum) || pNum <= 0) return;
@@ -64,9 +49,10 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
       (h) => h.modelId === model.id && String(h.partyNumber) === String(form.party)
     );
     if (matchedParty && matchedParty.sizes) {
-      const startPatta = (matchedParty.cumulativePattaCount > matchedParty.pattaCount)
-        ? (matchedParty.cumulativePattaCount - matchedParty.pattaCount + 1)
-        : 1;
+      const startPatta = matchedParty.pattaStartNumber
+        ?? (matchedParty.cumulativePattaCount > matchedParty.pattaCount
+          ? matchedParty.cumulativePattaCount - matchedParty.pattaCount + 1
+          : 1);
       const relPattaNum = pNum >= startPatta ? (pNum - startPatta + 1) : pNum;
 
       let counter = 1;
@@ -86,7 +72,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         updateTicketField(model.id, 'color', matchedParty.color);
       }
     }
-  }, [requireTicketValidation, form.party, form.patta, printedPartyHistory, model.id, availableSizes, updateTicketField, form.size, form.color]);
+  }, [strictParty, strictPatta, form.party, form.patta, printedPartyHistory, model.id, availableSizes, updateTicketField, form.size, form.color]);
 
   // Inline new operation state
   const [isAddingInline, setIsAddingInline] = useState(false);
@@ -199,7 +185,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const handlePartyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
       e.preventDefault();
-      if (requireTicketValidation && (isNonExistentParty || isWrongModelParty)) {
+      if (strictParty && (isNonExistentParty || isWrongModelParty)) {
         addNotification('warning', 'Partiya xatosi', errorBannerText);
       }
       safeFocus(pattaInputRef.current);
@@ -212,7 +198,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const handlePattaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
       e.preventDefault();
-      if (requireTicketValidation && hasBlockingError) {
+      if ((strictParty || strictPatta) && hasBlockingError) {
         addNotification('warning', 'Patta xatosi', errorBannerText);
       }
       if (qtyInputRef.current) {
@@ -232,7 +218,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const handleQtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
       e.preventDefault();
-      if (requireTicketValidation && hasBlockingError) {
+      if ((strictParty || strictPatta) && hasBlockingError) {
         addNotification('warning', 'Bloklangan', errorBannerText);
       }
       const firstOp = model.pattaOpsOrder[0];
@@ -381,7 +367,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
             <button
               onClick={() => {
-                if (requireTicketValidation && hasBlockingError) {
+                if ((strictParty || strictPatta) && hasBlockingError) {
                   addNotification(
                     'error',
                     'Chop etilmagan partiya',
@@ -452,7 +438,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   onFocus={() => handleCellFocus('C2', form.konveyer || '')}
                   className="soft-input"
                   style={{ height: '30px', textAlign: 'center', fontWeight: 700 }}
-                  placeholder={requireTicketValidation ? "" : "(ixtiyoriy)"}
+                  placeholder=""
                 />
               </td>
               <td colSpan={2} style={{ fontWeight: 600, textAlign: 'center' }}>
@@ -471,8 +457,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             {/* ROW 3: Party */}
             <tr style={{ height: '36px' }}>
               <td></td>
-              <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
-                Партия
+                <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <input type="checkbox" checked={strictParty} onChange={(e) => updateTicketField(model.id, 'strictParty', e.target.checked)} />
+                  Партия <small style={{ color: strictParty ? 'var(--primary)' : 'var(--text-muted)' }}>{strictParty ? 'Қатъий' : 'Эркин'}</small>
+                </label>
               </td>
               <td style={{ padding: '4px 8px' }}>
                 <input
@@ -487,11 +476,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                     height: '30px',
                     textAlign: 'center',
                     fontWeight: 700,
-                    borderColor: (requireTicketValidation && (isNonExistentParty || isWrongModelParty)) ? '#ef4444' : undefined,
-                    backgroundColor: (requireTicketValidation && (isNonExistentParty || isWrongModelParty)) ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)',
-                    color: (requireTicketValidation && (isNonExistentParty || isWrongModelParty)) ? '#f87171' : 'var(--text-primary)'
+                    borderColor: (strictParty && (isNonExistentParty || isWrongModelParty)) ? '#ef4444' : undefined,
+                    backgroundColor: (strictParty && (isNonExistentParty || isWrongModelParty)) ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)',
+                    color: (strictParty && (isNonExistentParty || isWrongModelParty)) ? '#f87171' : 'var(--text-primary)'
                   }}
-                  placeholder={requireTicketValidation ? "" : "(ixtiyoriy)"}
+                  placeholder={strictParty ? "" : "(ixtiyoriy)"}
                 />
               </td>
               <td colSpan={2}></td>
@@ -500,8 +489,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             {/* ROW 4: Patta, Rang, Razmer */}
             <tr style={{ height: '36px' }}>
               <td></td>
-              <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
-                Патта
+                <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <input type="checkbox" checked={strictPatta} onChange={(e) => updateTicketField(model.id, 'strictPatta', e.target.checked)} />
+                  Патта <small style={{ color: strictPatta ? 'var(--primary)' : 'var(--text-muted)' }}>{strictPatta ? 'Қатъий' : 'Эркин'}</small>
+                </label>
               </td>
               <td style={{ padding: '4px 8px' }}>
                 <input
@@ -516,11 +508,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                     height: '30px',
                     textAlign: 'center',
                     fontWeight: 700,
-                    borderColor: (requireTicketValidation && hasBlockingError) ? '#ef4444' : undefined,
-                    backgroundColor: (requireTicketValidation && hasBlockingError) ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)',
-                    color: (requireTicketValidation && hasBlockingError) ? '#f87171' : 'var(--text-primary)'
+                    borderColor: (strictPatta && hasBlockingError) ? '#ef4444' : undefined,
+                    backgroundColor: (strictPatta && hasBlockingError) ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)',
+                    color: (strictPatta && hasBlockingError) ? '#f87171' : 'var(--text-primary)'
                   }}
-                  placeholder={requireTicketValidation ? "" : "(ixtiyoriy)"}
+                  placeholder={strictPatta ? "" : "(ixtiyoriy)"}
                 />
               </td>
               <td style={{ fontWeight: 700, textAlign: 'center', color: 'var(--text-secondary)' }}>Ранг</td>

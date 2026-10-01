@@ -31,7 +31,7 @@ describe(' patta batch command payloads', () => {
     expect(result.batchId).toMatch(/^batch_/);
     expect(result.parties).toHaveLength(1);
     expect(result.parties[0]).toMatchObject({
-      id: expect.stringMatching(/^rec_/),
+      id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
       partyNumber: '1',
       modelId: 'model-a',
       pattaCount: 9,

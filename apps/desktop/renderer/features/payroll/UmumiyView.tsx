@@ -13,8 +13,8 @@ interface WorkerSummaryRowProps {
   rowNum: number;
   isSelected?: boolean;
   onSelectRow?: (workerId: number, toggle?: boolean) => void;
-  onAvansChange: (workerId: number, val: string) => void;
-  onJarimaChange: (workerId: number, val: string) => void;
+  onAvansChange: (workerId: number, val: string) => Promise<boolean> | void;
+  onJarimaChange: (workerId: number, val: string) => Promise<boolean> | void;
   onCellFocus: (cellId: string, value: string, formula?: string) => void;
   onOpenWorkerManager: () => void;
   onOpenWorkerDetail: (workerId: number) => void;
@@ -32,6 +32,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
   onOpenWorkerDetail
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [avansDraft, setAvansDraft] = useState<string | null>(null);
+  const [jarimaDraft, setJarimaDraft] = useState<string | null>(null);
   const formulaC = `=G${rowNum}-F${rowNum}-E${rowNum}-D${rowNum}`;
 
   return (
@@ -191,11 +193,16 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         <input
           type="text"
           inputMode="numeric"
-          value={w.avans > 0 ? formatMoney(w.avans) : ''}
-          onChange={(e) => onAvansChange(w.workerId, e.target.value)}
+          value={avansDraft ?? (w.avans > 0 ? formatMoney(w.avans) : '')}
+          onChange={(e) => setAvansDraft(e.target.value)}
           onFocus={() => {
+            setAvansDraft(w.avans > 0 ? formatMoney(w.avans) : '');
             onCellFocus(`E${rowNum}`, String(w.avans));
             onSelectRow && onSelectRow(w.workerId, false);
+          }}
+          onBlur={async (e) => {
+            await onAvansChange(w.workerId, e.currentTarget.value);
+            setAvansDraft(null);
           }}
           placeholder=""
           style={{
@@ -238,11 +245,16 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         <input
           type="text"
           inputMode="numeric"
-          value={w.jarima > 0 ? formatMoney(w.jarima) : ''}
-          onChange={(e) => onJarimaChange(w.workerId, e.target.value)}
+          value={jarimaDraft ?? (w.jarima > 0 ? formatMoney(w.jarima) : '')}
+          onChange={(e) => setJarimaDraft(e.target.value)}
           onFocus={() => {
+            setJarimaDraft(w.jarima > 0 ? formatMoney(w.jarima) : '');
             onCellFocus(`F${rowNum}`, String(w.jarima));
             onSelectRow && onSelectRow(w.workerId, false);
+          }}
+          onBlur={async (e) => {
+            await onJarimaChange(w.workerId, e.currentTarget.value);
+            setJarimaDraft(null);
           }}
           placeholder=""
           style={{
@@ -367,12 +379,12 @@ export const UmumiyView: React.FC = () => {
 
   const handleAvansChange = useCallback((workerId: number, val: string) => {
     const num = Number(val.replace(/\s+/g, '').replace(/,/g, '')) || 0;
-    updateWorker(workerId, { avans: num });
+    return updateWorker(workerId, { avans: num });
   }, [updateWorker]);
 
   const handleJarimaChange = useCallback((workerId: number, val: string) => {
     const num = Number(val.replace(/\s+/g, '').replace(/,/g, '')) || 0;
-    updateWorker(workerId, { jarima: num });
+    return updateWorker(workerId, { jarima: num });
   }, [updateWorker]);
 
   const handleCellFocus = useCallback((cellId: string, value: string, formula?: string) => {

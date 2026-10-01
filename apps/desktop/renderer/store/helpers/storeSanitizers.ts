@@ -293,8 +293,8 @@ export function sanitizePrintedPartyHistory(history: any[]): any[] {
 
   // 2. Sort chronologically: by cumulativePattaCount (if both > 0) or by creation timestamp
   const sorted = Array.from(idMap.values()).sort((a, b) => {
-    const cumA = Number(a.cumulativePattaCount) || 0;
-    const cumB = Number(b.cumulativePattaCount) || 0;
+    const cumA = Number(a.pattaEndNumber || a.cumulativePattaCount) || 0;
+    const cumB = Number(b.pattaEndNumber || b.cumulativePattaCount) || 0;
     if (cumA > 0 && cumB > 0) return cumA - cumB;
     const timeA = parseInt((a.id || '').replace(/^rec_(\d+).*/, '$1'), 10) || 0;
     const timeB = parseInt((b.id || '').replace(/^rec_(\d+).*/, '$1'), 10) || 0;
@@ -311,8 +311,11 @@ export function sanitizePrintedPartyHistory(history: any[]): any[] {
 
     let cumPatta = Number(r.cumulativePattaCount);
     let cumIsh = Number(r.cumulativeIshSoni);
+    const hasExplicitRange = Number.isSafeInteger(r.pattaStartNumber) && Number.isSafeInteger(r.pattaEndNumber);
 
-    if (!cumPatta || cumPatta <= 0) {
+    if (hasExplicitRange) {
+      runningCumPattas = Math.max(runningCumPattas, Number(r.pattaEndNumber));
+    } else if (!cumPatta || cumPatta <= 0) {
       runningCumPattas += pCount;
       cumPatta = runningCumPattas;
     } else {
@@ -328,7 +331,7 @@ export function sanitizePrintedPartyHistory(history: any[]): any[] {
 
     const cleanR: any = {
       ...r,
-      cumulativePattaCount: cumPatta,
+      cumulativePattaCount: hasExplicitRange ? Number(r.cumulativePattaCount || 0) : cumPatta,
       cumulativeIshSoni: cumIsh
     };
     if (cleanR.closedAt === undefined) {

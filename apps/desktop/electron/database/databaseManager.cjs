@@ -19,11 +19,28 @@ const activeCompanyConnections = new Map();
  * @returns {string} 'ok'
  */
 function runIntegrityCheck(db) {
-  const result = db.pragma('integrity_check', { simple: true });
-  if (result !== 'ok') {
+  const runCheck = () => db.prepare('PRAGMA integrity_check').all().map((row) => String(row.integrity_check));
+  let results = runCheck();
+  if (results.length !== 1 || results[0] !== 'ok') {
+    const repairableIndexErrors = results.map((message) => {
+      const match = message.match(/^(?:wrong # of entries in index|row \d+ missing from index|row \d+ out of order in index) ([A-Za-z0-9_]+)$/);
+      return match?.[1] || null;
+    });
+    const indexes = [...new Set(repairableIndexErrors.filter(Boolean))];
+    const allIndexOnly = indexes.length > 0 && repairableIndexErrors.every(Boolean);
+    const existingIndexes = allIndexOnly
+      ? new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all().map((row) => row.name))
+      : new Set();
+    if (allIndexOnly && indexes.every((name) => existingIndexes.has(name))) {
+      for (const name of indexes) db.exec(`REINDEX "${name}"`);
+      results = runCheck();
+    }
+  }
+  if (results.length !== 1 || results[0] !== 'ok') {
+    const result = results.join('; ');
     const err = new Error(`SQLite database integrity check failed: ${result}`);
     err.code = 'DATABASE_CORRUPT';
-    err.details = result;
+    err.details = results;
     throw err;
   }
   return 'ok';

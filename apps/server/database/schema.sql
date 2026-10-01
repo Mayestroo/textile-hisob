@@ -255,6 +255,8 @@ CREATE TABLE IF NOT EXISTS parties (
   color VARCHAR(64),
   patta_count INTEGER NOT NULL DEFAULT 0,
   cumulative_patta_count INTEGER NOT NULL DEFAULT 0,
+  patta_start_number INTEGER,
+  patta_end_number INTEGER,
   ish_soni_per_patta NUMERIC,
   total_ish_soni NUMERIC,
   ish_soni NUMERIC NOT NULL DEFAULT 0,
@@ -273,6 +275,26 @@ CREATE TABLE IF NOT EXISTS parties (
 CREATE INDEX IF NOT EXISTS idx_parties_comp ON parties(company_id);
 CREATE INDEX IF NOT EXISTS idx_parties_model ON parties(company_id, model_id);
 CREATE INDEX IF NOT EXISTS idx_parties_num ON parties(company_id, party_number);
+CREATE TABLE IF NOT EXISTS model_id_aliases (
+  company_id VARCHAR(64) NOT NULL,
+  legacy_model_id VARCHAR(128) NOT NULL,
+  canonical_model_id VARCHAR(128) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (company_id, legacy_model_id),
+  UNIQUE (company_id, canonical_model_id)
+);
+CREATE TABLE IF NOT EXISTS company_patta_sequences (
+  company_id VARCHAR(64) PRIMARY KEY,
+  next_patta_number BIGINT NOT NULL CHECK (next_patta_number > 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS protected_party_patta_ranges (
+  company_id VARCHAR(64) NOT NULL,
+  party_record_id VARCHAR(128) NOT NULL,
+  patta_start_number BIGINT NOT NULL CHECK (patta_start_number > 0),
+  patta_end_number BIGINT NOT NULL CHECK (patta_end_number >= patta_start_number),
+  PRIMARY KEY (company_id, party_record_id)
+);
 ALTER TABLE tickets DROP CONSTRAINT IF EXISTS fk_tickets_party_record;
 ALTER TABLE tickets ADD CONSTRAINT fk_tickets_party_record
   FOREIGN KEY (company_id, party_record_id) REFERENCES parties(company_id, id) ON DELETE RESTRICT;
@@ -344,20 +366,31 @@ BEGIN
       AND status != 'CLOSED'
       AND id != NEW.id;
 
-    IF v_other_active_count > 0 AND NOT (
-      NEW.company_id = 'comp_novda'
-      AND
-      NEW.party_number = '2'
-      AND NEW.id IN ('rec_1788774889449_vrbkv', 'rec_1788930871307_cg1iv')
-      AND v_other_active_count = 1
-      AND EXISTS (
-        SELECT 1 FROM parties p
-        WHERE p.company_id = NEW.company_id
-          AND p.party_number = '2'
-          AND p.status != 'CLOSED'
-          AND p.id != NEW.id
-          AND p.id IN ('rec_1788774889449_vrbkv', 'rec_1788930871307_cg1iv')
-      )
+    IF v_other_active_count > 0 AND NOT EXISTS (
+      SELECT 1
+      FROM legacy_party_collision_exceptions current_exception
+      JOIN legacy_party_collision_exceptions other_exception
+        ON other_exception.company_id = current_exception.company_id
+       AND other_exception.party_number = current_exception.party_number
+       AND other_exception.collision_group_id = current_exception.collision_group_id
+       AND other_exception.party_id <> current_exception.party_id
+      JOIN parties other_party
+        ON other_party.company_id = other_exception.company_id
+       AND other_party.id = other_exception.party_id
+      WHERE current_exception.company_id = NEW.company_id
+        AND current_exception.party_id = NEW.id
+        AND current_exception.party_number = NEW.party_number
+        AND current_exception.status = 'ACTIVE'
+        AND other_exception.status = 'ACTIVE'
+        AND other_party.status != 'CLOSED'
+        AND v_other_active_count = 1
+        AND (
+          SELECT COUNT(*) FROM legacy_party_collision_exceptions group_exception
+          WHERE group_exception.company_id = current_exception.company_id
+            AND group_exception.party_number = current_exception.party_number
+            AND group_exception.collision_group_id = current_exception.collision_group_id
+            AND group_exception.status = 'ACTIVE'
+        ) = 2
     ) THEN
       RAISE EXCEPTION 'ACTIVE_PARTY_EXISTS: Active party #% already exists for company %', NEW.party_number, NEW.company_id;
     END IF;

@@ -165,8 +165,19 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           factsUpdated++;
         } else if (op.command_type === 'UpsertModel' || op.command_type === 'DeactivateModel') {
           const status = op.command_type === 'DeactivateModel' ? 'INACTIVE' : 'ACTIVE';
+          const modelAlias = db.prepare(`SELECT canonical_model_id FROM model_id_aliases
+            WHERE company_id = ? AND legacy_model_id = ?`).get(companyId, op.entity_id);
+          const modelId = modelAlias?.canonical_model_id || op.entity_id;
           db.prepare(`UPDATE models SET status = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
-            .run(status, res.serverRevision, res.committedAt || new Date().toISOString(), companyId, op.entity_id);
+            .run(status, res.serverRevision, res.committedAt || new Date().toISOString(), companyId, modelId);
+          if (op.command_type === 'UpsertModel') {
+            db.prepare(`UPDATE local_outbox SET status = 'SUPERSEDED', error_message = NULL, last_error = NULL,
+              updated_at = ? WHERE company_id = ? AND command_type = 'UpsertModel' AND status = 'DEAD_LETTER'
+              AND entity_id IN (
+                SELECT legacy_model_id FROM model_id_aliases
+                WHERE company_id = ? AND canonical_model_id = ?
+              )`).run(new Date().toISOString(), companyId, companyId, modelId);
+          }
           factsUpdated++;
         } else if (op.command_type === 'UpsertWorker' || op.command_type === 'DeactivateWorker') {
           const status = op.command_type === 'DeactivateWorker' ? 'INACTIVE' : 'ACTIVE';
@@ -200,12 +211,16 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         } else if (op.command_type === 'CreateParty' || op.command_type === 'UpdateParty' || op.command_type === 'CloseParty') {
           const payload = JSON.parse(op.payload_json);
           const status = op.command_type === 'CloseParty' ? 'CLOSED' : 'ACTIVE';
+          const requestedPartyId = payload.partyRecordId || op.entity_id;
+          const partyAlias = db.prepare(`SELECT canonical_party_id FROM party_id_aliases
+            WHERE company_id = ? AND legacy_party_id = ?`).get(companyId, requestedPartyId);
+          const partyId = partyAlias?.canonical_party_id || requestedPartyId;
           db.prepare(`UPDATE parties SET server_revision = ?, status = ?, is_closed = ?,
             closed_at = COALESCE(?, closed_at), updated_at = COALESCE(?, updated_at)
             WHERE company_id = ? AND id = ?`)
             .run(res.serverRevision, status, status === 'CLOSED' ? 1 : 0,
               status === 'CLOSED' ? (res.committedAt || new Date().toISOString()) : null,
-              res.committedAt || null, companyId, payload.partyRecordId || op.entity_id);
+              res.committedAt || null, companyId, partyId);
           factsUpdated++;
         } else if (op.command_type === 'UpdateBatchSettings') {
           db.prepare(`UPDATE company_batch_settings SET server_revision = ?, updated_at = ? WHERE company_id = ?`)

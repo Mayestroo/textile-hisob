@@ -15,4 +15,16 @@ describe('buildPartyTicketsList work quantities', () => {
     expect(tickets.map((ticket) => ticket.expectedQty)).toEqual(Array(9).fill(108));
     expect(tickets.reduce((sum, ticket) => sum + ticket.expectedQty, 0)).toBe(972);
   });
+
+  it('derives per-patta quantity from a legacy total instead of repeating the total for every patta', () => {
+    const tickets = buildPartyTicketsList({
+      id: 'party-legacy', partyNumber: '1', modelId: 'buxoro-long', modelName: 'Buxoro long',
+      color: 'Кора', pattaCount: 10, cumulativePattaCount: 10,
+      ishSoni: 650, cumulativeIshSoni: 0,
+      sizes: { M: '10' }, printedAt: '2026-09-07T14:52:00.000Z'
+    }, [], ['M']);
+
+    expect(tickets.map((ticket) => ticket.expectedQty)).toEqual(Array(10).fill(65));
+    expect(tickets.reduce((sum, ticket) => sum + ticket.expectedQty, 0)).toBe(650);
+  });
 });

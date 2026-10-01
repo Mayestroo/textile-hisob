@@ -32,15 +32,21 @@ function appendChange(client, companyId, entityType, entityId, revision, operati
 }
 
 async function assertActiveModel(client, companyId, modelId) {
+  const alias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, modelId]);
+  const canonicalModelId = alias.rows[0]?.canonical_model_id || modelId;
   const result = await client.query(
     `SELECT id FROM models WHERE company_id = $1 AND id = $2 AND status = 'ACTIVE'`,
-    [companyId, modelId]
+    [companyId, canonicalModelId]
   );
   if (!result.rows.length) throw workbookError('MODEL_NOT_FOUND', `Active model "${modelId}" was not found`);
+  return canonicalModelId;
 }
 
 async function executeUpsertModel(client, companyId, operationId, payload, canonicalJson, envelope) {
-  const modelId = payload.modelId;
+  const modelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, payload.modelId]);
+  const modelId = modelAlias.rows[0]?.canonical_model_id || payload.modelId;
   await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':model-name:' || lower($2)))`, [companyId, payload.name]);
   const duplicate = await client.query(
     `SELECT id FROM models WHERE company_id = $1 AND lower(name) = lower($2) AND id <> $3 AND status = 'ACTIVE' LIMIT 1`,
@@ -199,10 +205,18 @@ async function readPeriodArchiveSource(client, companyId, period) {
       COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'JARIMA'), 0) AS jarima
       FROM workers w LEFT JOIN worker_adjustments a ON a.company_id = w.company_id AND a.worker_id = w.id AND a.period_id = $2
       WHERE w.company_id = $1 GROUP BY w.id, w.company_id, w.name, w.staj, w.role ORDER BY w.id`, [companyId, period.id]);
-  const parties = await client.query(`SELECT id, party_number, model_id, model_name, color, patta_count, cumulative_patta_count,
+  const parties = await client.query(`SELECT p.id, p.party_number,
+      COALESCE(a.canonical_model_id, p.model_id) AS model_id,
+      p.model_name, p.color, p.patta_count, p.cumulative_patta_count,
+      COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+      COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number,
       ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json, printed_at,
-      is_closed, closed_at, archived_patta_numbers_json
-      FROM parties WHERE company_id = $1 AND (status != 'CLOSED' OR printed_at::date >= $2::date AND printed_at::date <= $3::date) ORDER BY printed_at, id`,
+      p.is_closed, p.closed_at, p.archived_patta_numbers_json
+      FROM parties p
+      LEFT JOIN model_id_aliases a ON a.company_id = p.company_id AND a.legacy_model_id = p.model_id
+      LEFT JOIN protected_party_patta_ranges r ON r.company_id = p.company_id AND r.party_record_id = p.id
+      WHERE p.company_id = $1 AND (p.status != 'CLOSED' OR p.printed_at::date >= $2::date AND p.printed_at::date <= $3::date)
+      ORDER BY p.printed_at, p.id`,
       [companyId, period.start_date, period.end_date || period.start_date]);
   const tickets = await client.query(`SELECT id, model_id, period_id, party_number, party_record_id, patta_number, qty, size, color, konveyer, status, submitted_at
       FROM tickets WHERE company_id = $1 AND (period_id = $2 OR (period_id IS NULL AND submitted_at::date >= $3::date AND submitted_at::date <= $4::date))
@@ -237,6 +251,8 @@ async function readPeriodArchiveSource(client, companyId, period) {
   const printedPartyHistory = parties.rows.map((row) => ({
     id: row.id, partyNumber: row.party_number, modelId: row.model_id, modelName: row.model_name || '', color: row.color || '',
     pattaCount: row.patta_count, cumulativePattaCount: row.cumulative_patta_count,
+    pattaStartNumber: row.patta_start_number === null ? undefined : Number(row.patta_start_number),
+    pattaEndNumber: row.patta_end_number === null ? undefined : Number(row.patta_end_number),
     ishSoniPerPatta: row.ish_soni_per_patta === null ? undefined : Number(row.ish_soni_per_patta),
     totalIshSoni: row.total_ish_soni === null ? undefined : Number(row.total_ish_soni),
     ishSoni: Number(row.ish_soni || 0), cumulativeIshSoni: Number(row.cumulative_ish_soni || 0),
@@ -378,22 +394,52 @@ async function executeClosePeriod(client, companyId, operationId, payload, canon
 }
 
 async function executeUpdateParty(client, companyId, operationId, payload, canonicalJson, envelope) {
-  const currentResult = await client.query(`SELECT * FROM parties WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, payload.partyRecordId]);
+  const partyAlias = await client.query(`SELECT canonical_party_id FROM party_id_aliases
+    WHERE company_id = $1 AND legacy_party_id = $2`, [companyId, payload.partyRecordId]);
+  const partyRecordId = partyAlias.rows[0]?.canonical_party_id || payload.partyRecordId;
+  const currentResult = await client.query(`SELECT * FROM parties WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, partyRecordId]);
   const current = currentResult.rows[0];
-  if (!current) throw workbookError('PARTY_NOT_FOUND', `Party "${payload.partyRecordId}" was not found`);
+  if (!current) throw workbookError('PARTY_NOT_FOUND', `Party "${partyRecordId}" was not found`);
   if (current.status === 'CLOSED') throw workbookError('PARTY_ALREADY_CLOSED', 'Closed parties cannot be updated');
-  if (current.model_id !== payload.modelId || current.party_number !== payload.partyNumber) throw workbookError('IMMUTABLE_PARTY_IDENTITY', 'Party model and party number are immutable');
-  await assertActiveModel(client, companyId, payload.modelId);
+  if (Number(current.patta_count) !== Number(payload.pattaCount)) throw workbookError('IMMUTABLE_PATTA_RANGE', 'An existing printed party cannot change its patta count');
+  const modelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, current.model_id]);
+  const canonicalCurrentModelId = modelAlias.rows[0]?.canonical_model_id || current.model_id;
+  const canonicalPayloadModelId = await assertActiveModel(client, companyId, payload.modelId);
+  if (canonicalCurrentModelId !== canonicalPayloadModelId || current.party_number !== payload.partyNumber) throw workbookError('IMMUTABLE_PARTY_IDENTITY', 'Party model and party number are immutable');
   const revision = assertBaseRevision({ baseRevision: envelope.baseRevision }, current.server_revision, 'Party');
   const now = new Date().toISOString();
-  const result = await client.query(`UPDATE parties SET model_name = $1, color = $2, patta_count = $3,
-    cumulative_patta_count = $4, ish_soni_per_patta = $5, total_ish_soni = $6, ish_soni = $7,
-    cumulative_ish_soni = $8, sizes_json = $9::jsonb, server_revision = $10, updated_at = $11
-    WHERE company_id = $12 AND id = $13 RETURNING id`,
-  [payload.modelName || null, payload.color || null, payload.pattaCount, payload.cumulativePattaCount,
+  const protectedCollision = await client.query(`SELECT 1 FROM legacy_party_collision_exceptions
+    WHERE company_id = $1 AND party_id = $2 AND status = 'ACTIVE' LIMIT 1`, [companyId, partyRecordId]);
+  const result = protectedCollision.rows.length
+    ? await client.query(`UPDATE parties SET ish_soni_per_patta = $1, total_ish_soni = $2, ish_soni = $3,
+        cumulative_ish_soni = $4, server_revision = $5, updated_at = $6
+        WHERE company_id = $7 AND id = $8 RETURNING id`,
+      [payload.ishSoniPerPatta, payload.totalIshSoni, payload.ishSoni, payload.cumulativeIshSoni,
+        revision, now, companyId, partyRecordId])
+    : await client.query(`UPDATE parties SET model_name = $1, color = $2,
+    cumulative_patta_count = $3, ish_soni_per_patta = $4, total_ish_soni = $5, ish_soni = $6,
+    cumulative_ish_soni = $7, sizes_json = $8::jsonb, server_revision = $9, updated_at = $10
+    WHERE company_id = $11 AND id = $12 RETURNING id`,
+  [payload.modelName || null, payload.color || null, current.cumulative_patta_count,
     payload.ishSoniPerPatta, payload.totalIshSoni, payload.ishSoni, payload.cumulativeIshSoni,
-    JSON.stringify(payload.sizes || {}), revision, now, companyId, payload.partyRecordId]);
-  const change = await appendChange(client, companyId, 'party', payload.partyRecordId, revision, operationId, 'UPDATE', payload, now);
+    JSON.stringify(payload.sizes || {}), revision, now, companyId, partyRecordId]);
+  const changePayload = protectedCollision.rows.length
+    ? {
+      partyRecordId,
+      ishSoniPerPatta: payload.ishSoniPerPatta,
+      totalIshSoni: payload.totalIshSoni,
+      ishSoni: payload.ishSoni,
+      cumulativeIshSoni: payload.cumulativeIshSoni,
+      updatedAt: now
+    }
+    : {
+      ...payload,
+      cumulativePattaCount: Number(current.cumulative_patta_count || 0),
+      pattaStartNumber: current.patta_start_number === null ? undefined : Number(current.patta_start_number),
+      pattaEndNumber: current.patta_end_number === null ? undefined : Number(current.patta_end_number)
+    };
+  const change = await appendChange(client, companyId, 'party', partyRecordId, revision, operationId, 'UPDATE', changePayload, now);
   return { serverRevision: revision, entityId: result.rows[0].id, changeId: change.rows[0].change_id, committedAt: change.rows[0].committed_at };
 }
 
@@ -414,7 +460,7 @@ async function executeUpdateBatchSettings(client, companyId, operationId, payloa
       server_revision = excluded.server_revision, updated_at = excluded.updated_at`,
   [companyId, JSON.stringify(availableSizes), revision, now]);
   for (const config of payload.configs || []) {
-    await assertActiveModel(client, companyId, config.modelId);
+    const modelId = await assertActiveModel(client, companyId, config.modelId);
     await client.query(`INSERT INTO patta_batch_settings (
       company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, server_revision, updated_at
     ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 1, $8)
@@ -422,7 +468,7 @@ async function executeUpdateBatchSettings(client, companyId, operationId, payloa
       is_custom_party = excluded.is_custom_party, total_ish_soni = excluded.total_ish_soni,
       color = excluded.color, sizes_json = excluded.sizes_json,
       server_revision = patta_batch_settings.server_revision + 1, updated_at = excluded.updated_at`,
-    [companyId, config.modelId, config.partyNumber, config.isCustomParty, config.totalIshSoni, config.color || null,
+    [companyId, modelId, config.partyNumber, config.isCustomParty, config.totalIshSoni, config.color || null,
       JSON.stringify(config.sizes || {}), now]);
   }
   const change = await appendChange(client, companyId, 'batch_settings', companyId, revision, operationId,
@@ -437,14 +483,25 @@ async function executeCompletePattaBatch(client, companyId, operationId, payload
     await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':party:' || $2))`, [companyId, partyNumber]);
   }
   let lastChangeId = 0;
+  const canonicalPartyIds = [];
   for (const party of payload.parties) {
-    const existing = await client.query(`SELECT id, status FROM parties WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, party.partyRecordId]);
+    const partyAlias = await client.query(`SELECT canonical_party_id FROM party_id_aliases
+      WHERE company_id = $1 AND legacy_party_id = $2`, [companyId, party.partyRecordId]);
+    const canonicalPartyRecordId = partyAlias.rows[0]?.canonical_party_id || party.partyRecordId;
+    canonicalPartyIds.push(canonicalPartyRecordId);
+    const canonicalParty = canonicalPartyRecordId === party.partyRecordId
+      ? party : { ...party, partyRecordId: canonicalPartyRecordId };
+    const existing = await client.query(`SELECT p.id, p.status,
+      EXISTS (SELECT 1 FROM legacy_party_collision_exceptions e
+        WHERE e.company_id = p.company_id AND e.party_id = p.id AND e.status = 'ACTIVE') AS is_protected
+      FROM parties p WHERE p.company_id = $1 AND p.id = $2 FOR UPDATE`, [companyId, canonicalPartyRecordId]);
     let mutation;
     if (existing.rows.length) {
-      const itemEnvelope = { baseRevision: party.baseRevision };
-      mutation = await executeUpdateParty(client, companyId, operationId, party, canonicalStringify(party), itemEnvelope);
+      if (existing.rows[0].is_protected) continue;
+      const itemEnvelope = { baseRevision: canonicalParty.baseRevision };
+      mutation = await executeUpdateParty(client, companyId, operationId, canonicalParty, canonicalStringify(canonicalParty), itemEnvelope);
     } else {
-      mutation = await options.executeCreateParty(client, companyId, operationId, party, canonicalStringify(party));
+      mutation = await options.executeCreateParty(client, companyId, operationId, canonicalParty, canonicalStringify(canonicalParty));
     }
     lastChangeId = Number(mutation.changeId || lastChangeId);
   }
@@ -454,7 +511,7 @@ async function executeCompletePattaBatch(client, companyId, operationId, payload
   }, { baseRevision: payload.batchSettingsBaseRevision }, { skipRevision: true });
   lastChangeId = Math.max(lastChangeId, Number(settings.changeId || 0));
   const batchChange = await appendChange(client, companyId, 'patta_batch', payload.batchId, 1, operationId, 'INSERT',
-    { batchId: payload.batchId, parties: payload.parties.map((party) => party.partyRecordId) }, new Date().toISOString());
+    { batchId: payload.batchId, parties: canonicalPartyIds }, new Date().toISOString());
   lastChangeId = Number(batchChange.rows[0].change_id);
   return { serverRevision: 1, entityId: payload.batchId, changeId: lastChangeId, committedAt: batchChange.rows[0].committed_at };
 }

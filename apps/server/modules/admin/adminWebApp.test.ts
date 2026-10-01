@@ -13,7 +13,7 @@ describe(' Admin WebApp static security and usability boundaries', () => {
       expect(html).toContain(`data-view="${view}"`);
       expect(html).toContain(`data-section="${view}"`);
     }
-    expect(html).toContain('LEGACY CONTROLS RETIRED');
+    expect(html).toContain('UNSUPPORTED CONTROLS RETIRED');
     expect(html).toContain('PostgreSQL authoritative');
     for (const view of ['bindings', 'models', 'parties', 'tickets', 'balances', 'system']) {
       expect(html).toContain(`data-view="${view}"`);
@@ -29,7 +29,7 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).not.toMatch(/localStorage|sessionStorage/i);
   });
 
-  it('labels activation policy separately and offers only existing business scopes', () => {
+  it('labels activation policy separately and does not expose bot-managed ticket mode', () => {
     const policyForm = html.match(/<form id="companyForm"[\s\S]*?<\/form>/)?.[0] || '';
     expect(html).toContain('Activation policy');
     expect(html).toContain('activation-policy');
@@ -39,14 +39,10 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).not.toContain('elements.requireTicketValidation');
     expect(javascript).toContain('businessScopeExists');
     expect(policyForm).toContain('name="isActive"');
-    expect(html).toContain('id="strictModeToggle" type="checkbox" role="switch"');
-    expect(html).toContain('id="strictModeReapply"');
-    expect(html).toContain("Qat'iy rejim");
-    expect(html).toContain('Erkin rejim');
-    expect(javascript).toContain("method: 'PUT', body: { strictMode }");
-    expect(javascript).toContain('reapplyStrictModeToDevices');
-    expect(javascript).toContain('dasturlarni qayta oching');
-    expect(javascript).toContain('window.confirm(confirmation)');
+    expect(html).not.toContain('strictModeToggle');
+    expect(html).not.toContain('strictModeReapply');
+    expect(javascript).not.toContain('changeStrictMode');
+    expect(javascript).not.toContain('reapplyStrictModeToDevices');
   });
 
   it('contains no direct legacy database clients, secrets, unsafe DOM injection, or dynamic code', () => {

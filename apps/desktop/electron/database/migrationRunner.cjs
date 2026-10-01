@@ -73,15 +73,18 @@ function verifySchemaVersionConsistency(db) {
  * @param {import('better-sqlite3').Database} db
  * @returns {{ previousVersion: number, currentVersion: number, appliedCount: number }}
  */
-function applyMigrations(db) {
+function applyMigrations(db, options = {}) {
   // First, verify consistency of existing schema state
   const currentVersion = verifySchemaVersionConsistency(db);
   let appliedCount = 0;
   let activeVersion = currentVersion;
+  const targetVersion = Number.isSafeInteger(options.targetVersion)
+    ? Math.min(options.targetVersion, MIGRATIONS[MIGRATIONS.length - 1].version)
+    : MIGRATIONS[MIGRATIONS.length - 1].version;
 
   // Filter migrations with version > activeVersion
   const pending = MIGRATIONS
-    .filter(m => m.version > activeVersion)
+    .filter(m => m.version > activeVersion && m.version <= targetVersion)
     .sort((a, b) => a.version - b.version);
 
   for (const migration of pending) {

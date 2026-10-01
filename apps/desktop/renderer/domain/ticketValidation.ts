@@ -59,13 +59,14 @@ export function getTicketPartyStatus(
   model: ModelConfig,
   printedPartyHistory: PrintedPartyRecord[],
   submittedTickets: SubmittedTicketRecord[],
-  options?: { requireTicketValidation?: boolean }
+  options?: { requireTicketValidation?: boolean; strictParty?: boolean; strictPatta?: boolean }
 ): TicketPartyStatus {
-  const isStrict = options?.requireTicketValidation !== false;
+  const strictParty = options?.strictParty ?? options?.requireTicketValidation !== false;
+  const strictPatta = options?.strictPatta ?? options?.requireTicketValidation !== false;
   const currentPartyStr = String(form.party || '');
   const currentPattaNum = parseInt(form.patta || '0', 10) || 0;
 
-  if (!isStrict) {
+  if (!strictParty && !strictPatta) {
     let alreadySubmittedTicket: SubmittedTicketRecord | undefined;
     if (currentPartyStr && currentPattaNum > 0) {
       alreadySubmittedTicket = (submittedTickets || []).find(
@@ -99,16 +100,16 @@ export function getTicketPartyStatus(
   const partyOwner = activeParties.find((h) => h.modelId === model.id && String(h.partyNumber) === currentPartyStr)
     || (printedPartyHistory || []).slice().reverse().find((h) => h.modelId === model.id && String(h.partyNumber) === currentPartyStr);
 
-  const isNonExistentParty = !partyOwner;
-  const isWrongModelParty = !!partyOwner && partyOwner.modelId !== model.id;
+  const isNonExistentParty = strictParty && !partyOwner;
+  const isWrongModelParty = strictParty && !!partyOwner && partyOwner.modelId !== model.id;
 
   const minPattaForParty = partyOwner
-    ? (partyOwner.cumulativePattaCount > partyOwner.pattaCount
+    ? (partyOwner.pattaStartNumber ?? (partyOwner.cumulativePattaCount > partyOwner.pattaCount
         ? partyOwner.cumulativePattaCount - partyOwner.pattaCount + 1
-        : 1)
+        : 1))
     : 1;
   const maxPattaForParty = partyOwner
-    ? (partyOwner.cumulativePattaCount || partyOwner.pattaCount)
+    ? (partyOwner.pattaEndNumber ?? (partyOwner.cumulativePattaCount || partyOwner.pattaCount))
     : 1;
 
   let actualPattaNum = currentPattaNum;
@@ -124,7 +125,7 @@ export function getTicketPartyStatus(
 
   const isValidSequential = currentPattaNum >= minPattaForParty && currentPattaNum <= maxPattaForParty;
   const isValidRelative = currentPattaNum >= 1 && currentPattaNum <= (partyOwner?.pattaCount || 0);
-  const isExceededPattaNum = !!partyOwner && partyOwner.modelId === model.id && !isValidSequential && !isValidRelative;
+  const isExceededPattaNum = strictPatta && !!partyOwner && partyOwner.modelId === model.id && !isValidSequential && !isValidRelative;
 
   const isArchivedInPreviousPeriod = !!(
     partyOwner &&
@@ -176,9 +177,11 @@ export function validateTicketForSubmission(
   workers: Worker[],
   printedPartyHistory: PrintedPartyRecord[],
   submittedTickets: SubmittedTicketRecord[],
-  options?: { requireTicketValidation?: boolean }
+  options?: { requireTicketValidation?: boolean; strictParty?: boolean; strictPatta?: boolean }
 ): TicketValidationResult {
-  const isStrict = options?.requireTicketValidation !== false;
+  const strictParty = options?.strictParty ?? options?.requireTicketValidation !== false;
+  const strictPatta = options?.strictPatta ?? options?.requireTicketValidation !== false;
+  const isStrict = strictParty || strictPatta;
 
   const qty = Number(form.qty);
   if (!Number.isSafeInteger(qty) || qty <= 0) {
@@ -289,7 +292,7 @@ export function validateTicketForSubmission(
   }
 
   // --- Qat'iy rejim (Strict Mode) checks below ---
-  if (!Number.isSafeInteger(currentPattaNum) || currentPattaNum <= 0) {
+  if (strictPatta && (!Number.isSafeInteger(currentPattaNum) || currentPattaNum <= 0)) {
     return {
       isValid: false,
       errorType: 'error',
@@ -302,7 +305,7 @@ export function validateTicketForSubmission(
   const partyOwner = activeParties.find((h) => h.modelId === model.id && String(h.partyNumber).trim() === currentPartyStr)
     || (printedPartyHistory || []).slice().reverse().find((h) => h.modelId === model.id && String(h.partyNumber).trim() === currentPartyStr);
 
-  if (!partyOwner) {
+  if (strictParty && !partyOwner) {
     return {
       isValid: false,
       errorType: 'error',
@@ -311,7 +314,7 @@ export function validateTicketForSubmission(
     };
   }
 
-  if (partyOwner.modelId !== model.id) {
+  if (strictParty && partyOwner && partyOwner.modelId !== model.id) {
     return {
       isValid: false,
       errorType: 'error',
@@ -320,20 +323,21 @@ export function validateTicketForSubmission(
     };
   }
 
-  const minPattaForParty = partyOwner.cumulativePattaCount - partyOwner.pattaCount + 1;
-  const maxPattaForParty = partyOwner.cumulativePattaCount;
+  const minPattaForParty = partyOwner?.pattaStartNumber
+    ?? (partyOwner ? partyOwner.cumulativePattaCount - partyOwner.pattaCount + 1 : 1);
+  const maxPattaForParty = partyOwner?.pattaEndNumber ?? partyOwner?.cumulativePattaCount ?? Number.MAX_SAFE_INTEGER;
 
   let actualPattaNum = currentPattaNum;
   if (
     currentPattaNum >= 1 &&
-    currentPattaNum <= partyOwner.pattaCount &&
+    currentPattaNum <= (partyOwner?.pattaCount || 0) &&
     minPattaForParty > 1 &&
     currentPattaNum < minPattaForParty
   ) {
     actualPattaNum = minPattaForParty + currentPattaNum - 1;
   }
 
-  if (actualPattaNum < minPattaForParty || actualPattaNum > maxPattaForParty) {
+  if (strictPatta && (actualPattaNum < minPattaForParty || actualPattaNum > maxPattaForParty)) {
     return {
       isValid: false,
       errorType: 'error',

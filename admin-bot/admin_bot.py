@@ -268,18 +268,23 @@ def list_pending_text():
     result = api_request("GET", "/api/admin/activation/requests")
     requests = result.get("requests", [])
     if not requests:
-        return "Kutilayotgan aktivatsiya so'rovlari yo'q."
-    lines = ["<b>KUTILAYOTGAN AKTIVATSIYALAR</b>"]
-    for item in requests:
+        return "✅ <b>Kutilayotgan aktivatsiya so'rovlari yo'q.</b>\nBarcha qurilmalar ko'rib chiqilgan."
+    lines = ["📋 <b>KUTILAYOTGAN AKTIVATSIYALAR</b>\n"]
+    for i, item in enumerate(requests, 1):
         context = item.get("client_context") or {}
+        req_id = html.escape(str(item.get("request_id", "")))
+        machine_id = html.escape(str(item.get("machine_id", "")))
+        app_ver = html.escape(str(context.get("appVersion", "unknown")))
+        req_at = html.escape(str(item.get("requested_at", "")))
         lines.append(
-            f"\nID: <code>{html.escape(str(item.get('request_id', '')))}</code>"
-            f"\nQurilma: <code>{html.escape(str(item.get('machine_id', '')))}</code>"
-            f"\nVersiya: {html.escape(str(context.get('appVersion', 'unknown')))}"
-            f"\nSo'rov: {html.escape(str(item.get('requested_at', '')))}"
+            f"\n<b>{i}. So'rov:</b> <code>{req_id}</code>"
+            f"\n   🖥 Qurilma: <code>{machine_id}</code>"
+            f"\n   📦 Versiya: <code>{app_ver}</code>"
+            f"\n   ⏱ Vaqt: {req_at}\n"
         )
-    lines.append("\nTasdiqlash: <code>/approve REQUEST_ID COMPANY_ID admin|type|print</code>")
-    lines.append("\nRad etish: <code>/reject REQUEST_ID SABAB</code>")
+    lines.append("\n⚡ <b>Tezkor amallar:</b>")
+    lines.append("\n• Tasdiqlash: <code>/approve REQUEST_ID COMPANY_ID admin|type|print</code>")
+    lines.append("\n• Rad etish: <code>/reject REQUEST_ID SABAB</code>")
     return "".join(lines)
 
 
@@ -297,7 +302,7 @@ def handle_approve(telegram_id, arguments):
         None,
     )
     if company is None:
-        raise ValueError("Korxona  bazasida topilmadi. Avval /company ID NOMI orqali ro'yxatdan o'tkazing.")
+        raise ValueError("Korxona bazasida topilmadi. Avval /company ID NOMI orqali ro'yxatdan o'tkazing.")
     if role not in company.get("allowed_roles", []):
         raise ValueError("Bu rol tanlangan korxona uchun ruxsat etilmagan.")
     payload = {
@@ -318,7 +323,13 @@ def handle_approve(telegram_id, arguments):
         f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}/approve",
         {"adminTelegramId": str(telegram_id), "companyId": company_id, "role": role, "signedActivation": signed},
     )
-    return f"Tasdiqlandi: <code>{html.escape(request_id)}</code> · <b>{html.escape(company['company_name'])}</b> · <b>{role}</b>"
+    return (
+        f"✅ <b>Aktivatsiya tasdiqlandi!</b>\n\n"
+        f"▫️ <b>So'rov ID:</b> <code>{html.escape(request_id)}</code>\n"
+        f"▫️ <b>Korxona:</b> <b>{html.escape(company['company_name'])}</b>\n"
+        f"▫️ <b>Rol:</b> <code>{role}</code>\n"
+        f"▫️ <b>Imzo:</b> <i>Ed25519 muvaffaqiyatli yaratildi</i>"
+    )
 
 
 def handle_reject(telegram_id, arguments):
@@ -331,7 +342,7 @@ def handle_reject(telegram_id, arguments):
         f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}/reject",
         {"adminTelegramId": str(telegram_id), "reason": reason},
     )
-    return f"So'rov rad etildi: <code>{html.escape(request_id)}</code>"
+    return f"🚫 <b>Aktivatsiya so'rovi rad etildi:</b>\n<code>{html.escape(request_id)}</code>\n▫️ <b>Sabab:</b> {html.escape(reason)}"
 
 
 def handle_revoke(telegram_id, arguments):
@@ -352,7 +363,7 @@ def handle_revoke(telegram_id, arguments):
         f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}/revoke",
         {"adminTelegramId": str(telegram_id), "signedActivation": signed},
     )
-    return f"Aktivatsiya bekor qilindi: <code>{html.escape(request_id)}</code>"
+    return f"⚠️ <b>Aktivatsiya bekor qilindi (Revoked):</b>\n<code>{html.escape(request_id)}</code>"
 
 
 def handle_company(telegram_id, arguments):
@@ -366,20 +377,21 @@ def handle_company(telegram_id, arguments):
         {"adminTelegramId": str(telegram_id), "companyId": company_id, "companyName": company_name},
     )
     company = result["company"]
-    return f"Korxona saqlandi: <b>{html.escape(company['company_name'])}</b> (<code>{html.escape(company['company_id'])}</code>)"
+    return f"🏢 <b>Korxona saqlandi:</b>\n▫️ Nomi: <b>{html.escape(company['company_name'])}</b>\n▫️ ID: <code>{html.escape(company['company_id'])}</code>"
 
 
 def list_companies_text():
     companies = api_request("GET", "/api/admin/activation/companies").get("companies", [])
     if not companies:
-        return "Aktivatsiya uchun korxonalar kiritilmagan. /company ID NOMI buyrug'idan foydalaning."
-    lines = ["<b>AKTIV KORXONALAR</b>"]
-    for company in companies:
+        return "🏢 Aktivatsiya uchun korxonalar kiritilmagan. /company ID NOMI buyrug'idan foydalaning."
+    lines = ["🏢 <b>FAOL KORXONALAR RO'YXATI</b>\n"]
+    for i, company in enumerate(companies, 1):
         roles = ", ".join(company.get("allowed_roles", []))
+        name = html.escape(str(company.get("company_name", "")))
+        cid = html.escape(str(company.get("company_id", "")))
         lines.append(
-            f"\n{html.escape(str(company.get('company_name', '')))} "
-            f"(<code>{html.escape(str(company.get('company_id', '')))}</code>) · "
-            f"rollar: {html.escape(roles)}"
+            f"\n{i}. <b>{name}</b> (<code>{cid}</code>)"
+            f"\n   🏷 Rollar: <code>{html.escape(roles)}</code>"
         )
     return "".join(lines)
 
@@ -394,13 +406,17 @@ def handle_admin_command(telegram_id, text):
     arguments = parts[1:]
     if command in ("/start", "/help"):
         return (
-            "Novda  aktivatsiya boshqaruvi.\n"
-            "/pending — kutayotgan qurilmalar\n"
-            "/companies — aktiv korxonalar\n"
-            "/approve REQUEST_ID COMPANY_ID admin|type|print\n"
-            "/reject REQUEST_ID SABAB\n"
-            "/revoke REQUEST_ID\n"
-            "/company ID NOMI"
+            "✨ <b>Novda Admin Console</b>\n\n"
+            "Tizimni quyidagi buyruqlar yoki WebApp orqali boshqaring:\n\n"
+            "📋 <b>Aktivatsiya & Qurilmalar:</b>\n"
+            "• /pending — Kutilayotgan so'rovlar\n"
+            "• /approve <code>ID</code> <code>COMPANY</code> <code>admin|type|print</code> — Tasdiqlash\n"
+            "• /reject <code>ID</code> <code>SABAB</code> — Rad etish\n"
+            "• /revoke <code>ID</code> — Bekor qilish\n\n"
+            "🏢 <b>Korxonalar:</b>\n"
+            "• /companies — Faol korxonalar ro'yxati\n"
+            "• /company <code>ID</code> <code>NOMI</code> — Saqlash\n\n"
+            "📱 <i>To'liq boshqaruv panelini ochish uchun pastdagi tugmani bosing:</i>"
         )
     if command == "/pending":
         return list_pending_text()
@@ -470,7 +486,7 @@ def process_update(update):
         response = handle_admin_command(telegram_id, text)
         if response:
             command = str(text).strip().split(maxsplit=1)[0].split("@", 1)[0].lower()
-            reply_markup = admin_webapp_keyboard() if command == "/start" else None
+            reply_markup = admin_webapp_keyboard() if command in ("/start", "/help", "/pending") else None
             send_message(chat_id, response, reply_markup)
     except ValueError as error:
         send_message(chat_id, html.escape(str(error)))
@@ -497,16 +513,16 @@ def notify_new_pending_requests():
     for item in new_items:
         context = item.get("client_context") or {}
         message = (
-            "<b>Yangi PC aktivatsiya so'rovi</b>\n"
-            f"So'rov: <code>{html.escape(str(item.get('request_id')))}</code>\n"
-            f"Qurilma: <code>{html.escape(str(item.get('machine_id')))}</code>\n"
-            f"Versiya: {html.escape(str(context.get('appVersion', 'unknown')))}\n\n"
-            "Tafsilot va buyruqlar: /pending"
+            "🔔 <b>Yangi PC aktivatsiya so'rovi!</b>\n\n"
+            f"▫️ <b>So'rov ID:</b> <code>{html.escape(str(item.get('request_id')))}</code>\n"
+            f"▫️ <b>Qurilma ID:</b> <code>{html.escape(str(item.get('machine_id')))}</code>\n"
+            f"▫️ <b>Versiya:</b> <code>{html.escape(str(context.get('appVersion', 'nomaʼlum')))}</code>\n\n"
+            "👉 Ko'rib chiqish: /pending yoki WebApp orqali tasdiqlang."
         )
         delivered = False
         for admin_id in ADMIN_IDS:
             try:
-                send_message(admin_id, message)
+                send_message(admin_id, message, admin_webapp_keyboard())
                 delivered = True
             except Exception:
                 continue

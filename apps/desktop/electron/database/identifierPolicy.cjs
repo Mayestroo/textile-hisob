@@ -30,6 +30,14 @@ function createDeterministicUuid(namespace, ...components) {
   return `${p1}-${p2}-${p3}-${p4}-${p5}`;
 }
 
+function createCanonicalEntityUuid(entityType, companyId, oldId) {
+  const seed = `${String(entityType)}\u001f${String(companyId)}\u001f${String(oldId)}`;
+  const hash = crypto.createHash('md5').update(seed, 'utf8').digest('hex');
+  const variantByte = (parseInt(hash.slice(16, 18), 16) & 0x3f) | 0x80;
+  const variant = variantByte.toString(16).padStart(2, '0');
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-3${hash.slice(13, 16)}-${variant}${hash.slice(18, 20)}-${hash.slice(20, 32)}`;
+}
+
 /**
  * Derives a deterministic ID for a worker adjustment fact.
  *
@@ -102,6 +110,7 @@ function resolveEntityId(legacyId, fallbackEntity, ...fallbackComponents) {
 module.exports = {
   NOVDA_NAMESPACE,
   createDeterministicUuid,
+  createCanonicalEntityUuid,
   getWorkerAdjustmentId,
   getTicketEntryId,
   getReconciliationCandidateId,

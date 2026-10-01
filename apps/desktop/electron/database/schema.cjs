@@ -2,12 +2,7 @@
 
 const crypto = require('crypto');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
-const {
-  EXACT_PARTY_TWO_COMPANY_ID,
-  EXACT_PARTY_TWO_IDS,
-  isAllowedGrandfatheredPair,
-  isAllowedLegacyGrandfatheredPair
-} = require('../../../../packages/domain/partyPolicy.cjs');
+const { createCanonicalEntityUuid } = require('./identifierPolicy.cjs');
 
 /**
  * Migration definitions for Novda  Local SQLite Database.
@@ -819,17 +814,30 @@ const MIGRATIONS = [
           ORDER BY id
         `).all(group.company_id, group.party_number);
 
-        if (rows.length !== 2 || !isAllowedLegacyGrandfatheredPair(rows, rows[0])) {
+        if (rows.length !== 2) {
           const error = new Error(
-            `[Migration 010] EXACT_PARTY_2_POLICY_MIGRATION_BLOCKED: unexpected non-closed duplicate for ${group.company_id}/${group.party_number}`
+            `[Migration 010] ACTIVE_PARTY_MIGRATION_BLOCKED: unexpected non-closed duplicate for ${group.company_id}/${group.party_number}`
           );
-          error.code = 'EXACT_PARTY_2_POLICY_MIGRATION_BLOCKED';
+          error.code = 'ACTIVE_PARTY_MIGRATION_BLOCKED';
           error.records = rows;
           throw error;
         }
+        const collisionGroupId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const insertException = db.prepare(`
+          INSERT INTO legacy_party_collision_exceptions (
+            exception_id, company_id, party_number, party_id, collision_group_id,
+            approved_by, approved_at, reason, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+          ON CONFLICT(company_id, party_id) DO NOTHING
+        `);
+        for (const row of rows) {
+          insertException.run(crypto.randomUUID(), row.company_id, row.party_number, row.id,
+            collisionGroupId, 'schema-migration', now,
+            'Pre-existing active-party collision preserved during migration');
+        }
       }
 
-      const [exactIdA, exactIdB] = EXACT_PARTY_TWO_IDS;
       db.exec(`
         DROP TRIGGER IF EXISTS trg_parties_active_unique_insert;
         DROP TRIGGER IF EXISTS trg_parties_active_unique_update;
@@ -846,34 +854,22 @@ const MIGRATIONS = [
         CREATE TRIGGER trg_parties_exact_party_2_insert
         BEFORE INSERT ON parties
         FOR EACH ROW
-        WHEN NEW.status != 'CLOSED'
+        WHEN NEW.status != 'CLOSED' AND EXISTS (
+          SELECT 1 FROM parties p WHERE p.company_id = NEW.company_id
+            AND p.party_number = NEW.party_number AND p.status != 'CLOSED' AND p.id != NEW.id
+        )
         BEGIN
           SELECT CASE
-            WHEN EXISTS (
-              SELECT 1 FROM parties
-              WHERE company_id = NEW.company_id
-                AND party_number = NEW.party_number
-                AND status != 'CLOSED'
-                AND id != NEW.id
-            )
-            AND NOT (
-              NEW.party_number = '2'
-              AND NEW.id IN ('${exactIdA}', '${exactIdB}')
-              AND (
-                SELECT COUNT(*) FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-              ) = 1
-              AND EXISTS (
-                SELECT 1 FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-                  AND id IN ('${exactIdA}', '${exactIdB}')
-              )
+            WHEN NOT EXISTS (
+              SELECT 1 FROM legacy_party_collision_exceptions e
+              WHERE e.company_id = NEW.company_id AND e.party_id = NEW.id
+                AND e.party_number = NEW.party_number AND e.status = 'ACTIVE'
+                AND e.collision_group_id IN (
+                  SELECT e2.collision_group_id FROM legacy_party_collision_exceptions e2
+                  WHERE e2.company_id = NEW.company_id AND e2.party_number = NEW.party_number
+                    AND e2.status = 'ACTIVE'
+                  GROUP BY e2.collision_group_id HAVING COUNT(*) = 2
+                )
             )
             THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Active party already exists for this party number')
           END;
@@ -893,30 +889,18 @@ const MIGRATIONS = [
 
           SELECT CASE
             WHEN NEW.status != 'CLOSED' AND EXISTS (
-              SELECT 1 FROM parties
-              WHERE company_id = NEW.company_id
-                AND party_number = NEW.party_number
-                AND status != 'CLOSED'
-                AND id != NEW.id
-            )
-            AND NOT (
-              NEW.party_number = '2'
-              AND NEW.id IN ('${exactIdA}', '${exactIdB}')
-              AND (
-                SELECT COUNT(*) FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-              ) = 1
-              AND EXISTS (
-                SELECT 1 FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-                  AND id IN ('${exactIdA}', '${exactIdB}')
-              )
+              SELECT 1 FROM parties p WHERE p.company_id = NEW.company_id
+                AND p.party_number = NEW.party_number AND p.status != 'CLOSED' AND p.id != NEW.id
+            ) AND NOT EXISTS (
+              SELECT 1 FROM legacy_party_collision_exceptions e
+              WHERE e.company_id = NEW.company_id AND e.party_id = NEW.id
+                AND e.party_number = NEW.party_number AND e.status = 'ACTIVE'
+                AND e.collision_group_id IN (
+                  SELECT e2.collision_group_id FROM legacy_party_collision_exceptions e2
+                  WHERE e2.company_id = NEW.company_id AND e2.party_number = NEW.party_number
+                    AND e2.status = 'ACTIVE'
+                  GROUP BY e2.collision_group_id HAVING COUNT(*) = 2
+                )
             )
             THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Cannot reopen party; another active party already exists')
           END;
@@ -1001,6 +985,13 @@ const MIGRATIONS = [
         ORDER BY company_id, party_number
       `).all();
 
+      const insertException = db.prepare(`
+        INSERT INTO legacy_party_collision_exceptions (
+          exception_id, company_id, party_number, party_id, collision_group_id,
+          approved_by, approved_at, reason, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+        ON CONFLICT(company_id, party_id) DO NOTHING
+      `);
       for (const group of duplicateGroups) {
         const rows = db.prepare(`
           SELECT id, company_id, party_number, status
@@ -1008,18 +999,25 @@ const MIGRATIONS = [
           WHERE company_id = ? AND party_number = ? AND status != 'CLOSED'
           ORDER BY id
         `).all(group.company_id, group.party_number);
-        if (rows.length !== 2 || !isAllowedGrandfatheredPair(rows, rows[0])) {
+        if (rows.length !== 2) {
           const error = new Error(
-            `[Migration 012] EXACT_PARTY_2_COMPANY_SCOPE_MIGRATION_BLOCKED: unexpected active duplicate for ${group.company_id}/${group.party_number}`
+            `[Migration 012] ACTIVE_PARTY_MIGRATION_BLOCKED: expected exactly two pre-existing duplicate rows for ${group.company_id}/${group.party_number}`
           );
-          error.code = 'EXACT_PARTY_2_COMPANY_SCOPE_MIGRATION_BLOCKED';
+          error.code = 'ACTIVE_PARTY_MIGRATION_BLOCKED';
           error.records = rows;
           throw error;
         }
+        const collisionGroupId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        for (const row of rows) {
+          insertException.run(
+            crypto.randomUUID(), row.company_id, row.party_number, row.id,
+            collisionGroupId, 'schema-migration', now,
+            'Pre-existing active-party collision preserved during migration'
+          );
+        }
       }
 
-      const [exactIdA, exactIdB] = EXACT_PARTY_TWO_IDS;
-      const exactCompanyId = EXACT_PARTY_TWO_COMPANY_ID;
       db.exec(`
         DROP TRIGGER IF EXISTS trg_parties_exact_party_2_insert;
         DROP TRIGGER IF EXISTS trg_parties_exact_party_2_update;
@@ -1036,35 +1034,26 @@ const MIGRATIONS = [
         CREATE TRIGGER trg_parties_exact_party_2_insert
         BEFORE INSERT ON parties
         FOR EACH ROW
-        WHEN NEW.status != 'CLOSED'
+        WHEN NEW.status != 'CLOSED' AND EXISTS (
+          SELECT 1 FROM parties
+          WHERE company_id = NEW.company_id
+            AND party_number = NEW.party_number
+            AND status != 'CLOSED'
+            AND id != NEW.id
+        )
         BEGIN
           SELECT CASE
-            WHEN EXISTS (
-              SELECT 1 FROM parties
-              WHERE company_id = NEW.company_id
-                AND party_number = NEW.party_number
-                AND status != 'CLOSED'
-                AND id != NEW.id
-            )
-            AND NOT (
-              NEW.company_id = '${exactCompanyId}'
-              AND NEW.party_number = '2'
-              AND NEW.id IN ('${exactIdA}', '${exactIdB}')
-              AND (
-                SELECT COUNT(*) FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-              ) = 1
-              AND EXISTS (
-                SELECT 1 FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-                  AND id IN ('${exactIdA}', '${exactIdB}')
-              )
+            WHEN NOT EXISTS (
+              SELECT 1 FROM legacy_party_collision_exceptions e
+              WHERE e.company_id = NEW.company_id AND e.party_id = NEW.id
+                AND e.party_number = NEW.party_number AND e.status = 'ACTIVE'
+                AND e.collision_group_id IN (
+                  SELECT e2.collision_group_id FROM legacy_party_collision_exceptions e2
+                  WHERE e2.company_id = NEW.company_id AND e2.party_number = NEW.party_number
+                    AND e2.status = 'ACTIVE'
+                  GROUP BY e2.collision_group_id
+                  HAVING COUNT(*) = 2
+                )
             )
             THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Active party already exists for this party number')
           END;
@@ -1082,36 +1071,21 @@ const MIGRATIONS = [
             THEN RAISE(ABORT, 'IMMUTABLE_PARTY_IDENTITY: parties.id and parties.company_id cannot be modified')
           END;
 
-          SELECT CASE
-            WHEN NEW.status != 'CLOSED' AND EXISTS (
-              SELECT 1 FROM parties
-              WHERE company_id = NEW.company_id
-                AND party_number = NEW.party_number
-                AND status != 'CLOSED'
-                AND id != NEW.id
-            )
-            AND NOT (
-              NEW.company_id = '${exactCompanyId}'
-              AND NEW.party_number = '2'
-              AND NEW.id IN ('${exactIdA}', '${exactIdB}')
-              AND (
-                SELECT COUNT(*) FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-              ) = 1
-              AND EXISTS (
-                SELECT 1 FROM parties
-                WHERE company_id = NEW.company_id
-                  AND party_number = '2'
-                  AND status != 'CLOSED'
-                  AND id != NEW.id
-                  AND id IN ('${exactIdA}', '${exactIdB}')
+          SELECT CASE WHEN NEW.status != 'CLOSED' AND EXISTS (
+            SELECT 1 FROM parties p
+            WHERE p.company_id = NEW.company_id AND p.party_number = NEW.party_number
+              AND p.status != 'CLOSED' AND p.id != NEW.id
+          ) AND NOT EXISTS (
+            SELECT 1 FROM legacy_party_collision_exceptions e
+            WHERE e.company_id = NEW.company_id AND e.party_id = NEW.id
+              AND e.party_number = NEW.party_number AND e.status = 'ACTIVE'
+              AND e.collision_group_id IN (
+                SELECT e2.collision_group_id FROM legacy_party_collision_exceptions e2
+                WHERE e2.company_id = NEW.company_id AND e2.party_number = NEW.party_number
+                  AND e2.status = 'ACTIVE'
+                GROUP BY e2.collision_group_id HAVING COUNT(*) = 2
               )
-            )
-            THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Cannot reopen party; another active party already exists')
-          END;
+          ) THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Cannot reopen party; another active party already exists') END;
         END;
       `);
     }
@@ -1122,7 +1096,7 @@ const MIGRATIONS = [
     up: (db) => {
       const parties = db.prepare(`
         SELECT company_id, id, patta_count, ish_soni_per_patta,
-          total_ish_soni, ish_soni, sizes_json
+          total_ish_soni, ish_soni, sizes_json, provenance
         FROM parties
         ORDER BY created_at ASC, id ASC
       `).all();
@@ -1175,12 +1149,16 @@ const MIGRATIONS = [
           return !hasOnlyZeroWork || !hasValidSizeDistribution(party.sizes_json, 0);
         }
 
-        const sourceQuantity = Number(party.ish_soni_per_patta);
-        return party.ish_soni_per_patta === null
-          || !Number.isSafeInteger(sourceQuantity)
-          || sourceQuantity <= 0
-          || sourceQuantity % pattaCount !== 0
-          || !hasValidSizeDistribution(party.sizes_json, pattaCount);
+        const normalizedSource = party.provenance === 'LOCAL_COMMAND'
+          && party.ish_soni_per_patta !== null
+          && party.ish_soni_per_patta !== undefined;
+        const perPatta = Number(normalizedSource
+          ? party.ish_soni_per_patta
+          : party.ish_soni_per_patta ?? party.total_ish_soni ?? party.ish_soni);
+        const validQuantity = Number.isSafeInteger(perPatta)
+          && perPatta > 0
+          && (normalizedSource || perPatta % pattaCount === 0);
+        return !validQuantity || !hasValidSizeDistribution(party.sizes_json, pattaCount);
       });
 
       if (invalidParties.length > 0) {
@@ -1200,16 +1178,330 @@ const MIGRATIONS = [
       const partiesToConvert = parties.filter((party) => Number(party.patta_count) > 0);
       let cumulativeTotal = 0;
       for (const party of partiesToConvert) {
-        const partyTotal = Number(party.ish_soni_per_patta);
+        const normalizedSource = party.provenance === 'LOCAL_COMMAND'
+          && party.ish_soni_per_patta !== null
+          && party.ish_soni_per_patta !== undefined;
+        const sourceQuantity = Number(normalizedSource
+          ? party.ish_soni_per_patta
+          : party.ish_soni_per_patta ?? party.total_ish_soni ?? party.ish_soni);
+        const partyTotal = normalizedSource
+          ? sourceQuantity * Number(party.patta_count)
+          : sourceQuantity;
+        const perPatta = normalizedSource
+          ? sourceQuantity
+          : sourceQuantity / Number(party.patta_count);
         cumulativeTotal += partyTotal;
         updateParty.run(
-          partyTotal / Number(party.patta_count),
+          perPatta,
           partyTotal,
           partyTotal,
           cumulativeTotal,
           party.company_id,
           party.id
         );
+      }
+    }
+  },
+  {
+    version: 14,
+    name: '014_canonical_ids_global_patta_sequence_and_cleanup',
+    up: (db) => {
+      const columns = (table) => new Set(db.prepare(`PRAGMA table_info("${table}")`).all().map((row) => row.name));
+      const partyColumns = columns('parties');
+      if (!partyColumns.has('patta_start_number')) db.exec('ALTER TABLE parties ADD COLUMN patta_start_number INTEGER');
+      if (!partyColumns.has('patta_end_number')) db.exec('ALTER TABLE parties ADD COLUMN patta_end_number INTEGER');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS model_id_aliases (
+          company_id TEXT NOT NULL,
+          legacy_model_id TEXT NOT NULL,
+          canonical_model_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (company_id, legacy_model_id),
+          UNIQUE (company_id, canonical_model_id)
+        );
+        CREATE TABLE IF NOT EXISTS party_id_aliases (
+          company_id TEXT NOT NULL,
+          legacy_party_id TEXT NOT NULL,
+          canonical_party_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (company_id, legacy_party_id),
+          UNIQUE (company_id, canonical_party_id)
+        );
+        CREATE TABLE IF NOT EXISTS company_patta_sequences (
+          company_id TEXT PRIMARY KEY,
+          next_patta_number INTEGER NOT NULL CHECK (next_patta_number > 0),
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS protected_party_patta_ranges (
+          company_id TEXT NOT NULL,
+          party_record_id TEXT NOT NULL,
+          patta_start_number INTEGER NOT NULL,
+          patta_end_number INTEGER NOT NULL,
+          PRIMARY KEY (company_id, party_record_id),
+          CHECK (patta_start_number > 0 AND patta_end_number >= patta_start_number)
+        );
+      `);
+
+      db.pragma('defer_foreign_keys = ON');
+      const now = new Date().toISOString();
+      const protectedIds = new Set(db.prepare(`
+        SELECT p.id FROM parties p
+        JOIN legacy_party_collision_exceptions e
+          ON e.company_id = p.company_id AND e.party_id = p.id
+         AND e.party_number = p.party_number AND e.status = 'ACTIVE'
+        WHERE p.status != 'CLOSED'
+      `).all().map((row) => row.id));
+
+      const companyIds = db.prepare('SELECT DISTINCT company_id FROM parties ORDER BY company_id').all().map((row) => row.company_id);
+      const updateRange = db.prepare(`
+        UPDATE parties SET patta_start_number = ?, patta_end_number = ?, cumulative_patta_count = ?
+        WHERE company_id = ? AND id = ?
+      `);
+      const insertSequence = db.prepare(`
+        INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(company_id) DO UPDATE SET next_patta_number = excluded.next_patta_number, updated_at = excluded.updated_at
+      `);
+
+      for (const companyId of companyIds) {
+        const rows = db.prepare(`
+          SELECT id, patta_count, status, is_archived, printed_at, created_at
+          FROM parties WHERE company_id = ?
+          ORDER BY COALESCE(printed_at, created_at), id
+        `).all(companyId);
+        let nextNumber = 1;
+        for (const row of rows) {
+          if (row.status === 'CLOSED' || Number(row.is_archived) === 1) continue;
+          const count = Number(row.patta_count);
+          if (!Number.isSafeInteger(count) || count < 0) {
+            const error = new Error(`PATTA_SEQUENCE_MIGRATION_BLOCKED: invalid patta_count for party ${row.id}`);
+            error.code = 'PATTA_SEQUENCE_MIGRATION_BLOCKED';
+            throw error;
+          }
+          if (count === 0) continue;
+          const start = nextNumber;
+          const end = start + count - 1;
+          if (!Number.isSafeInteger(end)) throw new Error('PATTA_SEQUENCE_MIGRATION_BLOCKED: sequence exceeds safe integer range');
+          if (!protectedIds.has(row.id)) {
+            updateRange.run(start, end, end, companyId, row.id);
+          } else if (protectedIds.has(row.id)) {
+            db.prepare(`
+              INSERT INTO protected_party_patta_ranges(company_id, party_record_id, patta_start_number, patta_end_number)
+              VALUES (?, ?, ?, ?)
+              ON CONFLICT(company_id, party_record_id) DO UPDATE SET
+                patta_start_number = excluded.patta_start_number,
+                patta_end_number = excluded.patta_end_number
+            `).run(companyId, row.id, start, end);
+          }
+          nextNumber = end + 1;
+        }
+        insertSequence.run(companyId, nextNumber, now);
+      }
+
+      const modelRows = db.prepare('SELECT id, company_id FROM models ORDER BY company_id, id').all();
+      const modelIdMap = new Map();
+      for (const row of modelRows) {
+        const nextId = createCanonicalEntityUuid('model', row.company_id, row.id);
+        modelIdMap.set(`${row.company_id}\u0000${row.id}`, nextId);
+        db.prepare(`INSERT INTO model_id_aliases(company_id, legacy_model_id, canonical_model_id, created_at) VALUES (?, ?, ?, ?)`)
+          .run(row.company_id, row.id, nextId, now);
+      }
+
+      const partyRows = db.prepare(`
+        SELECT id, company_id FROM parties
+        WHERE status != 'CLOSED' AND is_archived = 0
+        ORDER BY company_id, id
+      `).all();
+      const partyIdMap = new Map();
+      for (const row of partyRows) {
+        if (protectedIds.has(row.id)) continue;
+        const nextId = createCanonicalEntityUuid('party', row.company_id, row.id);
+        partyIdMap.set(`${row.company_id}\u0000${row.id}`, nextId);
+        db.prepare(`INSERT INTO party_id_aliases(company_id, legacy_party_id, canonical_party_id, created_at) VALUES (?, ?, ?, ?)`)
+          .run(row.company_id, row.id, nextId, now);
+      }
+
+      const updateCompanyScopedIds = (table, column, idMap) => {
+        if (!columns(table).has(column)) return;
+        const rows = db.prepare(`SELECT rowid, company_id, "${column}" AS value FROM "${table}"`).all();
+        const update = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`);
+        for (const row of rows) {
+          const nextId = idMap.get(`${row.company_id}\u0000${row.value}`);
+          if (nextId) update.run(nextId, row.rowid);
+        }
+      };
+      const updateModelIds = (table) => updateCompanyScopedIds(table, 'model_id', modelIdMap);
+      for (const table of [
+        'tickets', 'production_adjustments', 'patta_batch_settings', 'local_ticket_forms',
+        'migration_quarantine_parties', 'migration_quarantine_tickets',
+        'migration_reconciliation_candidates'
+      ]) updateModelIds(table);
+
+      for (const [key, newId] of modelIdMap) {
+        const separator = key.indexOf('\u0000');
+        const companyId = key.slice(0, separator);
+        const oldId = key.slice(separator + 1);
+        db.prepare('UPDATE parties SET model_id = ? WHERE company_id = ? AND model_id = ? AND id NOT IN (SELECT party_id FROM legacy_party_collision_exceptions WHERE company_id = ? AND status = \'ACTIVE\')')
+          .run(newId, companyId, oldId, companyId);
+        db.prepare('UPDATE models SET id = ? WHERE company_id = ? AND id = ?').run(newId, companyId, oldId);
+      }
+
+      const partyTriggers = db.prepare(`
+        SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'parties'
+      `).all();
+      for (const trigger of partyTriggers) {
+        if (trigger.name === 'trg_parties_identity_immutable_update'
+          || trigger.name === 'trg_parties_identity_immutable'
+          || trigger.name === 'trg_parties_exact_party_2_update') {
+          db.exec(`DROP TRIGGER IF EXISTS "${trigger.name}"`);
+        }
+      }
+
+      const updatePartyReference = (table, column) => {
+        if (!columns(table).has(column)) return;
+        const rows = db.prepare(`SELECT rowid, company_id, "${column}" AS value FROM "${table}"`).all();
+        const update = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`);
+        for (const row of rows) {
+          const nextId = partyIdMap.get(`${row.company_id}\u0000${row.value}`);
+          if (nextId) update.run(nextId, row.rowid);
+        }
+      };
+      updatePartyReference('tickets', 'party_record_id');
+      updatePartyReference('migration_party_resolutions', 'party_id');
+      updatePartyReference('migration_quarantine_parties', 'resolved_party_id');
+      for (const [key, newId] of partyIdMap) {
+        const separator = key.indexOf('\u0000');
+        const companyId = key.slice(0, separator);
+        const oldId = key.slice(separator + 1);
+        db.prepare('UPDATE parties SET id = ? WHERE company_id = ? AND id = ?').run(newId, companyId, oldId);
+      }
+
+      const blockedPartyDeletion = db.prepare(`
+        SELECT p.id,
+          (SELECT COUNT(*) FROM tickets t WHERE t.company_id = p.company_id AND t.party_record_id = p.id) AS ticket_count
+        FROM parties p WHERE p.status = 'CLOSED' OR p.is_archived = 1
+      `).all().filter((row) => Number(row.ticket_count) > 0);
+      if (blockedPartyDeletion.length) {
+        const error = new Error(`CLOSED_PARTY_PURGE_BLOCKED: linked tickets exist for ${blockedPartyDeletion.map((row) => row.id).join(', ')}`);
+        error.code = 'CLOSED_PARTY_PURGE_BLOCKED';
+        error.records = blockedPartyDeletion;
+        throw error;
+      }
+      db.prepare(`DELETE FROM parties WHERE status = 'CLOSED' OR is_archived = 1`).run();
+
+      const blockedPeriodDeletion = db.prepare(`
+        SELECT p.id,
+          (SELECT COUNT(*) FROM tickets t WHERE t.company_id = p.company_id AND t.period_id = p.id) AS ticket_count,
+          (SELECT COUNT(*) FROM period_archives a WHERE a.company_id = p.company_id AND a.period_id = p.id) AS archive_count,
+          (SELECT COUNT(*) FROM worker_adjustments w WHERE w.company_id = p.company_id AND w.period_id = p.id) AS adjustment_count
+        FROM periods p WHERE p.is_closed = 1 OR p.status = 'CLOSED'
+      `).all().filter((row) => Number(row.ticket_count) + Number(row.archive_count) + Number(row.adjustment_count) > 0);
+      if (blockedPeriodDeletion.length) {
+        const error = new Error(`CLOSED_PERIOD_PURGE_BLOCKED: linked records exist for ${blockedPeriodDeletion.map((row) => row.id).join(', ')}`);
+        error.code = 'CLOSED_PERIOD_PURGE_BLOCKED';
+        error.records = blockedPeriodDeletion;
+        throw error;
+      }
+      db.prepare(`DELETE FROM periods WHERE is_closed = 1 OR status = 'CLOSED'`).run();
+
+      if (db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_outbox_comp_status'`).get()) {
+        db.exec('REINDEX idx_outbox_comp_status');
+      }
+
+      db.exec(`
+        CREATE TRIGGER trg_parties_identity_immutable_update
+        BEFORE UPDATE ON parties FOR EACH ROW
+        WHEN NEW.id IS NOT OLD.id OR NEW.company_id IS NOT OLD.company_id
+        BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_PARTY_IDENTITY: parties.id and parties.company_id cannot be modified'); END;
+
+        CREATE TRIGGER trg_parties_exact_party_2_update
+        BEFORE UPDATE OF id, company_id, status, party_number ON parties
+        FOR EACH ROW
+        WHEN NEW.status != 'CLOSED' OR NEW.id IS NOT OLD.id OR NEW.company_id IS NOT OLD.company_id
+        BEGIN
+          SELECT CASE WHEN NEW.id IS NOT OLD.id OR NEW.company_id IS NOT OLD.company_id
+            THEN RAISE(ABORT, 'IMMUTABLE_PARTY_IDENTITY: parties.id and parties.company_id cannot be modified') END;
+          SELECT CASE WHEN NEW.status != 'CLOSED' AND EXISTS (
+            SELECT 1 FROM parties p WHERE p.company_id = NEW.company_id
+              AND p.party_number = NEW.party_number AND p.status != 'CLOSED' AND p.id != NEW.id
+          ) AND NOT EXISTS (
+            SELECT 1 FROM legacy_party_collision_exceptions e
+            WHERE e.company_id = NEW.company_id AND e.party_id = NEW.id
+              AND e.party_number = NEW.party_number AND e.status = 'ACTIVE'
+              AND e.collision_group_id IN (
+                SELECT e2.collision_group_id FROM legacy_party_collision_exceptions e2
+                WHERE e2.company_id = NEW.company_id AND e2.party_number = NEW.party_number
+                  AND e2.status = 'ACTIVE'
+                GROUP BY e2.collision_group_id HAVING COUNT(*) = 2
+              )
+          ) THEN RAISE(ABORT, 'ACTIVE_PARTY_EXISTS: Cannot reopen party; another active party already exists') END;
+        END;
+      `);
+    }
+  },
+  {
+    version: 15,
+    name: '015_party_id_aliases_for_inflight_sync',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS party_id_aliases (
+          company_id TEXT NOT NULL,
+          legacy_party_id TEXT NOT NULL,
+          canonical_party_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (company_id, legacy_party_id),
+          UNIQUE (company_id, canonical_party_id)
+        );
+      `);
+    }
+  },
+  {
+    version: 16,
+    name: '016_refresh_model_snapshots_after_sync_validation_fix',
+    up: (db) => {
+      const modelsToRefresh = db.prepare(`
+        SELECT DISTINCT m.*
+        FROM models m
+        JOIN model_id_aliases a ON a.company_id = m.company_id AND a.canonical_model_id = m.id
+        JOIN local_outbox failed ON failed.company_id = a.company_id
+          AND failed.entity_id = a.legacy_model_id
+          AND failed.command_type = 'UpsertModel'
+          AND failed.entity_type = 'model'
+          AND failed.status = 'DEAD_LETTER'
+        WHERE NOT EXISTS (
+          SELECT 1 FROM local_outbox pending
+          WHERE pending.company_id = m.company_id AND pending.entity_id = m.id
+            AND pending.command_type = 'UpsertModel' AND pending.status IN ('PENDING', 'SENDING')
+        )
+        ORDER BY m.company_id, m.id
+      `).all();
+      const insertRefresh = db.prepare(`
+        INSERT INTO local_outbox (
+          operation_id, company_id, command_type, entity_type, entity_id, base_revision,
+          payload_json, depends_on_operation_id, causal_sequence, status, retry_count,
+          created_at, updated_at, attempt_count, payload_hash
+        ) VALUES (?, ?, 'UpsertModel', 'model', ?, ?, ?, NULL, 0, 'PENDING', 0, ?, ?, 0, ?)
+      `);
+      for (const model of modelsToRefresh) {
+        let operations = [];
+        let pattaOpsOrder = [];
+        try { operations = JSON.parse(model.operations_json || '[]'); } catch {}
+        try { pattaOpsOrder = JSON.parse(model.patta_ops_order_json || '[]'); } catch {}
+        const operationId = crypto.randomUUID();
+        const payloadJson = canonicalStringify({
+          commandId: crypto.randomUUID(), operationId, companyId: model.company_id, modelId: model.id,
+          name: model.name,
+          ...(model.hisob_sheet_name ? { hisobSheetName: model.hisob_sheet_name } : {}),
+          ...(model.title ? { title: model.title } : {}),
+          party: model.party || '',
+          ...(model.color ? { color: model.color } : {}),
+          ...(model.size ? { size: model.size } : {}),
+          operations,
+          pattaOpsOrder
+        });
+        const now = new Date().toISOString();
+        insertRefresh.run(operationId, model.company_id, model.id, Number(model.server_revision || 0),
+          payloadJson, now, now, computePayloadHash(payloadJson));
       }
     }
   }

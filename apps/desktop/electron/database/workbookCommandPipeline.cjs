@@ -569,7 +569,10 @@ function resolveCommandRevision(db, normalized, { table, entityColumn, mustExist
 }
 
 function assertActiveModel(db, companyId, modelId) {
-  const row = db.prepare('SELECT id FROM models WHERE company_id = ? AND id = ? AND status = \'ACTIVE\'').get(companyId, modelId);
+  const alias = db.prepare(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = ? AND legacy_model_id = ?`).get(companyId, modelId);
+  const canonicalModelId = alias?.canonical_model_id || modelId;
+  const row = db.prepare('SELECT id FROM models WHERE company_id = ? AND id = ? AND status = \'ACTIVE\'').get(companyId, canonicalModelId);
   if (!row) throw createCommandError('MODEL_NOT_FOUND', `Active model "${modelId}" was not found`);
 }
 
@@ -579,11 +582,12 @@ function insertPartyRecord(db, companyId, party) {
   db.prepare(`
     INSERT INTO parties (
       id, company_id, party_number, physical_party_number, model_id, model_name, color,
-      patta_count, cumulative_patta_count, ish_soni_per_patta, total_ish_soni,
+      patta_count, cumulative_patta_count, patta_start_number, patta_end_number,
+      ish_soni_per_patta, total_ish_soni,
       ish_soni, cumulative_ish_soni, sizes_json, printed_at, is_closed,
       archived_patta_numbers_json, status, created_at, updated_at, provenance, server_revision
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'ACTIVE', ?, ?, 'LOCAL_COMMAND', 0
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'ACTIVE', ?, ?, 'LOCAL_COMMAND', 0
     )
   `).run(
     party.partyRecordId,
@@ -595,6 +599,8 @@ function insertPartyRecord(db, companyId, party) {
     party.color || null,
     party.pattaCount,
     party.cumulativePattaCount,
+    party.pattaStartNumber,
+    party.pattaEndNumber,
     party.ishSoniPerPatta,
     party.totalIshSoni,
     party.ishSoni,
@@ -608,23 +614,39 @@ function insertPartyRecord(db, companyId, party) {
 
 function updatePartyRecord(db, companyId, party) {
   const current = db.prepare(`
-    SELECT id, model_id, party_number, status FROM parties WHERE company_id = ? AND id = ?
+    SELECT id, model_id, party_number, status, patta_count, cumulative_patta_count, patta_start_number, patta_end_number
+    FROM parties WHERE company_id = ? AND id = ?
   `).get(companyId, party.partyRecordId);
   if (!current) throw createCommandError('PARTY_NOT_FOUND', `Party "${party.partyRecordId}" was not found`);
-  if (current.model_id !== party.modelId || current.party_number !== party.partyNumber) {
+  const modelAlias = db.prepare(`SELECT canonical_model_id FROM model_id_aliases
+    WHERE company_id = ? AND legacy_model_id = ?`).get(companyId, current.model_id);
+  const canonicalModelId = modelAlias?.canonical_model_id || current.model_id;
+  if (canonicalModelId !== party.modelId || current.party_number !== party.partyNumber) {
     throw createCommandError('IMMUTABLE_PARTY_IDENTITY', 'Party model and party number are immutable');
   }
   if (current.status === 'CLOSED') throw createCommandError('PARTY_ALREADY_CLOSED', 'A closed party cannot be updated');
+  const isProtectedCollision = db.prepare(`SELECT 1 FROM legacy_party_collision_exceptions
+    WHERE company_id = ? AND party_id = ? AND status = 'ACTIVE' LIMIT 1`).get(companyId, party.partyRecordId);
+  if (isProtectedCollision) {
+    db.prepare(`UPDATE parties SET ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?,
+      cumulative_ish_soni = ?, updated_at = ? WHERE company_id = ? AND id = ?`).run(
+      party.ishSoniPerPatta, party.totalIshSoni, party.ishSoni, party.cumulativeIshSoni,
+      new Date().toISOString(), companyId, party.partyRecordId
+    );
+    return;
+  }
+  if (Number(current.patta_count) !== party.pattaCount) {
+    throw createCommandError('IMMUTABLE_PATTA_RANGE', 'An existing printed party cannot change its patta count');
+  }
   db.prepare(`
-    UPDATE parties SET model_name = ?, color = ?, patta_count = ?, cumulative_patta_count = ?,
+    UPDATE parties SET model_name = ?, color = ?, cumulative_patta_count = ?,
       ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?,
       sizes_json = ?, updated_at = ?
     WHERE company_id = ? AND id = ?
   `).run(
     party.modelName || null,
     party.color || null,
-    party.pattaCount,
-    party.cumulativePattaCount,
+    current.cumulative_patta_count,
     party.ishSoniPerPatta,
     party.totalIshSoni,
     party.ishSoni,
@@ -927,11 +949,41 @@ function executeClosePeriod(db, normalized) {
 }
 
 function executeCompletePattaBatch(db, normalized) {
+  const sequence = db.prepare(`
+    SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?
+  `).get(normalized.companyId);
+  let nextPattaNumber = Number(sequence?.next_patta_number || 1);
   for (const party of normalized.payload.parties) {
-    const current = db.prepare('SELECT id FROM parties WHERE company_id = ? AND id = ?').get(normalized.companyId, party.partyRecordId);
-    if (current) updatePartyRecord(db, normalized.companyId, party);
-    else insertPartyRecord(db, normalized.companyId, party);
+    const current = db.prepare(`
+      SELECT id, patta_count, cumulative_patta_count, patta_start_number, patta_end_number,
+        EXISTS (SELECT 1 FROM legacy_party_collision_exceptions e
+          WHERE e.company_id = parties.company_id AND e.party_id = parties.id AND e.status = 'ACTIVE') AS is_protected
+      FROM parties WHERE company_id = ? AND id = ?
+    `).get(normalized.companyId, party.partyRecordId);
+    if (current) {
+      if (current.is_protected) continue;
+      if (Number(current.patta_count) !== party.pattaCount) {
+        throw createCommandError('IMMUTABLE_PATTA_RANGE', 'An existing printed party cannot change its patta count');
+      }
+      party.pattaStartNumber = current.patta_start_number;
+      party.pattaEndNumber = current.patta_end_number;
+      party.cumulativePattaCount = Number(current.patta_end_number || current.cumulative_patta_count || 0);
+      updatePartyRecord(db, normalized.companyId, party);
+    } else {
+      if (party.pattaCount < 1) throw createCommandError('INVALID_PATTA_COUNT', 'A printed party must contain at least one patta');
+      party.pattaStartNumber = nextPattaNumber;
+      party.pattaEndNumber = nextPattaNumber + party.pattaCount - 1;
+      if (!Number.isSafeInteger(party.pattaEndNumber)) throw createCommandError('INVALID_PATTA_COUNT', 'Patta sequence exceeds the safe integer range');
+      party.cumulativePattaCount = party.pattaEndNumber;
+      nextPattaNumber = party.pattaEndNumber + 1;
+      insertPartyRecord(db, normalized.companyId, party);
+    }
   }
+  db.prepare(`
+    INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(company_id) DO UPDATE SET next_patta_number = excluded.next_patta_number, updated_at = excluded.updated_at
+  `).run(normalized.companyId, nextPattaNumber, new Date().toISOString());
   writeBatchSettings(db, normalized.companyId, {
     availableSizes: normalized.payload.availableSizes,
     configs: normalized.payload.configs
