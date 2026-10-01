@@ -263,6 +263,26 @@ jobs:
           ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
             "root@$VPS_HOST" 'bash -s' < ops/deploy/prepare-bot-secrets.sh
+          ssh -i "$key_file" -p "$VPS_PORT" \
+            -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            "$VPS_HOST" 'bash -s' <<'STATUS'
+          set -Eeuo pipefail
+          for name in admin-bot-token worker-bot-token admin-telegram-ids cloudflare-tunnel-token novda-license-ed25519-private-key; do
+            file="/srv/novda/secrets/bots/$name"
+            if [[ -s "$file" ]]; then state=present; else state=empty; fi
+            printf 'NOVDA_SECRET_STATUS %s %s\n' "$name" "$state"
+          done
+          if [[ -s /srv/novda/import/comp_novda.sqlite ]]; then
+            sha256sum /srv/novda/import/comp_novda.sqlite
+          else
+            printf 'NOVDA_SQLITE_SOURCE missing\n'
+          fi
+          if grep -Fxq 'NOVDA_ENABLE_PUBLIC_TLS=1' /srv/novda/secrets/compose.env; then
+            printf 'NOVDA_PUBLIC_TLS enabled\n'
+          else
+            printf 'NOVDA_PUBLIC_TLS disabled\n'
+          fi
+          STATUS
 
   verify-vps-access:
     name: Verify VPS access without deployment
