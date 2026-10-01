@@ -62,6 +62,25 @@ class PinlessWorkerEnrollmentTests(unittest.TestCase):
         self.assertTrue(any("PIN" in call.args[1] for call in send_message.call_args_list))
         save_binding.assert_not_called()
 
+    def test_start_restarts_an_abandoned_enrollment_prompt(self):
+        worker_bot.USER_STATES["123456789"] = {
+            "step": "WAITING_WORKER_ID",
+            "company_id": "Comp_novda",
+        }
+
+        with (
+            patch.object(worker_bot, "DEFAULT_COMPANY_ID", "comp_novda"),
+            patch.object(worker_bot, "get_worker_binding", return_value=None),
+            patch.object(worker_bot, "send_message") as send_message,
+        ):
+            worker_bot.handle_text(1, {"id": 123456789}, "/start")
+
+        self.assertEqual(worker_bot.USER_STATES["123456789"], {
+            "step": "WAITING_WORKER_ID",
+            "company_id": "comp_novda",
+        })
+        send_message.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
