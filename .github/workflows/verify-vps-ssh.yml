@@ -55,4 +55,7 @@ jobs:
           [[ "$(id -un)" == deploy ]]
           docker compose version >/dev/null
           printf 'NOVDA_VPS_SSH_CHECK_PASS user=%s docker_compose=present\n' "$(id -un)"
+          count_query="SELECT 'models' AS table_name, count(*) FROM models WHERE company_id='comp_novda' UNION ALL SELECT 'workers', count(*) FROM workers WHERE company_id='comp_novda' UNION ALL SELECT 'periods', count(*) FROM periods WHERE company_id='comp_novda' UNION ALL SELECT 'parties', count(*) FROM parties WHERE company_id='comp_novda' UNION ALL SELECT 'tickets', count(*) FROM tickets WHERE company_id='comp_novda' UNION ALL SELECT 'ticket_entries', count(*) FROM ticket_entries WHERE company_id='comp_novda' UNION ALL SELECT 'worker_adjustments', count(*) FROM worker_adjustments WHERE company_id='comp_novda' UNION ALL SELECT 'production_adjustments', count(*) FROM production_adjustments WHERE company_id='comp_novda' ORDER BY table_name"
+          docker exec -u postgres novda-postgres psql -U novda_owner -d novda_prod -At -F '|' -c "$count_query" \
+            | while IFS='|' read -r table count; do printf 'NOVDA_DB_ROWS %s %s\n' "$table" "$count"; done
           REMOTE
