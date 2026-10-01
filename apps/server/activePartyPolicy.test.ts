@@ -12,7 +12,7 @@ const migrator = require('../desktop/electron/database/migrator.cjs');
 // @ts-ignore
 const databaseManager = require('../desktop/electron/database/databaseManager.cjs');
 
-describe('Phase 2 — Active-Party Uniqueness Owner Exception Policy Tests (INV-05)', () => {
+describe('Phase 2 â€” Active-Party Uniqueness Owner Exception Policy Tests (INV-05)', () => {
   let app: any;
   let pool: any;
 
@@ -41,21 +41,24 @@ describe('Phase 2 — Active-Party Uniqueness Owner Exception Policy Tests (INV-
     // Seed test models
     await pool.query(
       `INSERT INTO models (id, company_id, name, operations_json) 
-       VALUES ($1, $2, 'BODY-T-SHRIT', '[]'), ($3, $2, 'Aleksandr-Приталинний', '[]')`,
+       VALUES ($1, $2, 'BODY-T-SHRIT', '[]'), ($3, $2, 'Aleksandr-ÐŸÑ€Ð¸Ñ‚Ð°Ð»Ð¸Ð½Ð½Ð¸Ð¹', '[]')`,
       ['model-body-t', COMPANY, 'model-alex-prit']
     );
   });
 
   function makePartyOp(opId: string, commandType: 'CreateParty' | 'CloseParty', payload: any) {
-    const canonical = canonicalStringify(payload);
+    const normalizedPayload = commandType === 'CreateParty' && payload.pattaCount === undefined
+      ? { ...payload, pattaCount: 1 }
+      : payload;
+    const canonical = canonicalStringify(normalizedPayload);
     const hash = computePayloadHash(canonical);
     return {
       operationId: opId,
       companyId: COMPANY,
       commandType,
       entityType: 'party',
-      entityId: payload.partyRecordId || payload.id,
-      payload,
+      entityId: normalizedPayload.partyRecordId || normalizedPayload.id,
+      payload: normalizedPayload,
       payloadHash: hash
     };
   }
@@ -669,7 +672,14 @@ describe('Phase 2 — Active-Party Uniqueness Owner Exception Policy Tests (INV-
       };
       fs.writeFileSync(jsonPath, JSON.stringify(payload));
 
-      const res = migrator.migrateLegacyData(tempDir, compTarget, { explicitSourcePath: jsonPath });
+      const partyResolutions = [GRANDFATHERED_A, GRANDFATHERED_B].map((partyId) => ({
+        partyId,
+        decision: 'GRANDFATHER_EXISTING_ACTIVE_COLLISION_UNTIL_CLOSED',
+        operatorId: 'OWNER_BUSINESS_DECISION',
+        decidedAt: '2026-10-01T00:00:00.000Z',
+        reason: 'Owner-approved exact existing comp_novda Party #2 pair'
+      }));
+      const res = migrator.migrateLegacyData(tempDir, compTarget, { explicitSourcePath: jsonPath, partyResolutions });
       expect(res.counts.quarantine).toBe(0); // Zero unresolved quarantine!
       expect(res.counts.parties).toBe(2);
       expect(res.migrationReady).toBe(true);
@@ -750,7 +760,7 @@ describe('Phase 2 — Active-Party Uniqueness Owner Exception Policy Tests (INV-
       `INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id, patta_number, qty, submitted_at)
        VALUES 
          ('00000000-0000-4000-8000-000000000601', $1, 'model-body-t', '2', $2, 1, 50, NOW() - INTERVAL '2 days'),
-         ('00000000-0000-4000-8000-000000000602', $1, 'model-alex-prit', '2', $3, 1, 75, NOW() - INTERVAL '1 day')`,
+         ('00000000-0000-4000-8000-000000000602', $1, 'model-alex-prit', '2', $3, 2, 75, NOW() - INTERVAL '1 day')`,
       [COMPANY, GRANDFATHERED_A, GRANDFATHERED_B]
     );
 

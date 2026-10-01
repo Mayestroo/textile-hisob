@@ -74,6 +74,7 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_PORT: ${{ secrets.VPS_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_PASSPHRASE: ${{ secrets.VPS_SSH_PASSPHRASE }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -81,10 +82,159 @@ jobs:
           : "${VPS_USER:?Missing GitHub secret VPS_USER}"
           : "${VPS_PORT:?Missing GitHub secret VPS_PORT}"
           : "${VPS_SSH_KEY:?Missing GitHub secret VPS_SSH_KEY}"
+          : "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
-          chmod 600 "$HOME/.ssh/id_ed25519"
+          key_file="$HOME/.ssh/novda_vps_key"
+          askpass_file="$RUNNER_TEMP/novda-ssh-askpass.sh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          cat > "$askpass_file" <<'ASKPASS'
+          #!/usr/bin/env bash
+          printf '%s\n' "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          ASKPASS
+          chmod 700 "$askpass_file"
+          eval "$(ssh-agent -s)" >/dev/null
+          cleanup() {
+            ssh-agent -k >/dev/null 2>&1 || true
+            rm -f "$key_file" "$askpass_file"
+          }
+          trap cleanup EXIT
+          export SSH_ASKPASS="$askpass_file"
+          export SSH_ASKPASS_REQUIRE=force
+          export DISPLAY="${DISPLAY:-:0}"
+          ssh-add "$key_file" </dev/null
           ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
-          ssh -i "$HOME/.ssh/id_ed25519" -p "$VPS_PORT" \
+          ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" 'bash /srv/novda/repository/ops/deploy/deploy.sh'
+
+  bootstrap-novda-paths:
+    name: Prepare Novda-only VPS directories
+    needs: verify
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create missing Novda paths only
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_PASSPHRASE: ${{ secrets.VPS_SSH_PASSPHRASE }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${VPS_HOST:?Missing GitHub secret VPS_HOST}"
+          : "${VPS_PORT:?Missing GitHub secret VPS_PORT}"
+          : "${VPS_SSH_KEY:?Missing GitHub secret VPS_SSH_KEY}"
+          : "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          install -d -m 700 "$HOME/.ssh"
+          key_file="$HOME/.ssh/novda_vps_key"
+          askpass_file="$RUNNER_TEMP/novda-ssh-askpass.sh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          cat > "$askpass_file" <<'ASKPASS'
+          #!/usr/bin/env bash
+          printf '%s\n' "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          ASKPASS
+          chmod 700 "$askpass_file"
+          eval "$(ssh-agent -s)" >/dev/null
+          cleanup() {
+            ssh-agent -k >/dev/null 2>&1 || true
+            rm -f "$key_file" "$askpass_file"
+          }
+          trap cleanup EXIT
+          export SSH_ASKPASS="$askpass_file"
+          export SSH_ASKPASS_REQUIRE=force
+          export DISPLAY="${DISPLAY:-:0}"
+          ssh-add "$key_file" </dev/null
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
+          ssh -i "$key_file" -p "$VPS_PORT" \
+            -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            "root@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          [[ "$(id -un)" == root ]]
+          id deploy >/dev/null
+          ensure_directory() {
+            local directory="$1" owner="$2" group="$3" mode="$4"
+            [[ ! -L "$directory" ]] || { printf 'NOVDA_PATH_SYMLINK_REFUSED %s\n' "$directory" >&2; exit 1; }
+            if [[ ! -e "$directory" ]]; then
+              install -d -o "$owner" -g "$group" -m "$mode" "$directory"
+              printf 'NOVDA_PATH_CREATED %s\n' "$directory"
+            elif [[ -d "$directory" ]]; then
+              printf 'NOVDA_PATH_PRESERVED %s\n' "$directory"
+            else
+              printf 'NOVDA_PATH_NOT_DIRECTORY %s\n' "$directory" >&2
+              exit 1
+            fi
+          }
+          ensure_directory /srv/novda deploy deploy 0750
+          ensure_directory /srv/novda/repository deploy deploy 0750
+          ensure_directory /srv/novda/secrets root deploy 0750
+          ensure_directory /srv/novda/backups root root 0700
+          ensure_directory /srv/novda/import deploy deploy 0750
+          REMOTE
+
+  verify-vps-access:
+    name: Verify VPS access without deployment
+    needs: [verify, bootstrap-novda-paths]
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SSH read-only probe
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_PASSPHRASE: ${{ secrets.VPS_SSH_PASSPHRASE }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${VPS_HOST:?Missing GitHub secret VPS_HOST}"
+          : "${VPS_USER:?Missing GitHub secret VPS_USER}"
+          : "${VPS_PORT:?Missing GitHub secret VPS_PORT}"
+          : "${VPS_SSH_KEY:?Missing GitHub secret VPS_SSH_KEY}"
+          : "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          install -d -m 700 "$HOME/.ssh"
+          key_file="$HOME/.ssh/novda_vps_key"
+          askpass_file="$RUNNER_TEMP/novda-ssh-askpass.sh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          cat > "$askpass_file" <<'ASKPASS'
+          #!/usr/bin/env bash
+          printf '%s\n' "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          ASKPASS
+          chmod 700 "$askpass_file"
+          eval "$(ssh-agent -s)" >/dev/null
+          cleanup() {
+            ssh-agent -k >/dev/null 2>&1 || true
+            rm -f "$key_file" "$askpass_file"
+          }
+          trap cleanup EXIT
+          export SSH_ASKPASS="$askpass_file"
+          export SSH_ASKPASS_REQUIRE=force
+          export DISPLAY="${DISPLAY:-:0}"
+          ssh-add "$key_file" </dev/null
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
+          ssh -i "$key_file" -p "$VPS_PORT" \
+            -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          test "$(id -un)" = deploy
+          docker compose version >/dev/null
+          for path in /srv/novda/repository/.git /srv/novda/secrets/compose.env /srv/novda/backups /srv/novda/import/comp_novda.sqlite; do
+            if test -e "$path"; then state=present; else state=missing; fi
+            printf 'NOVDA_PATH %s %s\n' "$path" "$state"
+          done
+          for service in novda-postgres novda-api novda-admin-bot novda-worker-bot; do
+            if docker inspect "$service" >/dev/null 2>&1; then
+              state="$(docker inspect --format '{{.State.Status}}' "$service")"
+            else
+              state=absent
+            fi
+            printf 'NOVDA_CONTAINER %s %s\n' "$service" "$state"
+          done
+          printf 'NOVDA_VPS_SSH_CHECK_PASS user=%s docker_compose=present\n' "$(id -un)"
+          REMOTE

@@ -110,7 +110,7 @@ async function verifyPostgresReleaseState(client) {
       missingOrNonRestrictive: []
     },
     orphanCounts: {},
-    partyPolicy: { triggerExists: false, callsExactPolicyFunction: false, exactPartyNumberTwoIdentities: [] },
+    partyPolicy: { triggerExists: false, callsExactPolicyFunction: false, persistedExceptionPolicy: false },
     constraints: { ticketUuidCheckValidated: false, businessKeyAbsent: false },
     operations: { unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 },
     businessMutations: { requiredTables: 3, presentTables: 0, requiredColumns: 18, presentColumns: 0 },
@@ -282,15 +282,22 @@ async function verifyPostgresReleaseState(client) {
   `);
   const activePartyTrigger = triggerRows.find((row) => row.trigger_name === 'trg_parties_active_uniqueness');
   const triggerDefinition = String(activePartyTrigger?.function_definition || '');
-  const grandfatheredIds = Array.from(new Set(triggerDefinition.match(/rec_[a-zA-Z0-9_-]+/g) || []));
+  const compactTriggerDefinition = triggerDefinition.toLowerCase().replace(/\s+/g, '');
   report.partyPolicy.triggerExists = Boolean(activePartyTrigger);
-  report.partyPolicy.exactPartyNumberTwoIdentities = grandfatheredIds;
+  report.partyPolicy.persistedExceptionPolicy = [
+    'legacy_party_collision_exceptions',
+    'current_exception.company_id=new.company_id',
+    'current_exception.party_id=new.id',
+    'current_exception.party_number=new.party_number',
+    'collision_group_id',
+    'count(*)',
+    ')=2',
+    'active_party_exists'
+  ].every((fragment) => compactTriggerDefinition.includes(fragment));
   report.partyPolicy.callsExactPolicyFunction = activePartyTrigger?.function_name === 'check_active_party_uniqueness'
-    && /NEW\.party_number\s*=\s*'2'/.test(triggerDefinition)
-    && /NEW\.company_id\s*=\s*'comp_novda'/.test(triggerDefinition)
-    && grandfatheredIds.length === 2;
+    && report.partyPolicy.persistedExceptionPolicy;
   if (!report.partyPolicy.triggerExists || !report.partyPolicy.callsExactPolicyFunction) {
-    problems.push('parties active-uniqueness trigger is missing or does not enforce the company-scoped exact Party #2 policy');
+    problems.push('parties active-uniqueness trigger is missing or does not enforce the company-scoped persisted exception policy');
   }
 
   const constraintRows = await rowsFor('ticket identity constraints', `

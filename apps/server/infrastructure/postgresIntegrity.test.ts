@@ -81,7 +81,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
     partyTrigger: [{
       trigger_name: 'trg_parties_active_uniqueness',
       function_name: 'check_active_party_uniqueness',
-       function_definition: "IF NEW.company_id = 'comp_novda' AND NEW.party_number = '2' THEN rec_1788774889449_vrbkv rec_1788930871307_cg1iv END IF"
+      function_definition: "IF NEW.status != 'CLOSED' THEN SELECT 1 FROM legacy_party_collision_exceptions current_exception JOIN legacy_party_collision_exceptions other_exception ON other_exception.collision_group_id = current_exception.collision_group_id WHERE current_exception.company_id = NEW.company_id AND current_exception.party_id = NEW.id AND current_exception.party_number = NEW.party_number AND COUNT(*) = 2; RAISE EXCEPTION 'ACTIVE_PARTY_EXISTS'; END IF"
     }],
     constraints: [{ constraint_name: 'ck_tickets_id_rfc4122', validated: true }],
     businessIndexes: [],
@@ -197,18 +197,18 @@ describe('PostgreSQL release-integrity evidence', () => {
     });
   });
 
-  it('fails closed when the exact Party #2 identities are not scoped to comp_novda', async () => {
+  it('fails closed when the persisted Party #2 exception is not company-scoped', async () => {
     const client = createEvidenceClient({
       partyTrigger: [{
         trigger_name: 'trg_parties_active_uniqueness',
         function_name: 'check_active_party_uniqueness',
-        function_definition: "IF NEW.party_number = '2' THEN rec_1788774889449_vrbkv rec_1788930871307_cg1iv END IF"
+        function_definition: "IF NEW.party_number = '2' THEN SELECT 1 FROM legacy_party_collision_exceptions WHERE party_id = NEW.id AND party_number = NEW.party_number AND collision_group_id = 'group'; END IF"
       }]
     });
 
     await expect(verifyPostgresReleaseState(client)).rejects.toMatchObject({
       code: 'POSTGRES_RELEASE_INTEGRITY_FAILED',
-      details: { problems: expect.arrayContaining([expect.stringContaining('company-scoped exact Party #2 policy')]) }
+      details: { problems: expect.arrayContaining([expect.stringContaining('company-scoped persisted exception policy')]) }
     });
   });
 

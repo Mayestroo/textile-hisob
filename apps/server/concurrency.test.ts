@@ -47,16 +47,35 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
     );
   }
 
+  async function seedGrandfatheredPartyTwoPair() {
+    await pool.query(`INSERT INTO legacy_party_collision_exceptions (
+      exception_id, company_id, party_number, party_id, collision_group_id,
+      approved_by, approved_at, reason, status
+    ) VALUES
+      ('exc-concurrency-p2-a', $1, '2', $2, 'col_group_comp_novda_party_2', 'OWNER_BUSINESS_DECISION', NOW(), 'Test fixture', 'ACTIVE'),
+      ('exc-concurrency-p2-b', $1, '2', $3, 'col_group_comp_novda_party_2', 'OWNER_BUSINESS_DECISION', NOW(), 'Test fixture', 'ACTIVE')`,
+    [EXACT_PARTY_TWO_COMPANY, 'rec_1788774889449_vrbkv', 'rec_1788930871307_cg1iv']);
+    await seedParty('rec_1788774889449_vrbkv', '2', EXACT_PARTY_TWO_COMPANY);
+    await pool.query(
+      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
+       VALUES ('rec_1788930871307_cg1iv', $1, '2', '2', 'm_1', 'ACTIVE')`,
+      [EXACT_PARTY_TWO_COMPANY]
+    );
+  }
+
   function partyOperation(operationId: string, commandType: 'CreateParty' | 'CloseParty', payload: any, companyId = COMPANY) {
-    const canonical = canonicalStringify(payload);
+    const normalizedPayload = commandType === 'CreateParty' && payload.pattaCount === undefined
+      ? { ...payload, pattaCount: 1 }
+      : payload;
+    const canonical = canonicalStringify(normalizedPayload);
     return {
       operationId,
       companyId,
       commandType,
       entityType: 'party',
-      entityId: payload.partyRecordId,
+      entityId: normalizedPayload.partyRecordId,
       payloadHash: computePayloadHash(canonical),
-      payload
+      payload: normalizedPayload
     };
   }
 
@@ -234,14 +253,16 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
     const payloadA = {
       partyRecordId: 'uuid-concurrent-p5-a',
       partyNumber: partyNum,
-      modelId: 'm_concurrent'
+      modelId: 'm_concurrent',
+      pattaCount: 1
     };
     const hashA = computePayloadHash(canonicalStringify(payloadA));
 
     const payloadB = {
       partyRecordId: 'uuid-concurrent-p5-b',
       partyNumber: partyNum,
-      modelId: 'm_concurrent'
+      modelId: 'm_concurrent',
+      pattaCount: 1
     };
     const hashB = computePayloadHash(canonicalStringify(payloadB));
 
@@ -279,12 +300,7 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
 
   it('5. two simultaneous third Party #2 creates are both rejected against the exact persisted pair', async () => {
     const token = `novda-test-token:${EXACT_PARTY_TWO_COMPANY}:device-concurrent`;
-    await seedParty('rec_1788774889449_vrbkv', '2', EXACT_PARTY_TWO_COMPANY);
-    await pool.query(
-      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
-       VALUES ('rec_1788930871307_cg1iv', $1, '2', '2', 'm_1', 'ACTIVE')`,
-      [EXACT_PARTY_TWO_COMPANY]
-    );
+    await seedGrandfatheredPartyTwoPair();
 
     const requests = [
       app.inject({
@@ -336,12 +352,7 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
 
   it('7. both exact historical closes serialize before a normal Party #2 transition', async () => {
     const token = `novda-test-token:${EXACT_PARTY_TWO_COMPANY}:device-concurrent`;
-    await seedParty('rec_1788774889449_vrbkv', '2', EXACT_PARTY_TWO_COMPANY);
-    await pool.query(
-      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
-       VALUES ('rec_1788930871307_cg1iv', $1, '2', '2', 'm_1', 'ACTIVE')`,
-      [EXACT_PARTY_TWO_COMPANY]
-    );
+    await seedGrandfatheredPartyTwoPair();
 
     const closeResults = await Promise.all([
       app.inject({

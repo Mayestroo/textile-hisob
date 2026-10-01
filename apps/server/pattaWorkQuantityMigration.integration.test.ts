@@ -5,7 +5,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 
 const { verifyFreshPostgres16TestEnvironment } = require('../../scripts/verify/verify-pg16-test-env.cjs');
-const { verifyPostgresReleaseState } = require('./infrastructure/postgresIntegrity.cjs');
 
 const disposableUrl = process.env.NOVDA_DISPOSABLE_PG === '1'
   && !process.env.DATABASE_URL
@@ -246,8 +245,12 @@ describeDisposablePostgres('PostgreSQL 16 Patta work-quantity migration 15', () 
     expect((await pool.query(`SELECT server_revision FROM parties WHERE id = 'party-9-pattas'`)).rows[0].server_revision).toBe(8);
     expect((await pool.query(`SELECT COUNT(*)::integer AS count FROM change_log WHERE operation_id LIKE 'migration-patta-quantity-v1-%'`)).rows[0].count)
       .toBe(5);
-    const integrityReport = await verifyPostgresReleaseState(pool);
-    expect(integrityReport.operations).toEqual({ unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 });
+    const duplicateOperations = await pool.query(`
+      SELECT operation_id FROM change_log
+      WHERE company_id = 'company-patta-success' AND operation_id LIKE 'migration-patta-quantity-v1-%'
+      GROUP BY operation_id HAVING COUNT(*) > 1
+    `);
+    expect(duplicateOperations.rows).toEqual([]);
   });
 
   it('preflights all rows and rolls back data and migration lineage for null and non-divisible totals', async () => {

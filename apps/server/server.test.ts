@@ -253,6 +253,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     app = buildFastifyServer({
       pool,
       allowTestTokens: true,
+      minClientVersion: '2.0.0',
       adminApiToken: 'activation-admin-service-test-token',
       allowedAdminIds: new Set(['12345678']),
       licensePublicKey: activationPublicKey,

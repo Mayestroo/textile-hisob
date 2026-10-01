@@ -12,7 +12,8 @@ const disposableUrl = process.env.NOVDA_DISPOSABLE_PG === '1' && !process.env.DA
   ? process.env.NOVDA_PG_URL
   : undefined;
 const dockerContainer = process.env.NOVDA_PG_DOCKER_CONTAINER;
-const describeDisposableBackup = disposableUrl ? describe : describe.skip;
+const backupDsnHasNoPassword = disposableUrl ? !new URL(disposableUrl).password : false;
+const describeDisposableBackup = disposableUrl && dockerContainer && backupDsnHasNoPassword ? describe : describe.skip;
 
 describeDisposableBackup('Disposable PostgreSQL 16 Backup & Restore Drill', () => {
   let sourcePool: Pool;
