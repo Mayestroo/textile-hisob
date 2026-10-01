@@ -265,7 +265,7 @@ jobs:
             "root@$VPS_HOST" 'bash -s' < ops/deploy/prepare-bot-secrets.sh
           ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            "$VPS_HOST" 'bash -s' <<'STATUS'
+            "root@$VPS_HOST" 'bash -s' <<'STATUS'
           set -Eeuo pipefail
           for name in admin-bot-token worker-bot-token admin-telegram-ids cloudflare-tunnel-token novda-license-ed25519-private-key; do
             file="/srv/novda/secrets/bots/$name"
