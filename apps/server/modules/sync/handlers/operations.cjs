@@ -562,8 +562,8 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
   await client.query(
     `INSERT INTO production_adjustments (
       adjustment_id, company_id, model_id, worker_id, op_name,
-      delta_qty, reason, status, server_revision, created_at, created_by, original_adjustment_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'REVERSED', 1, NOW(), $8, $9)`,
+      delta_qty, reason, status, server_revision, created_at, created_by, original_adjustment_id, provenance
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'REVERSED', 1, NOW(), $8, $9, 'REVERSAL')`,
     [
       effectiveReversalId,
       companyId,

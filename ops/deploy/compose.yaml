@@ -53,6 +53,40 @@ services:
       - no-new-privileges:true
     command: ["node", "ops/deploy/migrateProduction.cjs"]
 
+  novda-import:
+    profiles:
+      - import
+    build:
+      context: ../..
+      dockerfile: ops/deploy/Dockerfile
+    image: ${NOVDA_API_IMAGE:-novda-api:production}
+    restart: "no"
+    user: "node"
+    environment:
+      NODE_ENV: production
+      NOVDA_IMPORT_DATABASE_URL: postgresql://novda_migrator:${NOVDA_MIGRATOR_PASSWORD:?NOVDA_MIGRATOR_PASSWORD is required}@novda-postgres:5432/novda_prod
+    volumes:
+      - type: bind
+        source: /srv/novda/import/comp_novda.sqlite
+        target: /run/novda-import/hisob.sqlite
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      novda-postgres:
+        condition: service_healthy
+    networks:
+      - novda-prod_database
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["node", "ops/deploy/importSqliteBaseline.cjs"]
+    command: ["--source", "/run/novda-import/hisob.sqlite", "--company-id", "comp_novda"]
+
   novda-api:
     build:
       context: ../..

@@ -63,6 +63,10 @@ describe('Windows NSIS release configuration', () => {
     const commandMatch = installerInclude.match(/powershell\.exe[^\r\n]*-Command "([^"]+)"/);
     expect(commandMatch).not.toBeNull();
     const powershellScript = commandMatch![1].replace(/\$\$/g, '$');
+    expect(powershellScript).toContain("[IO.Path]::GetFullPath($root).TrimEnd([char]92)");
+    expect(powershellScript).toContain("[StringComparison]::OrdinalIgnoreCase");
+    if (process.platform !== 'win32') return;
+
     const resultPath = path.join(os.tmpdir(), `novda-process-check-${process.pid}.txt`);
 
     try {

@@ -9,6 +9,7 @@ COPY apps/server ./apps/server
 COPY packages/contracts/keys/licensePublicKey.cjs ./packages/contracts/keys/licensePublicKey.cjs
 COPY worker-bot/webapp/index.html ./worker-bot/webapp/index.html
 COPY ops/deploy/migrateProduction.cjs ./ops/deploy/migrateProduction.cjs
+COPY ops/deploy/importSqliteBaseline.cjs ./ops/deploy/importSqliteBaseline.cjs
 COPY ops/deploy/verifyProductionDatabase.cjs ./ops/deploy/verifyProductionDatabase.cjs
 COPY packages/domain/periodWriteGuard.cjs ./packages/domain/periodWriteGuard.cjs
 COPY packages/domain/partyPolicy.cjs ./packages/domain/partyPolicy.cjs
