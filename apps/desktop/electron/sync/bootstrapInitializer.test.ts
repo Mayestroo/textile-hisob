@@ -87,6 +87,7 @@ function getProductionLikeBootstrapFixture(companyId: string) {
       models: models.length,
       workers: workers.length,
       periods: periods.length,
+      legacyPartyCollisionExceptions: base.snapshot.legacyPartyCollisionExceptions.length,
       parties: parties.length,
       workerAdjustments: 0,
       tickets: 0,

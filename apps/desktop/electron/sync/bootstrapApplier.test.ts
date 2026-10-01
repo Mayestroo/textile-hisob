@@ -94,6 +94,7 @@ function makeProductionLikeBootstrap() {
     models,
     workers,
     periods,
+    legacyPartyCollisionExceptions: [],
     parties,
     workerAdjustments,
     tickets: [],
@@ -119,6 +120,7 @@ function makeProductionLikeBootstrap() {
       models: models.length,
       workers: workers.length,
       periods: periods.length,
+      legacyPartyCollisionExceptions: 0,
       parties: parties.length,
       workerAdjustments: workerAdjustments.length,
       tickets: 0,
@@ -191,6 +193,42 @@ describe(' SQLite authoritative bootstrap', () => {
     expect(projection.availableSizes).toEqual(['S', 'M', 'L']);
     expect(projection.pattaBatchConfigs.model_1).toMatchObject({ partyNumber: '42', totalIshSoni: '446' });
     expect(projection.workers.find((worker: any) => worker.id === 1)).toMatchObject({ avans: 2020000, jarima: 550000 });
+  });
+
+  it('imports persisted grandfathered party-collision exceptions before their duplicate parties', () => {
+    const response = makeProductionLikeBootstrap();
+    const firstParty = response.snapshot.parties.find((party: any) => party.id === 'party_2');
+    const secondParty = {
+      ...firstParty,
+      id: 'party_2-grandfathered',
+      modelId: 'model_2',
+      modelName: 'Model 2',
+      serverRevision: 2
+    };
+    response.snapshot.parties.push(secondParty);
+    response.snapshot.legacyPartyCollisionExceptions = [
+      {
+        exceptionId: 'exception-party-2-a', companyId: COMPANY_ID, partyNumber: '2', partyId: firstParty.id,
+        collisionGroupId: 'collision-party-2', approvedBy: 'OWNER_BUSINESS_DECISION',
+        approvedAt: '2026-09-01T00:00:00.000Z', reason: 'Preserve the approved historical Party #2 pair',
+        status: 'ACTIVE', createdAt: '2026-09-01T00:00:00.000Z'
+      },
+      {
+        exceptionId: 'exception-party-2-b', companyId: COMPANY_ID, partyNumber: '2', partyId: secondParty.id,
+        collisionGroupId: 'collision-party-2', approvedBy: 'OWNER_BUSINESS_DECISION',
+        approvedAt: '2026-09-01T00:00:00.000Z', reason: 'Preserve the approved historical Party #2 pair',
+        status: 'ACTIVE', createdAt: '2026-09-01T00:00:00.000Z'
+      }
+    ];
+    response.counts.parties = response.snapshot.parties.length;
+    response.counts.legacyPartyCollisionExceptions = 2;
+
+    expect(() => validateBootstrapResponse(response, COMPANY_ID)).not.toThrow();
+    expect(applyBootstrapSnapshot(db, COMPANY_ID, response)).toMatchObject({ status: 'APPLIED' });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM parties
+      WHERE company_id = ? AND party_number = '2' AND status != 'CLOSED'`).get(COMPANY_ID).count).toBe(2);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM legacy_party_collision_exceptions
+      WHERE company_id = ? AND party_number = '2' AND status = 'ACTIVE'`).get(COMPANY_ID).count).toBe(2);
   });
 
   it('accepts and atomically imports the production default batch-settings contract', () => {
