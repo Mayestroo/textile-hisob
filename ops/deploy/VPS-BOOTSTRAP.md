@@ -107,6 +107,10 @@ policy have been explicitly reviewed. Keep `/srv/novda/backups` and Docker's
 named `novda-prod_postgres-data` volume persistent and independently backed up.
 Compose JSON logs are Docker-managed, outside the checkout.
 
+Worker Telegram enrollment requires a configured PIN by default. The
+owner-controlled `NOVDA_WORKER_PIN_REQUIRED=false` override disables the PIN
+check for all worker bindings; use it only when explicitly authorized.
+
 For Internet sync without an operator-managed reverse proxy, create a separate
 Cloudflare Tunnel for Novda and route `sync.novdatextile.uz` to
 `http://novda-api:3474`. Store that tunnel's token in
