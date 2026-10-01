@@ -6,6 +6,6 @@ Requires=docker.service
 [Service]
 Type=oneshot
 User=root
-ExecStart=/usr/bin/bash /srv/novda/current/ops/deploy/restore-drill.sh
+ExecStart=/usr/bin/bash /srv/novda/repository/ops/deploy/restore-drill.sh
 StandardOutput=journal
 StandardError=journal

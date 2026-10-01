@@ -4,11 +4,32 @@ Production runs on the VPS with `ops/deploy/compose.yaml`. The canonical source
 checkout is `/srv/novda/repository`; persistent state, database files, backups,
 logs and all production credentials live outside it under `/srv/novda`.
 
+## Production topology
+
+- **Desktop clients:** Electron renderer communicates with the authenticated
+  canonical API and keeps its local SQLite/outbox for offline operation.
+- **Server/API:** `novda-api` serves the desktop sync, activation, worker and
+  admin endpoints. The admin and worker web apps are static assets served by it.
+- **Bots:** `admin-bot` and `worker-bot` call the internal API; neither connects
+  directly to PostgreSQL.
+- **Database:** `novda-postgres` is the authoritative business-data store on a
+  persistent named volume. The migration job is run before the API rollout.
+- **Ingress:** the API is exposed only to the ingress network. The optional
+  `public-tls` profile provides a Cloudflare Tunnel; an operator-managed reverse
+  proxy/tunnel may be used instead. No public database port is published.
+- **Backups/operations:** host systemd timers invoke PostgreSQL backup, restore
+  drill and disk-health scripts. Dumps are stored under `/srv/novda/backups`,
+  outside the checkout and database volume.
+
+The supported source path is `/srv/novda/repository` throughout deployment and
+systemd configuration. PostgreSQL and backup state must survive code rollouts.
+
 ## 1. Create the deploy account and install runtime
 
 As root on a supported Ubuntu/Debian VPS, create a non-root account and install
-Git, Docker Engine (including the Compose v2 plugin), OpenSSH, curl and
-`postgresql-client` if required by your operations:
+Git, OpenSSH client/server, OpenSSL, curl, Docker Engine and the Docker Compose
+plugin. Install Docker Engine from Docker's official repository for the VPS
+distribution:
 
 ```sh
 adduser --disabled-password --gecos '' deploy
@@ -19,9 +40,9 @@ install -d -o root -g root -m 0700 /srv/novda/backups
 usermod -aG docker deploy
 ```
 
-Install Docker from Docker's official repository for the VPS distribution. Log
-out and back in after granting the Docker group membership. The deployment user
-must be able to run `docker compose`; do not run the deployment script as root.
+Log out and back in after granting the Docker group membership. The deployment
+user must be able to run `docker compose`; do not run the deployment script as
+root.
 
 ## 2. Configure the two SSH trust relationships
 
@@ -96,8 +117,9 @@ docker compose --env-file /srv/novda/secrets/compose.env \
   -f /srv/novda/repository/ops/deploy/compose.yaml ps
 ```
 
-The script fetches and resets only `/srv/novda/repository` to `origin/main`,
-updates submodules, applies replay-safe migrations, builds and starts PostgreSQL,
+The script fetches and resets only `/srv/novda/repository` to the fetched
+`origin/main` commit, updates submodules, builds the candidate images, applies
+replay-safe migrations, and starts PostgreSQL,
 the canonical API, `admin-bot`, and `worker-bot`, removes Compose orphans without
 removing persistent volumes, and checks `/health` plus service health. Configure
 the public ingress route to the API as appropriate and check the external health
@@ -123,4 +145,4 @@ Push or merge to `main`. The workflow installs from `package-lock.json` with
 `npm ci`, runs configured lint (if any), TypeScript typecheck, unit and isolated
 PostgreSQL tests, and the production frontend build. Only after those checks
 succeed does it authenticate over SSH to the VPS and invoke the canonical deploy
-script. Workflow dispatch is also restricted to `main` for production.
+script. A manual workflow dispatch deploys only when its selected ref is `main`.

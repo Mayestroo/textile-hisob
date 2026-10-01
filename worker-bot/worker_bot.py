@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Novda worker Telegram bot backed only by the authenticated V2 API."""
+"""Novda worker Telegram bot backed by the authenticated VPS API."""
 
 import hashlib
 import hmac
@@ -95,19 +95,19 @@ def api_request(method, route, payload=None, query=None):
 
 
 def get_worker_binding(telegram_id):
-    return api_request("GET", f"/v2/worker/bindings/by-telegram/{urllib.parse.quote(str(telegram_id), safe='')}").get("binding")
+    return api_request("GET", f"/api/worker/bindings/by-telegram/{urllib.parse.quote(str(telegram_id), safe='')}").get("binding")
 
 
 def get_worker_id_binding(company_id, worker_id):
-    return api_request("GET", "/v2/worker/bindings/by-worker", query={"companyId": company_id, "workerId": worker_id}).get("binding")
+    return api_request("GET", "/api/worker/bindings/by-worker", query={"companyId": company_id, "workerId": worker_id}).get("binding")
 
 
 def get_worker_enrollment(company_id, worker_id):
-    return api_request("GET", "/v2/worker/enrollment", query={"companyId": company_id, "workerId": worker_id}).get("worker")
+    return api_request("GET", "/api/worker/enrollment", query={"companyId": company_id, "workerId": worker_id}).get("worker")
 
 
 def save_worker_binding(telegram_id, worker_id, company_id, username="", pin=None):
-    return api_request("POST", "/v2/worker/bindings", {
+    return api_request("POST", "/api/worker/bindings", {
         "telegramId": str(telegram_id),
         "workerId": int(worker_id),
         "companyId": company_id,
@@ -117,7 +117,7 @@ def save_worker_binding(telegram_id, worker_id, company_id, username="", pin=Non
 
 
 def get_worker_profile_and_stats(company_id, worker_id, telegram_id):
-    return api_request("GET", "/v2/worker/profile", query={
+    return api_request("GET", "/api/worker/profile", query={
         "companyId": company_id,
         "workerId": worker_id,
         "telegramId": telegram_id,
@@ -125,7 +125,7 @@ def get_worker_profile_and_stats(company_id, worker_id, telegram_id):
 
 
 def get_worker_recent_tickets(company_id, worker_id, telegram_id, limit=8):
-    result = api_request("GET", "/v2/worker/tickets", query={
+    result = api_request("GET", "/api/worker/tickets", query={
         "companyId": company_id,
         "workerId": worker_id,
         "telegramId": telegram_id,

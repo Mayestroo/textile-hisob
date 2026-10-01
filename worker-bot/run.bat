@@ -8,11 +8,5 @@ echo.
 
 cd /d "%~dp0"
 
-if not exist config.json (
-    echo [XATO] config.json fayli topilmadi!
-    pause
-    exit /b
-)
-
-python bot.py
+python worker_bot.py
 pause

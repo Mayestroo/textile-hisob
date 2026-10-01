@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Novda Hisob-Kitob V2 — Production Least-Privilege Database Roles
+-- Novda Hisob-Kitob — Production Least-Privilege Database Roles
 -- ==============================================================================
 -- Execute as postgres superuser during initial database provisioning.
 

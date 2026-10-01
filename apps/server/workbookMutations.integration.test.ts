@@ -18,7 +18,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
   const companyId = `company_workbook_${process.pid}`;
   const schemaName = `novda_workbook_mutations_${process.pid}_${Date.now().toString(36)}`;
   const quotedSchema = `"${schemaName}"`;
-  const req = { auth: { companyId, deviceId: 'device-workbook-test', clientVersion: '2.0.0' } };
+  const req = { auth: { companyId, deviceId: 'device-workbook-test', clientVersion: '0.0.0' } };
   let adminPool: Pool | undefined;
   let pool: Pool | undefined;
   let schemaCreated = false;

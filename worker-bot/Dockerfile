@@ -4,8 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /opt/novda-worker-bot
-COPY worker-bot/v2_bot.py ./v2_bot.py
+COPY worker-bot/worker_bot.py ./worker_bot.py
 
 USER 997:988
 EXPOSE 8081
-CMD ["python", "v2_bot.py"]
+CMD ["python", "worker_bot.py"]

@@ -9,7 +9,7 @@
  * Pure domain logic:
  * - Zero side effects
  * - Zero external state / caches
- * - No Zustand, Electron, SQLite, Firebase, network, or clock dependencies
+ * - No Zustand, Electron, SQLite, network, or clock dependencies
  * - Deterministic, order-independent, and fail-closed against corruption.
  */
 
@@ -564,4 +564,3 @@ export function getOperationBreakdown(
     }
   );
 }
-

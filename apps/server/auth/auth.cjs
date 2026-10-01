@@ -51,7 +51,7 @@ function createAuthMiddleware(pool, options = {}) {
     }
 
     const deviceIdHeader = req.headers['x-device-id'] ? String(req.headers['x-device-id']).trim() : null;
-    const clientVersionHeader = req.headers['x-client-version'] ? String(req.headers['x-client-version']).trim() : '2.0.0';
+    const clientVersionHeader = req.headers['x-client-version'] ? String(req.headers['x-client-version']).trim() : '0.0.0';
 
     // 2. Check client version fence first
     try {

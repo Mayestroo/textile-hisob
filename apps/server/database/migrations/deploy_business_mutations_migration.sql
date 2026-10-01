@@ -1,6 +1,6 @@
--- V2 workbook business mutation schema (source migration 9).
+-- Workbook business mutation schema (source migration 9).
 -- This migration is additive. It must be applied to production only after the
--- V2 business mutation runtime and client release are ready.
+-- Business mutation runtime and client release are ready.
 BEGIN;
 
 ALTER TABLE models

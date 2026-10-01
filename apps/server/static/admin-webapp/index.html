@@ -84,7 +84,7 @@
             </article>
             <article class="surface-card ledger-note">
               <div class="card-heading"><div><p class="eyebrow">AUTHORITY</p><h2>Ma’lumot manbai</h2></div><span class="ledger-seal"></span></div>
-              <p>Ushbu panel faqat  API orqali PostgreSQL’dan o‘qiydi. Eski Firebase qurilma telemetriyasi va egalar ro‘yxati  modeliga kirmaydi.</p>
+              <p>Ushbu panel faqat API orqali PostgreSQL’dan o‘qiydi. Qurilma telemetriyasi va egalar ro‘yxati canonical server ma’lumotlar modeliga kirmaydi.</p>
               <div class="fact-line"><span>Biznes bazasi</span><strong>PostgreSQL</strong></div>
               <div class="fact-line"><span>Admin autentifikatsiyasi</span><strong>Telegram · allowlist</strong></div>
               <div class="fact-line"><span>Aktivatsiya imzosi</span><strong>Ed25519 · server-side</strong></div>
@@ -94,7 +94,7 @@
         </section>
 
         <section class="view-section" data-section="devices" aria-labelledby="devicesTitle" hidden>
-          <div class="view-heading"><div><p class="eyebrow">REGISTERED CLIENTS</p><h1 id="devicesTitle">Qurilmalar</h1><p class="view-subtitle"> server ro‘yxati va aktivatsiya holatlari. Firebase telemetriyasi ko‘rsatilmaydi.</p></div></div>
+          <div class="view-heading"><div><p class="eyebrow">REGISTERED CLIENTS</p><h1 id="devicesTitle">Qurilmalar</h1><p class="view-subtitle">Server ro‘yxati va aktivatsiya holatlari.</p></div></div>
           <article class="surface-card"><div class="card-heading"><div><p class="eyebrow">SERVER DEVICES</p><h2>Ro‘yxatdan o‘tgan qurilmalar</h2></div></div><div class="table-wrap"><table><thead><tr><th>QURILMA ID</th><th>KORXONA</th><th>VERSIYA</th><th>HOLAT</th><th>RO‘YXAT VAQTI</th></tr></thead><tbody id="registeredDeviceRows"></tbody></table></div><p id="registeredDeviceEmpty" class="empty-state" hidden>PostgreSQL’da ro‘yxatdan o‘tgan qurilma yo‘q.</p></article>
           <article class="surface-card section-gap"><div class="card-heading"><div><p class="eyebrow">ACTIVATION LIFECYCLE</p><h2>Aktivatsiya so‘rovlari</h2></div></div><div class="table-wrap"><table><thead><tr><th>QURILMA</th><th>HOLAT</th><th>KORXONA</th><th>ROL</th><th>SO‘ROV VAQTI</th></tr></thead><tbody id="deviceActivationRows"></tbody></table></div><p id="deviceActivationEmpty" class="empty-state" hidden>Aktivatsiya yozuvlari yo‘q.</p></article>
         </section>
@@ -169,7 +169,7 @@
         <section class="view-section" data-section="admin" aria-labelledby="adminTitle" hidden>
           <div class="view-heading"><div><p class="eyebrow">IDENTITY & ACCESS</p><h1 id="adminTitle">Admin sessiyasi</h1><p class="view-subtitle">Telegram imzosi serverda tekshiriladi; ushbu panel admin allowlistini o‘zgartirmaydi.</p></div></div>
           <article class="surface-card session-card"><div class="session-stamp">AUTHENTICATED</div><dl class="session-facts"><div><dt>Telegram ID</dt><dd id="sessionTelegramId">—</dd></div><div><dt>Admin nomi</dt><dd id="sessionName">—</dd></div><div><dt>Session tugashi</dt><dd id="sessionExpires">—</dd></div><div><dt>Ruxsat manbai</dt><dd>VPS secret · ADMIN_TELEGRAM_IDS</dd></div><div><dt>API authority</dt><dd> authenticated routes</dd></div></dl><button id="signOutButton" class="button button-secondary" type="button">Sessiyani yopish</button></article>
-          <article class="surface-card section-gap retired-card"><p class="eyebrow">LEGACY CONTROLS RETIRED</p><h2>’da mavjud bo‘lmagan ma’lumotlar</h2><p>Firebase qurilma telemetriyasi, korxona egasini tayinlash, kutilayotgan telefon egasi va ixtiyoriy kalit yaratish boshqaruvlari bu panelga ko‘chirilmaydi. PostgreSQL’da mos authority bo‘lmasa, ma’lumot ko‘rsatilmaydi yoki amal rad etiladi.</p></article>
+          <article class="surface-card section-gap retired-card"><p class="eyebrow">UNSUPPORTED CONTROLS RETIRED</p><h2>Serverda mavjud bo‘lmagan ma’lumotlar</h2><p>Qurilma telemetriyasi, korxona egasini tayinlash, kutilayotgan telefon egasi va ixtiyoriy kalit yaratish boshqaruvlari bu panelga kiritilmaydi. PostgreSQL’da mos authority bo‘lmasa, ma’lumot ko‘rsatilmaydi yoki amal rad etiladi.</p></article>
         </section>
 
         <footer class="page-footer"><span>Novda  · PostgreSQL authoritative</span><span id="footerVersion">ADMIN WEBAPP / </span></footer>

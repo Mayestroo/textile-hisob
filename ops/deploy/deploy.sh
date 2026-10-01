@@ -11,25 +11,26 @@ die() { printf 'DEPLOY_FAILED: %s\n' "$*" >&2; exit 1; }
 [[ "$(id -un)" != root ]] || die 'run as the dedicated deploy user, not root'
 [[ -d "$checkout/.git" ]] || die "canonical repository checkout missing: $checkout"
 [[ -r "$env_file" ]] || die "production Compose environment unavailable: $env_file"
-[[ -f "$checkout/$compose_file" ]] || die "Compose file missing: $checkout/$compose_file"
 command -v docker >/dev/null || die 'Docker is required'
 docker compose version >/dev/null
 
 cd "$checkout"
-[[ "$(git remote get-url origin)" ]] || die 'origin remote is not configured'
+[[ -n "$(git remote get-url origin)" ]] || die 'origin remote is not configured'
 git fetch --prune origin "$branch"
-git reset --hard "origin/$branch"
+target_commit="$(git rev-parse --verify "refs/remotes/origin/$branch^{commit}")"
+git reset --hard "$target_commit"
 git submodule sync --recursive
 git submodule update --init --recursive --force
+[[ -f "$compose_file" ]] || die "Compose file missing: $checkout/$compose_file"
 
-compose=(docker compose --env-file "$env_file" -f "$compose_file")
+compose=(docker compose --project-name novda-prod --env-file "$env_file" -f "$compose_file")
 "${compose[@]}" config --quiet
 
-# Apply replay-safe forward migrations before replacing application containers.
+# Build the exact checked-out revision before applying its replay-safe migrations.
+"${compose[@]}" build --pull
 "${compose[@]}" --profile migrate run --rm novda-migrations
 
 # Compose removes orphaned containers without deleting persistent named volumes.
-"${compose[@]}" build --pull
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 180
 
 # Probe the actual API route inside the production container (no public host port).

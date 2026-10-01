@@ -800,7 +800,7 @@
       } catch (e) {}
     }
 
-    // Signed worker context is validated by the V2 API; no client-side database credentials exist.
+    // Signed worker context is validated by the VPS API; no client-side database credentials exist.
     const urlParams = new URLSearchParams(window.location.search);
     const targetWorkerId = urlParams.get('workerId');
     const companyId = urlParams.get('companyId');
@@ -890,7 +890,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Load the bound worker projection and activity from PostgreSQL-backed V2 API.
+    // Load the bound worker projection and activity from the PostgreSQL-backed API.
     async function loadWorkerData() {
       if (state.isLoading) return;
       state.isLoading = true;
@@ -911,7 +911,7 @@
           return;
         }
 
-        const profileResponse = await fetchWorkerApi('/v2/worker/profile');
+        const profileResponse = await fetchWorkerApi('/api/worker/profile');
         const profileResult = await profileResponse.json();
         if (!profileResponse.ok || !profileResult?.success || !profileResult.profile) {
           renderError("Shaxsiy ma'lumotlarni yuklab bo'lmadi. Bot orqali qayta kiring.");
@@ -950,7 +950,7 @@
         await fetchWorkerTickets();
 
       } catch (err) {
-        console.warn('Worker V2 data request failed.');
+        console.warn('Worker data request failed.');
         renderError("Ma'lumotlarni yuklashda xatolik yuz berdi. Internet aloqasini tekshiring.");
       } finally {
         state.isLoading = false;
@@ -1057,7 +1057,7 @@
       async function fetchWorkerTickets() {
         const ticketsListEl = document.getElementById('ticketsList');
         try {
-          const res = await fetchWorkerApi('/v2/worker/tickets?limit=50');
+          const res = await fetchWorkerApi('/api/worker/tickets?limit=50');
           const response = await res.json();
           if (!res.ok || !response?.success) throw new Error('WORKER_TICKETS_UNAVAILABLE');
           const myTickets = Array.isArray(response.tickets) ? response.tickets : [];

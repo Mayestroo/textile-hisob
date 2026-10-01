@@ -67,7 +67,7 @@ services:
       PORT: "3474"
       NOVDA_PUBLIC_API_URL: https://sync.novdatextile.uz
       DATABASE_URL: postgresql://novda_app:${NOVDA_APP_PASSWORD:?NOVDA_APP_PASSWORD is required}@novda-postgres:5432/novda_prod
-      MIN_CLIENT_VERSION: 2.0.0
+      MIN_CLIENT_VERSION: 0.0.0
       ALLOW_TEST_TOKENS: "false"
       NOVDA_BUSINESS_MUTATIONS_ENABLED: "true"
       NOVDA_ADMIN_API_TOKEN_FILE: /run/secrets/admin-api-token
@@ -98,7 +98,7 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3474/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        - "fetch('http://127.0.0.1:3474/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
       interval: 15s
       timeout: 5s
       retries: 5

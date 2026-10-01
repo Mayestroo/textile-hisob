@@ -1,6 +1,6 @@
 /**
  * Auth Store — Phase 4 (RBAC)
- * Hozircha UI uchun tayyor, Firebase Auth Phase 4 da ulanadi.
+ * UI authentication state backed by the current application session.
  */
 
 import { create } from 'zustand';

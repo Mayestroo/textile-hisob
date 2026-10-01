@@ -20,7 +20,7 @@ function rejectRemoteDeviceMutation() {
   return {
     accepted: false,
     code: AUTHORIZATION_UNAVAILABLE,
-    reason: 'Firebase device payload is not an authenticated command authority'
+    reason: 'Untrusted device payload is not an authenticated command authority'
   };
 }
 

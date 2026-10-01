@@ -88,14 +88,18 @@ playwright-report/
 *.db
 *.db-wal
 *.db-shm
+*.db-journal
 *.sqlite-wal
 *.sqlite-shm
 *.sqlite3-wal
 *.sqlite3-shm
+*.sqlite-journal
+*.sqlite3-journal
 *.pgdump
 *.dump
 *.dump.sql
 *.sql.gz
+*.backup
 test-databases/
 data/test/
 data/pg-dumps/
@@ -122,7 +126,6 @@ __pycache__/
 *$py.class
 
 # Misc
-*.pid
 *.seed
 scratch/
 telegram_admin_config.json

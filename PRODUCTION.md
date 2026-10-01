@@ -14,7 +14,7 @@ in separate Git repositories with separate runtime code and configuration.
   is `comp_novda`.
 - Never use production PostgreSQL for tests. Run PostgreSQL tests only after the
   repository's isolated PostgreSQL 16 preflight succeeds.
-- Preserve all local userData, SQLite databases, backups, Firebase snapshots,
+- Preserve all local userData, SQLite databases, backups,
   business exports, credentials, and evidence unless a specific authorized
   operation says otherwise. Do not use broad cleanup, reset, or restore commands.
 - Do not modify the IELTS project, its services, data, network, TLS, Nginx, or
@@ -22,9 +22,7 @@ in separate Git repositories with separate runtime code and configuration.
 - Do not import business data, apply source-only migrations, change production
   policy, deploy services, enable an unqualified writer, or distribute an
   unsigned candidate as part of routine source work.
-- Keep Firebase snapshots read-only and retained. Firebase integrations remain
-  historical/migration code, not data authorities. Production services run on
-  the VPS using Docker Compose, systemd, and Nginx.
+- Production services run on the VPS using Docker Compose, systemd, and Nginx.
 - Never put secrets in source, reports, shell history, command-line arguments,
   logs, or browser storage. Only public verification keys may ship in the client.
 - Protected source files must remain byte-identical:
@@ -37,7 +35,7 @@ in separate Git repositories with separate runtime code and configuration.
 
 ### Repository and client
 
-- Package and lockfile version: **1.7.15**.
+- Canonical project package and lockfile version: **0.0.0**.
 - Git branch/HEAD at capture: `master`, `ea6c0d46fd10eb12306c90733f905f6436684ec3`;
   the branch is one commit ahead of `origin/master`. That commit was already at
   HEAD when this work resumed. The worktree remains dirty and no commit was made
@@ -52,7 +50,7 @@ in separate Git repositories with separate runtime code and configuration.
 - The release builder is local-only, verifies the exact version, and refuses to
   overwrite an existing artifact. The former auto-publish release workflow was
   removed. Do not reintroduce a build command that commits, pushes, publishes, or
-  writes Firebase metadata.
+  writes hosting-provider metadata.
 
 ### Last verified production baseline
 
@@ -87,7 +85,7 @@ The last read-only production evidence available to this session was captured
 SSH verification during this session failed with `Permission denied
 (publickey,password)`. Therefore current production schema/revision, worker-bot
 deployment state, and current IELTS before/after state could not be freshly
-confirmed. No deployment, database mutation, Firebase write, or Telegram action
+confirmed. No deployment, database mutation, or Telegram action
 was performed.
 
 ### Runtime classification
@@ -98,13 +96,9 @@ was performed.
 - Admin and worker bots use the authenticated API; bot containers do not
   connect directly to PostgreSQL. The Admin bot is the only production Ed25519
   signer; the worker bot must never receive the signer private key.
-- The latest recorded runtime audit classified Firebase and former hosted-service
-  integrations as having
-  zero active production runtime dependencies. Keep their source and immutable
-  Firebase evidence until the independent retirement and cutover gates pass.
-- The source still contains compatibility and migration paths. Do not interpret
-  their presence as authorization to restore Firebase writes or legacy full-array
-  writes.
+- The VPS API and PostgreSQL are the only supported server and data authority.
+- The source contains local-data migration paths. Do not interpret those paths as
+  authorization to restore retired external data providers or legacy full-array writes.
 
 ## 3. Product and domain guide
 
@@ -174,7 +168,7 @@ browser receives no service token or signing key.
   `electron/main.cjs`.
 - Authenticode: `NotSigned`.
 - Built locally with `npm run dist:rc`; no upload, release publication, tag, Git
-  mutation, Firebase update, production install, or deployment was performed.
+  mutation, production install, or deployment was performed.
 - This candidate is **not qualified for distribution**. It has not passed the
   isolated Windows Sandbox in-place upgrade matrix or a pristine physical
   Windows 10/11 test.
@@ -259,7 +253,7 @@ directive with NSIS `Delete`.
   access and no Ed25519 private key.
 - `ops/deploy/`: Docker Compose, VPS service/configuration, and operational
   scripts. Production commands require explicit, reviewed infrastructure inputs.
-- `data/`, `%APPDATA%` databases, backups, Firebase snapshots, and spreadsheets
+- `data/`, `%APPDATA%` databases, backups, and spreadsheets
   are local/private evidence; they are not source fixtures and must be preserved.
 
 The SQLite migration sequence is append-only. The PostgreSQL schema and forward

@@ -33,11 +33,11 @@ function hashDeviceToken(token) {
  * @param {object} params
  * @param {string} params.deviceId Unique device identifier (e.g. machine hardware ID)
  * @param {string} params.companyId Tenant company identifier
- * @param {string} [params.clientVersion='2.0.0'] Initial approved client version
+ * @param {string} [params.clientVersion='0.0.0'] Initial approved client version
  * @returns {Promise<{ deviceId: string, companyId: string, clientVersion: string, token: string, tokenHash: string }>}
  */
 async function provisionDevice(pool, params) {
-  const { deviceId, companyId, clientVersion = '2.0.0' } = params;
+  const { deviceId, companyId, clientVersion = '0.0.0' } = params;
 
   if (!deviceId || typeof deviceId !== 'string' || !deviceId.trim()) {
     throw new Error('deviceId is required for provisioning');

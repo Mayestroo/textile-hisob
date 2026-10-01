@@ -11,7 +11,7 @@ describe('renderer runtime mode boundary', () => {
     expect(await resolveElectronRuntimeMode({})).toEqual({ success: true, mode: 'legacy' });
   });
 
-  it('fails closed instead of starting legacy Firebase sync in a production build without Electron', async () => {
+  it('fails closed instead of starting local sync in a production build without Electron', async () => {
     await expect(resolveElectronRuntimeMode(undefined, { productionBuild: true })).resolves.toEqual({
       success: false,
       mode: 'sync',

@@ -88,6 +88,11 @@ describe('worker web authentication compatibility', () => {
     expect(source).not.toMatch(/firebase|render\.com|onrender|ielts/i);
     expect(webApp).not.toMatch(/firebase|render\.com|onrender|ielts|hisobQuantities/i);
     expect(webApp).toContain('/api/worker/profile');
+    expect(webApp).toContain('/api/worker/tickets?limit=50');
+    expect(source).toContain('/api/worker/bindings/by-telegram/');
+    expect(source).toContain('/api/worker/bindings/by-worker');
+    expect(source).not.toMatch(/\/v2\//i);
+    expect(webApp).not.toMatch(/\/v2\//i);
     const inlineScript = webApp.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
     expect(inlineScript).toBeTruthy();
     expect(() => new vm.Script(inlineScript || '')).not.toThrow();

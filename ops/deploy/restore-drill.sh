@@ -5,7 +5,7 @@ umask 077
 backup_dir=/srv/novda/backups
 postgres_container=novda-postgres
 compose_env=/srv/novda/secrets/compose.env
-compose_file=/srv/novda/current/ops/deploy/compose.yaml
+compose_file=/srv/novda/repository/ops/deploy/compose.yaml
 
 if [[ "$(id -u)" -ne 0 ]]; then
   printf '%s\n' 'ROOT_REQUIRED_FOR_RESTORE_DRILL' >&2
