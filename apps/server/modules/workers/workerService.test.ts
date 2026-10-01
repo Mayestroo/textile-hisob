@@ -11,12 +11,12 @@ describe('worker binding credential enforcement', () => {
         worker_name: 'Worker 190',
         status: 'ACTIVE',
         staj: 0,
-        pin_required: false
+        pin_configured: false
       }] }))
     };
 
     await expect(getWorkerForEnrollment(pool, 'comp_novda', 190, { pinRequired: false }))
-      .resolves.toMatchObject({ worker_id: 190, pin_required: false });
+      .resolves.toMatchObject({ worker_id: 190, pin_required: false, pin_configured: false });
   });
 
   it('refuses to bind a worker without a configured PIN credential', async () => {

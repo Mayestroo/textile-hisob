@@ -51,6 +51,7 @@ class PinlessWorkerEnrollmentTests(unittest.TestCase):
                 "worker_id": 190,
                 "worker_name": "Worker 190",
                 "pin_required": True,
+                "pin_configured": True,
             }),
             patch.object(worker_bot, "save_worker_binding") as save_binding,
             patch.object(worker_bot, "send_message") as send_message,
