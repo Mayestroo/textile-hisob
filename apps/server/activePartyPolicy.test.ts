@@ -753,7 +753,7 @@ describe('Phase 2 â€” Active-Party Uniqueness Owner Exception Policy Tests 
       `INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id, patta_number, qty, submitted_at)
        VALUES 
          ('00000000-0000-4000-8000-000000000601', $1, 'model-body-t', '2', $2, 1, 50, NOW() - INTERVAL '2 days'),
-         ('00000000-0000-4000-8000-000000000602', $1, 'model-alex-prit', '2', $3, 1, 75, NOW() - INTERVAL '1 day')`,
+         ('00000000-0000-4000-8000-000000000602', $1, 'model-alex-prit', '2', $3, 2, 75, NOW() - INTERVAL '1 day')`,
       [COMPANY, GRANDFATHERED_A, GRANDFATHERED_B]
     );
 

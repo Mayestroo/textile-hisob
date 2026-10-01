@@ -47,7 +47,9 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_exact_party_2_company_scope_migration.sql',
       'deploy_activation_policy_device_sync_migration.sql',
       'deploy_free_mode_ticket_party_migration.sql',
-      'deploy_patta_work_quantity_migration.sql'
+      'deploy_patta_work_quantity_migration.sql',
+      'deploy_canonical_ids_global_patta_sequence.sql',
+      'deploy_production_adjustment_provenance_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'
@@ -166,8 +168,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const party = {
       commandId: 'cmd_party', operationId: 'op_party', companyId,
       partyRecordId: 'party_1', partyNumber: '1', modelId: 'model_2', modelName: 'Model 2',
-      pattaCount: 1, cumulativePattaCount: 1, ishSoniPerPatta: 50, totalIshSoni: 50, ishSoni: 50,
-      cumulativeIshSoni: 50, sizes: { M: 1 }, printedAt: '2026-09-23T10:00:00.000Z'
+      pattaCount: 2, cumulativePattaCount: 2, ishSoniPerPatta: 50, totalIshSoni: 100, ishSoni: 100,
+      cumulativeIshSoni: 100, sizes: { M: 2 }, printedAt: '2026-09-23T10:00:00.000Z'
     };
     expect(await apply('CreateParty', 'party', party.partyRecordId, party)).toMatchObject({ status: 'APPLIED', serverRevision: 1 });
     const partyUpdate = await apply('UpdateParty', 'party', party.partyRecordId, {
@@ -239,7 +241,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const periodTickets = [
       ['00000000-0000-4000-8000-000000000821', 'party_1', '1'],
       ['00000000-0000-4000-8000-000000000822', 'party_1', '2'],
-      ['00000000-0000-4000-8000-000000000823', 'party_2', '1']
+      ['00000000-0000-4000-8000-000000000823', 'party_2', '3']
     ];
     for (const [ticketId, partyRecordId, pattaNumber] of periodTickets) {
       const partyNumber = partyRecordId === 'party_1' ? '1' : '2';
@@ -278,7 +280,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       WHERE company_id = $1 AND id IN ('party_1', 'party_2') ORDER BY id`, [companyId]);
     expect(partyRows.rows).toEqual([
       expect.objectContaining({ id: 'party_1', status: 'CLOSED' }),
-      expect.objectContaining({ id: 'party_2', status: 'ACTIVE', archived_patta_numbers_json: [1] })
+      expect.objectContaining({ id: 'party_2', status: 'ACTIVE', archived_patta_numbers_json: [3] })
     ]);
 
     expect(await apply('CloseParty', 'party', 'party_2', {
