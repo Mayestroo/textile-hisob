@@ -174,6 +174,29 @@ jobs:
           ensure_directory /srv/novda/backups root root 0700
           ensure_directory /srv/novda/import deploy deploy 0750
 
+          bot_secret_dir=/srv/novda/secrets/bots
+          signer_file="$bot_secret_dir/novda-license-ed25519-private-key"
+          if [[ -e "$signer_file" ]]; then
+            if [[ -s "$signer_file" ]]; then
+              existing_fingerprint="$(openssl pkey -in "$signer_file" -pubout -outform DER 2>/dev/null | openssl dgst -sha256 -r | cut -d ' ' -f 1)"
+              printf 'NOVDA_SIGNER_ALREADY_PRESENT fingerprint=%s; preserving existing file\n' "$existing_fingerprint" >&2
+            else
+              printf 'NOVDA_SIGNER_PLACEHOLDER_ALREADY_PRESENT; preserving existing file\n' >&2
+            fi
+            exit 1
+          fi
+          if [[ ! -d "$bot_secret_dir" ]]; then install -d -o 997 -g 988 -m 0700 "$bot_secret_dir"; fi
+          [[ ! -L "$bot_secret_dir" ]] || { printf '%s\n' 'NOVDA_BOT_SECRET_DIRECTORY_SYMLINK_REFUSED' >&2; exit 1; }
+          umask 077
+          signer_temp="$signer_file.$$.tmp"
+          openssl genpkey -algorithm ED25519 -out "$signer_temp"
+          chown 997:988 "$signer_temp"
+          chmod 0600 "$signer_temp"
+          mv -- "$signer_temp" "$signer_file"
+          signer_fingerprint="$(openssl pkey -in "$signer_file" -pubout -outform DER | openssl dgst -sha256 -r | cut -d ' ' -f 1)"
+          printf 'NOVDA_NEW_SIGNER_FINGERPRINT=%s\n' "$signer_fingerprint"
+          openssl pkey -in "$signer_file" -pubout
+
           ssh_dir=/home/deploy/.ssh
           [[ ! -L "$ssh_dir" ]] || { printf '%s\n' 'DEPLOY_SSH_DIRECTORY_SYMLINK_REFUSED' >&2; exit 1; }
           if [[ ! -d "$ssh_dir" ]]; then install -d -o deploy -g deploy -m 0700 "$ssh_dir"; fi
