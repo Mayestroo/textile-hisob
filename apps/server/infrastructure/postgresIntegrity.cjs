@@ -282,15 +282,18 @@ async function verifyPostgresReleaseState(client) {
   `);
   const activePartyTrigger = triggerRows.find((row) => row.trigger_name === 'trg_parties_active_uniqueness');
   const triggerDefinition = String(activePartyTrigger?.function_definition || '');
+  const compactTriggerDefinition = triggerDefinition.toLowerCase().replace(/\s+/g, '');
   report.partyPolicy.triggerExists = Boolean(activePartyTrigger);
-  report.partyPolicy.persistedExceptionPolicy = /legacy_party_collision_exceptions/i.test(triggerDefinition)
-    && /current_exception\.company_id\s*=\s*NEW\.company_id/i.test(triggerDefinition)
-    && /current_exception\.party_id\s*=\s*NEW\.id/i.test(triggerDefinition)
-    && /current_exception\.party_number\s*=\s*NEW\.party_number/i.test(triggerDefinition)
-    && /collision_group_id/i.test(triggerDefinition)
-    && /COUNT\(\*\)/i.test(triggerDefinition)
-    && /=\s*2/.test(triggerDefinition)
-    && /ACTIVE_PARTY_EXISTS/i.test(triggerDefinition);
+  report.partyPolicy.persistedExceptionPolicy = [
+    'legacy_party_collision_exceptions',
+    'current_exception.company_id=new.company_id',
+    'current_exception.party_id=new.id',
+    'current_exception.party_number=new.party_number',
+    'collision_group_id',
+    'count(*)',
+    ')=2',
+    'active_party_exists'
+  ].every((fragment) => compactTriggerDefinition.includes(fragment));
   report.partyPolicy.callsExactPolicyFunction = activePartyTrigger?.function_name === 'check_active_party_uniqueness'
     && report.partyPolicy.persistedExceptionPolicy;
   if (!report.partyPolicy.triggerExists || !report.partyPolicy.callsExactPolicyFunction) {

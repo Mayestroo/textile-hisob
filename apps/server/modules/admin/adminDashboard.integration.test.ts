@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac, generateKeyPairSync, sign } from 'crypto';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { buildFastifyServer } from '../../app.cjs';
 import { getServerPool, resetServerDatabase, closeServerPool } from '../../infrastructure/db.cjs';
@@ -85,6 +86,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     await resetServerDatabase();
     await pool.query(`INSERT INTO company_batch_settings (company_id, available_sizes_json, server_revision)
       VALUES ($1, '["XXS","S","M"]'::jsonb, 1)`, [COMPANY_ID]);
+    await pool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_activation_company_scope_migration.sql'), 'utf8'));
     await pool.query(`
       INSERT INTO models (id, company_id, name, operations_json, status, server_revision)
       VALUES ('model-1', $1, 'Fixture Model', '[{"name":"Stitch","rate":9}]', 'ACTIVE', 1)

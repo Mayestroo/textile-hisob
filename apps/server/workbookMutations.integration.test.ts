@@ -102,6 +102,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const ticketId = '00000000-0000-4000-8000-000000000811';
     await pool!.query(`INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id, patta_number, qty, submitted_at)
       VALUES ($1, $2, $3, '88', 'party_model_rename', 1, 5, '2026-09-23T10:00:00Z')`, [ticketId, companyId, create.modelId]);
+    await pool!.query(`INSERT INTO company_patta_sequences(company_id, next_patta_number)
+      VALUES ($1, 2) ON CONFLICT (company_id) DO UPDATE SET next_patta_number = 2`, [companyId]);
     await pool!.query(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, qty)
       VALUES ('entry_model_rename', $1, $2, 'Cut', 99, 5)`, [ticketId, companyId]);
 
@@ -239,9 +241,9 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
   it('closes a period atomically, rolls parties, stores an archive, and archives history without deletes', async () => {
     await pool!.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1 WHERE company_id = $1 AND id = 'party_model_rename'`, [companyId]);
     const periodTickets = [
-      ['00000000-0000-4000-8000-000000000821', 'party_1', '1'],
-      ['00000000-0000-4000-8000-000000000822', 'party_1', '2'],
-      ['00000000-0000-4000-8000-000000000823', 'party_2', '3']
+      ['00000000-0000-4000-8000-000000000821', 'party_1', '2'],
+      ['00000000-0000-4000-8000-000000000822', 'party_1', '3'],
+      ['00000000-0000-4000-8000-000000000823', 'party_2', '4']
     ];
     for (const [ticketId, partyRecordId, pattaNumber] of periodTickets) {
       const partyNumber = partyRecordId === 'party_1' ? '1' : '2';
@@ -280,7 +282,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       WHERE company_id = $1 AND id IN ('party_1', 'party_2') ORDER BY id`, [companyId]);
     expect(partyRows.rows).toEqual([
       expect.objectContaining({ id: 'party_1', status: 'CLOSED' }),
-      expect.objectContaining({ id: 'party_2', status: 'ACTIVE', archived_patta_numbers_json: [3] })
+      expect.objectContaining({ id: 'party_2', status: 'ACTIVE', archived_patta_numbers_json: [4] })
     ]);
 
     expect(await apply('CloseParty', 'party', 'party_2', {
