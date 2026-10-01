@@ -155,13 +155,12 @@ worker management and detail, period management, and backup history.
 
 ## 4. Worker binding and WebApp security
 
-New Telegram worker binding requires a configured salted scrypt PIN credential.
-The API now rejects binding when the worker has no credential with
-`WORKER_ENROLLMENT_NOT_CONFIGURED` (HTTP 409); the bot no longer offers a
-confirmation-only fallback. A bad PIN remains rate-limited and rejected. This
-source fix has passed local regression tests but is **not deployed or verified
-against production**; keep new binding flows gated until the deployed API and bot
-are updated and a real Telegram test passes.
+Worker Telegram binding normally requires a configured salted scrypt PIN. The
+owner explicitly requested PIN-less binding for this deployment; after that
+authorization, `NOVDA_WORKER_PIN_REQUIRED=false` was enabled for the whole
+company. First-time bot binding now accepts the company ID and active worker ID
+without a PIN. Existing bindings remain unique per Telegram account and per
+worker. This is a company-wide policy, not a per-worker PIN reset.
 
 Worker WebApp links use a separate worker-auth HMAC, scoped to company, worker,
 Telegram ID, and a 15-minute expiry. This is not license-signing material. The

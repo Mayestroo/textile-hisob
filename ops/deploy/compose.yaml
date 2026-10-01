@@ -103,6 +103,8 @@ services:
       DATABASE_URL: postgresql://novda_app:${NOVDA_APP_PASSWORD:?NOVDA_APP_PASSWORD is required}@novda-postgres:5432/novda_prod
       MIN_CLIENT_VERSION: 0.0.0
       ALLOW_TEST_TOKENS: "false"
+      # Owner-controlled override; PIN checks remain on unless explicitly disabled.
+      NOVDA_WORKER_PIN_REQUIRED: "${NOVDA_WORKER_PIN_REQUIRED:-true}"
       NOVDA_BUSINESS_MUTATIONS_ENABLED: "true"
       NOVDA_ADMIN_API_TOKEN_FILE: /run/secrets/admin-api-token
       NOVDA_ADMIN_TELEGRAM_IDS_FILE: /run/secrets/admin-telegram-ids

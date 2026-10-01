@@ -268,10 +268,10 @@ def start_worker_id_check(chat_id, user, telegram_id, state, text):
         send_message(chat_id, "Ushbu ishchi hisob boshqa Telegram akkauntiga biriktirilgan. Korxona ma'muriyatiga murojaat qiling.")
         return
     worker = get_worker_enrollment(company_id, worker_id)
-    if not worker.get("pin_required"):
-        send_message(chat_id, "Ushbu ishchi hisob uchun PIN-kod sozlanmagan. Xavfsiz ulash uchun korxona ma'muriyatiga murojaat qiling.")
-        return
     state.update({"worker_id": worker_id, "worker_name": worker["worker_name"]})
+    if not worker.get("pin_required"):
+        finish_registration(chat_id, user, telegram_id, state, pin=None)
+        return
     state["step"] = "WAITING_PIN"
     send_message(chat_id, f"Xodim topildi: <b>{escape(worker['worker_name'])}</b>. Himoyalangan shaxsiy PIN-kodingizni yuboring.")
 
