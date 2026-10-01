@@ -48,13 +48,13 @@ root.
 
 These keys serve different purposes:
 
-1. **GitHub Actions â†’ VPS:** add the Actions public key to
+1. **GitHub Actions → VPS:** add the Actions public key to
    `/home/deploy/.ssh/authorized_keys` (mode `0600`, owned by deploy). Store
    the encrypted private key as GitHub Actions secret `VPS_SSH_KEY` and its
    passphrase as `VPS_SSH_PASSPHRASE`; set `VPS_HOST`, `VPS_USER=deploy` and
    `VPS_PORT` as repository/environment secrets too. The workflow loads the key
    through a short-lived SSH agent and does not print the passphrase.
-2. **VPS â†’ GitHub repository:** generate a different key pair on the VPS for
+2. **VPS → GitHub repository:** generate a different key pair on the VPS for
    `deploy`, register its public key as a read-only deploy key on this private
    repository, and configure SSH to use that key for the repository host. Never
    copy the Actions key into the VPS or use the repository read key for Actions.
@@ -106,6 +106,13 @@ enable write routes until the existing production baseline and business-write
 policy have been explicitly reviewed. Keep `/srv/novda/backups` and Docker's
 named `novda-prod_postgres-data` volume persistent and independently backed up.
 Compose JSON logs are Docker-managed, outside the checkout.
+
+For Internet sync without an operator-managed reverse proxy, create a separate
+Cloudflare Tunnel for Novda and route `sync.novdatextile.uz` to
+`http://novda-api:3474`. Store that tunnel's token in
+`/srv/novda/secrets/bots/cloudflare-tunnel-token`, then add
+`NOVDA_ENABLE_PUBLIC_TLS=1` to `compose.env`. This enables only the Novda
+`public-tls` profile; do not edit or reuse the IELTS tunnel, hostname, or route.
 
 ## 5. Start and verify the initial deployment
 
