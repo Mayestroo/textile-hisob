@@ -36,7 +36,8 @@ and Docker build contexts within the main repository.
 ### Repository and client
 
 - Canonical project package and lockfile version: **0.0.0**.
-- Git branch/HEAD at capture: `main`, `9b8bd07`, synchronized with `origin/main`.
+- Git branch/HEAD at deployment capture: `main`, `ec52cc7`, synchronized with
+  `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration
   lineage is at migration 17. The supplied `comp_novda` SQLite candidate reports
   schema version 15 and passes `PRAGMA integrity_check`.
@@ -52,10 +53,9 @@ and Docker build contexts within the main repository.
 ### Authorized initial data source and deployment status
 
 The owner identified `C:\Users\bekbo\Desktop\baza\hisob.sqlite` as the
-corrected in-progress database for `comp_novda`, and reported that the VPS is
-empty. This supersedes the older 2026-09-24 baseline as the intended initial
-business-data source; those earlier counts are historical evidence, not current
-truth.
+corrected in-progress database for `comp_novda`. This supersedes the older
+2026-09-24 baseline as the intended business-data source; those earlier counts
+are historical evidence, not current truth.
 
 Read-only local inspection on 2026-10-01 recorded:
 
@@ -70,12 +70,33 @@ Read-only local inspection on 2026-10-01 recorded:
   `DEAD_LETTER` records remain local and are excluded from the server baseline
   import; import the canonical business tables only.
 
-The SQLite file was not modified or transferred. A non-mutating GitHub Actions
-probe verified SSH as `deploy` and Docker Compose. The Novda-only VPS bootstrap
-created `/srv/novda` paths, cloned the repository, generated `compose.env`
-database credentials, and created a separate read-only GitHub repository key.
-The probe confirmed there are no Novda API, PostgreSQL, or bot containers and no
-staged SQLite import file. No service deployment or database import has run.
+The verified SQLite file is staged at `/srv/novda/import/comp_novda.sqlite`
+with mode `0400` and owner `1000:1000`; its hash matches the local source above.
+`local_outbox`, including all 111 `DEAD_LETTER` entries, was not imported.
+
+The VPS had a pre-existing `novda_prod` database despite the earlier expectation
+that it was empty. It was preserved under database name
+`novda_prod_pre_sqlite_20261001t190411z` and exported to
+`/srv/novda/import/novda_prod-pre-sqlite-20261001T190411Z.dump` (mode `0600`;
+`pg_restore --list` verified the dump). The new `novda_prod` database was created
+separately, leaving the prior database available for rollback or reconciliation.
+The three PostgreSQL role passwords were aligned with the protected Compose
+environment without exposing their values.
+
+PostgreSQL migrations 1–17 are installed and release-integrity verification
+passed. The guarded SQLite importer first passed dry-run with the exact source
+hash and expected counts, then applied the baseline transactionally. Imported
+counts: 209 workers, 20 models, 54 parties, 1 period, 3 tickets, 36 ticket
+entries, 63 worker adjustments, and 22 production adjustments; 2 Party #2
+exceptions and the canonical ID aliases/settings were also imported. Transient
+ticket forms and local sync state were excluded.
+
+The Novda API, PostgreSQL, admin bot, worker bot, and dedicated Cloudflare tunnel
+are running. Internal API health and public
+`https://sync.novdatextile.uz/health` both returned HTTP 200 with status `ok`.
+The post-import PostgreSQL counts match the authorized SQLite baseline. The
+pre-import database dump and renamed database must be retained until the owner
+confirms no further reconciliation or rollback is needed.
 
 An owner-approved license-signer rotation generated the new VPS private key at
 `/srv/novda/secrets/bots/novda-license-ed25519-private-key`; its public
@@ -83,7 +104,9 @@ fingerprint is
 `ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68`. The
 source retains the previous public key for verifying existing licenses and pins
 new activations to the new signer. A desktop client update must be qualified
-and delivered before issuing licenses signed by the new key.
+and delivered before issuing licenses signed by the new key. An authenticated
+device-to-server bootstrap/sync round trip has not yet been verified from an
+installed client.
 
 ### Runtime classification
 
