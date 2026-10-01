@@ -223,9 +223,11 @@ jobs:
             fi
             if [[ ! -e /srv/novda/secrets/compose.env ]]; then
               bash /srv/novda/repository/ops/deploy/create-secrets.sh
-              chown root:deploy /srv/novda/secrets/compose.env
-              chmod 0640 /srv/novda/secrets/compose.env
             fi
+            chown root:deploy /srv/novda/secrets
+            chmod 0750 /srv/novda/secrets
+            chown root:deploy /srv/novda/secrets/compose.env
+            chmod 0640 /srv/novda/secrets/compose.env
             printf 'NOVDA_REPOSITORY_AND_DATABASE_SECRETS_READY\n'
           else
             printf 'NOVDA_REPOSITORY_READ_ACCESS_PENDING %s\n' "$repo_url"
