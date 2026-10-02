@@ -245,9 +245,9 @@ changes to packaged inputs require the 1.7.15 candidate to be qualified anew.
 
 ### 1.0.0 fresh-start Patta size-switcher candidate
 
-- Artifact: `dist-build/local-candidate-1.0.0-clean-start/Novda-hisob-kitob-Setup-1.0.0-win10-11-x64.exe`
+- Artifact: `dist-build/local-candidate-1.0.0-clean-main/Novda-hisob-kitob-Setup-1.0.0-win10-11-x64.exe`
 - Size: `121241760` bytes
-- SHA-256: `dfc98af70d4cb3a3ed148cf79b79b748e59eea1e02f115e79f70b4473dcb84cb`
+- SHA-256: `d665e0b14df20f1398b761bc937ea4397c1b35492ea6c4970b856856fdc6eda2`
 - Packaged `package.json`: version `1.0.0`; Electron entrypoint
   `apps/desktop/electron/main.cjs`.
 - Authenticode: `NotSigned`.
@@ -257,6 +257,8 @@ changes to packaged inputs require the 1.7.15 candidate to be qualified anew.
 - This is a local test candidate, not published or yet verified on the target
   office PC. The PostgreSQL `comp_novda` baseline remains the authoritative
   source; no server data reset was performed for the version reset.
+- It was built from the clean `main` worktree at `ccab59f`; the earlier
+  working-tree-only candidate is superseded and must not be used.
 
 Preserve prior release artifacts and local evidence unless an exact artifact is
 proven invalid and its identity is recorded.
