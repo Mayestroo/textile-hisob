@@ -356,7 +356,7 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
   const periods = loadPeriodsFromSqlite(db, companyId);
   const openPeriod = periods.find((period) => !period.isClosed);
   const tickets = loadTicketFactsFromSqlite(db, companyId, openPeriod);
-  const visibleTickets = tickets.filter((ticket) => ticket.status !== 'VOIDED');
+  const visibleTickets = tickets.filter((ticket) => ticket.status !== 'VOIDED' && ticket.status !== 'PENDING_DELETE');
   const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId);
   const projections = buildHisobProjections({ tickets: visibleTickets, productionAdjustments });
   const models = loadModelsFromSqlite(db, companyId, projections);

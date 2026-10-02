@@ -174,6 +174,13 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run('entry-a', ticketId, companyId, 'Sew', 1, 'Worker A', 2, null, 5, now);
 
+    const pendingDeleteTicketId = '11111111-1111-4111-8111-111111111112';
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number,
+      qty, size, color, konveyer, status, is_closed, submitted_at, created_at, provenance
+    ) VALUES (?, ?, 'model-a', '1', 'party-a', 2, 20, 'M', 'Black', 'K1', 'PENDING_DELETE', 0, ?, ?, 'TEST')`)
+      .run(pendingDeleteTicketId, companyId, now, now);
+
     db.prepare(`
       INSERT INTO models (
         id, company_id, name, operations_json, patta_ops_order_json,
@@ -195,6 +202,9 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
     expect(projection.submittedTickets).toEqual([
       expect.objectContaining({ id: ticketId, partyRecordId: 'party-a', qty: 5, status: 'CONFIRMED' })
     ]);
+    expect(projection.submittedTickets).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: pendingDeleteTicketId })
+    ]));
     expect(projection.projections.accounting['model-a']['1'].Sew).toBe(5);
     expect(before).toEqual(after);
   });

@@ -1097,7 +1097,8 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
           commandId: normalized.commandId,
           operationId: normalized.operationId,
           entityId: normalized.entityId,
-          status: 'PENDING_SYNC',
+          status: existingOperation.status === 'SUPERSEDED' ? 'DELETED_LOCALLY' : 'PENDING_SYNC',
+          localOnly: existingOperation.status === 'SUPERSEDED',
           committed: true,
           isReplay: true
         };
@@ -1105,7 +1106,28 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
       throw createCommandError('IDEMPOTENCY_CONFLICT', `Operation "${normalized.operationId}" was already used for different workbook data`);
     }
 
-    const effectiveBaseRevision = executeWorkbookMutation(db, normalized, options);
+    let localOnlyDelete = false;
+    let effectiveBaseRevision;
+    if (normalized.commandType === 'DeleteTicket') {
+      const submitOperation = db.prepare(`SELECT status FROM local_outbox
+        WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
+        ORDER BY created_at DESC LIMIT 1`).get(normalized.companyId, normalized.entityId);
+      if (submitOperation?.status === 'DEAD_LETTER') {
+        const current = db.prepare('SELECT status, server_revision FROM tickets WHERE company_id = ? AND id = ?')
+          .get(normalized.companyId, normalized.entityId);
+        if (!current) throw createCommandError('TICKET_NOT_FOUND', `Ticket "${normalized.entityId}" was not found`);
+        if (current.status === 'VOIDED' || current.status === 'PENDING_DELETE') {
+          throw createCommandError('TICKET_ALREADY_DELETED', `Ticket "${normalized.entityId}" has already been deleted or queued for deletion`);
+        }
+        db.prepare(`UPDATE tickets SET status = 'VOIDED' WHERE company_id = ? AND id = ?`)
+          .run(normalized.companyId, normalized.entityId);
+        effectiveBaseRevision = Number(current.server_revision || 0);
+        localOnlyDelete = true;
+      }
+    }
+    if (effectiveBaseRevision === undefined) {
+      effectiveBaseRevision = executeWorkbookMutation(db, normalized, options);
+    }
 
     if (typeof options.testHooks?.afterFactWrite === 'function') options.testHooks.afterFactWrite();
     insertOutboxOperation(db, {
@@ -1119,7 +1141,7 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
       payload_hash: payloadHash,
       depends_on_operation_id: normalized.dependsOnOperationId,
       causal_sequence: normalized.causalSequence,
-      status: 'PENDING',
+      status: localOnlyDelete ? 'SUPERSEDED' : 'PENDING',
       created_at: new Date().toISOString()
     });
     if (typeof options.testHooks?.afterOutboxWrite === 'function') options.testHooks.afterOutboxWrite();
@@ -1128,7 +1150,8 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
       commandId: normalized.commandId,
       operationId: normalized.operationId,
       entityId: normalized.entityId,
-      status: 'PENDING_SYNC',
+      status: localOnlyDelete ? 'DELETED_LOCALLY' : 'PENDING_SYNC',
+      localOnly: localOnlyDelete,
       committed: true,
       isReplay: false
     };

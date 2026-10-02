@@ -98,6 +98,37 @@ describe(' workbook local command pipeline', () => {
       .get('op_delete_ticket')).toEqual({ command_type: 'DeleteTicket', entity_type: 'ticket', entity_id: ticketId });
   });
 
+  it('deletes a rejected local-only ticket without sending an impossible server delete', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    const ticketId = '11111111-1111-4111-8111-111111111112';
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, submitted_at, created_at
+    ) VALUES (?, ?, 'model_one', ?, NULL, 0, 1, 'CONFIRMED', ?, ?)`).run(ticketId, companyId, "No'malum Partiya", now, now);
+    const submitPayload = { ticketId, companyId };
+    const submitPayloadJson = canonicalStringify(submitPayload);
+    db.prepare(`INSERT INTO local_outbox (
+      operation_id, company_id, command_type, entity_type, entity_id, base_revision,
+      payload_json, payload_hash, status, created_at, updated_at, last_error, error_message
+    ) VALUES ('op_rejected_submit', ?, 'SubmitTicket', 'ticket', ?, 0, ?, ?, 'DEAD_LETTER', ?, ?, ?, ?)`)
+      .run(companyId, ticketId, submitPayloadJson, computePayloadHash(submitPayloadJson), now, now,
+        JSON.stringify({ code: 'PARTY_RECORD_REQUIRED' }), JSON.stringify({ code: 'PARTY_RECORD_REQUIRED' }));
+
+    const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'DeleteTicket', commandId: 'cmd_delete_local_only_ticket', operationId: 'op_delete_local_only_ticket',
+      companyId, entityId: ticketId, payload: { ticketId }
+    });
+
+    expect(result).toMatchObject({ committed: true, entityId: ticketId, status: 'DELETED_LOCALLY', localOnly: true });
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('VOIDED');
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_delete_local_only_ticket').status)
+      .toBe('SUPERSEDED');
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM local_outbox WHERE entity_id = ?
+      AND command_type = 'DeleteTicket' AND status = 'PENDING'`).get(ticketId).count).toBe(0);
+    expect(require('./projectionReader.cjs').loadWorkbookProjectionFromSqlite(db, companyId).submittedTickets)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: ticketId })]));
+  });
+
   it('rejects a changed replay and cross-company command without changing local facts', () => {
     const original = modelCommand();
     workbookCommandPipeline.executeWorkbookCommand(userData, companyId, original);

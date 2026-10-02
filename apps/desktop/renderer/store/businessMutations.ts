@@ -30,6 +30,7 @@ export type WorkbookCommandResult = {
   mode: 'legacy' | 'sync';
   success: boolean;
   committed?: boolean;
+  localOnly?: boolean;
   code?: string;
   error?: string;
 };
@@ -196,6 +197,7 @@ export async function submitWorkbookCommand(
     mode: 'sync',
     success: true,
     committed: true,
+    localOnly: commandResult.result?.localOnly === true,
     ...(projectionLoaded ? {} : { code: '_PROJECTION_RELOAD_PENDING', error: ' command is committed; projection reload will retry during reconnect' })
   };
 }

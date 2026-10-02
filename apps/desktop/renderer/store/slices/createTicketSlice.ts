@@ -510,7 +510,9 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         notifyMutation(state, makeMutationResult(result.code || '_COMMAND_REQUIRED', result.error || 'Ticket deletion was rejected'));
         return false;
       }
-      get().addNotification('success', 'Patta o\'chirildi', `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} hisobdan qaytarildi.`);
+      get().addNotification('success', 'Patta o\'chirildi', result.localOnly
+        ? `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} rad etilgan mahalliy yozuv sifatida o\'chirildi.`
+        : `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} hisobdan qaytarildi.`);
       return true;
     }
     const ticket = (state.submittedTickets || []).find((s) => s.id === ticketId);
