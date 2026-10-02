@@ -685,29 +685,44 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                                 >
                                   <div style={{
                                     height: '100%',
-                                    display: 'flex',
-                                    flexDirection: 'column',
+                                    width: '100%',
+                                    display: 'grid',
+                                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr)',
                                     alignItems: 'center',
-                                    justifyContent: 'space-evenly',
-                                    gap: '6px',
+                                    justifyItems: 'stretch',
+                                    gap: '3px',
                                     overflow: 'hidden'
                                   }}>
                                     {t.sizesSummary ? (
                                       <div style={{
+                                        gridColumn: '1',
                                         width: '100%',
-                                        maxWidth: '100%',
+                                        height: '100%',
+                                        minWidth: 0,
+                                        minHeight: 0,
+                                        writingMode: 'vertical-lr',
+                                        textOrientation: 'sideways' as any,
+                                        WebkitTextOrientation: 'sideways' as any,
                                         fontSize: dyn.verticalSizesFontSize,
                                         fontWeight: 'bold',
                                         lineHeight: 1.15,
                                         textAlign: 'center',
                                         whiteSpace: 'normal',
                                         overflowWrap: 'anywhere',
-                                        wordBreak: 'break-word'
+                                        wordBreak: 'break-word',
+                                        overflow: 'hidden'
                                       }}>
                                         Размер: {t.sizesSummary}
                                       </div>
                                     ) : null}
                                     <div style={{
+                                      gridColumn: '2',
+                                      height: '100%',
+                                      minWidth: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      textAlign: 'center',
                                       writingMode: 'vertical-lr',
                                       textOrientation: 'sideways' as any,
                                       WebkitTextOrientation: 'sideways' as any,
@@ -719,6 +734,13 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                                       Партия № {t.party}
                                     </div>
                                     <div style={{
+                                      gridColumn: '3',
+                                      height: '100%',
+                                      minWidth: 0,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      textAlign: 'center',
                                       writingMode: 'vertical-lr',
                                       textOrientation: 'sideways' as any,
                                       WebkitTextOrientation: 'sideways' as any,
