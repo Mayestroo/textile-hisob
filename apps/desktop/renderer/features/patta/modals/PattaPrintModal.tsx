@@ -639,25 +639,6 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                             </td>
                           </tr>
 
-                          <tr style={{ height: 'auto' }}>
-                            <td
-                              colSpan={5}
-                              style={{
-                                border: borderStyle,
-                                textAlign: 'left',
-                                fontWeight: 'bold',
-                                fontSize: dyn.verticalSizesFontSize,
-                                padding: '3px 6px',
-                                whiteSpace: 'normal',
-                                overflowWrap: 'anywhere',
-                                wordBreak: 'normal',
-                                lineHeight: 1.15
-                              }}
-                            >
-                              Размер: {t.sizesSummary}
-                            </td>
-                          </tr>
-
                           {/* ROW 5: Header (№, Operatsiya nomi, Nomer, Ism familiya, Brak ish) */}
                           <tr style={{ height: dyn.headerHeight, fontWeight: 'bold', backgroundColor: '#e2e8f0' }}>
                             <td style={{ border: borderStyle, textAlign: 'center', fontSize: dyn.tableFontSize, padding: dyn.cellPadding }}>№</td>
@@ -692,25 +673,62 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                               {opIdx === 0 && (
                                 <td
                                   rowSpan={t.operations.length}
-                                  className="vertical-patta-num"
                                   style={{
                                     border: borderStyle,
                                     textAlign: 'center',
                                     verticalAlign: 'middle',
                                     fontWeight: 'bold',
                                     color: '#000000',
-                                    padding: '2px 4px',
-                                    writingMode: 'vertical-lr',
-                                    textOrientation: 'sideways' as any,
-                                    WebkitTextOrientation: 'sideways' as any,
-                                    whiteSpace: 'nowrap'
+                                    padding: '4px',
+                                    overflow: 'hidden'
                                   }}
                                 >
-                                  <div style={{ fontSize: dyn.verticalPattaFontSize, letterSpacing: dyn.verticalPattaLetterSpacing, fontWeight: 'bold' }}>
-                                    Партия № {t.party}
-                                  </div>
-                                  <div style={{ fontSize: dyn.verticalPachkaFontSize, fontWeight: 'bold', letterSpacing: '0.5px', marginLeft: '6px' }}>
-                                    {t.pachkaCount} та пачка
+                                  <div style={{
+                                    height: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-evenly',
+                                    gap: '6px',
+                                    overflow: 'hidden'
+                                  }}>
+                                    {t.sizesSummary ? (
+                                      <div style={{
+                                        width: '100%',
+                                        maxWidth: '100%',
+                                        fontSize: dyn.verticalSizesFontSize,
+                                        fontWeight: 'bold',
+                                        lineHeight: 1.15,
+                                        textAlign: 'center',
+                                        whiteSpace: 'normal',
+                                        overflowWrap: 'anywhere',
+                                        wordBreak: 'break-word'
+                                      }}>
+                                        Размер: {t.sizesSummary}
+                                      </div>
+                                    ) : null}
+                                    <div style={{
+                                      writingMode: 'vertical-lr',
+                                      textOrientation: 'sideways' as any,
+                                      WebkitTextOrientation: 'sideways' as any,
+                                      fontSize: dyn.verticalPattaFontSize,
+                                      letterSpacing: dyn.verticalPattaLetterSpacing,
+                                      fontWeight: 'bold',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      Партия № {t.party}
+                                    </div>
+                                    <div style={{
+                                      writingMode: 'vertical-lr',
+                                      textOrientation: 'sideways' as any,
+                                      WebkitTextOrientation: 'sideways' as any,
+                                      fontSize: dyn.verticalPachkaFontSize,
+                                      fontWeight: 'bold',
+                                      letterSpacing: '0.5px',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {t.pachkaCount} та пачка
+                                    </div>
                                   </div>
                                 </td>
                               )}
