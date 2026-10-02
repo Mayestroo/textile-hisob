@@ -477,6 +477,11 @@ function validateSubmitTicket(payload, context) {
     ? null
     : requiredEntityKey(payload.partyRecordId, 'partyRecordId');
   const pattaNumber = nonNegativeInteger(payload.pattaNumber, 'pattaNumber');
+  for (const field of ['strictParty', 'strictPatta']) {
+    if (hasOwn(payload, field) && typeof payload[field] !== 'boolean') {
+      throw createValidationError('INVALID_TICKET_VALIDATION_MODE', `${field} must be a boolean when provided`, { field });
+    }
+  }
   const qty = positiveQuantity(payload.qty, 'qty');
 
   if (!Array.isArray(payload.entries) || payload.entries.length === 0) {
@@ -518,6 +523,9 @@ function validateSubmitTicket(payload, context) {
     qty,
     entries
   };
+  for (const field of ['strictParty', 'strictPatta']) {
+    if (hasOwn(payload, field)) normalized[field] = payload[field];
+  }
   if (periodId !== undefined) normalized.periodId = periodId;
   for (const field of ['effectiveDate', 'submittedAt']) {
     const value = dateValue(payload, field, { calendarOnly: field === 'effectiveDate' });

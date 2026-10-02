@@ -235,12 +235,22 @@ async function processSingleOperation(pool, req, op, options = {}) {
   }
 }
 
+function resolveTicketValidationMode(payload = {}, companyPolicy = null) {
+  const defaultStrictValidation = companyPolicy?.require_ticket_validation !== false;
+  return {
+    strictParty: payload.strictParty ?? defaultStrictValidation,
+    strictPatta: payload.strictPatta ?? defaultStrictValidation
+  };
+}
+
 async function executeSubmitTicket(client, companyId, operationId, payload, canonicalJson) {
   const {
     ticketId,
     modelId: requestedModelId,
     partyNumber,
     pattaNumber,
+    strictParty: requestedStrictParty,
+    strictPatta: requestedStrictPatta,
     qty,
     entries,
     partyRecordId: requestedPartyRecordId,
@@ -267,8 +277,19 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   `, [companyId]);
   const companyPolicy = activationPolicy.rows[0];
   if (companyPolicy && !companyPolicy.is_active) throw createOpError('COMPANY_POLICY_INACTIVE', 'The company activation policy is inactive');
-  if (companyPolicy?.require_ticket_validation !== false && !partyRecordId) {
+  // Company activation policy supplies the default for older clients and for
+  // tickets that do not carry per-ticket mode choices. The Patta screen's
+  // explicit switches are part of the canonical ticket command and must govern
+  // that ticket so the server matches the validation the operator selected.
+  const { strictParty, strictPatta } = resolveTicketValidationMode({
+    strictParty: requestedStrictParty,
+    strictPatta: requestedStrictPatta
+  }, companyPolicy);
+  if (strictParty && !partyRecordId) {
     throw createOpError('PARTY_RECORD_REQUIRED', 'A printed party is required while strict ticket validation is enabled');
+  }
+  if (strictPatta && Number(pattaNumber) <= 0) {
+    throw createOpError('PATTA_NUMBER_REQUIRED', 'A positive patta number is required while strict patta validation is enabled');
   }
 
   // 1. Canonical Ticket ID uniqueness check (Approach A: Canonical UUID Identity)
@@ -1124,5 +1145,6 @@ function assertReconciliationAuthority(req) {
 module.exports = {
   createOperationsHandler,
   processSingleOperation,
-  resolveTrustedAuditActor
+  resolveTrustedAuditActor,
+  resolveTicketValidationMode
 };

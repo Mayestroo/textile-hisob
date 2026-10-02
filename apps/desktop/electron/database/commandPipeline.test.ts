@@ -92,6 +92,24 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     expect(outboxCount).toBe(1);
   });
 
+  it('preserves the per-ticket free-mode choice in the canonical outbox payload', () => {
+    seedCompany(companyA);
+    const ticketId = '00000000-0000-4000-8000-000000000099';
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      commandId: 'cmd_free_ticket', operationId: 'op_free_ticket', companyId: companyA,
+      ticketId, modelId: 'model_101', partyNumber: "No'malum Partiya", partyRecordId: null,
+      pattaNumber: 0, strictParty: false, strictPatta: false, qty: 10,
+      entries: [{ workerId: 1, opName: 'Bichish' }]
+    });
+
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    const operation = db.prepare('SELECT payload_json FROM local_outbox WHERE operation_id = ?').get('op_free_ticket');
+    expect(JSON.parse(operation.payload_json)).toMatchObject({
+      partyNumber: "No'malum Partiya", partyRecordId: null, pattaNumber: 0,
+      strictParty: false, strictPatta: false
+    });
+  });
+
   it('2. qty-changed same operationId throws IDEMPOTENCY_CONFLICT with zero mutation', () => {
     seedCompany(companyA);
     const cmdOriginal = {

@@ -304,6 +304,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       partyNumber: currentPartyStr,
       partyRecordId,
       pattaNumber: actualPattaNum,
+      strictParty,
+      strictPatta,
       qty,
       entries: filledEntries
         .map(({ opName, workerId, rateSnapshot }) => ({ opName, workerId, rateSnapshot }))
@@ -371,6 +373,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
             partyNumber: currentPartyStr,
             partyRecordId,
             pattaNumber: actualPattaNum,
+            strictParty,
+            strictPatta,
             qty,
             size: form.size || '',
             color: form.color || '',

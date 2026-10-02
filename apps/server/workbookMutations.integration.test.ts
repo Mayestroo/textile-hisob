@@ -236,6 +236,17 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     });
     expect(strictResult).toMatchObject({ status: 'REJECTED', error: { code: 'PARTY_RECORD_REQUIRED' } });
     expect((await pool!.query('SELECT COUNT(*)::int AS count FROM tickets WHERE company_id = $1 AND id = $2', [companyId, strictTicketId])).rows[0].count).toBe(0);
+
+    const perTicketFreeId = '00000000-0000-4000-8000-000000000903';
+    const perTicketFreeResult = await apply('SubmitTicket', 'ticket', perTicketFreeId, {
+      commandId: 'cmd-per-ticket-free', operationId: 'op-per-ticket-free', companyId,
+      ticketId: perTicketFreeId, modelId: 'free-model', partyNumber: "No'malum Partiya",
+      partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false,
+      qty: 3, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601 }]
+    });
+    expect(perTicketFreeResult).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT party_record_id, party_number, patta_number FROM tickets WHERE company_id = $1 AND id = $2', [companyId, perTicketFreeId])).rows)
+      .toEqual([{ party_record_id: null, party_number: "No'malum Partiya", patta_number: 0 }]);
   });
 
   it('closes a period atomically, rolls parties, stores an archive, and archives history without deletes', async () => {

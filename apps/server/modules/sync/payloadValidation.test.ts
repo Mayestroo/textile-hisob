@@ -8,7 +8,7 @@ const {
   validateCommandPayload,
   validateOperationEnvelope
 } = require('./payloadValidation.cjs');
-const { processSingleOperation, resolveTrustedAuditActor } = require('./handlers/operations.cjs');
+const { processSingleOperation, resolveTrustedAuditActor, resolveTicketValidationMode } = require('./handlers/operations.cjs');
 
 const COMPANY = 'company-validation';
 const TICKET_ID = '00000000-0000-4000-8000-000000000501';
@@ -77,6 +77,31 @@ describe(' payload and authority validation', () => {
     const operation = envelope('DeleteTicket', payload);
     expect(validateCommandPayload('DeleteTicket', payload, context(operation))).toMatchObject({ ticketId: TICKET_ID, companyId: COMPANY });
     expectCode(() => validateCommandPayload('DeleteTicket', payload, context({ ...operation, entityId: 'other-ticket' })), 'ENTITY_ID_MISMATCH');
+  });
+
+  it('preserves explicit per-ticket strict/free switches and rejects non-boolean values', () => {
+    const freeTicket = ticketPayload({
+      partyNumber: "No'malum Partiya",
+      partyRecordId: null,
+      pattaNumber: 0,
+      strictParty: false,
+      strictPatta: false
+    });
+    expect(validateCommandPayload('SubmitTicket', freeTicket, context(envelope('SubmitTicket', freeTicket))))
+      .toMatchObject({ partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false });
+    const invalidMode = { ...freeTicket, strictParty: 'false' };
+    expectCode(() => validateCommandPayload('SubmitTicket', invalidMode, context(envelope('SubmitTicket', invalidMode))), 'INVALID_TICKET_VALIDATION_MODE');
+  });
+
+  it('uses the company setting as the default while honoring the selected per-ticket switches', () => {
+    expect(resolveTicketValidationMode({}, { require_ticket_validation: true }))
+      .toEqual({ strictParty: true, strictPatta: true });
+    expect(resolveTicketValidationMode({}, { require_ticket_validation: false }))
+      .toEqual({ strictParty: false, strictPatta: false });
+    expect(resolveTicketValidationMode({ strictParty: false, strictPatta: false }, { require_ticket_validation: true }))
+      .toEqual({ strictParty: false, strictPatta: false });
+    expect(resolveTicketValidationMode({ strictParty: true, strictPatta: false }, { require_ticket_validation: false }))
+      .toEqual({ strictParty: true, strictPatta: false });
   });
 
   it('exposes stable validation errors', () => {

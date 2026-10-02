@@ -134,7 +134,7 @@ describe(' ticket command routing', () => {
     expect(set).toHaveBeenCalled();
   });
 
-  it('submits free-mode production without fabricating a printed party record', async () => {
+  it('sends per-ticket free-mode choices without fabricating a printed party record', async () => {
     const SubmitTicketCommand = vi.fn().mockResolvedValue({ success: true });
     const dbRead = vi.fn().mockResolvedValue({
       success: true,
@@ -153,15 +153,17 @@ describe(' ticket command routing', () => {
       }
     });
     const { slice, state } = makeSlice();
-    state().licenseStatus.requireTicketValidation = false;
-    state().ticketForms['model-a'] = { ...state().ticketForms['model-a'], party: '', patta: '' };
+    state().ticketForms['model-a'] = {
+      ...state().ticketForms['model-a'], party: '', patta: '', strictParty: false, strictPatta: false
+    };
     state().printedPartyHistory = [];
 
     const result = await slice.jonatish('model-a');
 
     expect(result).toBe(true);
     expect(SubmitTicketCommand).toHaveBeenCalledWith(expect.objectContaining({
-      companyId: 'company-a', partyNumber: "No'malum Partiya", partyRecordId: null, pattaNumber: 0
+      companyId: 'company-a', partyNumber: "No'malum Partiya", partyRecordId: null, pattaNumber: 0,
+      strictParty: false, strictPatta: false
     }));
     expect(SubmitTicketCommand.mock.calls[0][0].partyRecordId).toBeNull();
   });
