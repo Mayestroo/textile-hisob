@@ -32,6 +32,7 @@ const COMMANDS = Object.freeze({
   UpdateBatchSettings: { entityType: 'batch_settings', entityId: 'companyId' },
   CompletePattaBatch: { entityType: 'patta_batch', entityId: 'batchId' },
   CompletePartySeries: { entityType: 'party_series', entityId: 'periodId' },
+  DeleteTicket: { entityType: 'ticket', entityId: 'ticketId' },
   ResolveMigrationReconciliationCandidate: {
     entityType: 'reconciliation_candidate',
     entityId: 'candidateId'
@@ -1106,6 +1107,16 @@ function validateCommandPayload(commandType, payload, context = {}) {
       return validateCompletePattaBatch(payload, context);
     case 'CompletePartySeries':
       return validateCompletePartySeries(payload, context);
+    case 'DeleteTicket': {
+      const ticketId = requiredEntityKey(payload.ticketId, 'ticketId');
+      const companyId = requiredCompany(payload.companyId);
+      const operationId = requiredIdentifier(payload, ['operationId']);
+      const commandId = requiredIdentifier(payload, ['commandId']);
+      assertEntity(context.operation, 'DeleteTicket', ticketId);
+      if (context.companyId && companyId !== context.companyId) throw createValidationError('COMPANY_SCOPE_MISMATCH', 'Command companyId does not match authenticated company');
+      if (context.operation?.operationId && operationId !== context.operation.operationId) throw createValidationError('OPERATION_ID_MISMATCH', 'Command operationId does not match envelope operationId');
+      return { ...payload, companyId, operationId, commandId, ticketId };
+    }
     case 'ArchivePartyHistory':
       return validateArchivePartyHistory(payload, context);
     case 'ResolveMigrationReconciliationCandidate':

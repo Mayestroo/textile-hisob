@@ -79,6 +79,25 @@ describe(' workbook local command pipeline', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(1);
   });
 
+  it('queues a canonical ticket deletion and marks the local ticket voided', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    const ticketId = '11111111-1111-4111-8111-111111111111';
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, submitted_at, created_at
+    ) VALUES (?, ?, 'model_one', '1', NULL, 1, 5, 'CONFIRMED', ?, ?)`).run(ticketId, companyId, now, now);
+
+    const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'DeleteTicket', commandId: 'cmd_delete_ticket', operationId: 'op_delete_ticket',
+      companyId, entityId: ticketId, payload: { ticketId }
+    });
+
+    expect(result).toMatchObject({ committed: true, entityId: ticketId });
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('PENDING_DELETE');
+    expect(db.prepare('SELECT command_type, entity_type, entity_id FROM local_outbox WHERE operation_id = ?')
+      .get('op_delete_ticket')).toEqual({ command_type: 'DeleteTicket', entity_type: 'ticket', entity_id: ticketId });
+  });
+
   it('rejects a changed replay and cross-company command without changing local facts', () => {
     const original = modelCommand();
     workbookCommandPipeline.executeWorkbookCommand(userData, companyId, original);

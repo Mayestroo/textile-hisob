@@ -161,15 +161,17 @@ describe(' ticket command routing', () => {
 
     expect(result).toBe(true);
     expect(SubmitTicketCommand).toHaveBeenCalledWith(expect.objectContaining({
-      companyId: 'company-a', partyNumber: '1', partyRecordId: null, pattaNumber: 1
+      companyId: 'company-a', partyNumber: "No'malum Partiya", partyRecordId: null, pattaNumber: 0
     }));
     expect(SubmitTicketCommand.mock.calls[0][0].partyRecordId).toBeNull();
   });
 
-  it('rejects unsupported  delete and edit mutations without changing state', async () => {
+  it('routes ticket deletion through the canonical workbook command', async () => {
+    const WorkbookCommand = vi.fn().mockResolvedValue({ success: true });
     vi.stubGlobal('window', {
       electronAPI: {
-        getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' })
+        getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+        WorkbookCommand
       }
     });
     const { slice, set, state } = makeSlice();
@@ -178,7 +180,10 @@ describe(' ticket command routing', () => {
     const deleteResult = await slice.deleteSubmittedTicket('ticket-a');
     const updateResult = await slice.updateSubmittedTicket('ticket-a', [{ opName: 'Sew', workerId: 1 }]);
 
-    expect(deleteResult).toBe(false);
+    expect(deleteResult).toBe(true);
+    expect(WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
+      commandType: 'DeleteTicket', entityId: 'ticket-a', payload: { ticketId: 'ticket-a' }
+    }));
     expect(updateResult).toBe(false);
     expect(set).not.toHaveBeenCalled();
     expect(state().submittedTickets).toHaveLength(1);

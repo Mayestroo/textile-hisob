@@ -42,4 +42,27 @@ describe('workbook store  patta boundary', () => {
     expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizes).toMatchObject({ '42': '3' });
     useWorkbookStore.setState(previousState, true);
   });
+
+  it('updates a size count immediately while runtime readiness is still pending', async () => {
+    let resolveRuntime!: (value: any) => void;
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getRuntimeMode: vi.fn(() => new Promise((resolve) => { resolveRuntime = resolve; }))
+      }
+    });
+
+    const previousState = useWorkbookStore.getState();
+    useWorkbookStore.setState({
+      licenseStatus: { companyId: 'company-a' } as any,
+      models: [{ id: 'model-a', name: 'Model A', color: 'Qora' } as any],
+      availableSizes: ['S'],
+      pattaBatchConfigs: { 'model-a': { partyNumber: '', totalIshSoni: '', color: 'Qora', sizes: {} } }
+    });
+
+    const pending = useWorkbookStore.getState().updatePattaBatchSize('model-a', 'S', '12');
+    expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizes.S).toBe('12');
+    resolveRuntime({ success: true, mode: 'sync' });
+    await pending;
+    useWorkbookStore.setState(previousState, true);
+  });
 });

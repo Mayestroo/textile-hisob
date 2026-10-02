@@ -13,6 +13,7 @@
 
 const VALID_TICKET_STATUSES = new Set([
   'PENDING_SYNC',
+  'PENDING_DELETE',
   'CONFIRMED',
   'CONFLICT',
   'REJECTED',
@@ -137,7 +138,7 @@ function buildHisobProjections(input = {}) {
     }
 
     // Exclude CONFLICT, REJECTED, VOIDED
-    if (t.status === 'CONFLICT' || t.status === 'REJECTED' || t.status === 'VOIDED') {
+    if (t.status === 'CONFLICT' || t.status === 'REJECTED' || t.status === 'VOIDED' || t.status === 'PENDING_DELETE') {
       continue;
     }
 

@@ -46,10 +46,13 @@ export const PattaBatchView: React.FC = () => {
     if (canUseBatchMutation()) deleteCustomSize(sizeName);
   };
   const guardedUpdateBatchConfig = (modelId: string, updates: any) => {
-    if (canUseBatchMutation()) updatePattaBatchConfig(modelId, updates);
+    // Keep controlled inputs responsive while runtime readiness is checked.
+    // The store applies the change locally first and resolves persistence mode
+    // asynchronously, so gating the handler here drops early keystrokes.
+    updatePattaBatchConfig(modelId, updates);
   };
   const guardedUpdateBatchSize = (modelId: string, size: string, count: string) => {
-    if (canUseBatchMutation()) updatePattaBatchSize(modelId, size, count);
+    updatePattaBatchSize(modelId, size, count);
   };
   const guardedBatchPrintCompleted = (printedSummary: any) => {
     if (canUseBatchMutation()) batchPrintCompleted(printedSummary);

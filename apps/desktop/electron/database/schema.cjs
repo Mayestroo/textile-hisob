@@ -1504,6 +1504,48 @@ const MIGRATIONS = [
           payloadJson, now, now, computePayloadHash(payloadJson));
       }
     }
+  },
+  {
+    version: 17,
+    name: '017_allow_free_mode_ticket_party',
+    up: (db) => {
+      db.pragma('defer_foreign_keys = ON');
+      db.exec(`
+        CREATE TABLE tickets_v17 (
+          id TEXT PRIMARY KEY, company_id TEXT NOT NULL,
+          model_id TEXT NOT NULL REFERENCES models(id) ON DELETE RESTRICT,
+          period_id TEXT, party_number TEXT NOT NULL, party_record_id TEXT,
+          patta_number INTEGER NOT NULL, qty REAL NOT NULL, size TEXT, color TEXT, konveyer TEXT,
+          status TEXT NOT NULL DEFAULT 'CONFIRMED', is_closed INTEGER NOT NULL DEFAULT 0,
+          submitted_at TEXT NOT NULL, created_at TEXT NOT NULL,
+          provenance TEXT NOT NULL DEFAULT 'LEGACY_MIGRATION', raw_legacy_json TEXT,
+          server_revision INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (company_id, party_record_id) REFERENCES parties(company_id, id) ON DELETE RESTRICT
+        );
+        INSERT INTO tickets_v17 SELECT * FROM tickets;
+        CREATE TABLE ticket_entries_v17 (
+          id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets_v17(id) ON DELETE CASCADE,
+          company_id TEXT NOT NULL, op_name TEXT NOT NULL,
+          worker_id INTEGER NOT NULL REFERENCES workers(id) ON DELETE RESTRICT,
+          worker_name_snapshot TEXT, rate_snapshot REAL, brak TEXT, qty REAL NOT NULL, created_at TEXT NOT NULL
+        );
+        INSERT INTO ticket_entries_v17 SELECT * FROM ticket_entries;
+        DROP TABLE ticket_entries;
+        DROP TABLE tickets;
+        ALTER TABLE tickets_v17 RENAME TO tickets;
+        ALTER TABLE ticket_entries_v17 RENAME TO ticket_entries;
+        CREATE INDEX idx_tickets_comp ON tickets(company_id);
+        CREATE INDEX idx_tickets_model ON tickets(model_id);
+        CREATE INDEX idx_tickets_party ON tickets(party_number);
+        CREATE INDEX idx_tickets_party_record ON tickets(company_id, party_record_id);
+        CREATE INDEX idx_tickets_status ON tickets(status);
+        CREATE INDEX idx_tickets_sub_at ON tickets(submitted_at);
+        CREATE INDEX idx_tickets_company_period ON tickets(company_id, period_id, submitted_at);
+        CREATE INDEX idx_entries_ticket ON ticket_entries(ticket_id);
+        CREATE INDEX idx_entries_worker ON ticket_entries(worker_id);
+        CREATE INDEX idx_entries_worker_op ON ticket_entries(worker_id, op_name);
+      `);
+    }
   }
 ];
 

@@ -145,6 +145,10 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
         assignments.push('is_closed = ?');
         values.push(payload.isClosed ? 1 : 0);
       }
+      if (payload.status !== undefined) {
+        assignments.push('status = ?');
+        values.push(payload.status);
+      }
       if (payload.periodId !== undefined) {
         assignments.push('period_id = COALESCE(period_id, ?)');
         values.push(payload.periodId || null);
@@ -162,9 +166,9 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
     // If ticket exists locally, ensure ACK and server-owned fields are applied.
     db.prepare(`
       UPDATE tickets
-      SET status = 'CONFIRMED', period_id = COALESCE(period_id, ?), server_revision = MAX(server_revision, ?)
+      SET status = COALESCE(?, 'CONFIRMED'), period_id = COALESCE(period_id, ?), server_revision = MAX(server_revision, ?)
       WHERE company_id = ? AND id = ?
-    `).run(payload.periodId || null, entityRevision, companyId, ticketId);
+    `).run(payload.status || null, payload.periodId || null, entityRevision, companyId, ticketId);
     return; // Idempotent: do not duplicate
   }
 

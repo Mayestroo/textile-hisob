@@ -21,7 +21,7 @@ describe(' workbook change-feed application', () => {
 
   it('applies model, worker, period, party, ticket, and batch settings idempotently with one cursor commit', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
-    const items = [
+    const items: any[] = [
       {
         changeId: '1', companyId, entityType: 'model', entityId: 'model-a', entityRevision: 1, changeType: 'INSERT',
         payload: { modelId: 'model-a', name: 'Model A', operations: [{ id: 'op-cut', name: 'Cut', rate: 5 }], pattaOpsOrder: ['Cut'] }
@@ -60,17 +60,22 @@ describe(' workbook change-feed application', () => {
         payload: { modelId: 'model-a', name: 'Model A', operations: [{ id: 'op-cut', name: 'Sew', rate: 5 }], pattaOpsOrder: ['Sew'], operationRenames: [{ fromName: 'Cut', toName: 'Sew' }] } }
     ];
 
-    const applied = applyChangesBatch(db, companyId, items, '9');
-    expect(applied).toEqual({ appliedCount: 9, nextCursor: 9 });
-    expect(getLocalCursor(db)).toBe(9);
+    items.push({
+      changeId: '10', companyId, entityType: 'ticket', entityId: '00000000-0000-4000-8000-000000000501',
+      entityRevision: 2, changeType: 'UPDATE', payload: { ticketId: '00000000-0000-4000-8000-000000000501', status: 'VOIDED' }
+    });
+    const applied = applyChangesBatch(db, companyId, items, '10');
+    expect(applied).toEqual({ appliedCount: 10, nextCursor: 10 });
+    expect(getLocalCursor(db)).toBe(10);
     expect(db.prepare('SELECT name FROM models WHERE company_id = ? AND id = ?').get(companyId, 'model-a').name).toBe('Model A');
     expect(db.prepare('SELECT SUM(amount) AS amount FROM worker_adjustments WHERE company_id = ? AND worker_id = 71').get(companyId).amount).toBe(25);
     expect(db.prepare('SELECT period_id FROM tickets WHERE company_id = ?').get(companyId).period_id).toBe('period-a');
+    expect(db.prepare('SELECT status FROM tickets WHERE company_id = ?').get(companyId).status).toBe('VOIDED');
     expect(db.prepare('SELECT op_name FROM ticket_entries WHERE company_id = ?').get(companyId).op_name).toBe('Sew');
     expect(db.prepare('SELECT available_sizes_json FROM company_batch_settings WHERE company_id = ?').get(companyId).available_sizes_json).toBe('["M","L"]');
 
-    const replay = applyChangesBatch(db, companyId, items, '9');
-    expect(replay.appliedCount).toBe(9);
+    const replay = applyChangesBatch(db, companyId, items, '10');
+    expect(replay.appliedCount).toBe(10);
     expect(db.prepare('SELECT COUNT(*) AS count FROM tickets WHERE company_id = ?').get(companyId).count).toBe(1);
     expect(db.prepare('SELECT COUNT(*) AS count FROM worker_adjustments WHERE company_id = ?').get(companyId).count).toBe(1);
   });

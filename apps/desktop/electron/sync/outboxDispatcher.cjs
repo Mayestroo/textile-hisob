@@ -163,6 +163,10 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
             WHERE company_id = ? AND id = ?
           `).run(companyId, op.entity_id);
           factsUpdated++;
+        } else if (op.command_type === 'DeleteTicket') {
+          db.prepare(`UPDATE tickets SET status = 'VOIDED', server_revision = ? WHERE company_id = ? AND id = ?`)
+            .run(res.serverRevision || 0, companyId, op.entity_id);
+          factsUpdated++;
         } else if (op.command_type === 'UpsertModel' || op.command_type === 'DeactivateModel') {
           const status = op.command_type === 'DeactivateModel' ? 'INACTIVE' : 'ACTIVE';
           const modelAlias = db.prepare(`SELECT canonical_model_id FROM model_id_aliases
@@ -244,6 +248,11 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
     } else if (res.status === 'CONFLICT') {
       const errJson = JSON.stringify(res.error || { code: 'CONFLICT' });
       updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', errJson);
+      if (op.command_type === 'DeleteTicket') {
+        db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
+          .run(companyId, op.entity_id);
+        factsUpdated++;
+      }
       conflict++;
     } else {
       const errorCode = res.error?.code;
@@ -255,6 +264,11 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
       // REJECTED / permanent failure -> DEAD_LETTER
       const errJson = JSON.stringify(res.error || { code: 'REJECTED' });
       updateOperationStatus(db, companyId, op.operation_id, 'DEAD_LETTER', errJson);
+      if (op.command_type === 'DeleteTicket') {
+        db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
+          .run(companyId, op.entity_id);
+        factsUpdated++;
+      }
       deadLetter++;
     }
   }
