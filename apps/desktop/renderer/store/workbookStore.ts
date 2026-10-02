@@ -14,6 +14,7 @@ import { DEFAULT_BATCH_SIZES } from '../constants/batchConstants';
 import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary } from './pattaBatch';
 import { createWorkbookCommand, submitWorkbookCommand } from './businessMutations';
 import { normalizePattaSizeCounts } from '../domain/pattaQuantity';
+import { formatDateIso } from '../utils/formatters';
 
 export const useWorkbookStore = create<WorkbookStore>((...args) => {
   const [set, get] = args;
@@ -285,7 +286,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         get().addNotification('error', 'PERIOD_NOT_FOUND', 'Ochiq davr topilmadi; partiya seriyasini yakunlab bo‘lmadi.');
         return;
       }
-      const success = await submit(context, 'CompletePartySeries', periodId, { periodId, endDate: new Date().toISOString().slice(0, 10) });
+      const success = await submit(context, 'CompletePartySeries', periodId, { periodId, endDate: formatDateIso() });
       if (success) get().addNotification('success', 'Partiya yakunlandi', 'Faol partiya va pattalar  bazasida yakunlandi.');
     }
   } as WorkbookStore;

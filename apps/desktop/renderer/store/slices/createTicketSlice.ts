@@ -3,7 +3,7 @@ import { WorkbookStore, TicketSlice } from '../types';
 import { TicketFormState, SubmittedTicketRecord } from '../../types/workbook';
 import { validateTicketForSubmission } from '../../domain/ticketValidation';
 import { cancelDebouncedSave, triggerDebouncedSave } from '../helpers/debounceSave';
-import { formatTicketTimestamp } from '../../utils/formatters';
+import { formatDateIso, formatTicketTimestamp } from '../../utils/formatters';
 import { hydrateWorkbookData } from '../helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { requestReconnect } from '../businessMutations';
@@ -297,7 +297,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const companyId = state.licenseStatus?.companyId;
     const initialLicenseStatus = state.licenseStatus;
     const partyRecordId = validation.partyOwner?.id ?? null;
-    const effectiveDate = form.date || new Date().toISOString().slice(0, 10);
+    const effectiveDate = form.date || formatDateIso();
     const fingerprint = JSON.stringify({
       companyId,
       modelId: model.id,

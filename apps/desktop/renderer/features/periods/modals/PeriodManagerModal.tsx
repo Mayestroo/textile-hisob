@@ -18,7 +18,7 @@ import {
   Check
 } from 'lucide-react';
 import { calculateMasterPayroll, formatMoney } from '../../../engine/formulaEngine';
-import { formatUzbekDate, getUzbekMonthName } from '../../../utils/formatters';
+import { formatDateIso, formatUzbekDate, getUzbekMonthName } from '../../../utils/formatters';
 import { exportWorkbookToExcel } from '../../../engine/excelSync';
 import { SYSTEM_SHEETS } from '../../../constants/sheetConstants';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../../store/runtimeMode';
@@ -53,8 +53,8 @@ export const PeriodManagerModal: React.FC = () => {
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
-  const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10));
-  const [nextPeriodStartDate, setNextPeriodStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [closeDate, setCloseDate] = useState(formatDateIso());
+  const [nextPeriodStartDate, setNextPeriodStartDate] = useState(formatDateIso());
   const [nextPeriodName, setNextPeriodName] = useState('');
   const [isAutoName, setIsAutoName] = useState(true);
 
@@ -101,7 +101,7 @@ export const PeriodManagerModal: React.FC = () => {
 
   useEffect(() => {
     if (modalType === 'period_manager') {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = formatDateIso();
       setCloseDate(today);
       setNextPeriodStartDate(today);
       setNextPeriodName(getUzbekMonthName(today));

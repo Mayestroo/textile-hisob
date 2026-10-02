@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateOnly, formatDateTime, formatTicketDateTime, formatTicketTimestamp, sortTicketsNewestFirst } from './formatters';
+import { formatDateIso, formatDateOnly, formatDateTime, formatTicketDateTime, formatTicketTimestamp, sortTicketsNewestFirst } from './formatters';
 
 describe('ticket date and ordering formatters', () => {
   it('formats ISO timestamps into a readable local date and time', () => {
     const formatted = formatTicketDateTime({ submittedAt: '2026-10-02T10:40:40.104Z' });
 
-    expect(formatted).toMatch(/^\d{2}\.\d{2}\.2026 \d{2}:\d{2}$/);
+    expect(formatted).toBe('02.10.2026 15:40');
     expect(formatted).not.toContain('T');
     expect(formatted).not.toContain('Z');
     expect(formatted).not.toContain('-');
   });
 
   it('uses the same date/time format in shared display helpers', () => {
-    const date = new Date(2026, 9, 2, 15, 40, 59);
+    const date = new Date('2026-10-02T10:40:59.000Z');
     expect(formatDateOnly(date)).toBe('02.10.2026');
     expect(formatDateTime(date)).toBe('02.10.2026 15:40');
     expect(formatTicketTimestamp(date)).toBe('02.10.2026 15:40');
@@ -36,5 +36,12 @@ describe('ticket date and ordering formatters', () => {
       'sub_1790937640000_legacy',
       '00000000-0000-4000-8000-000000000001',
     ]);
+  });
+
+  it('uses the Tashkent calendar day for dates near UTC midnight', () => {
+    const date = new Date('2026-10-02T20:30:00.000Z');
+    expect(formatDateOnly(date)).toBe('03.10.2026');
+    expect(formatDateIso(date)).toBe('2026-10-03');
+    expect(formatTicketDateTime('2026-10-02T15:40:00')).toBe('02.10.2026 15:40');
   });
 });

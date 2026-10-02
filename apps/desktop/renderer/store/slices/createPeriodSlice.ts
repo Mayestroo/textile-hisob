@@ -4,11 +4,11 @@ import { createInitialTicketForms } from '../helpers/storeSanitizers';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
-import { getUzbekMonthName } from '../../utils/formatters';
+import { formatDateIso, getUzbekMonthName } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { createWorkbookCommand, submitWorkbookCommand } from '../businessMutations';
 
-const defaultStartDate = new Date().toISOString().slice(0, 7) + '-01';
+const defaultStartDate = `${formatDateIso().slice(0, 7)}-01`;
 const defaultPeriodName = getUzbekMonthName(defaultStartDate);
 
 async function submitPeriodMutation(
@@ -64,7 +64,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
     const newPeriod = {
       id: `period_${Date.now()}`,
       name: name.trim() || getUzbekMonthName(startDate),
-      startDate: startDate || new Date().toISOString().slice(0, 10),
+      startDate: startDate || formatDateIso(),
       isClosed: false
     };
 
@@ -178,7 +178,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       state.addNotification('error', '_SESSION_CHANGED', 'The active company changed while the period operation was in flight.');
       return false;
     };
-    const cleanDate = endDate || new Date().toISOString().slice(0, 10);
+    const cleanDate = endDate || formatDateIso();
     const archiveFilename = `archive_${Date.now()}_${state.currentPeriod.name.replace(/[^a-zA-Z0-9_\u0400-\u04FF-]/g, '_')}.json`;
     const finalNextStartDate = nextStartDate || cleanDate;
     const NextStartDate = nextStartDate || (() => {

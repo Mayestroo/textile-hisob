@@ -3,6 +3,7 @@ import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore
 import { ModelConfig } from '../../types/workbook';
 import { getTicketPartyStatus } from '../../domain/ticketValidation';
 import { Send, Plus, Trash2, Check, X, Layers, GripVertical } from 'lucide-react';
+import { formatDateIso } from '../../utils/formatters';
 
 interface PattaViewProps {
   model: ModelConfig;
@@ -12,7 +13,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const workers = useWorkbookStore((s) => s.workers);
 
   const form = useWorkbookStore((s) => s.ticketForms[model.id]) || {
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDateIso(),
     party: model.party || '',
     color: model.color || '',
     size: model.size || '',

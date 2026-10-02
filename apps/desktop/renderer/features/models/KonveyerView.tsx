@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useWorkbookStore } from '../../store/workbookStore';
 import { CustomSelect } from '../../components/ui/CustomSelect';
-import { formatMoney, formatTicketDateTime, sortTicketsNewestFirst } from '../../utils/formatters';
+import { formatDateIso, formatMoney, formatTicketDateTime, sortTicketsNewestFirst } from '../../utils/formatters';
 
 export const KonveyerView: React.FC = () => {
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
@@ -315,7 +315,7 @@ export const KonveyerView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Konveyerlar_modellar_matritsasi_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Konveyerlar_modellar_matritsasi_${formatDateIso()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

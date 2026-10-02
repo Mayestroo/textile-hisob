@@ -5,6 +5,7 @@ import { STANDARD_OPERATIONS } from '../../constants/operationConstants';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { createWorkbookCommand, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
+import { formatDateIso } from '../../utils/formatters';
 
 async function tryModelMutation(
   state: Pick<WorkbookStore, 'addNotification' | 'licenseStatus'>,
@@ -110,7 +111,7 @@ async function tryHisobAdjustment(
     reason: 'MANUAL_CORRECTION',
     createdBy: '_WORKBOOK_UI',
     status: 'APPROVED',
-    effectiveDate: new Date().toISOString().slice(0, 10),
+    effectiveDate: formatDateIso(),
     createdAt: new Date().toISOString()
   });
   if (!result?.success) {
@@ -189,7 +190,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     const updatedTicketForms = {
       ...state.ticketForms,
       [newModel.id]: {
-        date: new Date().toISOString().slice(0, 10),
+        date: formatDateIso(),
         party: options?.party || '',
         color: options?.color || 'Кора',
         size: options?.size || 'XL',
