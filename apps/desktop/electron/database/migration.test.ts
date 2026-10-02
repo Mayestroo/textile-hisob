@@ -568,6 +568,70 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     }
   });
 
+  it('migration 017 preserves ticket column identities while allowing a missing printed party', () => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(tempUserDataDir, 'migration-017-ticket-columns.sqlite'));
+    const ticketId = '11111111-1111-4111-8111-111111111117';
+    const now = '2026-10-02T10:00:00.000Z';
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 16 });
+      db.prepare(`INSERT INTO models (id, company_id, name, created_at, updated_at)
+        VALUES ('model-017', ?, 'Model 017', ?, ?)`).run(companyId, now, now);
+      db.prepare(`INSERT INTO parties (
+        id, company_id, party_number, physical_party_number, model_id, created_at, updated_at
+      ) VALUES ('party-record-017', ?, 'party-017', 'party-017', 'model-017', ?, ?)`)
+        .run(companyId, now, now);
+      db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at)
+        VALUES (17, ?, 'Worker 17', ?, ?)`).run(companyId, now, now);
+      db.prepare(`INSERT INTO tickets (
+        id, company_id, model_id, party_number, party_record_id, patta_number,
+        qty, size, color, status, is_closed, submitted_at, created_at,
+        provenance, raw_legacy_json, period_id, server_revision
+      ) VALUES (?, ?, 'model-017', 'party-017', 'party-record-017', 7,
+        12, 'M', 'Blue', 'CONFIRMED', 0, ?, ?, 'TEST_IMPORT', NULL, 'period-017', 9)`)
+        .run(ticketId, companyId, now, now);
+      db.prepare(`INSERT INTO ticket_entries (
+        id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
+        rate_snapshot, brak, qty, created_at
+      ) VALUES ('entry-017', ?, ?, 'Sew', 17, 'Worker 17', 2.5, NULL, 12, ?)`)
+        .run(ticketId, companyId, now);
+
+      const result = migrationRunner.applyMigrations(db, { targetVersion: 17 });
+      expect(result.currentVersion).toBe(17);
+      expect(db.prepare(`SELECT period_id, party_number, party_record_id, patta_number,
+        provenance, server_revision FROM tickets WHERE id = ?`).get(ticketId)).toEqual({
+        period_id: 'period-017',
+        party_number: 'party-017',
+        party_record_id: 'party-record-017',
+        patta_number: 7,
+        provenance: 'TEST_IMPORT',
+        server_revision: 9
+      });
+      expect(db.prepare('SELECT ticket_id, op_name, worker_id, qty FROM ticket_entries WHERE id = ?').get('entry-017'))
+        .toEqual({ ticket_id: ticketId, op_name: 'Sew', worker_id: 17, qty: 12 });
+      db.prepare('UPDATE tickets SET party_record_id = NULL WHERE id = ?').run(ticketId);
+      expect(db.prepare('SELECT party_record_id FROM tickets WHERE id = ?').get(ticketId).party_record_id).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('migration 018 adds an optional local rollback snapshot to outbox operations', () => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(tempUserDataDir, 'migration-018-local-outbox-archive.sqlite'));
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 17 });
+      expect(db.pragma('user_version', { simple: true })).toBe(17);
+      expect(db.pragma('table_info(local_outbox)').some((column: any) => column.name === 'local_archive_json')).toBe(false);
+
+      const result = migrationRunner.applyMigrations(db);
+      expect(result.currentVersion).toBe(18);
+      expect(db.pragma('table_info(local_outbox)').some((column: any) => column.name === 'local_archive_json')).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
   it('fails closed when schema_meta has no verified applied migration', () => {
     const jsonPath = createSampleLegacyJson(companyId);
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyId);

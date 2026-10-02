@@ -24,6 +24,7 @@ const COMMAND_ENTITY_TYPES = Object.freeze({
   UpdateBatchSettings: 'batch_settings',
   CompletePattaBatch: 'patta_batch',
   CompletePartySeries: 'party_series',
+  UpdateTicket: 'ticket',
   DeleteTicket: 'ticket'
 });
 
@@ -466,12 +467,45 @@ function normalizeCommand(command, activeCompanyId) {
     const ticketId = assertEntityKey(command.payload?.ticketId ?? entityId, 'ticketId');
     if (ticketId !== entityId) throw createCommandError('ENTITY_ID_MISMATCH', 'ticketId does not match entityId');
     payload = { commandId, operationId, companyId, ticketId };
+  } else if (commandType === 'UpdateTicket') {
+    const ticketId = assertEntityKey(command.payload?.ticketId ?? entityId, 'ticketId');
+    if (ticketId !== entityId) throw createCommandError('ENTITY_ID_MISMATCH', 'ticketId does not match entityId');
+    const entries = command.payload?.entries;
+    if (!Array.isArray(entries) || entries.length === 0 || entries.length > 256) {
+      throw createCommandError('INVALID_TICKET_ENTRIES', 'Updated ticket entries must contain 1–256 operations');
+    }
+    payload = {
+      commandId,
+      operationId,
+      companyId,
+      ticketId,
+      entries: entries.map((entry, index) => {
+        assertObject(entry, `entries[${index}]`);
+        const workerId = Number(entry.workerId);
+        if (!Number.isSafeInteger(workerId) || workerId <= 0) {
+          throw createCommandError('INVALID_WORKER_ID', `entries[${index}].workerId must be a positive integer`);
+        }
+        return {
+          opName: assertText(entry.opName, `entries[${index}].opName`, 256),
+          workerId,
+          ...(entry.workerNameSnapshot ? { workerNameSnapshot: assertText(entry.workerNameSnapshot, `entries[${index}].workerNameSnapshot`, 256) } : {}),
+          ...(entry.rateSnapshot === undefined || entry.rateSnapshot === null ? {} : { rateSnapshot: assertFiniteNumber(entry.rateSnapshot, `entries[${index}].rateSnapshot`) }),
+          ...(entry.brak ? { brak: assertText(entry.brak, `entries[${index}].brak`, 256) } : {})
+        };
+      })
+    };
   } else {
     throw createCommandError('UNKNOWN_COMMAND', `Unsupported workbook command: ${commandType}`);
   }
 
   const localArchiveJson = payload.localArchiveJson || null;
   if (Object.prototype.hasOwnProperty.call(payload, 'localArchiveJson')) delete payload.localArchiveJson;
+  const commandLocalArchiveJson = command.localArchive === undefined
+    ? null
+    : JSON.stringify(command.localArchive);
+  if (commandLocalArchiveJson && Buffer.byteLength(commandLocalArchiveJson, 'utf8') > 64 * 1024) {
+    throw createCommandError('TICKET_EDIT_ARCHIVE_TOO_LARGE', 'Ticket edit rollback snapshot exceeds 64 KiB');
+  }
   return {
     commandType,
     entityType,
@@ -482,7 +516,7 @@ function normalizeCommand(command, activeCompanyId) {
     baseRevision,
     dependsOnOperationId,
     causalSequence,
-    localArchiveJson,
+    localArchiveJson: localArchiveJson || commandLocalArchiveJson,
     payload
   };
 }
@@ -744,6 +778,49 @@ function executeDeactivateEntity(db, normalized, table, idColumn, status) {
 
 function executeWorkbookMutation(db, normalized, options) {
   const { commandType, companyId, entityId, payload } = normalized;
+  if (commandType === 'UpdateTicket') {
+    const current = db.prepare(`SELECT status, is_closed, qty, server_revision
+      FROM tickets WHERE company_id = ? AND id = ?`).get(companyId, entityId);
+    if (!current) throw createCommandError('TICKET_NOT_FOUND', `Ticket "${entityId}" was not found`);
+    if (current.status === 'VOIDED' || current.status === 'PENDING_DELETE') {
+      throw createCommandError('TICKET_NOT_EDITABLE', 'Deleted tickets cannot be edited');
+    }
+    if (current.is_closed) throw createCommandError('TICKET_PERIOD_CLOSED', 'Tickets in a closed period cannot be edited');
+    const submission = db.prepare(`SELECT status FROM local_outbox
+      WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
+      ORDER BY created_at DESC LIMIT 1`).get(companyId, entityId);
+    if (submission && submission.status !== 'SYNCED') {
+      throw createCommandError('TICKET_NOT_SYNCED', 'A ticket must sync successfully before its workers can be edited');
+    }
+    const revision = getNextEntityRevision(db, companyId, 'ticket', entityId, current.server_revision);
+    if (normalized.baseRevision !== null && normalized.baseRevision !== revision) {
+      throw createCommandError('REVISION_CONFLICT', 'Ticket revision changed');
+    }
+    const previousEntries = db.prepare(`SELECT id, company_id, op_name, worker_id, worker_name_snapshot,
+        rate_snapshot, brak, qty, created_at
+      FROM ticket_entries WHERE company_id = ? AND ticket_id = ? ORDER BY id`).all(companyId, entityId);
+    db.prepare('DELETE FROM ticket_entries WHERE company_id = ? AND ticket_id = ?').run(companyId, entityId);
+    const insertEntry = db.prepare(`INSERT INTO ticket_entries (
+      id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, brak, qty, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const now = new Date().toISOString();
+    payload.entries.forEach((entry, index) => {
+      insertEntry.run(
+        `${entityId}_entry_${index + 1}`,
+        entityId,
+        companyId,
+        entry.opName,
+        entry.workerId,
+        entry.workerNameSnapshot || null,
+        entry.rateSnapshot ?? null,
+        entry.brak || null,
+        current.qty,
+        now
+      );
+    });
+    normalized.localArchiveJson = JSON.stringify({ entries: previousEntries });
+    return revision;
+  }
   if (commandType === 'DeleteTicket') {
     const current = db.prepare('SELECT status, server_revision FROM tickets WHERE company_id = ? AND id = ?').get(companyId, entityId);
     if (!current) throw createCommandError('TICKET_NOT_FOUND', `Ticket "${entityId}" was not found`);
@@ -1097,7 +1174,8 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
           commandId: normalized.commandId,
           operationId: normalized.operationId,
           entityId: normalized.entityId,
-          status: 'PENDING_SYNC',
+          status: existingOperation.status === 'SUPERSEDED' ? 'DELETED_LOCALLY' : 'PENDING_SYNC',
+          localOnly: existingOperation.status === 'SUPERSEDED',
           committed: true,
           isReplay: true
         };
@@ -1105,7 +1183,28 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
       throw createCommandError('IDEMPOTENCY_CONFLICT', `Operation "${normalized.operationId}" was already used for different workbook data`);
     }
 
-    const effectiveBaseRevision = executeWorkbookMutation(db, normalized, options);
+    let localOnlyDelete = false;
+    let effectiveBaseRevision;
+    if (normalized.commandType === 'DeleteTicket') {
+      const submitOperation = db.prepare(`SELECT status FROM local_outbox
+        WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
+        ORDER BY created_at DESC LIMIT 1`).get(normalized.companyId, normalized.entityId);
+      if (submitOperation?.status === 'DEAD_LETTER') {
+        const current = db.prepare('SELECT status, server_revision FROM tickets WHERE company_id = ? AND id = ?')
+          .get(normalized.companyId, normalized.entityId);
+        if (!current) throw createCommandError('TICKET_NOT_FOUND', `Ticket "${normalized.entityId}" was not found`);
+        if (current.status === 'VOIDED' || current.status === 'PENDING_DELETE') {
+          throw createCommandError('TICKET_ALREADY_DELETED', `Ticket "${normalized.entityId}" has already been deleted or queued for deletion`);
+        }
+        db.prepare(`UPDATE tickets SET status = 'VOIDED' WHERE company_id = ? AND id = ?`)
+          .run(normalized.companyId, normalized.entityId);
+        effectiveBaseRevision = Number(current.server_revision || 0);
+        localOnlyDelete = true;
+      }
+    }
+    if (effectiveBaseRevision === undefined) {
+      effectiveBaseRevision = executeWorkbookMutation(db, normalized, options);
+    }
 
     if (typeof options.testHooks?.afterFactWrite === 'function') options.testHooks.afterFactWrite();
     insertOutboxOperation(db, {
@@ -1117,9 +1216,10 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
       base_revision: effectiveBaseRevision,
       payload_json: payloadJson,
       payload_hash: payloadHash,
+      local_archive_json: normalized.localArchiveJson,
       depends_on_operation_id: normalized.dependsOnOperationId,
       causal_sequence: normalized.causalSequence,
-      status: 'PENDING',
+      status: localOnlyDelete ? 'SUPERSEDED' : 'PENDING',
       created_at: new Date().toISOString()
     });
     if (typeof options.testHooks?.afterOutboxWrite === 'function') options.testHooks.afterOutboxWrite();
@@ -1128,7 +1228,8 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
       commandId: normalized.commandId,
       operationId: normalized.operationId,
       entityId: normalized.entityId,
-      status: 'PENDING_SYNC',
+      status: localOnlyDelete ? 'DELETED_LOCALLY' : 'PENDING_SYNC',
+      localOnly: localOnlyDelete,
       committed: true,
       isReplay: false
     };

@@ -9,7 +9,7 @@ const {
   validateCommandPayload
 } = require('../payloadValidation.cjs');
 const { isAllowedGrandfatheredPair } = require('../../../../../packages/domain/partyPolicy.cjs');
-const { executeWorkbookOperation } = require('../workbookOperations.cjs');
+const { executeWorkbookOperation, appendChange } = require('../workbookOperations.cjs');
 const { acquireCompanyChangeLock } = require('../changeFeedWatermark.cjs');
 
 function dateOnly(value) {
@@ -134,6 +134,8 @@ async function processSingleOperation(pool, req, op, options = {}) {
     let mutationResult = null;
     if (commandType === 'SubmitTicket') {
       mutationResult = await executeSubmitTicket(client, companyId, operationId, validatedPayload, serverCanonical);
+    } else if (commandType === 'UpdateTicket') {
+      mutationResult = await executeUpdateTicket(client, companyId, operationId, validatedPayload);
     } else if (commandType === 'RecordProductionAdjustment') {
       mutationResult = await executeRecordAdjustment(client, companyId, operationId, validatedPayload, serverCanonical, req);
     } else if (commandType === 'ReverseProductionAdjustment') {
@@ -235,12 +237,99 @@ async function processSingleOperation(pool, req, op, options = {}) {
   }
 }
 
+function resolveTicketValidationMode(payload = {}, companyPolicy = null) {
+  const defaultStrictValidation = companyPolicy?.require_ticket_validation !== false;
+  return {
+    strictParty: payload.strictParty ?? defaultStrictValidation,
+    strictPatta: payload.strictPatta ?? defaultStrictValidation
+  };
+}
+
+async function executeUpdateTicket(client, companyId, operationId, payload) {
+  const ticketId = payload.ticketId;
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':ticket:' || $2))`, [companyId, ticketId]);
+  const ticketResult = await client.query(`SELECT id, model_id, qty, status, is_closed, server_revision
+    FROM tickets WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, ticketId]);
+  const ticket = ticketResult.rows[0];
+  if (!ticket) throw createOpError('TICKET_NOT_FOUND', `Ticket "${ticketId}" was not found`);
+  if (ticket.status === 'VOIDED' || ticket.is_closed) {
+    throw createOpError('TICKET_NOT_EDITABLE', 'Deleted or closed-period tickets cannot be edited');
+  }
+  if (Number(ticket.server_revision || 0) !== payload.baseRevision) {
+    throw createOpError('REVISION_CONFLICT', `Ticket revision conflict; current revision is ${ticket.server_revision}`);
+  }
+
+  const modelResult = await client.query(`SELECT operations_json, status FROM models
+    WHERE company_id = $1 AND id = $2`, [companyId, ticket.model_id]);
+  const model = modelResult.rows[0];
+  if (!model) throw createOpError('MODEL_NOT_FOUND', `Ticket model "${ticket.model_id}" was not found`);
+  if (model.status !== 'ACTIVE') throw createOpError('MODEL_INACTIVE', `Ticket model "${ticket.model_id}" is inactive`);
+  let modelOperations = model.operations_json;
+  if (typeof modelOperations === 'string') {
+    try { modelOperations = JSON.parse(modelOperations); } catch { modelOperations = []; }
+  }
+  if (!Array.isArray(modelOperations)) modelOperations = [];
+  const operationByName = new Map(modelOperations.map((entry) => [
+    typeof entry === 'string' ? entry : entry?.name,
+    typeof entry === 'string' ? null : Number.isFinite(Number(entry?.rate)) ? Number(entry.rate) : null
+  ]));
+  for (const entry of payload.entries) {
+    if (!operationByName.has(entry.opName)) {
+      throw createOpError('UNKNOWN_OPERATION', `Operation "${entry.opName}" is not defined in the ticket model`);
+    }
+  }
+
+  const workerIds = [...new Set(payload.entries.map((entry) => Number(entry.workerId)))];
+  const workersResult = await client.query(`SELECT id, name, status FROM workers
+    WHERE company_id = $1 AND id = ANY($2::int[])`, [companyId, workerIds]);
+  const workers = new Map(workersResult.rows.map((worker) => [Number(worker.id), worker]));
+  for (const workerId of workerIds) {
+    const worker = workers.get(workerId);
+    if (!worker) throw createOpError('WORKER_NOT_FOUND', `Worker "${workerId}" was not found`);
+    if (worker.status !== 'ACTIVE') throw createOpError('WORKER_INACTIVE', `Worker "${workerId}" is inactive`);
+  }
+
+  const serverRevision = Number(ticket.server_revision || 0) + 1;
+  const committedAt = new Date().toISOString();
+  await client.query(`DELETE FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2`, [companyId, ticketId]);
+  const entries = payload.entries.map((entry, index) => ({
+    entryId: `${ticketId}_entry_${index + 1}`,
+    opName: entry.opName,
+    workerId: Number(entry.workerId),
+    workerNameSnapshot: workers.get(Number(entry.workerId)).name,
+    rateSnapshot: operationByName.get(entry.opName),
+    brak: null,
+    qty: Number(ticket.qty)
+  }));
+  for (const entry of entries) {
+    await client.query(`INSERT INTO ticket_entries (
+      id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
+      rate_snapshot, brak, qty, created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, [
+      entry.entryId, ticketId, companyId, entry.opName, entry.workerId,
+      entry.workerNameSnapshot, entry.rateSnapshot, entry.brak, entry.qty, committedAt
+    ]);
+  }
+  await client.query(`UPDATE tickets SET server_revision = $3 WHERE company_id = $1 AND id = $2`,
+    [companyId, ticketId, serverRevision]);
+  const change = await appendChange(client, companyId, 'ticket', ticketId, serverRevision,
+    operationId, 'UPDATE', { ticketId, status: ticket.status, entries }, committedAt);
+  return {
+    serverRevision,
+    entityId: ticketId,
+    changeId: Number(change.rows[0].change_id),
+    committedAt
+  };
+}
+
 async function executeSubmitTicket(client, companyId, operationId, payload, canonicalJson) {
   const {
     ticketId,
     modelId: requestedModelId,
     partyNumber,
     pattaNumber,
+    strictParty: requestedStrictParty,
+    strictPatta: requestedStrictPatta,
     qty,
     entries,
     partyRecordId: requestedPartyRecordId,
@@ -267,8 +356,19 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   `, [companyId]);
   const companyPolicy = activationPolicy.rows[0];
   if (companyPolicy && !companyPolicy.is_active) throw createOpError('COMPANY_POLICY_INACTIVE', 'The company activation policy is inactive');
-  if (companyPolicy?.require_ticket_validation !== false && !partyRecordId) {
+  // Company activation policy supplies the default for older clients and for
+  // tickets that do not carry per-ticket mode choices. The Patta screen's
+  // explicit switches are part of the canonical ticket command and must govern
+  // that ticket so the server matches the validation the operator selected.
+  const { strictParty, strictPatta } = resolveTicketValidationMode({
+    strictParty: requestedStrictParty,
+    strictPatta: requestedStrictPatta
+  }, companyPolicy);
+  if (strictParty && !partyRecordId) {
     throw createOpError('PARTY_RECORD_REQUIRED', 'A printed party is required while strict ticket validation is enabled');
+  }
+  if (strictPatta && Number(pattaNumber) <= 0) {
+    throw createOpError('PATTA_NUMBER_REQUIRED', 'A positive patta number is required while strict patta validation is enabled');
   }
 
   // 1. Canonical Ticket ID uniqueness check (Approach A: Canonical UUID Identity)
@@ -1124,5 +1224,7 @@ function assertReconciliationAuthority(req) {
 module.exports = {
   createOperationsHandler,
   processSingleOperation,
-  resolveTrustedAuditActor
+  resolveTrustedAuditActor,
+  resolveTicketValidationMode,
+  executeUpdateTicket
 };

@@ -33,8 +33,8 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
     ? [period.id, period.startDate, period.endDate || null, period.endDate || null]
     : [];
   const ticketsQuery = db.prepare(`
-    SELECT t.id, t.model_id, t.party_number, t.party_record_id, t.patta_number, t.qty,
-           t.size, t.color, t.konveyer, t.status, t.submitted_at
+     SELECT t.id, t.model_id, t.party_number, t.party_record_id, t.patta_number, t.qty,
+            t.size, t.color, t.konveyer, t.status, t.is_closed, t.server_revision, t.submitted_at
     FROM tickets t
     WHERE t.company_id = ?${periodFilter}
     ORDER BY t.id ASC
@@ -80,6 +80,8 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
     color: t.color,
     konveyer: t.konveyer,
     status: t.status,
+    isClosed: Boolean(t.is_closed),
+    serverRevision: Number(t.server_revision || 0),
     submittedAt: t.submitted_at,
     entries: entriesByTicket.get(t.id) || []
   }));
@@ -332,6 +334,8 @@ function toSubmittedTicket(fact) {
     color: fact.color || undefined,
     konveyer: fact.konveyer || undefined,
     status: fact.status,
+    isClosed: fact.isClosed,
+    serverRevision: fact.serverRevision,
     submittedAt: fact.submittedAt,
     entries: (fact.entries || []).map((entry) => ({
       opName: entry.opName,
@@ -356,7 +360,7 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
   const periods = loadPeriodsFromSqlite(db, companyId);
   const openPeriod = periods.find((period) => !period.isClosed);
   const tickets = loadTicketFactsFromSqlite(db, companyId, openPeriod);
-  const visibleTickets = tickets.filter((ticket) => ticket.status !== 'VOIDED');
+  const visibleTickets = tickets.filter((ticket) => ticket.status !== 'VOIDED' && ticket.status !== 'PENDING_DELETE');
   const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId);
   const projections = buildHisobProjections({ tickets: visibleTickets, productionAdjustments });
   const models = loadModelsFromSqlite(db, companyId, projections);

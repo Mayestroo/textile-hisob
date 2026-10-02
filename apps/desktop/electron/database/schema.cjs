@@ -1522,14 +1522,31 @@ const MIGRATIONS = [
           server_revision INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY (company_id, party_record_id) REFERENCES parties(company_id, id) ON DELETE RESTRICT
         );
-        INSERT INTO tickets_v17 SELECT * FROM tickets;
+        INSERT INTO tickets_v17 (
+          id, company_id, model_id, period_id, party_number, party_record_id,
+          patta_number, qty, size, color, konveyer, status, is_closed,
+          submitted_at, created_at, provenance, raw_legacy_json, server_revision
+        )
+        SELECT
+          id, company_id, model_id, period_id, party_number, party_record_id,
+          patta_number, qty, size, color, konveyer, status, is_closed,
+          submitted_at, created_at, COALESCE(provenance, 'LEGACY_MIGRATION'),
+          raw_legacy_json, COALESCE(server_revision, 0)
+        FROM tickets;
         CREATE TABLE ticket_entries_v17 (
           id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets_v17(id) ON DELETE CASCADE,
           company_id TEXT NOT NULL, op_name TEXT NOT NULL,
           worker_id INTEGER NOT NULL REFERENCES workers(id) ON DELETE RESTRICT,
           worker_name_snapshot TEXT, rate_snapshot REAL, brak TEXT, qty REAL NOT NULL, created_at TEXT NOT NULL
         );
-        INSERT INTO ticket_entries_v17 SELECT * FROM ticket_entries;
+        INSERT INTO ticket_entries_v17 (
+          id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
+          rate_snapshot, brak, qty, created_at
+        )
+        SELECT
+          id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
+          rate_snapshot, brak, qty, created_at
+        FROM ticket_entries;
         DROP TABLE ticket_entries;
         DROP TABLE tickets;
         ALTER TABLE tickets_v17 RENAME TO tickets;
@@ -1545,6 +1562,16 @@ const MIGRATIONS = [
         CREATE INDEX idx_entries_worker ON ticket_entries(worker_id);
         CREATE INDEX idx_entries_worker_op ON ticket_entries(worker_id, op_name);
       `);
+    }
+  },
+  {
+    version: 18,
+    name: '018_local_outbox_edit_rollback_snapshot',
+    up: (db) => {
+      const columns = db.prepare('PRAGMA table_info(local_outbox)').all();
+      if (!columns.some((column) => column.name === 'local_archive_json')) {
+        db.exec('ALTER TABLE local_outbox ADD COLUMN local_archive_json TEXT');
+      }
     }
   }
 ];

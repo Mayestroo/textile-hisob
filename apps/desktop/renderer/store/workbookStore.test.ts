@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useWorkbookStore } from './workbookStore';
+import { preserveBatchSettingsDraft } from './businessMutations';
 
 describe('workbook store  patta boundary', () => {
   afterEach(() => {
@@ -64,5 +65,21 @@ describe('workbook store  patta boundary', () => {
     resolveRuntime({ success: true, mode: 'sync' });
     await pending;
     useWorkbookStore.setState(previousState, true);
+  });
+
+  it('preserves the latest batch input when a command reload returns an older projection', () => {
+    const latestConfig = { partyNumber: '54', totalIshSoni: '100', color: 'Qora', sizes: { XXS: '' } };
+    const refreshed = preserveBatchSettingsDraft({
+      availableSizes: ['S'],
+      pattaBatchConfigs: { 'model-a': { partyNumber: '54', totalIshSoni: '100', color: 'Qora', sizes: { XXS: '1' } } },
+      models: [{ id: 'model-a' }]
+    }, {
+      availableSizes: ['S', 'XXS'],
+      pattaBatchConfigs: { 'model-a': latestConfig }
+    });
+
+    expect(refreshed.availableSizes).toEqual(['S', 'XXS']);
+    expect(refreshed.pattaBatchConfigs['model-a'].sizes.XXS).toBe('');
+    expect(refreshed.models).toEqual([{ id: 'model-a' }]);
   });
 });

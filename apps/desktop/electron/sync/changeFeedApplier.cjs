@@ -161,6 +161,28 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
         db.prepare(`UPDATE tickets SET ${assignments.join(', ')} WHERE company_id = ? AND id = ?`)
           .run(...values, companyId, ticketId);
       }
+      if (Array.isArray(payload.entries)) {
+        db.prepare('DELETE FROM ticket_entries WHERE company_id = ? AND ticket_id = ?').run(companyId, ticketId);
+        const insertEntry = db.prepare(`INSERT INTO ticket_entries (
+          id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
+          rate_snapshot, brak, qty, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const now = new Date().toISOString();
+        payload.entries.forEach((entry, index) => {
+          insertEntry.run(
+            entry.entryId || `${ticketId}_entry_${index + 1}`,
+            ticketId,
+            companyId,
+            entry.opName,
+            entry.workerId,
+            entry.workerNameSnapshot || null,
+            entry.rateSnapshot ?? null,
+            entry.brak || null,
+            entry.qty,
+            entry.createdAt || now
+          );
+        });
+      }
       return;
     }
     // If ticket exists locally, ensure ACK and server-owned fields are applied.
@@ -192,10 +214,10 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
   db.prepare(`
     INSERT INTO tickets (
       id, company_id, model_id, period_id, party_number, party_record_id, patta_number,
-      qty, size, color, konveyer, status, is_closed, submitted_at, created_at, provenance
+      qty, size, color, konveyer, status, is_closed, submitted_at, created_at, provenance, server_revision
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, 'CONFIRMED', 0, ?, ?, 'REMOTE_SYNC'
+      ?, ?, ?, ?, 'CONFIRMED', 0, ?, ?, 'REMOTE_SYNC', ?
     )
   `).run(
     ticketId,
@@ -210,7 +232,8 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
     color || null,
     konveyer || null,
     now,
-    now
+    now,
+    Number.isSafeInteger(entityRevision) ? entityRevision : 1
   );
 
   // Insert ticket entries

@@ -8,7 +8,7 @@ const {
   validateCommandPayload,
   validateOperationEnvelope
 } = require('./payloadValidation.cjs');
-const { processSingleOperation, resolveTrustedAuditActor } = require('./handlers/operations.cjs');
+const { processSingleOperation, resolveTrustedAuditActor, resolveTicketValidationMode, executeUpdateTicket } = require('./handlers/operations.cjs');
 
 const COMPANY = 'company-validation';
 const TICKET_ID = '00000000-0000-4000-8000-000000000501';
@@ -42,7 +42,7 @@ function envelope(commandType: string, payload: Record<string, unknown>, overrid
     operationId: payload.operationId,
     companyId: COMPANY,
     commandType,
-    entityType: commandType === 'SubmitTicket' || commandType === 'DeleteTicket' ? 'ticket' : commandType === 'CreateParty' || commandType === 'CloseParty' ? 'party' : commandType === 'ResolveMigrationReconciliationCandidate' ? 'reconciliation_candidate' : 'production_adjustment',
+    entityType: commandType === 'SubmitTicket' || commandType === 'UpdateTicket' || commandType === 'DeleteTicket' ? 'ticket' : commandType === 'CreateParty' || commandType === 'CloseParty' ? 'party' : commandType === 'ResolveMigrationReconciliationCandidate' ? 'reconciliation_candidate' : 'production_adjustment',
     entityId: payload.ticketId || payload.adjustmentId || payload.reversalId || payload.partyRecordId || payload.candidateId,
     payloadHash: computePayloadHash(canonicalStringify(payload)),
     payload,
@@ -77,6 +77,75 @@ describe(' payload and authority validation', () => {
     const operation = envelope('DeleteTicket', payload);
     expect(validateCommandPayload('DeleteTicket', payload, context(operation))).toMatchObject({ ticketId: TICKET_ID, companyId: COMPANY });
     expectCode(() => validateCommandPayload('DeleteTicket', payload, context({ ...operation, entityId: 'other-ticket' })), 'ENTITY_ID_MISMATCH');
+  });
+
+  it('validates ticket entry edits against ticket identity and base revision', () => {
+    const payload = {
+      commandId: 'edit-command', operationId: 'edit-operation', companyId: COMPANY,
+      ticketId: TICKET_ID, entries: [{ opName: 'Sew', workerId: 71 }]
+    };
+    const operation = envelope('UpdateTicket', payload, { baseRevision: 4 });
+    expect(validateCommandPayload('UpdateTicket', payload, context(operation))).toMatchObject({
+      ticketId: TICKET_ID, baseRevision: 4, entries: [{ opName: 'Sew', workerId: 71 }]
+    });
+    expectCode(() => validateCommandPayload('UpdateTicket', payload, context({ ...operation, entityId: 'other-ticket' })), 'ENTITY_ID_MISMATCH');
+    expectCode(() => validateCommandPayload('UpdateTicket', payload, context({ ...operation, baseRevision: undefined })), 'MISSING_BASE_REVISION');
+  });
+
+  it('preserves explicit per-ticket strict/free switches and rejects non-boolean values', () => {
+    const freeTicket = ticketPayload({
+      partyNumber: "No'malum Partiya",
+      partyRecordId: null,
+      pattaNumber: 0,
+      strictParty: false,
+      strictPatta: false
+    });
+    expect(validateCommandPayload('SubmitTicket', freeTicket, context(envelope('SubmitTicket', freeTicket))))
+      .toMatchObject({ partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false });
+    const invalidMode = { ...freeTicket, strictParty: 'false' };
+    expectCode(() => validateCommandPayload('SubmitTicket', invalidMode, context(envelope('SubmitTicket', invalidMode))), 'INVALID_TICKET_VALIDATION_MODE');
+  });
+
+  it('uses the company setting as the default while honoring the selected per-ticket switches', () => {
+    expect(resolveTicketValidationMode({}, { require_ticket_validation: true }))
+      .toEqual({ strictParty: true, strictPatta: true });
+    expect(resolveTicketValidationMode({}, { require_ticket_validation: false }))
+      .toEqual({ strictParty: false, strictPatta: false });
+    expect(resolveTicketValidationMode({ strictParty: false, strictPatta: false }, { require_ticket_validation: true }))
+      .toEqual({ strictParty: false, strictPatta: false });
+    expect(resolveTicketValidationMode({ strictParty: true, strictPatta: false }, { require_ticket_validation: false }))
+      .toEqual({ strictParty: true, strictPatta: false });
+  });
+
+  it('updates an open ticket from canonical model and worker facts and appends a change event', async () => {
+    const calls: Array<{ sql: string; values: any[] }> = [];
+    const client = {
+      query: async (sql: string, values: any[] = []) => {
+        calls.push({ sql, values });
+        if (sql.includes('FROM tickets WHERE company_id')) {
+          return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 5, status: 'CONFIRMED', is_closed: false, server_revision: 3 }] };
+        }
+        if (sql.includes('FROM models')) {
+          return { rows: [{ operations_json: [{ name: 'Sew', rate: 7 }], status: 'ACTIVE' }] };
+        }
+        if (sql.includes('FROM workers')) {
+          return { rows: [{ id: 71, name: 'Worker 71', status: 'ACTIVE' }] };
+        }
+        if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: '19' }] };
+        return { rows: [] };
+      }
+    };
+    const result = await executeUpdateTicket(client, COMPANY, 'edit-operation', {
+      ticketId: TICKET_ID,
+      baseRevision: 3,
+      entries: [{ opName: 'Sew', workerId: 71 }]
+    });
+
+    expect(result).toMatchObject({ entityId: TICKET_ID, serverRevision: 4, changeId: 19 });
+    const insertedEntry = calls.find(({ sql }) => sql.includes('INSERT INTO ticket_entries'));
+    expect(insertedEntry?.values.slice(0, 9)).toEqual([`${TICKET_ID}_entry_1`, TICKET_ID, COMPANY, 'Sew', 71, 'Worker 71', 7, null, 5]);
+    const change = calls.find(({ sql }) => sql.includes('INSERT INTO change_log'));
+    expect(JSON.parse(change!.values[6])).toMatchObject({ ticketId: TICKET_ID, entries: [{ opName: 'Sew', workerId: 71, qty: 5 }] });
   });
 
   it('exposes stable validation errors', () => {

@@ -160,6 +160,11 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
   const partyRecordId = command.partyRecordId === undefined || command.partyRecordId === null || command.partyRecordId === ''
     ? null
     : assertNonEmptyString(command.partyRecordId, 'partyRecordId');
+  for (const field of ['strictParty', 'strictPatta']) {
+    if (command[field] !== undefined && typeof command[field] !== 'boolean') {
+      throw createCommandError('INVALID_TICKET_VALIDATION_MODE', `${field} must be a boolean when provided`);
+    }
+  }
   const periodId = command.periodId === undefined || command.periodId === null || command.periodId === ''
     ? null
     : assertNonEmptyString(command.periodId, 'periodId');
@@ -224,6 +229,8 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
       workerNameSnapshot: e.workerNameSnapshot || null
     })),
     partyRecordId,
+    ...(command.strictParty === undefined ? {} : { strictParty: command.strictParty }),
+    ...(command.strictPatta === undefined ? {} : { strictPatta: command.strictPatta }),
     konveyer: command.konveyer ? String(command.konveyer).trim() : null,
     size: command.size ? String(command.size).trim() : null,
     color: command.color ? String(command.color).trim() : null,

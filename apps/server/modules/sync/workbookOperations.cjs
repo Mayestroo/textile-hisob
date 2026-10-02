@@ -622,5 +622,6 @@ async function getPeriodArchive(pool, companyId, periodId) {
 
 module.exports = {
   executeWorkbookOperation,
-  getPeriodArchive
+  getPeriodArchive,
+  appendChange
 };

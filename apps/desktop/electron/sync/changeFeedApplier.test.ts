@@ -62,7 +62,10 @@ describe(' workbook change-feed application', () => {
 
     items.push({
       changeId: '10', companyId, entityType: 'ticket', entityId: '00000000-0000-4000-8000-000000000501',
-      entityRevision: 2, changeType: 'UPDATE', payload: { ticketId: '00000000-0000-4000-8000-000000000501', status: 'VOIDED' }
+      entityRevision: 2, changeType: 'UPDATE', payload: {
+        ticketId: '00000000-0000-4000-8000-000000000501', status: 'VOIDED',
+        entries: [{ entryId: 'edited-entry', opName: 'Sew', workerId: 71, workerNameSnapshot: 'Worker A', rateSnapshot: 8, qty: 10 }]
+      }
     });
     const applied = applyChangesBatch(db, companyId, items, '10');
     expect(applied).toEqual({ appliedCount: 10, nextCursor: 10 });
@@ -72,6 +75,8 @@ describe(' workbook change-feed application', () => {
     expect(db.prepare('SELECT period_id FROM tickets WHERE company_id = ?').get(companyId).period_id).toBe('period-a');
     expect(db.prepare('SELECT status FROM tickets WHERE company_id = ?').get(companyId).status).toBe('VOIDED');
     expect(db.prepare('SELECT op_name FROM ticket_entries WHERE company_id = ?').get(companyId).op_name).toBe('Sew');
+    expect(db.prepare('SELECT id, rate_snapshot FROM ticket_entries WHERE company_id = ?').get(companyId))
+      .toEqual({ id: 'edited-entry', rate_snapshot: 8 });
     expect(db.prepare('SELECT available_sizes_json FROM company_batch_settings WHERE company_id = ?').get(companyId).available_sizes_json).toBe('["M","L"]');
 
     const replay = applyChangesBatch(db, companyId, items, '10');

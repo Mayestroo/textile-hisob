@@ -201,6 +201,42 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(parties.rows.map((row) => row.party_number)).toEqual(['1', '2']);
   });
 
+  it('updates ticket worker assignments canonically, increments revision, and publishes replacement entries', async () => {
+    const ticketId = '00000000-0000-4000-8000-000000000941';
+    await pool!.query(`INSERT INTO models (id, company_id, name, operations_json, status)
+      VALUES ('ticket-edit-model', $1, 'Ticket Edit Model', '[{"name":"Cut","rate":3},{"name":"Sew","rate":7}]', 'ACTIVE')`, [companyId]);
+    await pool!.query(`INSERT INTO workers (id, company_id, name, status)
+      VALUES (741, $1, 'Worker A', 'ACTIVE'), (742, $1, 'Worker B', 'ACTIVE')`, [companyId]);
+    await pool!.query(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, is_closed, server_revision
+    ) VALUES ($1, $2, 'ticket-edit-model', '29', NULL, 303, 116, 'CONFIRMED', FALSE, 4)`, [ticketId, companyId]);
+    await pool!.query(`INSERT INTO ticket_entries (
+      id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, qty
+    ) VALUES ('ticket-edit-old-entry', $1, $2, 'Cut', 741, 'Worker A', 3, 116)`, [ticketId, companyId]);
+
+    const updatePayload = {
+      commandId: 'cmd-ticket-edit', operationId: 'op-ticket-edit', companyId, ticketId,
+      entries: [{ opName: 'Sew', workerId: 742 }]
+    };
+    expect(await apply('UpdateTicket', 'ticket', ticketId, updatePayload, 4))
+      .toMatchObject({ status: 'APPLIED', serverRevision: 5 });
+    expect(await apply('UpdateTicket', 'ticket', ticketId, {
+      ...updatePayload, commandId: 'cmd-ticket-edit-stale', operationId: 'op-ticket-edit-stale'
+    }, 4)).toMatchObject({ status: 'CONFLICT', error: { code: 'REVISION_CONFLICT' } });
+
+    const ticket = await pool!.query('SELECT server_revision FROM tickets WHERE company_id = $1 AND id = $2', [companyId, ticketId]);
+    const entries = await pool!.query(`SELECT op_name, worker_id, worker_name_snapshot, rate_snapshot, qty
+      FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2`, [companyId, ticketId]);
+    expect(ticket.rows[0].server_revision).toBe(5);
+    expect(entries.rows).toHaveLength(1);
+    expect(entries.rows[0]).toMatchObject({ op_name: 'Sew', worker_id: 742, worker_name_snapshot: 'Worker B', qty: 116 });
+    expect(Number(entries.rows[0].rate_snapshot)).toBe(7);
+    const change = await pool!.query(`SELECT payload_json FROM change_log
+      WHERE company_id = $1 AND entity_type = 'ticket' AND entity_id = $2
+      ORDER BY change_id DESC LIMIT 1`, [companyId, ticketId]);
+    expect(change.rows[0].payload_json.entries).toMatchObject([{ opName: 'Sew', workerId: 742, qty: 116 }]);
+  });
+
   it('accepts a canonical free-mode ticket without creating or inventing a printed party', async () => {
     const partyCountBefore = Number((await pool!.query('SELECT COUNT(*)::int AS count FROM parties WHERE company_id = $1', [companyId])).rows[0].count);
     await pool!.query(`INSERT INTO company_batch_settings (company_id, available_sizes_json) VALUES ($1, '[]')
@@ -236,6 +272,17 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     });
     expect(strictResult).toMatchObject({ status: 'REJECTED', error: { code: 'PARTY_RECORD_REQUIRED' } });
     expect((await pool!.query('SELECT COUNT(*)::int AS count FROM tickets WHERE company_id = $1 AND id = $2', [companyId, strictTicketId])).rows[0].count).toBe(0);
+
+    const perTicketFreeId = '00000000-0000-4000-8000-000000000903';
+    const perTicketFreeResult = await apply('SubmitTicket', 'ticket', perTicketFreeId, {
+      commandId: 'cmd-per-ticket-free', operationId: 'op-per-ticket-free', companyId,
+      ticketId: perTicketFreeId, modelId: 'free-model', partyNumber: "No'malum Partiya",
+      partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false,
+      qty: 3, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601 }]
+    });
+    expect(perTicketFreeResult).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT party_record_id, party_number, patta_number FROM tickets WHERE company_id = $1 AND id = $2', [companyId, perTicketFreeId])).rows)
+      .toEqual([{ party_record_id: null, party_number: "No'malum Partiya", patta_number: 0 }]);
   });
 
   it('closes a period atomically, rolls parties, stores an archive, and archives history without deletes', async () => {
