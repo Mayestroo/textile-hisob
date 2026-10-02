@@ -38,7 +38,7 @@ interface PrintableTicket {
   ishSoni: string;
   operations: Array<{ name: string }>;
   pachkaCount: number;
-  sizesSummary: string;
+  sizesSummary: string[];
 }
 
 export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
@@ -62,7 +62,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
       item,
       workTickets,
       sizeEntries,
-      sizesSummary: sizeEntries.map(([size, count]) => `${size} - ${count} ta`).join('   ')
+      sizesSummary: sizeEntries.map(([size, count]) => `${size} - ${count} ta`)
     };
   }), [items]);
 
@@ -687,7 +687,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                                     height: '100%',
                                     width: '100%',
                                     display: 'grid',
-                                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr)',
+                                    gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)',
                                     alignItems: 'center',
                                     justifyItems: 'stretch',
                                     gap: '3px',
@@ -700,19 +700,33 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                                         height: '100%',
                                         minWidth: 0,
                                         minHeight: 0,
-                                        writingMode: 'vertical-lr',
-                                        textOrientation: 'sideways' as any,
-                                        WebkitTextOrientation: 'sideways' as any,
-                                        fontSize: dyn.verticalSizesFontSize,
-                                        fontWeight: 'bold',
-                                        lineHeight: 1.15,
-                                        textAlign: 'center',
-                                        whiteSpace: 'normal',
-                                        overflowWrap: 'anywhere',
-                                        wordBreak: 'break-word',
+                                        display: 'grid',
+                                        gridTemplateColumns: `repeat(${Math.min(4, t.sizesSummary.length)}, minmax(0, 1fr))`,
+                                        gridTemplateRows: `repeat(${Math.ceil(t.sizesSummary.length / Math.min(4, t.sizesSummary.length))}, minmax(0, 1fr))`,
+                                        gridAutoFlow: 'column',
+                                        alignItems: 'stretch',
+                                        justifyItems: 'stretch',
+                                        gap: '1px',
                                         overflow: 'hidden'
                                       }}>
-                                        Размер: {t.sizesSummary}
+                                        {t.sizesSummary.map((sizeLine, sizeIndex) => (
+                                          <div key={`${sizeLine}-${sizeIndex}`} style={{
+                                            writingMode: 'vertical-lr',
+                                            textOrientation: 'sideways' as any,
+                                            WebkitTextOrientation: 'sideways' as any,
+                                            fontSize: '8pt',
+                                            fontWeight: 'bold',
+                                            lineHeight: 1.05,
+                                            textAlign: 'center',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                          }}>
+                                            {sizeLine}
+                                          </div>
+                                        ))}
                                       </div>
                                     ) : null}
                                     <div style={{
