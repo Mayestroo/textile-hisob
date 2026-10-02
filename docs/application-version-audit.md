@@ -31,3 +31,9 @@ reset.
   passed in CI.
 - The unsigned Windows x64 `1.0.0` local test installer and its SHA-256 are
   recorded in `PRODUCTION.md`.
+
+## 1.1.0 local build
+
+At the owner's request, the application package version is advanced to `1.1.0`.
+Root and deployment package/lockfile versions and the NSIS upgrade-matrix target
+are kept aligned. The local installer is built without publishing an update.
