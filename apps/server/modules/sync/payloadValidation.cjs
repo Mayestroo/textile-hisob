@@ -16,6 +16,7 @@ const MAX_STRING_LENGTH = 4096;
 
 const COMMANDS = Object.freeze({
   SubmitTicket: { entityType: 'ticket', entityId: 'ticketId' },
+  UpdateTicket: { entityType: 'ticket', entityId: 'ticketId' },
   RecordProductionAdjustment: { entityType: 'production_adjustment', entityId: 'adjustmentId' },
   ReverseProductionAdjustment: { entityType: 'production_adjustment', entityId: 'adjustmentId' },
   CreateParty: { entityType: 'party', entityId: 'partyRecordId' },
@@ -542,6 +543,48 @@ function validateSubmitTicket(payload, context) {
   Object.assign(normalized, causal);
   assertEntity(context.operation, 'SubmitTicket', ticketId);
   return normalized;
+}
+
+function validateUpdateTicket(payload, context) {
+  rejectAuthorityFields(payload, [...AUTHORITY_FIELDS, 'status']);
+  const commandId = requiredIdentifier(payload, ['commandId']);
+  const operationId = requiredIdentifier(payload, ['operationId']);
+  const causal = validateCausalFields(payload, operationId);
+  const companyId = requiredCompany(payload.companyId);
+  if (context.companyId && companyId !== context.companyId) {
+    throw createValidationError('COMPANY_SCOPE_MISMATCH', 'Command companyId does not match authenticated company');
+  }
+  if (context.operation?.operationId && operationId !== context.operation.operationId) {
+    throw createValidationError('OPERATION_ID_MISMATCH', 'Command operationId does not match envelope operationId');
+  }
+
+  const ticketId = requiredIdentifier(payload, ['ticketId']);
+  if (!UUID.test(ticketId)) throw createValidationError('INVALID_TICKET_UUID', 'ticketId must be an RFC 4122 canonical UUID', { field: 'ticketId' });
+  assertEntity(context.operation, 'UpdateTicket', ticketId);
+  const baseRevision = revisionContext(payload, context);
+  if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+    throw createValidationError('MISSING_BASE_REVISION', 'UpdateTicket requires a non-negative baseRevision');
+  }
+  if (!Array.isArray(payload.entries) || payload.entries.length === 0 || payload.entries.length > MAX_ARRAY_ITEMS) {
+    throw createValidationError('INVALID_ENTRIES', 'Updated ticket entries must contain between 1 and the maximum allowed operations');
+  }
+  const entries = payload.entries.map((entry, index) => {
+    assertPlainObject(entry, 'INVALID_ENTRY');
+    rejectAuthorityFields(entry);
+    return {
+      opName: normalizeText(entry.opName, `entries[${index}].opName`, { maxLength: 256 }),
+      workerId: workerReference(entry.workerId, `entries[${index}].workerId`)
+    };
+  });
+  return {
+    commandId,
+    operationId,
+    companyId,
+    ticketId,
+    baseRevision,
+    ...causal,
+    entries
+  };
 }
 
 function validateRecordAdjustment(payload, context) {
@@ -1089,6 +1132,8 @@ function validateCommandPayload(commandType, payload, context = {}) {
   switch (commandType) {
     case 'SubmitTicket':
       return validateSubmitTicket(payload, context);
+    case 'UpdateTicket':
+      return validateUpdateTicket(payload, context);
     case 'RecordProductionAdjustment':
       return validateRecordAdjustment(payload, context);
     case 'ReverseProductionAdjustment':

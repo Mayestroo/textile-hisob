@@ -180,15 +180,61 @@ describe(' ticket command routing', () => {
     state().submittedTickets = [{ id: 'ticket-a', modelId: 'model-a', qty: 1, entries: [] }];
 
     const deleteResult = await slice.deleteSubmittedTicket('ticket-a');
-    const updateResult = await slice.updateSubmittedTicket('ticket-a', [{ opName: 'Sew', workerId: 1 }]);
 
     expect(deleteResult).toBe(true);
     expect(WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
       commandType: 'DeleteTicket', entityId: 'ticket-a', payload: { ticketId: 'ticket-a' }
     }));
-    expect(updateResult).toBe(false);
     expect(set).not.toHaveBeenCalled();
     expect(state().submittedTickets).toHaveLength(1);
+  });
+
+  it('routes ticket worker edits through the canonical workbook command', async () => {
+    const WorkbookCommand = vi.fn().mockResolvedValue({ success: true, result: { status: 'PENDING_SYNC' } });
+    const dbRead = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        companyId: 'company-a',
+        workers: [{ id: 1, name: 'Worker A' }, { id: 2, name: 'Worker B' }],
+        models: [{ id: 'model-a', name: 'Model A', operations: [{ id: 'op-1', name: 'Sew', rate: 2 }], pattaOpsOrder: ['Sew'], hisobQuantities: {} }],
+        printedPartyHistory: [],
+        submittedTickets: [{
+          id: 'ticket-a', modelId: 'model-a', partyNumber: '1', partyRecordId: 'party-a',
+          pattaNumber: 1, qty: 5, status: 'CONFIRMED', serverRevision: 2,
+          submittedAt: '2026-09-23T10:00:00.000Z',
+          entries: [{ opName: 'Sew', workerId: 2, workerNameSnapshot: 'Worker B', rateSnapshot: 2 }]
+        }],
+        periods: [],
+        currentPeriod: { id: 'period_default', name: 'Default', startDate: '2026-09-01', isClosed: false }
+      }
+    });
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+        WorkbookCommand,
+        dbRead
+      }
+    });
+    const { slice, state } = makeSlice();
+    state().workers.push({ id: 2, name: 'Worker B' });
+    state().submittedTickets = [{
+      id: 'ticket-a', modelId: 'model-a', partyNumber: '1', partyRecordId: 'party-a',
+      pattaNumber: 1, qty: 5, status: 'CONFIRMED', serverRevision: 2,
+      submittedAt: '2026-09-23T10:00:00.000Z',
+      entries: [{ opName: 'Sew', workerId: 1, workerNameSnapshot: 'Worker A', rateSnapshot: 2 }]
+    }];
+
+    const result = await slice.updateSubmittedTicket('ticket-a', [{ opName: 'Sew', workerId: 2, rateSnapshot: 2 }]);
+
+    expect(result).toBe(true);
+    expect(WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
+      commandType: 'UpdateTicket',
+      entityId: 'ticket-a',
+      baseRevision: 2,
+      payload: { ticketId: 'ticket-a', entries: [expect.objectContaining({ opName: 'Sew', workerId: 2 })] },
+      localArchive: { entries: [expect.objectContaining({ opName: 'Sew', workerId: 1 })] }
+    }));
+    expect(dbRead).toHaveBeenCalledWith('company-a');
   });
 
   it('shares one in-flight command for identical concurrent submissions', async () => {

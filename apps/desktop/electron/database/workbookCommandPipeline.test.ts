@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const databaseManager = require('./databaseManager.cjs');
 const workbookCommandPipeline = require('./workbookCommandPipeline.cjs');
+const outboxDispatcher = require('../sync/outboxDispatcher.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 
 describe(' workbook local command pipeline', () => {
@@ -127,6 +128,56 @@ describe(' workbook local command pipeline', () => {
       AND command_type = 'DeleteTicket' AND status = 'PENDING'`).get(ticketId).count).toBe(0);
     expect(require('./projectionReader.cjs').loadWorkbookProjectionFromSqlite(db, companyId).submittedTickets)
       .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: ticketId })]));
+  });
+
+  it('updates ticket entries locally and restores the previous assignments if the server rejects the edit', async () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at)
+      VALUES (1, ?, 'Worker A', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at)
+      VALUES (2, ?, 'Worker B', ?, ?)`).run(companyId, now, now);
+    const ticketId = '11111111-1111-4111-8111-111111111113';
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number, qty,
+      status, submitted_at, created_at, server_revision
+    ) VALUES (?, ?, 'model_one', '1', NULL, 1, 5, 'CONFIRMED', ?, ?, 2)`)
+      .run(ticketId, companyId, now, now);
+    db.prepare(`INSERT INTO ticket_entries (
+      id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, qty, created_at
+    ) VALUES ('entry_before_edit', ?, ?, 'Cut', 1, 'Worker A', 3, 5, ?)`)
+      .run(ticketId, companyId, now);
+
+    const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateTicket', commandId: 'cmd_update_ticket', operationId: 'op_update_ticket',
+      companyId, entityId: ticketId, baseRevision: 2,
+      payload: { ticketId, entries: [{ opName: 'Cut', workerId: 2, workerNameSnapshot: 'Worker B', rateSnapshot: 3 }] }
+    });
+
+    expect(result).toMatchObject({ committed: true, entityId: ticketId, status: 'PENDING_SYNC' });
+    expect(db.prepare('SELECT op_name, worker_id, worker_name_snapshot FROM ticket_entries WHERE ticket_id = ?')
+      .all(ticketId)).toEqual([{ op_name: 'Cut', worker_id: 2, worker_name_snapshot: 'Worker B' }]);
+    const outbox = db.prepare(`SELECT command_type, base_revision, local_archive_json FROM local_outbox WHERE operation_id = ?`)
+      .get('op_update_ticket');
+    expect(outbox.command_type).toBe('UpdateTicket');
+    expect(outbox.base_revision).toBe(2);
+    expect(JSON.parse(outbox.local_archive_json).entries).toEqual([
+      expect.objectContaining({ id: 'entry_before_edit', worker_id: 1, worker_name_snapshot: 'Worker A' })
+    ]);
+
+    await outboxDispatcher.dispatchOutbox(db, companyId, {
+      pushOperations: async (operations: any[]) => ({
+        results: operations.map((operation) => ({
+          operationId: operation.operationId,
+          status: 'REJECTED',
+          error: { code: 'TICKET_PERIOD_CLOSED', message: 'Ticket period is closed' }
+        }))
+      })
+    }, { baseUserDataPath: userData });
+    expect(db.prepare('SELECT op_name, worker_id FROM ticket_entries WHERE ticket_id = ?').all(ticketId))
+      .toEqual([{ op_name: 'Cut', worker_id: 1 }]);
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_update_ticket').status)
+      .toBe('DEAD_LETTER');
   });
 
   it('rejects a changed replay and cross-company command without changing local facts', () => {

@@ -596,7 +596,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       ) VALUES ('entry-017', ?, ?, 'Sew', 17, 'Worker 17', 2.5, NULL, 12, ?)`)
         .run(ticketId, companyId, now);
 
-      const result = migrationRunner.applyMigrations(db);
+      const result = migrationRunner.applyMigrations(db, { targetVersion: 17 });
       expect(result.currentVersion).toBe(17);
       expect(db.prepare(`SELECT period_id, party_number, party_record_id, patta_number,
         provenance, server_revision FROM tickets WHERE id = ?`).get(ticketId)).toEqual({
@@ -611,6 +611,22 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
         .toEqual({ ticket_id: ticketId, op_name: 'Sew', worker_id: 17, qty: 12 });
       db.prepare('UPDATE tickets SET party_record_id = NULL WHERE id = ?').run(ticketId);
       expect(db.prepare('SELECT party_record_id FROM tickets WHERE id = ?').get(ticketId).party_record_id).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('migration 018 adds an optional local rollback snapshot to outbox operations', () => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(tempUserDataDir, 'migration-018-local-outbox-archive.sqlite'));
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 17 });
+      expect(db.pragma('user_version', { simple: true })).toBe(17);
+      expect(db.pragma('table_info(local_outbox)').some((column: any) => column.name === 'local_archive_json')).toBe(false);
+
+      const result = migrationRunner.applyMigrations(db);
+      expect(result.currentVersion).toBe(18);
+      expect(db.pragma('table_info(local_outbox)').some((column: any) => column.name === 'local_archive_json')).toBe(true);
     } finally {
       db.close();
     }

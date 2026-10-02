@@ -1563,6 +1563,16 @@ const MIGRATIONS = [
         CREATE INDEX idx_entries_worker_op ON ticket_entries(worker_id, op_name);
       `);
     }
+  },
+  {
+    version: 18,
+    name: '018_local_outbox_edit_rollback_snapshot',
+    up: (db) => {
+      const columns = db.prepare('PRAGMA table_info(local_outbox)').all();
+      if (!columns.some((column) => column.name === 'local_archive_json')) {
+        db.exec('ALTER TABLE local_outbox ADD COLUMN local_archive_json TEXT');
+      }
+    }
   }
 ];
 

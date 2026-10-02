@@ -583,14 +583,6 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       state.addNotification('error', '_SESSION_CHANGED', 'The active company changed while the ticket mutation was in flight.');
       return false;
     }
-    if (runtime.mode === 'sync') {
-      const rejected = makeMutationResult(
-        runtime.code || '_COMMAND_UNSUPPORTED',
-        runtime.error || ' ticket-edit mutation is not supported; use a canonical command.'
-      );
-      notifyMutation(state, rejected);
-      return false;
-    }
     const ticket = (state.submittedTickets || []).find((s) => s.id === ticketId);
     if (!ticket) {
       state.addNotification('error', 'Xatolik', 'Tahrirlanayotgan patta topilmadi');
@@ -641,6 +633,34 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     if (validEntries.length === 0) {
       state.addNotification('warning', 'Ishchilar kiritilmadi', "Hech bo'lmaganda bitta operatsiyaga ishchi ID sini kiriting.");
       return false;
+    }
+
+    if (runtime.mode === 'sync') {
+      if (!runtime.success) {
+        notifyMutation(state, makeMutationResult(runtime.code || '_RUNTIME_NOT_READY', runtime.error || 'Runtime readiness failed'));
+        return false;
+      }
+      const companyId = initialLicenseStatus?.companyId;
+      if (!companyId) {
+        notifyMutation(state, makeMutationResult('_COMMAND_REQUIRED', 'An active company is required to edit a ticket.'));
+        return false;
+      }
+      const command = createWorkbookCommand('UpdateTicket', companyId, ticketId, {
+        ticketId,
+        entries: validEntries
+      }, {
+        entries: (ticket.entries || []).map((entry) => ({ ...entry }))
+      });
+      if (Number.isSafeInteger(ticket.serverRevision) && ticket.serverRevision! >= 0) {
+        command.baseRevision = ticket.serverRevision;
+      }
+      const result = await submitWorkbookCommand(command, get, set);
+      if (!result.success) {
+        notifyMutation(state, makeMutationResult(result.code || '_COMMAND_REQUIRED', result.error || 'Ticket edit was rejected'));
+        return false;
+      }
+      get().addNotification('success', 'Patta yangilandi', `Partiya ${ticket.partyNumber}, Patta #${ticket.pattaNumber} operatsiyalari yangilandi.`);
+      return true;
     }
 
     // Adjust hisobQuantities:

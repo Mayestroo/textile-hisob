@@ -9,7 +9,7 @@ export type WorkbookCommandType =
   | 'UpsertWorker' | 'DeactivateWorker' | 'CreateWorker'
   | 'CreatePeriod' | 'UpdatePeriod' | 'ClosePeriod'
   | 'CreateParty' | 'UpdateParty' | 'CloseParty' | 'ArchivePartyHistory'
-  | 'UpdateBatchSettings' | 'CompletePattaBatch' | 'CompletePartySeries' | 'DeleteTicket';
+  | 'UpdateBatchSettings' | 'CompletePattaBatch' | 'CompletePartySeries' | 'UpdateTicket' | 'DeleteTicket';
 
 export type WorkbookCommand = {
   commandType: WorkbookCommandType;
@@ -17,6 +17,7 @@ export type WorkbookCommand = {
   operationId: string;
   companyId: string;
   entityId: string;
+  baseRevision?: number;
   payload: Record<string, any>;
   localArchive?: unknown;
 };

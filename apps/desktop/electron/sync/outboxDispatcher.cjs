@@ -31,6 +31,23 @@ function isDependencySatisfied(db, companyId, op) {
   return parent.status === 'SYNCED';
 }
 
+function restoreTicketEntries(db, companyId, op) {
+  if (!op.local_archive_json) return false;
+  let archive;
+  try { archive = JSON.parse(op.local_archive_json); } catch { return false; }
+  if (!Array.isArray(archive?.entries)) return false;
+  db.prepare('DELETE FROM ticket_entries WHERE company_id = ? AND ticket_id = ?').run(companyId, op.entity_id);
+  const insertEntry = db.prepare(`INSERT INTO ticket_entries (
+    id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
+    rate_snapshot, brak, qty, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const entry of archive.entries) {
+    insertEntry.run(entry.id, op.entity_id, companyId, entry.op_name, entry.worker_id,
+      entry.worker_name_snapshot, entry.rate_snapshot, entry.brak, entry.qty, entry.created_at);
+  }
+  return true;
+}
+
 /**
  * Dispatches eligible local outbox operations to the authoritative server.
  *
@@ -159,13 +176,17 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         if (op.command_type === 'SubmitTicket') {
           db.prepare(`
             UPDATE tickets
-            SET status = 'CONFIRMED'
+            SET status = 'CONFIRMED', server_revision = MAX(server_revision, ?)
             WHERE company_id = ? AND id = ?
-          `).run(companyId, op.entity_id);
+          `).run(res.serverRevision || 0, companyId, op.entity_id);
           factsUpdated++;
         } else if (op.command_type === 'DeleteTicket') {
           db.prepare(`UPDATE tickets SET status = 'VOIDED', server_revision = ? WHERE company_id = ? AND id = ?`)
             .run(res.serverRevision || 0, companyId, op.entity_id);
+          factsUpdated++;
+        } else if (op.command_type === 'UpdateTicket') {
+          db.prepare(`UPDATE tickets SET server_revision = MAX(server_revision, ?)
+            WHERE company_id = ? AND id = ?`).run(res.serverRevision || 0, companyId, op.entity_id);
           factsUpdated++;
         } else if (op.command_type === 'UpsertModel' || op.command_type === 'DeactivateModel') {
           const status = op.command_type === 'DeactivateModel' ? 'INACTIVE' : 'ACTIVE';
@@ -252,6 +273,8 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
           .run(companyId, op.entity_id);
         factsUpdated++;
+      } else if (op.command_type === 'UpdateTicket' && restoreTicketEntries(db, companyId, op)) {
+        factsUpdated++;
       }
       conflict++;
     } else {
@@ -267,6 +290,8 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
       if (op.command_type === 'DeleteTicket') {
         db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
           .run(companyId, op.entity_id);
+        factsUpdated++;
+      } else if (op.command_type === 'UpdateTicket' && restoreTicketEntries(db, companyId, op)) {
         factsUpdated++;
       }
       deadLetter++;
@@ -294,5 +319,6 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
 
 module.exports = {
   isDependencySatisfied,
-  dispatchOutbox
+  dispatchOutbox,
+  restoreTicketEntries
 };

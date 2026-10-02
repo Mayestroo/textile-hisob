@@ -108,12 +108,12 @@ function insertOutboxOperation(db, op) {
     INSERT INTO local_outbox (
       operation_id, company_id, command_type, entity_type, entity_id,
       base_revision, payload_json, payload_hash, depends_on_operation_id, causal_sequence,
-      status, attempt_count, retry_count, last_error, error_message,
+      status, attempt_count, retry_count, last_error, error_message, local_archive_json,
       created_at, updated_at
     ) VALUES (
       ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?,
       ?, ?
     )
   `);
@@ -134,6 +134,7 @@ function insertOutboxOperation(db, op) {
     retryCount,
     lastError,
     lastError,
+    op.local_archive_json || null,
     now,
     now
   );
