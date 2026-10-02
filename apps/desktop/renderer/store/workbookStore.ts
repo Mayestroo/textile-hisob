@@ -138,6 +138,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       scheduleBatchSettings(context);
     },
     updatePattaBatchSize: async (modelId: string, size: string, count: string) => {
+      const sizeKey = size.trim().toUpperCase();
       // Keep the controlled input responsive while the sync context is being
       // resolved. Multiple keystrokes can otherwise complete out of order and
       // overwrite newer values with an older snapshot.
@@ -145,10 +146,20 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       const immediateModel = immediateState.models.find((item) => item.id === modelId);
       if (immediateModel) {
         const current = immediateState.pattaBatchConfigs[modelId] || { partyNumber: '', totalIshSoni: '', color: immediateModel.color || 'Кора', sizes: {} };
-        set({ pattaBatchConfigs: { ...immediateState.pattaBatchConfigs, [modelId]: { ...current, sizes: { ...(current.sizes || {}), [size]: count } } } });
+        const currentSizes = immediateState.availableSizes || DEFAULT_BATCH_SIZES;
+        const availableSizes = currentSizes.some((value) => value.toUpperCase() === sizeKey)
+          ? currentSizes
+          : [...currentSizes, sizeKey];
+        set({
+          availableSizes,
+          pattaBatchConfigs: {
+            ...immediateState.pattaBatchConfigs,
+            [modelId]: { ...current, sizes: { ...(current.sizes || {}), [sizeKey]: count } }
+          }
+        });
       }
       const context = await getContext();
-      if (!context) return slices.updatePattaBatchSize(modelId, size, count);
+      if (!context) return slices.updatePattaBatchSize(modelId, sizeKey, count);
       if (!context.success) return;
       scheduleBatchSettings(context);
     },
