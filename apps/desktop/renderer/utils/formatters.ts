@@ -58,9 +58,14 @@ export function formatTicketDateTime(
   const timeStr = typeof ticketOrTime === 'string' ? ticketOrTime : ticketOrTime.submittedAt || '';
   const idStr = typeof ticketOrTime === 'string' ? ticketId : ticketOrTime.id;
 
-  // If already contains date (e.g. "13.09.2026 17:03" or "13.09.2026, 17:03")
-  if (timeStr && timeStr.includes('.')) {
+  // Keep already-human-readable local timestamps as-is.
+  if (/^\d{2}\.\d{2}\.\d{4}(?:,?\s+\d{2}:\d{2}(?::\d{2})?)?$/.test(timeStr)) {
     return timeStr.replace(',', '');
+  }
+
+  const parsed = parseTicketDateTime(timeStr);
+  if (parsed) {
+    return formatTicketTimestamp(parsed);
   }
 
   // Attempt recovery from ticket id (format: sub_1726574580000_...)
@@ -69,17 +74,42 @@ export function formatTicketDateTime(
     if (match) {
       const ts = parseInt(match[1], 10);
       if (!isNaN(ts)) {
-        const d = new Date(ts);
-        const day = padZero(d.getDate());
-        const month = padZero(d.getMonth() + 1);
-        const year = d.getFullYear();
-        const fallbackTime = `${padZero(d.getHours())}:${padZero(d.getMinutes())}`;
-        return `${day}.${month}.${year} ${timeStr || fallbackTime}`;
+        return formatTicketTimestamp(new Date(ts));
       }
     }
   }
 
   return timeStr || '—';
+}
+
+function parseTicketDateTime(value: string): Date | null {
+  if (!value) return null;
+  const localized = value.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:,?\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (localized) {
+    const [, day, month, year, hours = '0', minutes = '0', seconds = '0'] = localized;
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp);
+}
+
+function ticketTimestamp(ticket: { id?: string; submittedAt?: string }): number {
+  const parsed = parseTicketDateTime(ticket.submittedAt || '');
+  if (parsed) return parsed.getTime();
+  const legacyId = ticket.id?.match(/^sub_(\d{12,})/);
+  if (legacyId) {
+    const timestamp = Number(legacyId[1]);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
+export function sortTicketsNewestFirst<T extends { id?: string; submittedAt?: string }>(tickets: T[]): T[] {
+  return tickets
+    .map((ticket, index) => ({ ticket, index, timestamp: ticketTimestamp(ticket) }))
+    .sort((left, right) => right.timestamp - left.timestamp || right.index - left.index)
+    .map(({ ticket }) => ticket);
 }
 
 /**
@@ -126,4 +156,3 @@ export function formatUzbekDate(dateStr?: string): string {
   }
   return dateStr;
 }
-
