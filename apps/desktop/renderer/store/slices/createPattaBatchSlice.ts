@@ -94,21 +94,26 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
 
   updatePattaBatchSize: (modelId: string, size: string, count: string) => {
     set((state) => {
+      const sizeKey = size.trim().toUpperCase();
+      const currentSizes = state.availableSizes || DEFAULT_BATCH_SIZES;
+      const availableSizes = currentSizes.some((value) => value.toUpperCase() === sizeKey)
+        ? currentSizes
+        : [...currentSizes, sizeKey];
       const current = state.pattaBatchConfigs[modelId] || {
         partyNumber: '1',
         totalIshSoni: '',
         color: 'Кора',
         sizes: {}
       };
-      const updatedSizes = { ...(current.sizes || {}), [size]: count };
+      const updatedSizes = { ...(current.sizes || {}), [sizeKey]: count };
       const updated = {
         ...state.pattaBatchConfigs,
         [modelId]: { ...current, sizes: updatedSizes }
       };
       triggerDebouncedSave(() => {
-        get().saveToDisk({ pattaBatchConfigs: updated });
+        get().saveToDisk({ pattaBatchConfigs: updated, availableSizes });
       }, 1200, 'patta_batch');
-      return { pattaBatchConfigs: updated };
+      return { availableSizes, pattaBatchConfigs: updated };
     });
   },
 

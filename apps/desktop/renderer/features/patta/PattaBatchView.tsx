@@ -5,6 +5,7 @@ import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 import { ModelConfig } from '../../types/workbook';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { calculatePartyWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
+import { getPattaSizesForSystem, PattaSizeSystem } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { selectPartyDashboardRecords } from '../../store/selectors';
 
@@ -24,6 +25,7 @@ export const PattaBatchView: React.FC = () => {
   const completePartySeries = useWorkbookStore((s) => s.completePartySeries);
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const [runtimeMode, setRuntimeMode] = useState<'checking' | 'legacy' | 'sync'>('checking');
+  const [sizeSystem, setSizeSystem] = useState<PattaSizeSystem>('letters');
 
   useEffect(() => {
     let active = true;
@@ -53,7 +55,25 @@ export const PattaBatchView: React.FC = () => {
     if (canUseBatchMutation()) batchPrintCompleted(printedSummary);
   };
   
-  const activeSizes = availableSizes && availableSizes.length > 0 ? availableSizes : DEFAULT_BATCH_SIZES;
+  const allKnownSizes = useMemo(() => {
+    const sizes = new Set<string>(availableSizes && availableSizes.length > 0 ? availableSizes : DEFAULT_BATCH_SIZES);
+    for (const config of Object.values(pattaBatchConfigs || {})) {
+      for (const size of Object.keys(config.sizes || {})) sizes.add(size);
+    }
+    for (const party of printedPartyHistory || []) {
+      for (const size of Object.keys(party.sizes || {})) sizes.add(size);
+    }
+    return Array.from(sizes);
+  }, [availableSizes, pattaBatchConfigs, printedPartyHistory]);
+  const activeSizes = useMemo(
+    () => getPattaSizesForSystem(allKnownSizes, sizeSystem),
+    [allKnownSizes, sizeSystem]
+  );
+
+  const getActiveSizeValues = (modelId: string) => {
+    const savedSizes = pattaBatchConfigs[modelId]?.sizes || {};
+    return Object.fromEntries(activeSizes.map((size) => [size, savedSizes[size] || '']));
+  };
 
   const [printBatchItems, setPrintBatchItems] = useState<PrintBatchItem[] | null>(null);
   const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
@@ -65,10 +85,9 @@ export const PattaBatchView: React.FC = () => {
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const getTotalPattaCount = (modelId: string) => {
-    const config = pattaBatchConfigs[modelId];
-    if (!config || !config.sizes) return 0;
+    if (!pattaBatchConfigs[modelId]?.sizes) return 0;
     try {
-      return normalizePattaSizeCounts(config.sizes).pattaCount;
+      return normalizePattaSizeCounts(getActiveSizeValues(modelId)).pattaCount;
     } catch {
       return 0;
     }
@@ -156,7 +175,7 @@ export const PattaBatchView: React.FC = () => {
     }
 
     return { effectiveParties: parties, partyConflicts: conflicts };
-  }, [models, pattaBatchConfigs, nextPartyNumber, printedPartyHistory]);
+  }, [models, pattaBatchConfigs, nextPartyNumber, printedPartyHistory, activeSizes]);
 
   const totalBatchPattas = useMemo(() => {
     let total = 0;
@@ -164,11 +183,11 @@ export const PattaBatchView: React.FC = () => {
       total += getTotalPattaCount(m.id);
     }
     return total;
-  }, [models, pattaBatchConfigs]);
+  }, [models, pattaBatchConfigs, activeSizes]);
 
   const filledModelsCount = useMemo(() => {
     return models.filter((m) => getTotalPattaCount(m.id) > 0).length;
-  }, [models, pattaBatchConfigs]);
+  }, [models, pattaBatchConfigs, activeSizes]);
 
   const missingIshSoniModels = useMemo(() => {
     return models.filter((m) => {
@@ -176,18 +195,18 @@ export const PattaBatchView: React.FC = () => {
       if (pCount === 0) return false;
       return !pattaBatchConfigs[m.id]?.totalIshSoni?.trim();
     });
-  }, [models, pattaBatchConfigs]);
+  }, [models, pattaBatchConfigs, activeSizes]);
 
   const invalidPattaSizeModels = useMemo(() => {
     return models.filter((model) => {
       try {
-        normalizePattaSizeCounts(pattaBatchConfigs[model.id]?.sizes);
+        normalizePattaSizeCounts(getActiveSizeValues(model.id));
         return false;
       } catch {
         return true;
       }
     });
-  }, [models, pattaBatchConfigs]);
+  }, [models, pattaBatchConfigs, activeSizes]);
 
   const canAttemptBatchPrint = totalBatchPattas > 0 || invalidPattaSizeModels.length > 0;
 
@@ -199,7 +218,7 @@ export const PattaBatchView: React.FC = () => {
       try {
         normalizedSizesByModelId.set(
           model.id,
-          normalizePattaSizeCounts(pattaBatchConfigs[model.id]?.sizes)
+          normalizePattaSizeCounts(getActiveSizeValues(model.id))
         );
       } catch (error) {
         const errorCode = error instanceof Error ? error.message : '';
@@ -393,12 +412,12 @@ export const PattaBatchView: React.FC = () => {
   const pendingPattasCount = useMemo(() => {
     let count = 0;
     for (const p of activeUnclosedParties) {
-      const tickets = buildPartyTicketsList(p, submittedTickets || [], activeSizes);
+      const tickets = buildPartyTicketsList(p, submittedTickets || [], allKnownSizes);
       const unsubmitted = tickets.filter((t) => !t.isSubmitted).length;
       count += unsubmitted;
     }
     return count;
-  }, [activeUnclosedParties, submittedTickets, activeSizes]);
+  }, [activeUnclosedParties, submittedTickets, allKnownSizes]);
 
   return (
     <div className="excel-grid-container" style={{ padding: '16px 20px', backgroundColor: 'var(--bg-app)', overflowY: 'auto' }}>
@@ -434,6 +453,53 @@ export const PattaBatchView: React.FC = () => {
           }}>
             <Layers size={16} />
             <span>Pattalar Pechati (Partiyalar)</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Razmer turi:</span>
+            <div
+              role="group"
+              aria-label="Razmer turi"
+              title="Tanlangan turdagi razmerlar ko‘rsatiladi; boshqa turdagi qiymatlar saqlanib qoladi."
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '3px',
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--bg-surface-subtle)',
+                border: '1px solid var(--border-subtle)'
+              }}
+            >
+              {([
+                { value: 'letters', label: 'Harfli (S, M, L)' },
+                { value: 'numbers', label: 'Raqamli (36, 38, 40)' }
+              ] as const).map((option) => {
+                const selected = sizeSystem === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setSizeSystem(option.value)}
+                    style={{
+                      border: 'none',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '6px 10px',
+                      background: selected ? 'var(--primary)' : 'transparent',
+                      color: selected ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '14px' }}>
