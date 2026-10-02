@@ -265,7 +265,7 @@ async function approveActivationRequest(pool, requestId, input, options = {}) {
     );
     const provisionedDevice = await client.query(
       `INSERT INTO server_devices (device_id, company_id, token_hash, client_version, is_revoked, registered_at)
-       VALUES ($1, $2, $3, '2.0.0', false, NOW())
+        VALUES ($1, $2, $3, '1.0.0', false, NOW())
        ON CONFLICT (device_id) DO UPDATE SET
          company_id = EXCLUDED.company_id,
          token_hash = EXCLUDED.token_hash,
