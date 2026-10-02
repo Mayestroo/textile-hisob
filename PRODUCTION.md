@@ -35,7 +35,7 @@ and Docker build contexts within the main repository.
 
 ### Repository and client
 
-- Canonical project package and lockfile version: **0.0.0**.
+- Canonical project package and lockfile version: **1.0.0**.
 - Git branch/HEAD at deployment capture: `main`, `ec52cc7`, synchronized with
   `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration
@@ -242,6 +242,22 @@ changes to packaged inputs require the 1.7.15 candidate to be qualified anew.
   forced exit-code-2 recovery, fresh install, same-version reinstall, running
   app, and closed app). Synthetic SQLite and credential marker were preserved
   byte-for-byte on upgrade.
+
+### 1.0.0 fresh-start Patta size-switcher candidate
+
+- Artifact: `dist-build/local-candidate-1.0.0-clean-start/Novda-hisob-kitob-Setup-1.0.0-win10-11-x64.exe`
+- Size: `121241760` bytes
+- SHA-256: `dfc98af70d4cb3a3ed148cf79b79b748e59eea1e02f115e79f70b4473dcb84cb`
+- Packaged `package.json`: version `1.0.0`; Electron entrypoint
+  `apps/desktop/electron/main.cjs`.
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled. It includes the Patta printing
+  switcher for Harfli and Raqamli size systems. The Raqamli presets are 36–60;
+  additional numeric sizes can be added from the page.
+- This is a local test candidate, not published or yet verified on the target
+  office PC. The PostgreSQL `comp_novda` baseline remains the authoritative
+  source; no server data reset was performed for the version reset.
+
 Preserve prior release artifacts and local evidence unless an exact artifact is
 proven invalid and its identity is recorded.
 

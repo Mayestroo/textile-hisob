@@ -39,7 +39,7 @@ async function startServer(options = {}) {
   const app = buildServer({
     pool,
     env,
-    minClientVersion: env.MIN_CLIENT_VERSION || '0.0.0',
+    minClientVersion: env.MIN_CLIENT_VERSION || '1.0.0',
     allowTestTokens: env.ALLOW_TEST_TOKENS === 'true',
     logger: { level: env.LOG_LEVEL || 'info' }
   });

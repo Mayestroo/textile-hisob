@@ -583,6 +583,7 @@ if (isSyncEnabled) {
       token: deviceToken,
       operatorToken: withOperator ? readOperatorSession(compId) : '',
       deviceId,
+      clientVersion: app.getVersion(),
       baseUrl: resolveApiBaseUrl({ allowHttp: !app.isPackaged }),
       allowHttp: !app.isPackaged
     });

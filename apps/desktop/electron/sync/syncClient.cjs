@@ -33,7 +33,7 @@ class SyncClient {
     this.token = config.token || '';
     this.operatorToken = config.operatorToken || '';
     this.deviceId = config.deviceId || 'electron-workstation';
-    this.clientVersion = config.clientVersion || '0.0.0';
+    this.clientVersion = config.clientVersion || '1.0.0';
     this.timeoutMs = config.timeoutMs || 10000;
   }
 
