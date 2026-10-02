@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { buildPartyWorkSummary, buildPattaWorkTickets, calculatePartyWorkQuantities, normalizePattaSizeCounts } from './pattaQuantity';
+import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities, calculatePartyWorkQuantities, normalizePattaSizeCounts } from './pattaQuantity';
 
 describe('buildPattaWorkTickets', () => {
-  it('builds one per-patta work record for each patta in a party total', () => {
-    const tickets = buildPattaWorkTickets(972, { M: '9' });
+  it('uses the entered work count for each patta and multiplies the batch total', () => {
+    const tickets = buildPattaWorkTickets(100, { XXS: '1', XS: '1', S: '1', M: '1', L: '1', XL: '1', XXL: '1', XXXL: '1', '4XL': '1', '5XL': '1' });
 
-    expect(tickets).toEqual(Array.from({ length: 9 }, () => ({ size: 'M', perPatta: 108 })));
-    expect(tickets.reduce((total, ticket) => total + ticket.perPatta, 0)).toBe(972);
+    expect(tickets).toHaveLength(10);
+    expect(tickets.every((ticket) => ticket.perPatta === 100)).toBe(true);
+    expect(tickets.reduce((total, ticket) => total + ticket.perPatta, 0)).toBe(1000);
+    expect(calculateBatchWorkQuantities(100, tickets.length)).toEqual({
+      ishSoniPerPatta: 100,
+      pattaCount: 10,
+      totalIshSoni: 1000
+    });
   });
 });
 
@@ -53,5 +59,21 @@ describe('calculatePartyWorkQuantities', () => {
 
   it('rejects a total that does not divide evenly', () => {
     expect(() => calculatePartyWorkQuantities(1000, 9)).toThrow('PARTY_TOTAL_NOT_DIVISIBLE');
+  });
+});
+
+describe('calculateBatchWorkQuantities', () => {
+  it('multiplies the one-patta work count by the batch patta count', () => {
+    expect(calculateBatchWorkQuantities(100, 10)).toEqual({
+      ishSoniPerPatta: 100,
+      pattaCount: 10,
+      totalIshSoni: 1000
+    });
+  });
+
+  it('rejects invalid per-patta work counts and unsafe batch totals', () => {
+    expect(() => calculateBatchWorkQuantities(0, 10)).toThrow('INVALID_PARTY_TOTAL');
+    expect(() => calculateBatchWorkQuantities(100, 0)).toThrow('INVALID_PATTA_COUNT');
+    expect(() => calculateBatchWorkQuantities(Number.MAX_SAFE_INTEGER, 2)).toThrow('INVALID_PARTY_TOTAL');
   });
 });

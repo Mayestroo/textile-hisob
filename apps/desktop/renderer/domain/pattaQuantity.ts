@@ -4,6 +4,12 @@ export interface PartyWorkQuantities {
   perPatta: number;
 }
 
+export interface BatchWorkQuantities {
+  ishSoniPerPatta: number;
+  pattaCount: number;
+  totalIshSoni: number;
+}
+
 export interface PartyWorkSummary {
   ishSoniPerPatta: number;
   totalIshSoni: number;
@@ -72,17 +78,34 @@ export function calculatePartyWorkQuantities(
   return { partyTotal, pattaCount, perPatta: partyTotal / pattaCount };
 }
 
+export function calculateBatchWorkQuantities(
+  ishSoniPerPatta: number,
+  pattaCount: number
+): BatchWorkQuantities {
+  if (!Number.isSafeInteger(ishSoniPerPatta) || ishSoniPerPatta <= 0) {
+    throw new Error('INVALID_PARTY_TOTAL');
+  }
+  if (!Number.isSafeInteger(pattaCount) || pattaCount <= 0) {
+    throw new Error('INVALID_PATTA_COUNT');
+  }
+  const totalIshSoni = ishSoniPerPatta * pattaCount;
+  if (!Number.isSafeInteger(totalIshSoni)) {
+    throw new Error('INVALID_PARTY_TOTAL');
+  }
+  return { ishSoniPerPatta, pattaCount, totalIshSoni };
+}
+
 export function buildPattaWorkTickets(
-  partyTotal: number,
+  ishSoniPerPatta: number,
   sizes: Record<string, string | number> | undefined
 ): PattaWorkTicket[] {
   const normalizedSizes = normalizePattaSizeCounts(sizes);
-  const quantities = calculatePartyWorkQuantities(partyTotal, normalizedSizes.pattaCount);
+  calculateBatchWorkQuantities(ishSoniPerPatta, normalizedSizes.pattaCount);
   const tickets: PattaWorkTicket[] = [];
 
   for (const [size, count] of Object.entries(normalizedSizes.sizes)) {
     for (let index = 0; index < count; index += 1) {
-      tickets.push({ size, perPatta: quantities.perPatta });
+      tickets.push({ size, perPatta: ishSoniPerPatta });
     }
   }
 

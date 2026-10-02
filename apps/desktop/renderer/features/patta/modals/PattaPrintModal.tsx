@@ -2,13 +2,13 @@ import React from 'react';
 import { Printer, X, FileText } from 'lucide-react';
 import { ModelConfig } from '../../../types/workbook';
 import { useWorkbookStore } from '../../../store/workbookStore';
-import { buildPartyWorkSummary, buildPattaWorkTickets } from '../../../domain/pattaQuantity';
+import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
 
 export interface PrintBatchItem {
   model: ModelConfig;
   partyNumber: string;
   sizes: Record<string, string>;
-  totalIshSoni?: string;
+  ishSoniPerPatta?: string;
   color?: string;
 }
 
@@ -51,7 +51,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
   const printableItems = React.useMemo(() => items.map((item) => {
-    const workTickets = buildPattaWorkTickets(Number(item.totalIshSoni), item.sizes);
+    const workTickets = buildPattaWorkTickets(Number(item.ishSoniPerPatta), item.sizes);
     const sizeCounts = new Map<string, number>();
     for (const ticket of workTickets) {
       sizeCounts.set(ticket.size, (sizeCounts.get(ticket.size) || 0) + 1);
@@ -234,7 +234,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
           modelId: item.model.id,
           partyNumber: item.partyNumber,
           pattaCount,
-          ...buildPartyWorkSummary(Number(item.totalIshSoni), pattaCount),
+          ...buildPartyWorkSummary(calculateBatchWorkQuantities(Number(item.ishSoniPerPatta), pattaCount).totalIshSoni, pattaCount),
           sizes: Object.fromEntries(sizeEntries.map(([size, count]) => [size, String(count)])),
           color: item.color || item.model.color || 'Кора'
         };
@@ -639,6 +639,25 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                             </td>
                           </tr>
 
+                          <tr style={{ height: 'auto' }}>
+                            <td
+                              colSpan={5}
+                              style={{
+                                border: borderStyle,
+                                textAlign: 'left',
+                                fontWeight: 'bold',
+                                fontSize: dyn.verticalSizesFontSize,
+                                padding: '3px 6px',
+                                whiteSpace: 'normal',
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'normal',
+                                lineHeight: 1.15
+                              }}
+                            >
+                              Размер: {t.sizesSummary}
+                            </td>
+                          </tr>
+
                           {/* ROW 5: Header (№, Operatsiya nomi, Nomer, Ism familiya, Brak ish) */}
                           <tr style={{ height: dyn.headerHeight, fontWeight: 'bold', backgroundColor: '#e2e8f0' }}>
                             <td style={{ border: borderStyle, textAlign: 'center', fontSize: dyn.tableFontSize, padding: dyn.cellPadding }}>№</td>
@@ -687,11 +706,6 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
                                     whiteSpace: 'nowrap'
                                   }}
                                 >
-                                  {t.sizesSummary ? (
-                                   <div style={{ fontSize: dyn.verticalSizesFontSize, fontWeight: 'bold', letterSpacing: '0.3px', marginRight: '6px', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.15 }}>
-                                      {t.sizesSummary}
-                                    </div>
-                                  ) : null}
                                   <div style={{ fontSize: dyn.verticalPattaFontSize, letterSpacing: dyn.verticalPattaLetterSpacing, fontWeight: 'bold' }}>
                                     Партия № {t.party}
                                   </div>

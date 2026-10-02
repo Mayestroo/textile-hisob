@@ -127,14 +127,31 @@ function isCompanySessionCurrent(get: () => WorkbookStore, session: ReturnType<t
     && (!authCompanyId || authCompanyId === companyId);
 }
 
-function refreshAfterReconnect(eAPI: any, companyId: string, get: () => WorkbookStore, set: SetWorkbook, session: ReturnType<typeof captureSessionIdentity>, initialLicenseStatus: WorkbookStore['licenseStatus']) {
+export function preserveBatchSettingsDraft(projection: any, current: Pick<WorkbookStore, 'availableSizes' | 'pattaBatchConfigs'>) {
+  return {
+    ...projection,
+    availableSizes: current.availableSizes,
+    pattaBatchConfigs: current.pattaBatchConfigs
+  };
+}
+
+function refreshAfterReconnect(
+  eAPI: any,
+  companyId: string,
+  get: () => WorkbookStore,
+  set: SetWorkbook,
+  session: ReturnType<typeof captureSessionIdentity>,
+  initialLicenseStatus: WorkbookStore['licenseStatus'],
+  preserveBatchDraft = false
+) {
   if (typeof eAPI?.SyncReconnect !== 'function') return;
   void runReconnect(eAPI, companyId).then(async (syncResult: any) => {
     if (!syncResult?.success || !isCompanySessionCurrent(get, session, companyId, initialLicenseStatus)) return;
     if (!isCompanySessionCurrent(get, session, companyId, initialLicenseStatus)) return;
     const refreshed = await reloadWorkbookProjection(eAPI, companyId);
     if (!isCompanySessionCurrent(get, session, companyId, initialLicenseStatus)) return;
-    set({ ...refreshed, isServerConnected: true } as Partial<WorkbookStore>);
+    const safeProjection = preserveBatchDraft ? preserveBatchSettingsDraft(refreshed, get()) : refreshed;
+    set({ ...safeProjection, isServerConnected: true } as Partial<WorkbookStore>);
   }).catch(() => {
     // Offline  writes remain durable in SQLite/outbox; never fall back to legacy storage.
   });
@@ -186,13 +203,24 @@ export async function submitWorkbookCommand(
   try {
     const projection = await reloadWorkbookProjection(eAPI, command.companyId);
     if (isCurrent()) {
-      set(projection as Partial<WorkbookStore>);
+      const safeProjection = command.commandType === 'UpdateBatchSettings'
+        ? preserveBatchSettingsDraft(projection, get())
+        : projection;
+      set(safeProjection as Partial<WorkbookStore>);
       projectionLoaded = true;
     }
   } catch {
     // The command and outbox row are already committed. Reconnect/hydration can retry later.
   }
-  refreshAfterReconnect(eAPI, command.companyId, get, set, session, initialLicenseStatus);
+  refreshAfterReconnect(
+    eAPI,
+    command.companyId,
+    get,
+    set,
+    session,
+    initialLicenseStatus,
+    command.commandType === 'UpdateBatchSettings'
+  );
   return {
     mode: 'sync',
     success: true,

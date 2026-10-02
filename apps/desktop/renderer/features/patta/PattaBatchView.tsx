@@ -4,7 +4,7 @@ import { Printer, Plus, X, Layers, CheckCircle2, AlertCircle, TrendingUp } from 
 import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 import { ModelConfig } from '../../types/workbook';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
-import { calculatePartyWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
+import { calculateBatchWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
 import { getPattaSizesForSystem, PattaSizeSystem } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { selectPartyDashboardRecords } from '../../store/selectors';
@@ -268,17 +268,14 @@ export const PattaBatchView: React.FC = () => {
       const pattaCount = normalizedSizesByModelId.get(model.id)?.pattaCount || 0;
       if (pattaCount === 0) continue;
 
-      const partyTotal = Number(pattaBatchConfigs[model.id]?.totalIshSoni);
+      const ishSoniPerPatta = Number(pattaBatchConfigs[model.id]?.totalIshSoni);
       try {
-        calculatePartyWorkQuantities(partyTotal, pattaCount);
-      } catch (error) {
+        calculateBatchWorkQuantities(ishSoniPerPatta, pattaCount);
+      } catch {
         inputRefs.current[`ish_soni_${model.id}`]?.focus();
         inputRefs.current[`ish_soni_${model.id}`]?.select();
 
-        const errorCode = error instanceof Error ? error.message : '';
-        const message = errorCode === 'PARTY_TOTAL_NOT_DIVISIBLE'
-          ? `"${model.name}" modeli uchun jami ish soni (${partyTotal}) ${pattaCount} ta pattaga qoldiqsiz bo'linishi kerak.`
-          : `"${model.name}" modeli uchun jami ish soni musbat butun son bo'lishi kerak.`;
+        const message = `"${model.name}" modeli uchun 1 ta pattadagi ish soni musbat butun son bo'lishi va jami (${ishSoniPerPatta} × ${pattaCount}) xavfsiz butun son bo'lishi kerak.`;
         addNotification('error', 'Jami ish soni xato!', message);
         return;
       }
@@ -293,7 +290,7 @@ export const PattaBatchView: React.FC = () => {
           model: m,
           partyNumber: effectiveParties[m.id] || '1',
           sizes: Object.fromEntries(Object.entries(normalizedSizes).map(([size, count]) => [size, String(count)])),
-          totalIshSoni: cfg.totalIshSoni || '',
+          ishSoniPerPatta: cfg.totalIshSoni || '',
           color: cfg.color || m.color || 'Кора'
         };
       });
@@ -618,9 +615,14 @@ export const PattaBatchView: React.FC = () => {
           const currentParty = effectiveParties[model.id] || String(nextPartyNumber || 1);
           const partyConflictError = partyConflicts[model.id];
 
-          const partyTotal = Number(config.totalIshSoni);
+          const ishSoniPerPatta = Number(config.totalIshSoni);
           const isIshSoniMissing = totalPattaCount > 0 && !config.totalIshSoni?.trim();
-          const totalIshCalculated = totalPattaCount > 0 && Number.isFinite(partyTotal) && partyTotal > 0 ? partyTotal : 0;
+          let totalIshCalculated = 0;
+          if (totalPattaCount > 0 && Number.isSafeInteger(ishSoniPerPatta) && ishSoniPerPatta > 0) {
+            try {
+              totalIshCalculated = calculateBatchWorkQuantities(ishSoniPerPatta, totalPattaCount).totalIshSoni;
+            } catch {}
+          }
 
           return (
             <div 
@@ -688,7 +690,7 @@ export const PattaBatchView: React.FC = () => {
                 {/* 1. Ish Soni */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: isIshSoniMissing ? '#ef4444' : 'var(--text-secondary)' }}>
-                    Jami ish soni:
+                    1 patta ish:
                   </label>
                   <input
                     ref={(el) => { inputRefs.current[`ish_soni_${model.id}`] = el; }}
@@ -778,7 +780,7 @@ export const PattaBatchView: React.FC = () => {
                   <div>Patta: <strong>{totalPattaCount} ta</strong></div>
                   {totalIshCalculated > 0 && (
                     <div style={{ fontSize: '10.5px', color: 'var(--text-primary)', marginTop: '2px' }}>
-                      Jami: {totalIshCalculated.toLocaleString()} dona
+                      Jami ish soni: {totalIshCalculated.toLocaleString()} dona
                     </div>
                   )}
                 </div>
