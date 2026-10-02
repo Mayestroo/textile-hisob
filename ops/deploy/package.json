@@ -1,7 +1,7 @@
 {
   "name": "novda-api-runtime",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Minimal production runtime dependencies for the Novda API",
   "dependencies": {
     "fastify": "5.12.5",

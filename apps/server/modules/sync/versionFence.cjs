@@ -24,7 +24,7 @@ function isVersionAtLeast(clientVersion, minVersion) {
   return compareVersions(clientVersion, minVersion) >= 0;
 }
 
-const DEFAULT_MIN_CLIENT_VERSION = process.env.NOVDA_MIN_CLIENT_VERSION || '0.0.0';
+const DEFAULT_MIN_CLIENT_VERSION = process.env.NOVDA_MIN_CLIENT_VERSION || '1.0.0';
 
 function checkClientVersionFence(clientVersion, minVersion = DEFAULT_MIN_CLIENT_VERSION) {
   if (!clientVersion || !isVersionAtLeast(clientVersion, minVersion)) {

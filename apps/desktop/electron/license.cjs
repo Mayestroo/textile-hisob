@@ -24,7 +24,7 @@ const LICENSE_SCHEMA = 'novda-license-v1';
 const VALID_ROLES = new Set(['admin', 'type', 'print']);
 const DEFAULT_ACTIVATION_API_URL = DEFAULT__API_BASE_URL;
 
-let APP_VERSION = '0.0.0';
+let APP_VERSION = '1.0.0';
 try {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf-8'));
   APP_VERSION = pkg.version || APP_VERSION;

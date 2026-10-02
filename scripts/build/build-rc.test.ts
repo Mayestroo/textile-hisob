@@ -14,8 +14,8 @@ describe('local RC build boundary', () => {
   });
 
   it('accepts a matching package and lockfile version pair', () => {
-    const packageJson = { version: '0.0.0' };
-    const packageLock = { version: '0.0.0', packages: { '': { version: '0.0.0' } } };
+    const packageJson = { version: '1.0.0' };
+    const packageLock = { version: '1.0.0', packages: { '': { version: '1.0.0' } } };
 
     expect(() => assertReleaseVersion(packageJson, packageLock)).not.toThrow();
     expect(() => assertReleaseVersion({ version: '1.7.11' }, packageLock)).toThrowError(

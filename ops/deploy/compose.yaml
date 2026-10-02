@@ -101,7 +101,7 @@ services:
       PORT: "3474"
       NOVDA_PUBLIC_API_URL: https://sync.novdatextile.uz
       DATABASE_URL: postgresql://novda_app:${NOVDA_APP_PASSWORD:?NOVDA_APP_PASSWORD is required}@novda-postgres:5432/novda_prod
-      MIN_CLIENT_VERSION: 0.0.0
+      MIN_CLIENT_VERSION: 1.0.0
       ALLOW_TEST_TOKENS: "false"
       # Owner-controlled override; PIN checks remain on unless explicitly disabled.
       NOVDA_WORKER_PIN_REQUIRED: "${NOVDA_WORKER_PIN_REQUIRED:-true}"
