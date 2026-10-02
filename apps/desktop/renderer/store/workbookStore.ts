@@ -12,7 +12,7 @@ import { getElectronApi, resolveElectronRuntimeMode } from './runtimeMode';
 import { cancelDebouncedSave, triggerDebouncedSave } from './helpers/debounceSave';
 import { DEFAULT_BATCH_SIZES } from '../constants/batchConstants';
 import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary } from './pattaBatch';
-import { createWorkbookCommand, submitWorkbookCommand } from './businessMutations';
+import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from './businessMutations';
 import { normalizePattaSizeCounts } from '../domain/pattaQuantity';
 import { formatDateIso } from '../utils/formatters';
 
@@ -189,7 +189,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         printedAt: party.printedAt
       };
       const success = await submit(context, commandType, party.id, payload);
-      if (success) get().addNotification('success', 'Partiya saqlandi', `Partiya ${party.partyNumber}  bazasida saqlandi.`);
+      if (success) get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`Partiya ${party.partyNumber} saqlandi.`));
     },
     batchPrintCompleted: async (printedItems: Parameters<WorkbookStore['batchPrintCompleted']>[0]) => {
       const context = await getContext();
@@ -213,7 +213,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         });
         if (success) {
           set({ nextPartyNumber: mutation.nextPartyNumber, deletedPartyIds: mutation.deletedPartyIds });
-          get().addNotification('success', 'Pattalar saqlandi', `${mutation.parties.length} ta partiya  bazasiga saqlandi.`);
+          get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`${mutation.parties.length} ta partiya saqlandi.`));
         }
       } catch (error) {
         get().addNotification('error', '_BATCH_INVALID', error instanceof Error ? error.message : 'Patta batch was invalid.');
@@ -240,7 +240,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       });
       if (!confirmed) return;
       const success = await submit(context, 'ArchivePartyHistory', context.companyId, { partyRecordIds: ids });
-      if (success) get().addNotification('success', 'Tarix arxivlandi', 'Partiya yozuvlari saqlandi va ko‘rinadigan ro‘yxatdan olindi.');
+      if (success) get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice('Partiya tarixi arxivlash uchun belgilandi.'));
     },
     confirmPartyActualQuantities: async (partyRecordId: string) => {
       const context = await getContext();
@@ -275,7 +275,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         sizes: party.sizes || {},
         printedAt: party.printedAt
       });
-      if (success) get().addNotification('success', 'Tasdiqlandi!', `Partiya ${party.partyNumber} haqiqiy ish soni  bazasida yangilandi.`);
+      if (success) get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`Partiya ${party.partyNumber} ish soni yangilandi.`));
     },
     completePartySeries: async () => {
       const context = await getContext();
@@ -287,7 +287,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         return;
       }
       const success = await submit(context, 'CompletePartySeries', periodId, { periodId, endDate: formatDateIso() });
-      if (success) get().addNotification('success', 'Partiya yakunlandi', 'Faol partiya va pattalar  bazasida yakunlandi.');
+      if (success) get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice('Faol partiya va pattalar yakunlandi.'));
     }
   } as WorkbookStore;
 });

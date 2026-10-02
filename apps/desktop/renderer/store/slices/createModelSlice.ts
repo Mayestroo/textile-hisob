@@ -4,7 +4,7 @@ import { ModelConfig } from '../../types/workbook';
 import { STANDARD_OPERATIONS } from '../../constants/operationConstants';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
-import { createWorkbookCommand, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
+import { createWorkbookCommand, localCommitSyncNotice, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
 import { formatDateIso } from '../../utils/formatters';
 
 async function tryModelMutation(
@@ -218,7 +218,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     if (sync?.handled) {
       if (sync.success) {
         set({ activeSheet: cleanName });
-        state.addNotification('success', "Model qo'shildi", `"${cleanName}" modeli  bazasiga saqlandi.`);
+        state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${cleanName}" modeli yaratildi.`));
       }
       return;
     }
@@ -255,7 +255,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     if (sync?.handled) {
       if (sync.success) {
         set({ activeSheet: get().models[0]?.name || 'Umumiy' });
-        state.addNotification('info', "O'chirildi", 'Model  tarixini saqlagan holda faol holatdan olindi.');
+        state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice('Model faol ro‘yxatdan olindi; tarixi saqlanadi.'));
       }
       return;
     }
@@ -296,7 +296,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
         const activeSheet = get().activeSheet;
         if (activeSheet === targetModel.name || activeSheet === targetModel.id || activeSheet === oldId) set({ activeSheet: cleanName });
         else if (activeSheet === targetModel.hisobSheetName || activeSheet === `${oldId}-hisob`) set({ activeSheet: `${cleanName}-hisob` });
-        state.addNotification('success', 'Nomlandi', `Model nomi "${cleanName}" ga o'zgartirildi.`);
+        state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`Model nomi "${cleanName}" ga o‘zgartirildi.`));
       }
       return;
     }
@@ -409,7 +409,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
       ? await tryModelMutation(state, get, set, 'UpsertModel', modelId, modelCommandPayload(updatedModel))
       : null;
     if (sync?.handled) {
-      if (sync.success) state.addNotification('success', "Qo'shildi", `'${cleanOpName}'  modeliga qo'shildi.`);
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`'${cleanOpName}' operatsiyasi modelga qo‘shildi.`));
       return;
     }
 
@@ -493,7 +493,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
           const saved = await eAPI.TicketDraftSave({ companyId, modelId, form: updatedForms[modelId] });
           if (!saved?.success) state.addNotification('warning', '_TICKET_DRAFT_SAVE_FAILED', saved?.error || 'The updated ticket draft could not be saved.');
         }
-        state.addNotification('info', "O'chirildi", `"${cleanOpName}"  modelidan o'chirildi.`);
+        state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${cleanOpName}" operatsiyasi modeldan olindi.`));
       }
       return;
     }
@@ -527,7 +527,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
       ? await tryModelMutation(state, get, set, 'UpsertModel', modelId, modelCommandPayload(updatedModel))
       : null;
     if (sync?.handled) {
-      if (sync.success) state.addNotification('success', 'Stavka yangilandi', `"${opName}" stavkasi  da saqlandi.`);
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${opName}" stavkasi yangilandi.`));
       return;
     }
 
@@ -602,7 +602,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
           const saved = await eAPI.TicketDraftSave({ companyId, modelId, form: updatedTicketForms[modelId] });
           if (!saved?.success) state.addNotification('warning', '_TICKET_DRAFT_SAVE_FAILED', saved?.error || 'The updated ticket draft could not be saved.');
         }
-        state.addNotification('success', 'Nom yangilandi', `"${oldOpName}" nomi  modelida yangilandi.`);
+        state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${oldOpName}" nomi modelda yangilandi.`));
       }
       return;
     }
@@ -692,7 +692,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
       ? await tryModelMutation(state, get, set, 'UpsertModel', modelId, modelCommandPayload(updatedModel))
       : null;
     if (sync?.handled) {
-      if (sync.success) state.addNotification('success', 'Tartib saqlandi', 'Operatsiyalar tartibi  modelida saqlandi.');
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice('Operatsiyalar tartibi yangilandi.'));
       return;
     }
 

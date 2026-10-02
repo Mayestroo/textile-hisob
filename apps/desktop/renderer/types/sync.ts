@@ -243,6 +243,7 @@ export interface SyncInfo {
   status: SyncStatus;
   lastSyncedAt: string | null;
   pendingChanges: number;
+  failedChanges: number;
   online: boolean;
   isServerConnected: boolean;
   errorMessage?: string;

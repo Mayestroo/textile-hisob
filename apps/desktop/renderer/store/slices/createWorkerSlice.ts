@@ -178,7 +178,7 @@ export const createWorkerSlice: StateCreator<WorkbookStore, [], [], WorkerSlice>
         return false;
       }
       if (result.success) {
-        state.addNotification('success', "Ishchi qo'shildi", 'Yangi ishchi yaratish navbatga qo\'shildi; raqam server tomonidan belgilanadi.');
+        state.addNotification('info', 'Ishchi yaratish navbatda', 'Yangi ishchi yaratish so‘rovi lokal outboxga yozildi; ID server tasdiqlagach belgilanadi.');
       }
       return result.success;
     }

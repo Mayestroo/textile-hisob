@@ -39,6 +39,10 @@ export type WorkbookCommandResult = {
 type SetWorkbook = (partial: Partial<WorkbookStore>) => void;
 const reconnectQueues = new Map<string, Promise<any>>();
 
+export function localCommitSyncNotice(detail: string): string {
+  return `${detail} Lokal bazaga saqlandi; VPS sinxron holati yuqoridagi indikator orqali ko‘rinadi.`;
+}
+
 function createCommandId(): string {
   const randomUUID = (globalThis.crypto as Crypto & { randomUUID?: () => string } | undefined)?.randomUUID;
   if (typeof randomUUID !== 'function') throw new Error('_COMMAND_REQUIRED: UUID generation is unavailable');

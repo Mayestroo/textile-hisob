@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useOnline } from '../../hooks/useOnline';
 import { useSyncStore } from '../../store/syncStore';
 import { useAuthStore } from '../../store/authStore';
@@ -6,7 +6,8 @@ import { useWorkbookStore } from '../../store/workbookStore';
 import { isValidCompanyId } from '../../store/helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode, ElectronRuntimeModeResult } from '../../store/runtimeMode';
 import { captureSessionIdentity, isSessionCurrent } from '../../store/sessionGuard';
-import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { runReconnect } from '../../store/businessMutations';
+import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export function resolveManualSyncCompany(authCompanyId: unknown, licenseCompanyId: unknown): string | undefined {
   if (!isValidCompanyId(licenseCompanyId)) return undefined;
@@ -22,8 +23,11 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
   const online = useOnline();
   const status = useSyncStore((s) => s.status);
   const pendingChanges = useSyncStore((s) => s.pendingChanges);
+  const failedChanges = useSyncStore((s) => s.failedChanges);
   const setPending = useSyncStore((s) => s.setPending);
+  const setFailed = useSyncStore((s) => s.setFailed);
   const setStatus = useSyncStore((s) => s.setStatus);
+  const isServerConnected = useWorkbookStore((s) => s.isServerConnected);
   const syncing = status === 'syncing';
   const authCompanyId = useAuthStore((s) => s.companyId);
   const licenseCompanyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
@@ -33,14 +37,24 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     : authCompanyId && authCompanyId !== licenseCompanyId
     ? 'Sinxronizatsiya bloklandi: autentifikatsiya va litsenziya korxonalari mos emas.'
     : null;
+  const syncInFlight = useRef(false);
 
   const refreshPendingCount = async () => {
     const eAPI = getElectronApi();
     if (!activeCompanyId || typeof eAPI?.OutboxPending !== 'function') {
       setPending(0);
+      setFailed(0);
       return;
     }
     try {
+      if (typeof eAPI.OutboxDiagnostics === 'function') {
+        const result = await eAPI.OutboxDiagnostics(activeCompanyId);
+        if (!result?.success) return;
+        const diagnostics = result.diagnostics || {};
+        setPending(Number(diagnostics.pendingCount || 0) + Number(diagnostics.sendingCount || 0));
+        setFailed(Number(diagnostics.conflictCount || 0) + Number(diagnostics.deadLetterCount || 0));
+        return;
+      }
       const result = await eAPI.OutboxPending({ companyId: activeCompanyId, limit: 1000 });
       if (result?.success) setPending(Array.isArray(result.pending) ? result.pending.length : 0);
     } catch {
@@ -48,8 +62,9 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     }
   };
 
-  const handleManualSync = async () => {
-    if (!online || syncing || !isValidCompanyId(activeCompanyId)) return;
+  const synchronize = async (manual: boolean) => {
+    if (!online || !isValidCompanyId(activeCompanyId) || syncInFlight.current || manual && syncing) return;
+    syncInFlight.current = true;
     const initialLicenseStatus = useWorkbookStore.getState().licenseStatus;
     const session = captureSessionIdentity(activeCompanyId);
     const isCurrent = () => useWorkbookStore.getState().licenseStatus === initialLicenseStatus
@@ -61,20 +76,64 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       const runtime = await resolveElectronRuntimeMode(eAPI);
       if (!allowsManualSync(runtime) || !isCurrent() || typeof eAPI?.SyncReconnect !== 'function') return;
       setStatus('syncing');
-      const result = await eAPI.SyncReconnect(activeCompanyId);
+      const result = await runReconnect(eAPI, activeCompanyId);
       if (!isCurrent()) return;
-      setStatus(result?.success ? 'idle' : 'error', result?.error || result?.code);
+      useWorkbookStore.setState({ isServerConnected: Boolean(result?.success) });
       await refreshPendingCount();
+      const failures = useSyncStore.getState().failedChanges;
+      setStatus(result?.success && failures === 0 ? 'synced' : 'error',
+        failures > 0 ? `${failures} ta outbox buyrug'i serverda rad etilgan yoki conflict bo'lgan.` : result?.error || result?.code);
     } catch (error) {
+      useWorkbookStore.setState({ isServerConnected: false });
       setStatus('error', error instanceof Error ? error.message : 'VPS sync failed');
+    } finally {
+      syncInFlight.current = false;
     }
   };
+
+  const handleManualSync = () => synchronize(true);
 
   useEffect(() => {
     void refreshPendingCount();
     const interval = setInterval(() => void refreshPendingCount(), 3000);
     return () => clearInterval(interval);
   }, [activeCompanyId]);
+
+  // Pull remote changes periodically so an idle second/third workstation sees
+  // updates without requiring a click or another local write.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (online && activeCompanyId) void synchronize(false);
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [activeCompanyId, online]);
+
+  const hasSyncFailures = failedChanges > 0;
+  const hasPendingChanges = pendingChanges > 0;
+  const statusColor = !online || hasSyncFailures
+    ? '#fca5a5'
+    : hasPendingChanges || !isServerConnected
+      ? '#fde047'
+      : '#6ee7b7';
+  const statusBackground = !online || hasSyncFailures
+    ? 'rgba(239, 68, 68, 0.15)'
+    : hasPendingChanges || !isServerConnected
+      ? 'rgba(245, 158, 11, 0.15)'
+      : 'rgba(16, 185, 129, 0.15)';
+  const statusBorder = !online || hasSyncFailures
+    ? 'rgba(239, 68, 68, 0.35)'
+    : hasPendingChanges || !isServerConnected
+      ? 'rgba(251, 191, 36, 0.35)'
+      : 'rgba(52, 211, 153, 0.35)';
+  const statusTitle = syncContextError || (!online
+    ? 'Tarmoq uzilgan: o‘zgarishlar lokal navbatda saqlanadi.'
+    : hasSyncFailures
+      ? `${failedChanges} ta buyruq conflict yoki rad javobi olgan. Tafsilotlar outboxda saqlangan.`
+      : hasPendingChanges
+        ? `${pendingChanges} ta o‘zgarish VPSga yuborish navbatida. Qayta sinxronlash uchun bosing.`
+        : isServerConnected
+          ? 'Oxirgi tekshiruvda VPS bilan sync xatosiz yakunlandi.'
+          : 'Internet bor, lekin VPS bilan sync hali tasdiqlanmagan. Qayta sinxronlash uchun bosing.');
 
   return (
     <div
@@ -87,30 +146,33 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         borderRadius: 'var(--radius-full)',
         fontSize: '11.5px',
         fontWeight: 600,
-        backgroundColor: online ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-        color: online ? '#6ee7b7' : '#fca5a5',
-        border: `1px solid ${online ? 'rgba(52, 211, 153, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
+         backgroundColor: statusBackground,
+         color: statusColor,
+         border: `1px solid ${statusBorder}`,
         backdropFilter: 'blur(8px)',
         transition: 'all 0.2s',
         userSelect: 'none',
         cursor: online && activeCompanyId ? 'pointer' : 'default',
         ...style
       }}
-      title={syncContextError || (online
-        ? syncing
-          ? 'VPS bilan sinxronlanmoqda...'
-          : pendingChanges > 0
-          ? `${pendingChanges} ta o'zgarish navbatda. Bosing — VPS bilan qayta sinxronlash`
-          : 'VPS tarmog‘i ulangan (Online)'
-        : 'Tarmoq uzilgan (Oflayn rejim — o‘zgarishlar mahalliy navbatda saqlanadi)')}
+       title={syncing ? 'VPS bilan sinxronlanmoqda…' : statusTitle}
     >
-      {online ? (
-        syncing ? <RefreshCw size={13} className="spin-animation" color="#6ee7b7" /> : <Wifi size={13} color="#6ee7b7" />
-      ) : <WifiOff size={13} color="#fca5a5" />}
-      <span>{online ? (syncing ? 'Sinxron...' : 'Online') : 'Oflayn'}</span>
+      {syncing
+        ? <RefreshCw size={13} className="spin-animation" color={statusColor} />
+        : !online
+          ? <WifiOff size={13} color={statusColor} />
+          : hasSyncFailures
+            ? <AlertTriangle size={13} color={statusColor} />
+            : <Wifi size={13} color={statusColor} />}
+      <span>{syncing ? 'Sinxron...' : !online ? 'Oflayn' : hasSyncFailures ? 'Sync xatosi' : hasPendingChanges ? 'Navbatda' : isServerConnected ? 'Sinxron' : 'VPS?'}</span>
       {pendingChanges > 0 && (
-        <span style={{ marginLeft: '2px', background: 'var(--status-error)', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
+        <span style={{ marginLeft: '2px', background: '#d97706', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
           {pendingChanges}
+        </span>
+      )}
+      {failedChanges > 0 && (
+        <span style={{ marginLeft: '2px', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
+          !{failedChanges}
         </span>
       )}
     </div>

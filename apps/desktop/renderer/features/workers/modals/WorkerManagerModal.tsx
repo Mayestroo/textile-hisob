@@ -49,7 +49,7 @@ export const WorkerManagerModal: React.FC = () => {
         staj: stajNum
       }, { immediate: true });
       if (updated === false) return;
-      addNotification('success', 'Yangilandi', `Ishchi #${workerId} ma'lumotlari (F.I.O va Staj) yangilandi.`);
+      addNotification('info', 'Saqlash holati', `Ishchi #${workerId} ma'lumotlari lokalda saqlandi; VPS holatini sinxron indikator orqali ko‘ring.`);
     }
     setEditingWorkerId(null);
     setEditingName('');

@@ -82,7 +82,12 @@ export const PattaHisobView: React.FC = () => {
       const eAPI = getElectronApi();
       const runtime = await resolveElectronRuntimeMode(eAPI);
       if (runtime.mode === 'sync') {
-        setArchiveFiles([]);
+        setArchiveFiles(periods.filter((period) => period.isClosed).map((period) => ({
+          filename: period.archiveFilename || period.id,
+          name: period.name,
+          startDate: period.startDate,
+          endDate: period.endDate
+        })));
         return;
       }
       if (eAPI && (eAPI.archivesListMeta || eAPI.archivesList)) {
@@ -106,7 +111,7 @@ export const PattaHisobView: React.FC = () => {
       }
     };
     fetchArchiveList();
-  }, [selectedArchiveFilename, companyId]);
+  }, [selectedArchiveFilename, companyId, periods]);
 
   // All-time mode state & handler
   const [isAllTimeMode, setIsAllTimeMode] = useState(false);
@@ -118,8 +123,8 @@ export const PattaHisobView: React.FC = () => {
 
   const handleSelectAllTime = async () => {
     const runtime = await resolveElectronRuntimeMode(getElectronApi());
-    if (runtime.mode === 'sync') {
-      addNotification('error', runtime.code || '_LEGACY_STORAGE_FORBIDDEN', runtime.error || ' archive reads are unavailable.');
+    if (runtime.mode === 'sync' && !runtime.success) {
+      addNotification('error', runtime.code || '_RUNTIME_NOT_READY', runtime.error || 'Runtime readiness failed.');
       return;
     }
     setIsAllTimeMode(true);
@@ -131,9 +136,16 @@ export const PattaHisobView: React.FC = () => {
       const ticketMap = new Map<string, SubmittedTicketRecord>();
 
       const eAPI = getElectronApi();
-      let filesToRead = archiveFiles;
+      let filesToRead = runtime.mode === 'sync'
+        ? periods.filter((period) => period.isClosed).map((period) => ({
+          filename: period.archiveFilename || period.id,
+          name: period.name,
+          startDate: period.startDate,
+          endDate: period.endDate
+        }))
+        : archiveFiles;
 
-      if (eAPI && eAPI.archivesList && filesToRead.length === 0) {
+      if (runtime.mode !== 'sync' && eAPI && eAPI.archivesList && filesToRead.length === 0) {
         try {
           const aRes = await eAPI.archivesList(companyId);
           if (aRes.success && aRes.archives) {
@@ -151,7 +163,25 @@ export const PattaHisobView: React.FC = () => {
       }
 
       // 1. Read all archive files
-      if (eAPI && eAPI.archiveRead && filesToRead.length > 0) {
+      if (runtime.mode === 'sync' && eAPI?.PeriodArchiveRead && filesToRead.length > 0) {
+        for (const file of filesToRead) {
+          try {
+            const result = await eAPI.PeriodArchiveRead({ companyId, filename: file.filename });
+            if (result?.success && result.data) {
+              for (const party of (result.data.printedPartyHistory || [])) {
+                if (!partyMap.has(party.id)) partyMap.set(party.id, { ...party, archivedPattaNumbers: [] });
+              }
+              for (const ticket of (result.data.submittedTickets || [])) {
+                if (ticket.id) ticketMap.set(ticket.id, ticket);
+              }
+            } else if (result?.code !== 'PERIOD_ARCHIVE_NOT_FOUND') {
+              addNotification('warning', 'Arxiv o‘qilmadi', result?.error || `${file.name} arxivi yuklanmadi.`);
+            }
+          } catch (error) {
+            addNotification('warning', 'Arxiv o‘qilmadi', error instanceof Error ? error.message : `${file.name} arxivi yuklanmadi.`);
+          }
+        }
+      } else if (runtime.mode !== 'sync' && eAPI && eAPI.archiveRead && filesToRead.length > 0) {
         for (const file of filesToRead) {
           try {
             const res = await eAPI.archiveRead(file.filename, companyId);

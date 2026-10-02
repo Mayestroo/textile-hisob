@@ -6,6 +6,7 @@ import path from 'node:path';
 const databaseManager = require('./databaseManager.cjs');
 const workbookCommandPipeline = require('./workbookCommandPipeline.cjs');
 const outboxDispatcher = require('../sync/outboxDispatcher.cjs');
+const outboxManager = require('./outboxManager.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 
 describe(' workbook local command pipeline', () => {
@@ -78,6 +79,29 @@ describe(' workbook local command pipeline', () => {
     });
     expect(operation.payload_hash).toBe(computePayloadHash(canonicalStringify(JSON.parse(operation.payload_json))));
     expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(1);
+  });
+
+  it('reports pending, conflict, and dead-letter outbox counts separately', () => {
+    const db = seedModel();
+    const statuses = ['PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER'];
+    statuses.forEach((status, index) => {
+      const operationId = `op_diagnostic_${index}`;
+      const payloadJson = canonicalStringify({ operationId, companyId });
+      const createdAt = new Date(Date.now() + index).toISOString();
+      outboxManager.insertOutboxOperation(db, {
+        operation_id: operationId, company_id: companyId,
+        command_type: 'UpsertModel', entity_type: 'model', entity_id: `model_${index}`,
+        base_revision: 0, payload_json: payloadJson, payload_hash: computePayloadHash(payloadJson),
+        status, created_at: createdAt
+      });
+    });
+
+    expect(outboxManager.getOutboxDiagnostics(db, companyId)).toMatchObject({
+      pendingCount: 1,
+      sendingCount: 1,
+      conflictCount: 1,
+      deadLetterCount: 1
+    });
   });
 
   it('queues a canonical ticket deletion and marks the local ticket voided', () => {

@@ -6,7 +6,7 @@ import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
 import { formatDateIso, getUzbekMonthName } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
-import { createWorkbookCommand, submitWorkbookCommand } from '../businessMutations';
+import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from '../businessMutations';
 
 const defaultStartDate = `${formatDateIso().slice(0, 7)}-01`;
 const defaultPeriodName = getUzbekMonthName(defaultStartDate);
@@ -74,7 +74,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       startDate: newPeriod.startDate
     });
     if (sync?.handled) {
-      if (sync.success) state.addNotification('success', 'Yangi davr boshlandi', `"${newPeriod.name}" davri  bazasida yaratildi (${newPeriod.startDate}).`);
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${newPeriod.name}" davri yaratildi (${newPeriod.startDate}).`));
       return sync.success;
     }
 
@@ -103,7 +103,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       startDate: cleanDate
     });
     if (sync?.handled) {
-      if (sync.success) state.addNotification('success', 'Davr yangilandi', `Joriy davr "${updated.name}" deb  bazasida saqlandi.`);
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`Joriy davr "${updated.name}" deb yangilandi.`));
       return sync.success;
     }
     set({ currentPeriod: updated });
@@ -258,9 +258,9 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       if (sync.success) {
         set({ selectedArchiveFilename: null, selectedArchiveData: null });
         state.addNotification(
-          'success',
-          'Davr muvaffaqiyatli arxivlandi',
-          `"${closedPeriod.name}" davri  bazasida yopildi. To'liq kiritilgan ${completedParties.length} ta partiya arxivlandi; ${incompleteParties.length} ta partiya ko'chirildi.`
+          'info',
+          'Sinxronlash navbatda',
+          localCommitSyncNotice(`"${closedPeriod.name}" davri yopildi. ${completedParties.length} ta partiya arxivlandi; ${incompleteParties.length} ta partiya ko'chirildi.`)
         );
       }
       return sync.success;
