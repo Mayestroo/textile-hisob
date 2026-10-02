@@ -20,6 +20,7 @@ import {
 
 export type TicketStatus =
   | 'PENDING_SYNC'
+  | 'PENDING_DELETE'
   | 'CONFIRMED'
   | 'CONFLICT'
   | 'REJECTED'
@@ -95,6 +96,7 @@ export class ProjectionValidationError extends Error {
 
 const VALID_TICKET_STATUSES: ReadonlySet<TicketStatus> = new Set([
   'PENDING_SYNC',
+  'PENDING_DELETE',
   'CONFIRMED',
   'CONFLICT',
   'REJECTED',
@@ -269,7 +271,7 @@ export function buildHisobProjections(input: BuildProjectionsInput): HisobProjec
 
     // Invariant Filtering:
     // CONFLICT, REJECTED, VOIDED contribute to NEITHER projection
-    if (t.status === 'CONFLICT' || t.status === 'REJECTED' || t.status === 'VOIDED') {
+    if (t.status === 'CONFLICT' || t.status === 'REJECTED' || t.status === 'VOIDED' || t.status === 'PENDING_DELETE') {
       continue;
     }
 

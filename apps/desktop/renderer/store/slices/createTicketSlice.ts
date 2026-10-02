@@ -9,6 +9,7 @@ import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { requestReconnect } from '../businessMutations';
 import { useAuthStore } from '../authStore';
 import { captureSessionIdentity, isSessionCurrent } from '../sessionGuard';
+import { createWorkbookCommand, submitWorkbookCommand } from '../businessMutations';
 
 type MutationResult = {
   success: false;
@@ -214,8 +215,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const filledEntries = validation.filledEntries!;
     const actualPattaNum = validation.actualPattaNum!;
     const qty = Number(form.qty);
-    const currentPartyStr = String(form.party || '1');
-    const currentPattaNum = parseInt(form.patta || '1', 10) || 1;
+    const currentPartyStr = String(form.party || '').trim() || (strictParty ? '1' : "No'malum Partiya");
+    const currentPattaNum = actualPattaNum;
 
     // Apply additions to hisobQuantities
     const updatedHisobQuantities = { ...(model.hisobQuantities || {}) };
@@ -488,12 +489,29 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       return false;
     }
     if (runtime.mode === 'sync') {
-      const rejected = makeMutationResult(
-        runtime.code || '_COMMAND_UNSUPPORTED',
-        runtime.error || ' delete-ticket mutation is not supported; use a canonical command.'
+      if (!runtime.success) {
+        const rejected = makeMutationResult(runtime.code || '_RUNTIME_NOT_READY', runtime.error || 'Runtime readiness failed');
+        notifyMutation(state, rejected);
+        return false;
+      }
+      const companyId = initialLicenseStatus?.companyId;
+      if (!companyId) {
+        notifyMutation(state, makeMutationResult('_COMMAND_REQUIRED', 'An active company is required to delete a ticket.'));
+        return false;
+      }
+      const ticket = (state.submittedTickets || []).find((item) => item.id === ticketId);
+      if (!ticket) return false;
+      const result = await submitWorkbookCommand(
+        createWorkbookCommand('DeleteTicket', companyId, ticketId, { ticketId }),
+        get,
+        set
       );
-      notifyMutation(state, rejected);
-      return false;
+      if (!result.success) {
+        notifyMutation(state, makeMutationResult(result.code || '_COMMAND_REQUIRED', result.error || 'Ticket deletion was rejected'));
+        return false;
+      }
+      get().addNotification('success', 'Patta o\'chirildi', `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} hisobdan qaytarildi.`);
+      return true;
     }
     const ticket = (state.submittedTickets || []).find((s) => s.id === ticketId);
     if (!ticket) return;

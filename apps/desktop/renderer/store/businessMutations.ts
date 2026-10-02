@@ -9,7 +9,7 @@ export type WorkbookCommandType =
   | 'UpsertWorker' | 'DeactivateWorker' | 'CreateWorker'
   | 'CreatePeriod' | 'UpdatePeriod' | 'ClosePeriod'
   | 'CreateParty' | 'UpdateParty' | 'CloseParty' | 'ArchivePartyHistory'
-  | 'UpdateBatchSettings' | 'CompletePattaBatch' | 'CompletePartySeries';
+  | 'UpdateBatchSettings' | 'CompletePattaBatch' | 'CompletePartySeries' | 'DeleteTicket';
 
 export type WorkbookCommand = {
   commandType: WorkbookCommandType;

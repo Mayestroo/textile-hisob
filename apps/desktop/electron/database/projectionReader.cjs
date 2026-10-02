@@ -356,13 +356,14 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
   const periods = loadPeriodsFromSqlite(db, companyId);
   const openPeriod = periods.find((period) => !period.isClosed);
   const tickets = loadTicketFactsFromSqlite(db, companyId, openPeriod);
+  const visibleTickets = tickets.filter((ticket) => ticket.status !== 'VOIDED');
   const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId);
-  const projections = buildHisobProjections({ tickets, productionAdjustments });
+  const projections = buildHisobProjections({ tickets: visibleTickets, productionAdjustments });
   const models = loadModelsFromSqlite(db, companyId, projections);
   const workers = loadWorkersFromSqlite(db, companyId, openPeriod?.id || null);
   const printedPartyHistory = loadPartiesFromSqlite(db, companyId);
   const batchSettings = loadBatchSettingsFromSqlite(db, companyId, models);
-  const submittedTickets = tickets.map(toSubmittedTicket);
+  const submittedTickets = visibleTickets.map(toSubmittedTicket);
   const currentPeriod = openPeriod || periods[0] || {
     id: 'period_default',
     name: 'Default period',

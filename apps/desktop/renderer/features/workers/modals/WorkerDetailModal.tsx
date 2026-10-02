@@ -613,7 +613,7 @@ export const WorkerDetailModal: React.FC = () => {
                     </td>
 
                     <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {r.partyNumber}
+                      {r.partyNumber && r.partyNumber !== '—' ? r.partyNumber : "No'malum Partiya"}
                     </td>
 
                     <td style={{ textAlign: 'center', fontWeight: 800 }}>
@@ -630,7 +630,7 @@ export const WorkerDetailModal: React.FC = () => {
                           Patta #{r.pattaNumber}
                         </span>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        <span style={{ color: 'var(--text-muted)' }}>No'malum Patta</span>
                       )}
                     </td>
 

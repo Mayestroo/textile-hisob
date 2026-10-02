@@ -42,7 +42,7 @@ function envelope(commandType: string, payload: Record<string, unknown>, overrid
     operationId: payload.operationId,
     companyId: COMPANY,
     commandType,
-    entityType: commandType === 'SubmitTicket' ? 'ticket' : commandType === 'CreateParty' || commandType === 'CloseParty' ? 'party' : commandType === 'ResolveMigrationReconciliationCandidate' ? 'reconciliation_candidate' : 'production_adjustment',
+    entityType: commandType === 'SubmitTicket' || commandType === 'DeleteTicket' ? 'ticket' : commandType === 'CreateParty' || commandType === 'CloseParty' ? 'party' : commandType === 'ResolveMigrationReconciliationCandidate' ? 'reconciliation_candidate' : 'production_adjustment',
     entityId: payload.ticketId || payload.adjustmentId || payload.reversalId || payload.partyRecordId || payload.candidateId,
     payloadHash: computePayloadHash(canonicalStringify(payload)),
     payload,
@@ -72,6 +72,13 @@ function expectCode(action: () => unknown, code: string) {
 }
 
 describe(' payload and authority validation', () => {
+  it('validates canonical ticket deletion identity and company scope', () => {
+    const payload = { commandId: 'delete-cmd', operationId: 'delete-op', companyId: COMPANY, ticketId: TICKET_ID };
+    const operation = envelope('DeleteTicket', payload);
+    expect(validateCommandPayload('DeleteTicket', payload, context(operation))).toMatchObject({ ticketId: TICKET_ID, companyId: COMPANY });
+    expectCode(() => validateCommandPayload('DeleteTicket', payload, context({ ...operation, entityId: 'other-ticket' })), 'ENTITY_ID_MISMATCH');
+  });
+
   it('exposes stable validation errors', () => {
     const error = createValidationError('INVALID_FIELD', 'field is invalid', { field: 'x' });
     expect(error).toMatchObject({ name: 'ValidationError', code: 'INVALID_FIELD', details: { field: 'x' }, statusCode: 400 });

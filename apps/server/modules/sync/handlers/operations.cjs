@@ -146,8 +146,8 @@ async function processSingleOperation(pool, req, op, options = {}) {
       mutationResult = await executeResolveCandidate(client, companyId, operationId, validatedPayload, serverCanonical, req);
     } else if ([
       'UpsertModel', 'DeactivateModel', 'UpsertWorker', 'DeactivateWorker',
-      'CreatePeriod', 'UpdatePeriod', 'ClosePeriod', 'UpdateParty', 'ArchivePartyHistory',
-      'UpdateBatchSettings', 'CompletePattaBatch', 'CompletePartySeries'
+       'CreatePeriod', 'UpdatePeriod', 'ClosePeriod', 'UpdateParty', 'ArchivePartyHistory',
+       'UpdateBatchSettings', 'CompletePattaBatch', 'CompletePartySeries', 'DeleteTicket'
     ].includes(commandType)) {
       mutationResult = await executeWorkbookOperation(
         client,

@@ -23,7 +23,8 @@ const COMMAND_ENTITY_TYPES = Object.freeze({
   ArchivePartyHistory: 'party_history',
   UpdateBatchSettings: 'batch_settings',
   CompletePattaBatch: 'patta_batch',
-  CompletePartySeries: 'party_series'
+  CompletePartySeries: 'party_series',
+  DeleteTicket: 'ticket'
 });
 
 function createCommandError(code, message, details = {}) {
@@ -461,6 +462,10 @@ function normalizeCommand(command, activeCompanyId) {
       periodId,
       endDate: assertCalendarDate(command.payload?.endDate || new Date().toISOString().slice(0, 10), 'endDate')
     };
+  } else if (commandType === 'DeleteTicket') {
+    const ticketId = assertEntityKey(command.payload?.ticketId ?? entityId, 'ticketId');
+    if (ticketId !== entityId) throw createCommandError('ENTITY_ID_MISMATCH', 'ticketId does not match entityId');
+    payload = { commandId, operationId, companyId, ticketId };
   } else {
     throw createCommandError('UNKNOWN_COMMAND', `Unsupported workbook command: ${commandType}`);
   }
@@ -739,6 +744,16 @@ function executeDeactivateEntity(db, normalized, table, idColumn, status) {
 
 function executeWorkbookMutation(db, normalized, options) {
   const { commandType, companyId, entityId, payload } = normalized;
+  if (commandType === 'DeleteTicket') {
+    const current = db.prepare('SELECT status, server_revision FROM tickets WHERE company_id = ? AND id = ?').get(companyId, entityId);
+    if (!current) throw createCommandError('TICKET_NOT_FOUND', `Ticket "${entityId}" was not found`);
+    if (current.status === 'VOIDED' || current.status === 'PENDING_DELETE') throw createCommandError('TICKET_ALREADY_DELETED', `Ticket "${entityId}" has already been deleted or queued for deletion`);
+    const revision = getNextEntityRevision(db, companyId, 'ticket', entityId, current.server_revision);
+    if (normalized.baseRevision !== null && normalized.baseRevision !== revision) throw createCommandError('REVISION_CONFLICT', 'Ticket revision changed');
+    db.prepare('UPDATE tickets SET status = ?, server_revision = ? WHERE company_id = ? AND id = ?')
+      .run('PENDING_DELETE', revision, companyId, entityId);
+    return revision;
+  }
   if (commandType === 'UpsertModel') {
     const existing = db.prepare('SELECT server_revision FROM models WHERE company_id = ? AND id = ?').get(companyId, entityId);
     const effectiveRevision = getNextEntityRevision(db, companyId, 'model', entityId, existing?.server_revision);

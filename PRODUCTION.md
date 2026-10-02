@@ -35,7 +35,7 @@ and Docker build contexts within the main repository.
 
 ### Repository and client
 
-- Canonical project package and lockfile version: **1.0.0**.
+- Canonical project package and lockfile version: **1.1.0**.
 - Git branch/HEAD at deployment capture: `main`, `ec52cc7`, synchronized with
   `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration

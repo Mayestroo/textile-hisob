@@ -157,7 +157,9 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
   const ticketId = assertCanonicalTicketUuid(command.ticketId);
   const modelId = assertNonEmptyString(command.modelId, 'modelId');
   const partyNumber = assertNonEmptyString(command.partyNumber, 'partyNumber');
-  const partyRecordId = assertNonEmptyString(command.partyRecordId, 'partyRecordId');
+  const partyRecordId = command.partyRecordId === undefined || command.partyRecordId === null || command.partyRecordId === ''
+    ? null
+    : assertNonEmptyString(command.partyRecordId, 'partyRecordId');
   const periodId = command.periodId === undefined || command.periodId === null || command.periodId === ''
     ? null
     : assertNonEmptyString(command.periodId, 'periodId');
@@ -277,8 +279,10 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
       throw createCommandError('MODEL_NOT_FOUND', `Model "${modelId}" not found for company "${companyId}"`);
     }
 
-    const partyRow = db.prepare('SELECT id FROM parties WHERE id = ? AND company_id = ?').get(partyRecordId, companyId);
-    if (!partyRow) {
+    const partyRow = partyRecordId
+      ? db.prepare('SELECT id FROM parties WHERE id = ? AND company_id = ?').get(partyRecordId, companyId)
+      : null;
+    if (partyRecordId && !partyRow) {
       throw createCommandError('PARTY_NOT_FOUND', `Party "${partyRecordId}" not found for company "${companyId}"`);
     }
 

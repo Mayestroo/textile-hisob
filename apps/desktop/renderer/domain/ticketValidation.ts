@@ -253,6 +253,9 @@ export function validateTicketForSubmission(
   if (!isStrict) {
     let actualPattaNum = currentPattaNum;
     if (!Number.isSafeInteger(actualPattaNum) || actualPattaNum <= 0) {
+      if (!strictPatta) {
+        return { isValid: true, actualPattaNum: 0, filledEntries, partyOwner: undefined };
+      }
       // Auto-assign next patta number if left blank or 0 in free mode
       const partyKey = currentPartyStr || '1';
       const existingForParty = (submittedTickets || []).filter(

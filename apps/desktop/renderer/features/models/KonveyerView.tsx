@@ -907,8 +907,8 @@ export const KonveyerView: React.FC = () => {
                                           <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{tIdx + 1}</td>
                                           <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11.5px', whiteSpace: 'nowrap' }}>{formatTicketDateTime(t)}</td>
                                           <td style={{ paddingLeft: '10px', fontWeight: 600 }}>{m?.name || t.modelId}</td>
-                                          <td style={{ textAlign: 'center', fontWeight: 700 }}>{t.partyNumber}</td>
-                                          <td style={{ textAlign: 'center', fontWeight: 700, color: '#fbbf24' }}>#{t.pattaNumber}</td>
+                                          <td style={{ textAlign: 'center', fontWeight: 700 }}>{t.partyNumber || "No'malum Partiya"}</td>
+                                          <td style={{ textAlign: 'center', fontWeight: 700, color: '#fbbf24' }}>{t.pattaNumber > 0 ? `#${t.pattaNumber}` : "No'malum Patta"}</td>
                                           <td style={{ textAlign: 'center' }}>{t.size || '—'}</td>
                                           <td style={{ textAlign: 'center' }}>{t.color || '—'}</td>
                                           <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: 'var(--primary)' }}>
@@ -1096,10 +1096,10 @@ export const KonveyerView: React.FC = () => {
                         {model?.name || t.modelId}
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {t.partyNumber}
+                        {t.partyNumber || "No'malum Partiya"}
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 800, color: '#fbbf24' }}>
-                        #{t.pattaNumber}
+                        {t.pattaNumber > 0 ? `#${t.pattaNumber}` : "No'malum Patta"}
                       </td>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>
                         {t.size ? (

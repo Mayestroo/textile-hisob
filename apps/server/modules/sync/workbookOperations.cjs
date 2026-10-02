@@ -594,8 +594,24 @@ async function executeWorkbookOperation(client, companyId, operationId, commandT
     case 'UpdateBatchSettings': return executeUpdateBatchSettings(client, companyId, operationId, payload, envelope);
     case 'CompletePattaBatch': return executeCompletePattaBatch(client, companyId, operationId, payload, canonicalJson, options);
     case 'CompletePartySeries': return executeCompletePartySeries(client, companyId, operationId, payload);
+    case 'DeleteTicket': return executeDeleteTicket(client, companyId, operationId, payload);
     default: throw workbookError('UNKNOWN_COMMAND', `Unsupported workbook command type: ${commandType}`);
   }
+}
+
+async function executeDeleteTicket(client, companyId, operationId, payload) {
+  const current = await client.query(`SELECT id, status, is_closed FROM tickets
+    WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, payload.ticketId]);
+  if (!current.rows.length) throw workbookError('TICKET_NOT_FOUND', `Ticket "${payload.ticketId}" was not found`);
+  if (current.rows[0].status === 'VOIDED') throw workbookError('TICKET_ALREADY_DELETED', 'Ticket has already been deleted');
+  if (current.rows[0].is_closed) throw workbookError('TICKET_PERIOD_CLOSED', 'Tickets in a closed period cannot be deleted');
+  const now = new Date().toISOString();
+  const updated = await client.query(`UPDATE tickets SET status = 'VOIDED', server_revision = server_revision + 1
+    WHERE company_id = $1 AND id = $2 RETURNING server_revision`, [companyId, payload.ticketId]);
+  const change = await appendChange(client, companyId, 'ticket', payload.ticketId, updated.rows[0].server_revision,
+    operationId, 'UPDATE', { ticketId: payload.ticketId, status: 'VOIDED' }, now);
+  return { serverRevision: updated.rows[0].server_revision, entityId: payload.ticketId,
+    changeId: Number(change.rows[0].change_id), committedAt: now };
 }
 
 async function getPeriodArchive(pool, companyId, periodId) {
