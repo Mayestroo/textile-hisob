@@ -1,4 +1,5 @@
 import { ModelConfig, Worker, TicketFormState, PrintedPartyRecord, SubmittedTicketRecord } from '../types/workbook';
+import { formatTicketDateTime } from '../utils/formatters';
 
 export interface TicketValidationResult {
   isValid: boolean;
@@ -79,7 +80,7 @@ export function getTicketPartyStatus(
     const hasBlockingError = !!alreadySubmittedTicket;
     let errorBannerText = '';
     if (alreadySubmittedTicket) {
-      errorBannerText = `Partiya ${currentPartyStr}, Patta ${currentPattaNum} allaqachon hisobga kiritilgan (${alreadySubmittedTicket.submittedAt} da)!`;
+      errorBannerText = `Partiya ${currentPartyStr}, Patta ${currentPattaNum} allaqachon hisobga kiritilgan (${formatTicketDateTime(alreadySubmittedTicket)} da)!`;
     }
 
     return {
@@ -151,7 +152,7 @@ export function getTicketPartyStatus(
   } else if (isArchivedInPreviousPeriod) {
     errorBannerText = `Partiya ${currentPartyStr}, Patta ${currentPattaNum} oldingi yopilgan oyda topshirilgan!`;
   } else if (alreadySubmittedTicket) {
-    errorBannerText = `Partiya ${currentPartyStr}, Patta ${currentPattaNum} allaqachon hisobga kiritilgan (${alreadySubmittedTicket.submittedAt} da)!`;
+    errorBannerText = `Partiya ${currentPartyStr}, Patta ${currentPattaNum} allaqachon hisobga kiritilgan (${formatTicketDateTime(alreadySubmittedTicket)} da)!`;
   }
 
   return {
@@ -281,7 +282,7 @@ export function validateTicketForSubmission(
           isValid: false,
           errorType: 'error',
           title: 'Bu patta allaqachon kiritilgan!',
-          message: `Partiya ${currentPartyStr}, Patta ${actualPattaNum} allaqachon hisobga o'tkazilgan (${alreadySubmitted.submittedAt || ''} da, ${alreadySubmitted.qty} dona).`
+          message: `Partiya ${currentPartyStr}, Patta ${actualPattaNum} allaqachon hisobga o'tkazilgan (${formatTicketDateTime(alreadySubmitted)} da, ${alreadySubmitted.qty} dona).`
         };
       }
     }
@@ -358,7 +359,7 @@ export function validateTicketForSubmission(
       isValid: false,
       errorType: 'error',
       title: 'Bu patta allaqachon kiritilgan!',
-      message: `Partiya ${currentPartyStr}, Patta ${actualPattaNum} allaqachon hisobga o'tkazilgan (${alreadySubmitted.submittedAt || ''} da, ${alreadySubmitted.qty} dona). Bitta patta ikki marta kiritilishi mumkin emas!`
+      message: `Partiya ${currentPartyStr}, Patta ${actualPattaNum} allaqachon hisobga o'tkazilgan (${formatTicketDateTime(alreadySubmitted)} da, ${alreadySubmitted.qty} dona). Bitta patta ikki marta kiritilishi mumkin emas!`
     };
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatTicketDateTime, sortTicketsNewestFirst } from './formatters';
+import { formatDateOnly, formatDateTime, formatTicketDateTime, formatTicketTimestamp, sortTicketsNewestFirst } from './formatters';
 
 describe('ticket date and ordering formatters', () => {
   it('formats ISO timestamps into a readable local date and time', () => {
@@ -11,8 +11,15 @@ describe('ticket date and ordering formatters', () => {
     expect(formatted).not.toContain('-');
   });
 
+  it('uses the same date/time format in shared display helpers', () => {
+    const date = new Date(2026, 9, 2, 15, 40, 59);
+    expect(formatDateOnly(date)).toBe('02.10.2026');
+    expect(formatDateTime(date)).toBe('02.10.2026 15:40');
+    expect(formatTicketTimestamp(date)).toBe('02.10.2026 15:40');
+  });
+
   it('preserves an existing readable timestamp and recovers old timestamp IDs', () => {
-    expect(formatTicketDateTime({ submittedAt: '02.10.2026 15:40' })).toBe('02.10.2026 15:40');
+    expect(formatTicketDateTime({ submittedAt: '02.10.2026 15:40:59' })).toBe('02.10.2026 15:40');
     expect(formatTicketDateTime({ id: 'sub_1790937640104_abc', submittedAt: '15:40' }))
       .toMatch(/^\d{2}\.\d{2}\.2026 \d{2}:\d{2}$/);
   });

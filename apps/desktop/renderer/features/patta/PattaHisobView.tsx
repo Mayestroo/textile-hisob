@@ -23,7 +23,7 @@ import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook'
 import { buildPartyTicketsList, getPartyHealth } from '../../domain/partyAnalytics';
 import { selectPartyHistoryForView } from '../../domain/partyHistoryVisibility';
 import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
-import { formatTicketDateTime } from '../../utils/formatters';
+import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 
 export const PattaHisobView: React.FC = () => {
@@ -556,7 +556,7 @@ export const PattaHisobView: React.FC = () => {
                 {isAllTimeMode
                   ? 'Barcha yopilgan oylar va joriy oydagi partiyalar va kiritilgan pattalarning to\'liq monitoringi'
                   : isArchiveMode
-                  ? `Yopilgan oy arxivi: ${activePeriodName} (${selectedArchiveData?.period?.startDate} — ${selectedArchiveData?.period?.endDate || ''})`
+                  ? `Yopilgan oy arxivi: ${activePeriodName} (${formatUzbekDate(selectedArchiveData?.period?.startDate) || '—'} — ${formatUzbekDate(selectedArchiveData?.period?.endDate) || '—'})`
                   : 'Chop etilgan partiyalar, topshirilgan va qolgan kiritilmagan pattalar monitoringi'}
               </p>
             </div>
@@ -859,7 +859,7 @@ export const PattaHisobView: React.FC = () => {
                               {cp.name}
                             </div>
                             <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                              {cp.startDate} — {cp.endDate || ''}
+                              {formatUzbekDate(cp.startDate)} — {formatUzbekDate(cp.endDate) || '—'}
                             </div>
                           </div>
                         </div>
@@ -1414,7 +1414,7 @@ export const PattaHisobView: React.FC = () => {
                                   </td>
 
                                   {/* Col 10: Chop etilgan vaqt */}
-                                  <td style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>{row.printedAt}</td>
+                                  <td style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>{formatTicketDateTime(row.printedAt)}</td>
 
                                   {/* Col 11: O'chirish (only in active live mode) */}
                                   {!isArchiveMode && !isAllTimeMode && (

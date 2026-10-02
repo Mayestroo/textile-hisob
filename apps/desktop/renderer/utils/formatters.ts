@@ -21,28 +21,26 @@ export function padZero(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/**
- * Format date to standard localized string: DD.MM.YYYY, HH:mm
- */
-export function formatDateTime(date: Date = new Date()): string {
+/** Format a date as DD.MM.YYYY using the local timezone. */
+export function formatDateOnly(date: Date = new Date()): string {
   const day = padZero(date.getDate());
   const month = padZero(date.getMonth() + 1);
   const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
+}
+
+/** Format a date and time as DD.MM.YYYY HH:mm using the local timezone. */
+export function formatDateTime(date: Date = new Date()): string {
   const hours = padZero(date.getHours());
   const minutes = padZero(date.getMinutes());
-  return `${day}.${month}.${year}, ${hours}:${minutes}`;
+  return `${formatDateOnly(date)} ${hours}:${minutes}`;
 }
 
 /**
  * Format ticket date to standard DD.MM.YYYY HH:mm (e.g. 13.09.2026 17:03)
  */
 export function formatTicketTimestamp(date: Date = new Date()): string {
-  const day = padZero(date.getDate());
-  const month = padZero(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = padZero(date.getHours());
-  const minutes = padZero(date.getMinutes());
-  return `${day}.${month}.${year} ${hours}:${minutes}`;
+  return formatDateTime(date);
 }
 
 /**
@@ -57,11 +55,6 @@ export function formatTicketDateTime(
 
   const timeStr = typeof ticketOrTime === 'string' ? ticketOrTime : ticketOrTime.submittedAt || '';
   const idStr = typeof ticketOrTime === 'string' ? ticketId : ticketOrTime.id;
-
-  // Keep already-human-readable local timestamps as-is.
-  if (/^\d{2}\.\d{2}\.\d{4}(?:,?\s+\d{2}:\d{2}(?::\d{2})?)?$/.test(timeStr)) {
-    return timeStr.replace(',', '');
-  }
 
   const parsed = parseTicketDateTime(timeStr);
   if (parsed) {

@@ -4,6 +4,7 @@ import { useWorkbookStore } from '../../store/workbookStore';
 import { calculateMasterPayroll, formatMoney } from '../../engine/formulaEngine';
 import { Search, Calendar, DollarSign, Wallet, Award, TrendingUp } from 'lucide-react';
 import { WorkerPayrollSummary } from '../../engine/formulaEngine';
+import { formatUzbekDate } from '../../utils/formatters';
 
 const VIRTUAL_THRESHOLD = 30;
 const ROW_HEIGHT = 32;
@@ -444,7 +445,7 @@ export const UmumiyView: React.FC = () => {
               title="Oylik davrini boshqarish"
             >
               <Calendar size={13} color="var(--primary)" />
-              <span>{currentPeriod.name || 'Joriy Oylik'} ({currentPeriod.startDate} dan)</span>
+              <span>{currentPeriod.name || 'Joriy Oylik'} ({formatUzbekDate(currentPeriod.startDate)} dan)</span>
             </button>
           </div>
 
