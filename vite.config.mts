@@ -4,12 +4,13 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('./package.json');
+const appVersion = process.env.VITE_APP_VERSION?.trim() || packageJson.version;
 
 export default defineConfig({
   base: './',
   plugins: [react()],
   define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version)
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion)
   },
   test: {
     fileParallelism: false,
