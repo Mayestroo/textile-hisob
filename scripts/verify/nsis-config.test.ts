@@ -88,14 +88,14 @@ describe('Windows NSIS release configuration', () => {
   });
 
   it('keeps package and lockfile release versions aligned', () => {
-    expect(packageJson.version).toBe('1.1.0');
+    expect(packageJson.version).toBe('1.1.1');
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[''].version).toBe(packageJson.version);
   });
 
   it('builds the installer matrix against the current release version', () => {
     const matrix = fs.readFileSync(path.resolve(__dirname, '../../ops/windows-sandbox/nsis-upgrade-matrix.ps1'), 'utf8');
-    expect(matrix).toContain("$finalVersion = '1.1.0'");
+    expect(matrix).toContain("$finalVersion = '1.1.1'");
     expect(matrix).toContain("'G: exit code 2 with no running app repairs through in-place replacement'");
     expect(matrix).toContain("'H: exit code 2 with a running app aborts without replacing files'");
     expect(matrix).toContain("RecoveryDecision=abort-process-remains-or-check-failed");
