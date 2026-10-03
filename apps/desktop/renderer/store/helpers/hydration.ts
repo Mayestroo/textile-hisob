@@ -1,5 +1,6 @@
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { ModelConfig, Worker, SubmittedTicketRecord, PayrollPeriod } from '../../types/workbook';
+import { formatDateIso, getUzbekMonthName } from '../../utils/formatters';
 import {
   reconcileModelHisobQuantities,
   sanitizeForms,
@@ -57,8 +58,8 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
   const nextPartyNumber = Number(source.nextPartyNumber || fallback?.nextPartyNumber || 1);
   const currentPeriod = source.currentPeriod || fallback?.currentPeriod || {
     id: 'period_default',
-    name: `${new Date().getFullYear()}-${new Date().toLocaleDateString('uz-UZ', { month: 'long' })} oyligi`,
-    startDate: new Date().toISOString().slice(0, 7) + '-01',
+    name: getUzbekMonthName(),
+    startDate: `${formatDateIso().slice(0, 7)}-01`,
     isClosed: false
   };
 

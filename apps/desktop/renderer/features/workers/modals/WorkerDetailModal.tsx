@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Layers, Search, Download, Clock } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
-import { formatTicketDateTime } from '../../../utils/formatters';
+import { formatDateIso, formatTicketDateTime } from '../../../utils/formatters';
 
 interface WorkerOperationRecord {
   id: string;
@@ -252,7 +252,7 @@ export const WorkerDetailModal: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `${worker.name.replace(/\s+/g, '_')}_Bajargan_ishlari_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.setAttribute('download', `${worker.name.replace(/\s+/g, '_')}_Bajargan_ishlari_${formatDateIso()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

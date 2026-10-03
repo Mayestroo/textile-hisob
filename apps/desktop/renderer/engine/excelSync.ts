@@ -1,6 +1,7 @@
 import XLSX from 'xlsx-js-style';
 import { Worker, ModelConfig } from '../types/workbook';
 import { calculateModelTotals, calculateMasterPayroll } from './formulaEngine';
+import { formatDateIso } from '../utils/formatters';
 
 function makeSheetName(name: string, usedNames: Set<string>): string {
   const baseName = (name || 'Sheet').replace(/[\\/:?*\[\]]/g, '_').slice(0, 31) || 'Sheet';
@@ -129,7 +130,7 @@ export function exportWorkbookToExcel(models: ModelConfig[], workers: Worker[], 
   }
 
   // Trigger browser download
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = formatDateIso();
   const finalFilename = customFilename || `Buxoro_Futbolka_Hisob_${dateStr}.xlsx`;
   XLSX.writeFile(wb, finalFilename);
 }
@@ -240,7 +241,7 @@ export function exportWorkersListToExcel(workers: Worker[], customFilename?: str
 
   XLSX.utils.book_append_sheet(wb, ws, 'Ishchilar');
 
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = formatDateIso();
   const finalFilename = customFilename || `Ishchilar_Royxati_${dateStr}.xlsx`;
   XLSX.writeFile(wb, finalFilename);
 }

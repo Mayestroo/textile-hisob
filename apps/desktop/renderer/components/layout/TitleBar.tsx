@@ -5,6 +5,7 @@ import { selectWorkerCount } from '../../store/selectors';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { useTrialCountdown } from '../../hooks/useTrialCountdown';
 import { useOnline } from '../../hooks/useOnline';
+import { useSyncStore } from '../../store/syncStore';
 import { RoleBadge } from '../ui/RoleBadge';
 import { ConnectionStatus } from './ConnectionStatus';
 import { resolveDatabaseStatusLabel, type DatabaseRuntimeMode } from '../../utils/statusFormatters';
@@ -17,6 +18,8 @@ export const TitleBar: React.FC = () => {
   const saveToDisk = useWorkbookStore((s) => s.saveToDisk);
   const isServerConnected = useWorkbookStore((s) => s.isServerConnected);
   const isSaving = useWorkbookStore((s) => s.isSaving);
+  const pendingSyncChanges = useSyncStore((s) => s.pendingChanges);
+  const failedSyncChanges = useSyncStore((s) => s.failedChanges);
   const openModal = useWorkbookStore((s) => s.openModal);
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
   const availableUpdate = useWorkbookStore((s) => s.availableUpdate);
@@ -40,8 +43,12 @@ export const TitleBar: React.FC = () => {
     runtimeMode: databaseRuntimeMode,
     online,
     isServerConnected,
-    isSaving
+    isSaving,
+    pendingChanges: pendingSyncChanges,
+    failedChanges: failedSyncChanges
   });
+  const isSyncHealthy = isServerConnected && pendingSyncChanges === 0 && failedSyncChanges === 0;
+  const syncHasFailures = failedSyncChanges > 0;
 
   const handleSave = async () => {
     const saved = await saveToDisk(undefined, { forceBackup: true });
@@ -242,17 +249,17 @@ export const TitleBar: React.FC = () => {
             alignItems: 'center', 
             gap: '6px', 
             fontSize: '11.5px', 
-            background: isServerConnected ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)', 
-            border: `1px solid ${isServerConnected ? 'rgba(52, 211, 153, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
+            background: syncHasFailures ? 'rgba(239, 68, 68, 0.12)' : isSyncHealthy ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+            border: `1px solid ${syncHasFailures ? 'rgba(239, 68, 68, 0.3)' : isSyncHealthy ? 'rgba(52, 211, 153, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
             padding: '4px 10px', 
             borderRadius: 'var(--radius-full)',
             cursor: 'pointer',
             fontWeight: 600,
-            color: isServerConnected ? '#6ee7b7' : '#fde047',
+            color: syncHasFailures ? '#fca5a5' : isSyncHealthy ? '#6ee7b7' : '#fde047',
             backdropFilter: 'blur(8px)'
           }}
           title={databaseRuntimeMode === 'sync'
-            ? `Kanonik ma'lumotlar  SQLite bazasida saqlanadi · ${databaseStatusLabel}`
+            ? `Lokal SQLite · ${databaseStatusLabel}`
             : isServerConnected
               ? "Markaziy serverga ulangan (avtomatik sinxronizatsiya)"
               : "Lokal xotirada ishlamoqda"}
@@ -261,8 +268,8 @@ export const TitleBar: React.FC = () => {
             width: '6px', 
             height: '6px', 
             borderRadius: '50%', 
-            backgroundColor: isServerConnected ? '#10b981' : '#f59e0b',
-            boxShadow: isServerConnected ? '0 0 6px rgba(16, 185, 129, 0.5)' : '0 0 6px rgba(245, 158, 11, 0.5)'
+            backgroundColor: syncHasFailures ? '#ef4444' : isSyncHealthy ? '#10b981' : '#f59e0b',
+            boxShadow: syncHasFailures ? '0 0 6px rgba(239, 68, 68, 0.5)' : isSyncHealthy ? '0 0 6px rgba(16, 185, 129, 0.5)' : '0 0 6px rgba(245, 158, 11, 0.5)'
           }} />
           <span>{databaseStatusLabel}</span>
         </div>

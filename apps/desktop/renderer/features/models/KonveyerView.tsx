@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useWorkbookStore } from '../../store/workbookStore';
 import { CustomSelect } from '../../components/ui/CustomSelect';
-import { formatMoney, formatTicketDateTime } from '../../utils/formatters';
+import { formatDateIso, formatMoney, formatTicketDateTime, sortTicketsNewestFirst } from '../../utils/formatters';
 
 export const KonveyerView: React.FC = () => {
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
@@ -244,21 +244,7 @@ export const KonveyerView: React.FC = () => {
 
   const filteredTickets = useMemo(() => {
     // Har bir pattaga uning bazaga kiritilgan ketma-ket tartib raqami (1, 2, ... N) biriktiriladi
-    const ticketsWithSeq = (submittedTickets || []).map((t, idx) => ({
-      ...t,
-      globalSeq: idx + 1
-    }));
-
-    // Eng so'nggi kiritilgan patta doim yuqorida turishi uchun teskari tartib
-    const list = [...ticketsWithSeq].reverse();
-    list.sort((a, b) => {
-      const tA = parseInt(a.id?.match(/^sub_(\d+)/)?.[1] || '0', 10);
-      const tB = parseInt(b.id?.match(/^sub_(\d+)/)?.[1] || '0', 10);
-      if (tA && tB && tA !== tB) return tB - tA;
-      return b.globalSeq - a.globalSeq;
-    });
-
-    return list.filter((t) => {
+    const list = (submittedTickets || []).filter((t) => {
       const kVal = (t.konveyer || 'Noma\'lum').trim();
       if (selectedKonveyer !== 'all' && kVal !== selectedKonveyer) return false;
       if (selectedModel !== 'all' && t.modelId !== selectedModel) return false;
@@ -286,6 +272,7 @@ export const KonveyerView: React.FC = () => {
 
       return true;
     });
+    return sortTicketsNewestFirst(list).map((ticket, index) => ({ ...ticket, globalSeq: index + 1 }));
   }, [submittedTickets, selectedKonveyer, selectedModel, selectedParty, searchQuery, modelMap]);
 
   const toCsvCell = (value: unknown) => {
@@ -328,7 +315,7 @@ export const KonveyerView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Konveyerlar_modellar_matritsasi_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Konveyerlar_modellar_matritsasi_${formatDateIso()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -900,7 +887,7 @@ export const KonveyerView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {row.tickets.map((t, tIdx) => {
+                                    {sortTicketsNewestFirst(row.tickets).map((t, tIdx) => {
                                       const m = modelMap.get(t.modelId);
                                       return (
                                         <tr key={t.id || tIdx} style={{ height: '30px' }}>

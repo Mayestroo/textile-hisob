@@ -4,6 +4,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { isValidCompanyId } from '../../../store/helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../../store/runtimeMode';
 import { X, Database, RotateCcw, Clock, Star, ShieldCheck, Server } from 'lucide-react';
+import { formatTicketDateTime } from '../../../utils/formatters';
 
 interface BackupItem {
   filename: string;
@@ -149,28 +150,16 @@ export const BackupManagerModal: React.FC = () => {
     const matchLocal = b.filename.match(/(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/);
     if (matchLocal) {
       const [, y, m, d, hh, mm, ss] = matchLocal;
-      return `${d}.${m}.${y}, ${hh}:${mm}:${ss}`;
+      return formatTicketDateTime(`${y}-${m}-${d}T${hh}:${mm}:${ss}`);
     }
 
     const matchIso = b.filename.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
     if (matchIso) {
       const [, y, m, d, hh, mm, ss] = matchIso;
-      const utcDate = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss)));
-      return utcDate.toLocaleString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+      return formatTicketDateTime(`${y}-${m}-${d}T${hh}:${mm}:${ss}Z`);
     }
 
-    if (b.createdAt) {
-      try {
-        return new Date(b.createdAt).toLocaleString('ru-RU');
-      } catch {}
-    }
+    if (b.createdAt) return formatTicketDateTime(b.createdAt);
     return b.filename;
   };
 

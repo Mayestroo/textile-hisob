@@ -8,7 +8,7 @@ import {
   sanitizeWorkers,
   reconcileModelHisobQuantities
 } from '../helpers/storeSanitizers';
-import { padZero } from '../../utils/formatters';
+import { formatDateIso, formatTashkentTimestampForFilename, getUzbekMonthName } from '../../utils/formatters';
 import { useAuthStore } from '../authStore';
 import { hydrateWorkbookData, isPayloadOwnedByCompany, isValidCompanyId } from '../helpers/hydration';
 import { captureSessionIdentity, isSessionCurrent } from '../sessionGuard';
@@ -183,8 +183,8 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
           const customSizes = [...DEFAULT_BATCH_SIZES];
           const freshPeriod = {
             id: 'period_default',
-            name: `${new Date().getFullYear()}-${new Date().toLocaleDateString('uz-UZ', { month: 'long' })} oyligi`,
-            startDate: new Date().toISOString().slice(0, 7) + '-01',
+            name: getUzbekMonthName(),
+            startDate: `${formatDateIso().slice(0, 7)}-01`,
             isClosed: false
           };
 
@@ -430,8 +430,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
 
     try {
       // 1. Automatically create pre-reset backup
-      const now = new Date();
-      const ts = `${now.getFullYear()}-${padZero(now.getMonth() + 1)}-${padZero(now.getDate())}_${padZero(now.getHours())}-${padZero(now.getMinutes())}-${padZero(now.getSeconds())}`;
+      const ts = formatTashkentTimestampForFilename();
       const backupFilename = `backup_before_reset_${ts}.json`;
 
       const currentDb = {
@@ -469,7 +468,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
       const cleanForms: Record<string, any> = {};
       for (const m of cleanModels) {
         cleanForms[m.id] = {
-          date: new Date().toISOString().slice(0, 10),
+          date: formatDateIso(),
           party: '',
           color: m.color || 'Кора',
           size: m.size || 'M',

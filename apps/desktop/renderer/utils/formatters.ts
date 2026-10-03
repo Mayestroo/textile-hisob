@@ -21,28 +21,39 @@ export function padZero(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/**
- * Format date to standard localized string: DD.MM.YYYY, HH:mm
- */
+const DISPLAY_TIME_ZONE = 'Asia/Tashkent';
+
+function datePartsInTashkent(date: Date) {
+  const values = new Intl.DateTimeFormat('en-GB', {
+    timeZone: DISPLAY_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+  return Object.fromEntries(values.map((part) => [part.type, part.value]));
+}
+
+/** Format a date as DD.MM.YYYY in Asia/Tashkent (UTC+5). */
+export function formatDateOnly(date: Date = new Date()): string {
+  const parts = datePartsInTashkent(date);
+  return `${parts.day}.${parts.month}.${parts.year}`;
+}
+
+/** Format a date and time as DD.MM.YYYY HH:mm in Asia/Tashkent (UTC+5). */
 export function formatDateTime(date: Date = new Date()): string {
-  const day = padZero(date.getDate());
-  const month = padZero(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = padZero(date.getHours());
-  const minutes = padZero(date.getMinutes());
-  return `${day}.${month}.${year}, ${hours}:${minutes}`;
+  const parts = datePartsInTashkent(date);
+  return `${parts.day}.${parts.month}.${parts.year} ${parts.hour}:${parts.minute}`;
 }
 
 /**
  * Format ticket date to standard DD.MM.YYYY HH:mm (e.g. 13.09.2026 17:03)
  */
 export function formatTicketTimestamp(date: Date = new Date()): string {
-  const day = padZero(date.getDate());
-  const month = padZero(date.getMonth() + 1);
-  const year = date.getFullYear();
-  const hours = padZero(date.getHours());
-  const minutes = padZero(date.getMinutes());
-  return `${day}.${month}.${year} ${hours}:${minutes}`;
+  return formatDateTime(date);
 }
 
 /**
@@ -58,9 +69,9 @@ export function formatTicketDateTime(
   const timeStr = typeof ticketOrTime === 'string' ? ticketOrTime : ticketOrTime.submittedAt || '';
   const idStr = typeof ticketOrTime === 'string' ? ticketId : ticketOrTime.id;
 
-  // If already contains date (e.g. "13.09.2026 17:03" or "13.09.2026, 17:03")
-  if (timeStr && timeStr.includes('.')) {
-    return timeStr.replace(',', '');
+  const parsed = parseTicketDateTime(timeStr);
+  if (parsed) {
+    return formatTicketTimestamp(parsed);
   }
 
   // Attempt recovery from ticket id (format: sub_1726574580000_...)
@@ -69,12 +80,7 @@ export function formatTicketDateTime(
     if (match) {
       const ts = parseInt(match[1], 10);
       if (!isNaN(ts)) {
-        const d = new Date(ts);
-        const day = padZero(d.getDate());
-        const month = padZero(d.getMonth() + 1);
-        const year = d.getFullYear();
-        const fallbackTime = `${padZero(d.getHours())}:${padZero(d.getMinutes())}`;
-        return `${day}.${month}.${year} ${timeStr || fallbackTime}`;
+        return formatTicketTimestamp(new Date(ts));
       }
     }
   }
@@ -82,11 +88,57 @@ export function formatTicketDateTime(
   return timeStr || '—';
 }
 
+function parseTicketDateTime(value: string): Date | null {
+  if (!value) return null;
+  const localized = value.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:,?\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (localized) {
+    const [, day, month, year, hours = '0', minutes = '0', seconds = '0'] = localized;
+    // Human-formatted application timestamps always represent Tashkent wall time.
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hours) - 5, Number(minutes), Number(seconds)));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const unzonedIso = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/);
+  if (unzonedIso) {
+    const [, year, month, day, hours = '0', minutes = '0', seconds = '0', milliseconds = '0'] = unzonedIso;
+    const date = new Date(Date.UTC(
+      Number(year), Number(month) - 1, Number(day), Number(hours) - 5,
+      Number(minutes), Number(seconds), Number(milliseconds.padEnd(3, '0'))
+    ));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp);
+}
+
+function ticketTimestamp(ticket: { id?: string; submittedAt?: string }): number {
+  const parsed = parseTicketDateTime(ticket.submittedAt || '');
+  if (parsed) return parsed.getTime();
+  const legacyId = ticket.id?.match(/^sub_(\d{12,})/);
+  if (legacyId) {
+    const timestamp = Number(legacyId[1]);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
+export function sortTicketsNewestFirst<T extends { id?: string; submittedAt?: string }>(tickets: T[]): T[] {
+  return tickets
+    .map((ticket, index) => ({ ticket, index, timestamp: ticketTimestamp(ticket) }))
+    .sort((left, right) => right.timestamp - left.timestamp || right.index - left.index)
+    .map(({ ticket }) => ticket);
+}
+
 /**
  * Format date to YYYY-MM-DD
  */
 export function formatDateIso(date: Date = new Date()): string {
-  return date.toISOString().slice(0, 10);
+  const parts = datePartsInTashkent(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function formatTashkentTimestampForFilename(date: Date = new Date()): string {
+  const parts = datePartsInTashkent(date);
+  return `${parts.year}-${parts.month}-${parts.day}_${parts.hour}-${parts.minute}-${parts.second}`;
 }
 
 const UZBEK_MONTHS = [
@@ -102,17 +154,19 @@ export function getUzbekMonthName(dateInput?: string | Date): string {
   if (!dateInput) {
     d = new Date();
   } else if (typeof dateInput === 'string') {
-    const parts = dateInput.slice(0, 10).split('-');
-    if (parts.length === 3) {
-      d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    } else {
-      d = new Date(dateInput);
-    }
+    d = parseTicketDateTime(dateInput) || new Date(dateInput);
   } else {
     d = dateInput;
   }
   if (isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${UZBEK_MONTHS[d.getMonth()]} oyligi`;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: DISPLAY_TIME_ZONE,
+    year: 'numeric',
+    month: 'numeric'
+  }).formatToParts(d);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  return `${year}-${UZBEK_MONTHS[month - 1]} oyligi`;
 }
 
 /**
@@ -126,4 +180,3 @@ export function formatUzbekDate(dateStr?: string): string {
   }
   return dateStr;
 }
-

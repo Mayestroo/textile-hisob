@@ -50,9 +50,14 @@
   function timestamp(value) {
     if (!value) return '—';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('uz-UZ', {
-      dateStyle: 'medium', timeStyle: 'short'
-    }).format(date);
+    if (Number.isNaN(date.getTime())) return '—';
+    const parts = new Intl.DateTimeFormat('uz-UZ', {
+      timeZone: 'Asia/Tashkent',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(date);
+    const fields = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${fields.day}.${fields.month}.${fields.year} ${fields.hour}:${fields.minute}`;
   }
 
   function statusLabel(value) {

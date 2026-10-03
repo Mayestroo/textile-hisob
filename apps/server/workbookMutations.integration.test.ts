@@ -209,7 +209,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       VALUES (741, $1, 'Worker A', 'ACTIVE'), (742, $1, 'Worker B', 'ACTIVE')`, [companyId]);
     await pool!.query(`INSERT INTO tickets (
       id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, is_closed, server_revision
-    ) VALUES ($1, $2, 'ticket-edit-model', '29', NULL, 303, 116, 'CONFIRMED', FALSE, 4)`, [ticketId, companyId]);
+    ) VALUES ($1, $2, 'ticket-edit-model', '29', NULL, 303, 116, 'CONFIRMED', 0, 4)`, [ticketId, companyId]);
     await pool!.query(`INSERT INTO ticket_entries (
       id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, qty
     ) VALUES ('ticket-edit-old-entry', $1, $2, 'Cut', 741, 'Worker A', 3, 116)`, [ticketId, companyId]);

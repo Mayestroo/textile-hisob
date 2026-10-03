@@ -18,7 +18,7 @@ import {
   Check
 } from 'lucide-react';
 import { calculateMasterPayroll, formatMoney } from '../../../engine/formulaEngine';
-import { formatUzbekDate, getUzbekMonthName } from '../../../utils/formatters';
+import { formatDateIso, formatUzbekDate, getUzbekMonthName } from '../../../utils/formatters';
 import { exportWorkbookToExcel } from '../../../engine/excelSync';
 import { SYSTEM_SHEETS } from '../../../constants/sheetConstants';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../../store/runtimeMode';
@@ -53,8 +53,8 @@ export const PeriodManagerModal: React.FC = () => {
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
-  const [closeDate, setCloseDate] = useState(new Date().toISOString().slice(0, 10));
-  const [nextPeriodStartDate, setNextPeriodStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [closeDate, setCloseDate] = useState(formatDateIso());
+  const [nextPeriodStartDate, setNextPeriodStartDate] = useState(formatDateIso());
   const [nextPeriodName, setNextPeriodName] = useState('');
   const [isAutoName, setIsAutoName] = useState(true);
 
@@ -71,7 +71,13 @@ export const PeriodManagerModal: React.FC = () => {
     const eAPI = getElectronApi();
     const runtime = await resolveElectronRuntimeMode(eAPI);
     if (runtime.mode === 'sync') {
-      setServerArchives([]);
+      const closedPeriods = useWorkbookStore.getState().periods.filter((period) => period.isClosed);
+      setServerArchives(closedPeriods.map((period) => ({
+        filename: period.archiveFilename || period.id,
+        period: { name: period.name, startDate: period.startDate, endDate: period.endDate },
+        archivedAt: period.closedAt || period.endDate || period.startDate,
+        workersCount: 0
+      })));
       return;
     }
     if (eAPI && eAPI.archivesList) {
@@ -101,7 +107,7 @@ export const PeriodManagerModal: React.FC = () => {
 
   useEffect(() => {
     if (modalType === 'period_manager') {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = formatDateIso();
       setCloseDate(today);
       setNextPeriodStartDate(today);
       setNextPeriodName(getUzbekMonthName(today));
@@ -166,8 +172,8 @@ export const PeriodManagerModal: React.FC = () => {
     setIsProcessing(true);
     try {
       const runtime = await resolveElectronRuntimeMode(getElectronApi());
-      if (runtime.mode === 'sync') {
-        addNotification('error', runtime.code || '_COMMAND_UNSUPPORTED', runtime.error || ' period close is unavailable through legacy storage.');
+      if (runtime.mode === 'sync' && !runtime.success) {
+        addNotification('error', runtime.code || '_RUNTIME_NOT_READY', runtime.error || 'Runtime readiness failed.');
         return;
       }
       // 1. Export final Excel for the closing month
@@ -181,7 +187,9 @@ export const PeriodManagerModal: React.FC = () => {
       // 3. Refresh archives and switch to history view
       await fetchArchives();
       setActiveTab('history');
-      addNotification('success', 'Oy muvaffaqiyatli yopildi', `«${currentPeriod.name}» arxivlandi. Yangi davr: «${finalNextName}»`);
+      addNotification(runtime.mode === 'sync' ? 'info' : 'success', runtime.mode === 'sync' ? 'Sinxronlash navbatda' : 'Oy muvaffaqiyatli yopildi', runtime.mode === 'sync'
+        ? `«${currentPeriod.name}» yopilishi lokal outboxga yozildi; VPS sinxron holati yuqoridagi indikator orqali ko‘rinadi.`
+        : `«${currentPeriod.name}» arxivlandi. Yangi davr: «${finalNextName}»`);
     } catch (err: any) {
       console.error('Failed to close period', err);
       addNotification('error', 'Xatolik', 'Oyni yopishda xatolik yuz berdi: ' + (err.message || ''));
@@ -207,13 +215,27 @@ export const PeriodManagerModal: React.FC = () => {
   const handleDownloadArchiveExcel = async (item: ArchiveItem) => {
     const eAPI = getElectronApi();
     const runtime = await resolveElectronRuntimeMode(eAPI);
-    if (runtime.mode === 'sync') {
-      addNotification('error', runtime.code || '_LEGACY_STORAGE_FORBIDDEN', runtime.error || ' archive reads are unavailable.');
-      return;
-    }
     let archiveData: any = null;
 
-    if (eAPI && eAPI.archiveRead) {
+    if (runtime.mode === 'sync') {
+      if (!runtime.success || !companyId || typeof eAPI?.PeriodArchiveRead !== 'function') {
+        addNotification('error', runtime.code || 'PERIOD_ARCHIVE_READ_FAILED', runtime.error || 'Server arxivini o‘qish xizmati mavjud emas.');
+        return;
+      }
+      try {
+        const result = await eAPI.PeriodArchiveRead({ companyId, filename: item.filename });
+        if (result?.success && result.data) archiveData = result.data;
+        else {
+          addNotification('error', result?.code || 'PERIOD_ARCHIVE_READ_FAILED', result?.error || 'Server arxivi topilmadi.');
+          return;
+        }
+      } catch (error) {
+        addNotification('error', 'PERIOD_ARCHIVE_READ_FAILED', error instanceof Error ? error.message : 'Server arxivini o‘qib bo‘lmadi.');
+        return;
+      }
+    }
+
+    if (runtime.mode !== 'sync' && eAPI && eAPI.archiveRead) {
       try {
         const res = await eAPI.archiveRead(item.filename);
         if (res.success && res.data) archiveData = res.data;
@@ -222,7 +244,7 @@ export const PeriodManagerModal: React.FC = () => {
       }
     }
 
-    if (!archiveData) {
+    if (!archiveData && runtime.mode !== 'sync') {
       try {
         const res = await fetch(`/api/archive/${item.filename}`);
         if (res.ok) archiveData = await res.json();

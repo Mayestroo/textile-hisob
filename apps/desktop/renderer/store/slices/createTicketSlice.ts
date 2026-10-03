@@ -3,13 +3,13 @@ import { WorkbookStore, TicketSlice } from '../types';
 import { TicketFormState, SubmittedTicketRecord } from '../../types/workbook';
 import { validateTicketForSubmission } from '../../domain/ticketValidation';
 import { cancelDebouncedSave, triggerDebouncedSave } from '../helpers/debounceSave';
-import { formatTicketTimestamp } from '../../utils/formatters';
+import { formatDateIso, formatTicketTimestamp } from '../../utils/formatters';
 import { hydrateWorkbookData } from '../helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { requestReconnect } from '../businessMutations';
 import { useAuthStore } from '../authStore';
 import { captureSessionIdentity, isSessionCurrent } from '../sessionGuard';
-import { createWorkbookCommand, submitWorkbookCommand } from '../businessMutations';
+import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from '../businessMutations';
 
 type MutationResult = {
   success: false;
@@ -297,7 +297,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const companyId = state.licenseStatus?.companyId;
     const initialLicenseStatus = state.licenseStatus;
     const partyRecordId = validation.partyOwner?.id ?? null;
-    const effectiveDate = form.date || new Date().toISOString().slice(0, 10);
+    const effectiveDate = form.date || formatDateIso();
     const fingerprint = JSON.stringify({
       companyId,
       modelId: model.id,
@@ -426,9 +426,9 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         }
         requestReconnect(eAPI, companyId);
         state.addNotification(
-          'success',
-          'Muvaffaqiyatli saqlandi',
-          ' kanonik buyrug\'i qabul qilindi va SQLite proyeksiyasi yangilandi.'
+          'info',
+          'Sinxronlash navbatda',
+          localCommitSyncNotice('Patta lokal bazaga yozildi; VPS tasdig‘i kutilmoqda.')
         );
         return true;
       }
@@ -514,9 +514,11 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         notifyMutation(state, makeMutationResult(result.code || '_COMMAND_REQUIRED', result.error || 'Ticket deletion was rejected'));
         return false;
       }
-      get().addNotification('success', 'Patta o\'chirildi', result.localOnly
-        ? `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} rad etilgan mahalliy yozuv sifatida o\'chirildi.`
-        : `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} hisobdan qaytarildi.`);
+      if (result.localOnly) {
+        get().addNotification('success', 'Patta lokalda o\'chirildi', `Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber} serverda yaratilmagan rad etilgan yozuv edi.`);
+      } else {
+        get().addNotification('info', 'O\'chirish navbatda', localCommitSyncNotice(`Partiya ${ticket.partyNumber}, Patta ${ticket.pattaNumber}ni hisobdan qaytarish so‘rovi yuborishga tayyor.`));
+      }
       return true;
     }
     const ticket = (state.submittedTickets || []).find((s) => s.id === ticketId);
@@ -659,7 +661,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         notifyMutation(state, makeMutationResult(result.code || '_COMMAND_REQUIRED', result.error || 'Ticket edit was rejected'));
         return false;
       }
-      get().addNotification('success', 'Patta yangilandi', `Partiya ${ticket.partyNumber}, Patta #${ticket.pattaNumber} operatsiyalari yangilandi.`);
+      get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`Partiya ${ticket.partyNumber}, Patta #${ticket.pattaNumber} operatsiyalari yangilandi.`));
       return true;
     }
 

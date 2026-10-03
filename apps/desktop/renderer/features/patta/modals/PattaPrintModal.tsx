@@ -3,6 +3,7 @@ import { Printer, X, FileText } from 'lucide-react';
 import { ModelConfig } from '../../../types/workbook';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
+import { formatDateOnly } from '../../../utils/formatters';
 
 export interface PrintBatchItem {
   model: ModelConfig;
@@ -69,7 +70,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
   // Generate flat list of tickets across all items in batch
   const tickets: PrintableTicket[] = React.useMemo(() => {
     const list: PrintableTicket[] = [];
-    const today = new Date().toLocaleDateString('ru-RU');
+    const today = formatDateOnly(new Date());
 
     // Global high-water mark across every model; stored party ranges are authoritative.
     const activeHistory = (printedPartyHistory || []).filter((h) => !h.isClosed);

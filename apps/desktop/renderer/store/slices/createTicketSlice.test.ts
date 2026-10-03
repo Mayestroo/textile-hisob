@@ -129,7 +129,7 @@ describe(' ticket command routing', () => {
     expect(dbRead).toHaveBeenCalledWith('company-a');
     expect(state().submittedTickets[0].id).toBe('44444444-4444-4444-8444-444444444444');
     expect(state().models[0].hisobQuantities).toEqual({ '1': { Sew: 5 } });
-    expect(state().addNotification).toHaveBeenCalledWith('success', 'Muvaffaqiyatli saqlandi', expect.any(String));
+    expect(state().addNotification).toHaveBeenCalledWith('info', 'Sinxronlash navbatda', expect.stringContaining('VPS tasdig‘i kutilmoqda'));
     expect(state().saveToDisk).not.toHaveBeenCalled();
     expect(set).toHaveBeenCalled();
   });
