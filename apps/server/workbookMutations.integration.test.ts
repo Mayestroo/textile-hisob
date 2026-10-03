@@ -229,7 +229,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2`, [companyId, ticketId]);
     expect(ticket.rows[0].server_revision).toBe(5);
     expect(entries.rows).toHaveLength(1);
-    expect(entries.rows[0]).toMatchObject({ op_name: 'Sew', worker_id: 742, worker_name_snapshot: 'Worker B', qty: 116 });
+    expect(entries.rows[0]).toMatchObject({ op_name: 'Sew', worker_id: 742, worker_name_snapshot: 'Worker B' });
+    expect(Number(entries.rows[0].qty)).toBe(116);
     expect(Number(entries.rows[0].rate_snapshot)).toBe(7);
     const change = await pool!.query(`SELECT payload_json FROM change_log
       WHERE company_id = $1 AND entity_type = 'ticket' AND entity_id = $2
