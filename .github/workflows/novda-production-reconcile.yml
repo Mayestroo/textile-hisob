@@ -99,6 +99,13 @@ jobs:
                 COALESCE(client_context->>'appVersion', '') || '|' || requested_at::text || '|' || COALESCE(approved_at::text, '')
               FROM activation_requests WHERE machine_id = 'D9A7-CC62-ED18-A8B8'
               ORDER BY requested_at DESC;
+              SELECT 'DEVICE_REGISTRATION|' || device_id || '|' || company_id || '|' || client_version || '|' || is_revoked || '|' || registered_at::text
+              FROM server_devices WHERE device_id = 'D9A7-CC62-ED18-A8B8';
+              SELECT 'RECENT_PARTY|' || id || '|' || party_number || '|' || status || '|' || is_closed || '|' || is_archived || '|' ||
+                patta_count || '|' || COALESCE(patta_start_number::text, '') || '|' || COALESCE(patta_end_number::text, '') || '|' || created_at::text
+              FROM parties WHERE company_id = 'comp_novda' ORDER BY created_at DESC, id DESC LIMIT 8;
+              SELECT 'RECENT_OPERATION|' || operation_id || '|' || command_type || '|' || entity_type || '|' || entity_id || '|' || accepted_at::text
+              FROM operations_dedup WHERE company_id = 'comp_novda' ORDER BY accepted_at DESC, operation_id DESC LIMIT 10;
             "
             exit 0
           fi

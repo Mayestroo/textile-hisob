@@ -8,7 +8,7 @@ describe('database status label', () => {
     expect(resolveDatabaseStatusLabel({ runtimeMode: 'sync', online: false, isServerConnected: false, isSaving: false }))
       .toBe('Offline · Lokal');
     expect(resolveDatabaseStatusLabel({ runtimeMode: 'sync', online: true, isServerConnected: false, isSaving: false }))
-      .toBe('VPS tasdig‘i yo‘q');
+      .toBe('VPS sync kutilmoqda');
     expect(resolveDatabaseStatusLabel({ runtimeMode: 'sync', online: true, isServerConnected: true, isSaving: false, pendingChanges: 2 }))
       .toBe('VPS navbatida · 2');
     expect(resolveDatabaseStatusLabel({ runtimeMode: 'sync', online: true, isServerConnected: true, isSaving: false, failedChanges: 1 }))
