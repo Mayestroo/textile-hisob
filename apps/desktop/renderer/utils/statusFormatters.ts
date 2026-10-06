@@ -13,7 +13,7 @@ export function resolveDatabaseStatusLabel(input: {
   if (input.runtimeMode === 'sync') {
     if (!input.online) return 'Offline · Lokal';
     if ((input.failedChanges || 0) > 0) return `Sync xatosi · ${input.failedChanges}`;
-    if (!input.isServerConnected) return 'VPS tasdig‘i yo‘q';
+    if (!input.isServerConnected) return 'VPS sync kutilmoqda';
     if ((input.pendingChanges || 0) > 0) return `VPS navbatida · ${input.pendingChanges}`;
     return 'VPS bilan sinxron';
   }
