@@ -50,7 +50,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_patta_work_quantity_migration.sql',
       'deploy_canonical_ids_global_patta_sequence.sql',
       'deploy_production_adjustment_provenance_migration.sql',
-      'deploy_patta_series_sequence_migration.sql'
+      'deploy_patta_series_sequence_migration.sql',
+      'deploy_patta_sequence_runtime_grant_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'
@@ -376,6 +377,10 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(await apply('ArchivePartyHistory', 'party_history', companyId, archived)).toMatchObject({ status: 'APPLIED' });
     const archivedRows = await pool!.query('SELECT COUNT(*) AS count FROM parties WHERE company_id = $1 AND is_archived = TRUE', [companyId]);
     expect(Number(archivedRows.rows[0].count)).toBe(4);
+    expect(await apply('ArchivePartyHistory', 'party_history', companyId, {
+      commandId: 'cmd_archive_stale_local_party', operationId: 'op_archive_stale_local_party',
+      companyId, partyRecordIds: ['stale-local-party-record']
+    })).toMatchObject({ status: 'APPLIED' });
   });
 
   it('rolls back every party when a completed batch contains an invalid model reference', async () => {

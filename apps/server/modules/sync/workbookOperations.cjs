@@ -568,7 +568,9 @@ async function executeCompletePartySeries(client, companyId, operationId, payloa
 async function executeArchivePartyHistory(client, companyId, operationId, payload) {
   const ids = [...payload.partyRecordIds].sort();
   const current = await client.query(`SELECT id FROM parties WHERE company_id = $1 AND id = ANY($2::varchar[]) FOR UPDATE`, [companyId, ids]);
-  if (current.rows.length !== ids.length) throw workbookError('PARTY_NOT_FOUND', 'One or more parties to archive were not found');
+  const foundIds = current.rows.map((row) => row.id);
+  const foundIdSet = new Set(foundIds);
+  const missingIds = ids.filter((id) => !foundIdSet.has(id));
   const now = new Date().toISOString();
   let lastChangeId = 0;
   for (const row of current.rows) {
@@ -580,7 +582,7 @@ async function executeArchivePartyHistory(client, companyId, operationId, payloa
     lastChangeId = Number(change.rows[0].change_id);
   }
   const aggregate = await appendChange(client, companyId, 'party_history', companyId, 1, operationId, 'UPDATE',
-    { partyRecordIds: ids, archivedAt: now }, now);
+    { partyRecordIds: foundIds, missingPartyRecordIds: missingIds, archivedAt: now }, now);
   lastChangeId = Number(aggregate.rows[0].change_id);
   return { serverRevision: 1, entityId: companyId, changeId: lastChangeId, committedAt: now };
 }

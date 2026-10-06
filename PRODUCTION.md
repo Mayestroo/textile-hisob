@@ -35,7 +35,7 @@ and Docker build contexts within the main repository.
 
 ### Repository and client
 
-- Canonical project package and lockfile version: **1.1.4**.
+- Canonical project package and lockfile version: **1.1.5**.
 - Git branch/HEAD at deployment capture: `main`, `ec52cc7`, synchronized with
   `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration
@@ -316,7 +316,7 @@ This continuation added or changed source for:
   built, qualified, and delivered.
 - Canonical UUID model/party identities, active-series patta ranges that restart
   after series completion, per-patta quantity normalization, data-driven collision approvals, and removal of
-  closed/archived local history. PostgreSQL migrations 16–18 must be applied before
+  closed/archived local history. PostgreSQL migrations 16–19 must be applied before
   clients using canonical IDs reconnect; execution on the VPS is not verified.
 
 The admin and worker bots are built from directories in the main repository;

@@ -204,6 +204,7 @@ describe('trusted operator authentication primitives', () => {
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS operator_login_attempts');
     expect(migration).toContain('CREATE INDEX IF NOT EXISTS idx_operator_login_attempts_expiry');
     expect(roles).toContain('operator_login_attempts');
+    expect(roles).toContain('company_patta_sequences');
     expect(roles).toContain('NOCREATEROLE');
     expect(roles).toContain('NOSUPERUSER');
     expect(roles).toContain('ALTER ROLE novda_app');

@@ -1573,6 +1573,21 @@ const MIGRATIONS = [
         db.exec('ALTER TABLE local_outbox ADD COLUMN local_archive_json TEXT');
       }
     }
+  },
+  {
+    version: 19,
+    name: '019_retry_resolved_patta_sync_failures',
+    up: (db) => {
+      const codeExpr = (column) => `CASE WHEN json_valid(${column}) THEN json_extract(${column}, '$.code') END`;
+      db.prepare(`UPDATE local_outbox
+        SET status = 'PENDING', last_error = NULL, error_message = NULL, updated_at = ?
+        WHERE status IN ('CONFLICT', 'DEAD_LETTER') AND (
+          (command_type = 'CompletePattaBatch'
+            AND COALESCE(${codeExpr('last_error')}, ${codeExpr('error_message')}) = '42501')
+          OR (command_type = 'ArchivePartyHistory'
+            AND COALESCE(${codeExpr('last_error')}, ${codeExpr('error_message')}) = 'PARTY_NOT_FOUND')
+        )`).run(new Date().toISOString());
+    }
   }
 ];
 

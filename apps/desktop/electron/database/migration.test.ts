@@ -568,6 +568,38 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     }
   });
 
+  it('migration 019 retries only patta commands rejected by the fixed VPS permission and stale-archive cases', () => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(tempUserDataDir, 'migration-019-patta-retry.sqlite'));
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 18 });
+      const now = new Date().toISOString();
+      const insert = db.prepare(`INSERT INTO local_outbox (
+        operation_id, company_id, command_type, entity_type, entity_id, payload_json, payload_hash,
+        status, created_at, updated_at, last_error, error_message
+      ) VALUES (?, ?, ?, ?, ?, '{}', ?, 'DEAD_LETTER', ?, ?, ?, ?)`);
+      insert.run('retry-patta-batch', companyId, 'CompletePattaBatch', 'patta_batch', 'batch-a',
+        'a'.repeat(64), now, now, JSON.stringify({ code: '42501', message: 'permission denied for table company_patta_sequences' }),
+        JSON.stringify({ code: '42501', message: 'permission denied for table company_patta_sequences' }));
+      insert.run('retry-stale-archive', companyId, 'ArchivePartyHistory', 'party_history', companyId,
+        'b'.repeat(64), now, now, JSON.stringify({ code: 'PARTY_NOT_FOUND', message: 'stale local history' }),
+        JSON.stringify({ code: 'PARTY_NOT_FOUND', message: 'stale local history' }));
+      insert.run('keep-unrelated-failure', companyId, 'SubmitTicket', 'ticket', 'ticket-a',
+        'c'.repeat(64), now, now, JSON.stringify({ code: 'PERIOD_CLOSED' }), JSON.stringify({ code: 'PERIOD_CLOSED' }));
+
+      const result = migrationRunner.applyMigrations(db);
+      expect(result.currentVersion).toBe(19);
+      expect(db.prepare('SELECT operation_id, status, last_error FROM local_outbox ORDER BY operation_id').all())
+        .toEqual([
+          { operation_id: 'keep-unrelated-failure', status: 'DEAD_LETTER', last_error: JSON.stringify({ code: 'PERIOD_CLOSED' }) },
+          { operation_id: 'retry-patta-batch', status: 'PENDING', last_error: null },
+          { operation_id: 'retry-stale-archive', status: 'PENDING', last_error: null }
+        ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('migration 017 preserves ticket column identities while allowing a missing printed party', () => {
     const Database = require('better-sqlite3');
     const db = new Database(path.join(tempUserDataDir, 'migration-017-ticket-columns.sqlite'));
@@ -624,7 +656,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       expect(db.pragma('user_version', { simple: true })).toBe(17);
       expect(db.pragma('table_info(local_outbox)').some((column: any) => column.name === 'local_archive_json')).toBe(false);
 
-      const result = migrationRunner.applyMigrations(db);
+      const result = migrationRunner.applyMigrations(db, { targetVersion: 18 });
       expect(result.currentVersion).toBe(18);
       expect(db.pragma('table_info(local_outbox)').some((column: any) => column.name === 'local_archive_json')).toBe(true);
     } finally {
