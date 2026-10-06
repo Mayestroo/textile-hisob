@@ -18,7 +18,8 @@ const EXPECTED_MIGRATIONS = Object.freeze({
   15: 'deploy_patta_work_quantity_migration.sql',
   16: 'deploy_canonical_ids_global_patta_sequence.sql',
   17: 'deploy_production_adjustment_provenance_migration.sql',
-  18: 'deploy_patta_series_sequence_migration.sql'
+  18: 'deploy_patta_series_sequence_migration.sql',
+  19: 'deploy_patta_sequence_runtime_grant_migration.sql'
 });
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([
@@ -116,6 +117,7 @@ async function verifyPostgresReleaseState(client) {
       ticketUuidCheckValidated: false, businessKeyAbsent: false,
       partyPattaUnique: false, companyWidePattaIndexAbsent: false
     },
+    pattaSequencePrivileges: { canSelect: false, canInsert: false, canUpdate: false },
     operations: { unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 },
     businessMutations: { requiredTables: 3, presentTables: 0, requiredColumns: 18, presentColumns: 0 },
     baseline: {
@@ -344,6 +346,22 @@ async function verifyPostgresReleaseState(client) {
   );
   if (!report.constraints.partyPattaUnique || !report.constraints.companyWidePattaIndexAbsent) {
     problems.push('ticket patta uniqueness is not scoped to the party series');
+  }
+
+  const pattaSequencePrivilegeRows = await rowsFor('party sequence runtime permissions', `
+    SELECT has_table_privilege(current_user, 'company_patta_sequences', 'SELECT') AS can_select,
+      has_table_privilege(current_user, 'company_patta_sequences', 'INSERT') AS can_insert,
+      has_table_privilege(current_user, 'company_patta_sequences', 'UPDATE') AS can_update
+  `);
+  const sequencePrivileges = pattaSequencePrivilegeRows[0] || {};
+  report.pattaSequencePrivileges = {
+    canSelect: sequencePrivileges.can_select === true,
+    canInsert: sequencePrivileges.can_insert === true,
+    canUpdate: sequencePrivileges.can_update === true
+  };
+  if (!report.pattaSequencePrivileges.canSelect || !report.pattaSequencePrivileges.canInsert
+    || !report.pattaSequencePrivileges.canUpdate) {
+    problems.push('application role cannot read or allocate active-series patta numbers');
   }
 
   const operationRows = await rowsFor('operation idempotency evidence', `

@@ -59,7 +59,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   worker_binding_limits,
   company_batch_settings,
   patta_batch_settings,
-  period_archives
+  period_archives,
+  company_patta_sequences
 TO novda_app;
 
 GRANT SELECT ON TABLE schema_migrations TO novda_app;

@@ -154,11 +154,12 @@ async function verifyTarget(client, companyId) {
   if (result.rows[0]?.database !== 'novda_prod' || !String(result.rows[0]?.server_version_num || '').startsWith('16')) {
     throw new Error('POSTGRES_IMPORT_TARGET_INVALID');
   }
-  const migrationRows = await client.query('SELECT version, name FROM schema_migrations WHERE version IN (16, 17, 18) ORDER BY version');
+  const migrationRows = await client.query('SELECT version, name FROM schema_migrations WHERE version IN (16, 17, 18, 19) ORDER BY version');
   const expectedMigrations = [
     [16, 'deploy_canonical_ids_global_patta_sequence.sql'],
     [17, 'deploy_production_adjustment_provenance_migration.sql'],
-    [18, 'deploy_patta_series_sequence_migration.sql']
+    [18, 'deploy_patta_series_sequence_migration.sql'],
+    [19, 'deploy_patta_sequence_runtime_grant_migration.sql']
   ];
   if (migrationRows.rows.length !== expectedMigrations.length
     || migrationRows.rows.some((row, index) => row.version !== expectedMigrations[index][0]

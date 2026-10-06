@@ -29,7 +29,8 @@ const exactMigrations = [
   'deploy_patta_work_quantity_migration.sql',
   'deploy_canonical_ids_global_patta_sequence.sql',
   'deploy_production_adjustment_provenance_migration.sql',
-  'deploy_patta_series_sequence_migration.sql'
+  'deploy_patta_series_sequence_migration.sql',
+  'deploy_patta_sequence_runtime_grant_migration.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -91,6 +92,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
       indexname: 'idx_tickets_party_patta',
       indexdef: 'CREATE UNIQUE INDEX idx_tickets_party_patta ON public.tickets USING btree (company_id, party_record_id, patta_number) WHERE (party_record_id IS NOT NULL)'
     }],
+    pattaSequencePrivileges: [{ can_select: true, can_insert: true, can_update: true }],
     baseline: [{ owner_exclusion_rows: '0', owner_excluded_quantity: '0', owner_scope_mismatch_rows: '0' }],
     activationTables: [
       'activation_companies', 'activation_requests', 'activation_request_limits',
@@ -123,6 +125,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
       if (sql.includes('trg_parties_active_uniqueness')) return { rows: evidence.partyTrigger };
       if (sql.includes("'ck_tickets_id_rfc4122'")) return { rows: evidence.constraints };
       if (sql.includes("'idx_tickets_company_global_patta', 'idx_tickets_party_patta'")) return { rows: evidence.partyPattaIndexes };
+      if (sql.includes('has_table_privilege(current_user, \'company_patta_sequences\'')) return { rows: evidence.pattaSequencePrivileges };
       if (sql.includes('FROM pg_indexes')) return { rows: evidence.businessIndexes };
       if (sql.includes('unmatched_change_log_operations')) return { rows: evidence.operations };
       if (sql.includes('owner_exclusion_rows')) return { rows: evidence.baseline };
@@ -156,6 +159,7 @@ describe('PostgreSQL release-integrity evidence', () => {
     expect(report.constraints.ticketUuidCheckValidated).toBe(true);
     expect(report.constraints.businessKeyAbsent).toBe(true);
     expect(report.constraints).toMatchObject({ partyPattaUnique: true, companyWidePattaIndexAbsent: true });
+    expect(report.pattaSequencePrivileges).toEqual({ canSelect: true, canInsert: true, canUpdate: true });
     expect(report.operations).toEqual({ unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 });
     expect(report.baseline.scopePreserved).toBe(true);
   });
@@ -434,7 +438,8 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       'deploy_patta_work_quantity_migration.sql',
       'deploy_canonical_ids_global_patta_sequence.sql',
       'deploy_production_adjustment_provenance_migration.sql',
-      'deploy_patta_series_sequence_migration.sql'
+      'deploy_patta_series_sequence_migration.sql',
+      'deploy_patta_sequence_runtime_grant_migration.sql'
     ]) {
       await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
     }
@@ -451,7 +456,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
 
   it('verifies a fresh schema after applying all ordered deployment migrations', async () => {
     const freshReport = await verifyPostgresReleaseState(isolatedPool);
-    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
     expect(freshReport.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(freshReport.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(freshReport.baseline.scopePreserved).toBe(true);
