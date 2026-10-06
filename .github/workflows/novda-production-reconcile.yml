@@ -139,6 +139,8 @@ jobs:
             current_sequence bigint;
             operation_id text := 'admin-sequence-reset-' || gen_random_uuid()::text;
             committed_at timestamptz := NOW();
+            change_id bigint;
+            reset_event record;
           BEGIN
             PERFORM pg_advisory_xact_lock(hashtext('novda:startup-party-archive:comp_novda'));
             SELECT count(*) INTO total_count FROM parties WHERE company_id = 'comp_novda';
@@ -154,7 +156,7 @@ jobs:
             SELECT next_patta_number INTO current_sequence FROM company_patta_sequences WHERE company_id = 'comp_novda' FOR UPDATE;
             IF total_count <> 58 OR target_count <> 4 OR archived_target_count <> 4
               OR retained_closed_count <> 54 OR retained_visible_closed_count <> 54
-              OR current_sequence IS DISTINCT FROM 27 THEN
+              OR current_sequence IS DISTINCT FROM 27 AND current_sequence IS DISTINCT FROM 1 THEN
               RAISE EXCEPTION 'SEQUENCE_RESET_GUARD_FAILED total=% targets=% archived_targets=% retained_closed=% retained_visible_closed=% sequence=%',
                 total_count, target_count, archived_target_count, retained_closed_count, retained_visible_closed_count, current_sequence;
             END IF;
@@ -172,14 +174,73 @@ jobs:
               RAISE EXCEPTION 'ARCHIVED_PARTY_REFERENCES_FOUND count=%', linked_count;
             END IF;
 
-            UPDATE company_patta_sequences SET next_patta_number = 1, updated_at = committed_at
-              WHERE company_id = 'comp_novda';
-            INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
-            VALUES ('comp_novda', 'party_series', 'startup-sequence-reset', 1, operation_id, 'UPDATE',
-              jsonb_build_object('pattaSequenceReset', true, 'nextPattaNumber', 1), committed_at);
+            IF current_sequence = 27 THEN
+              UPDATE company_patta_sequences SET next_patta_number = 1, updated_at = committed_at
+                WHERE company_id = 'comp_novda';
+              INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
+              VALUES ('comp_novda', 'party_series', 'startup-sequence-reset', 1, operation_id, 'UPDATE',
+                jsonb_build_object('pattaSequenceReset', true, 'nextPattaNumber', 1), committed_at)
+              RETURNING change_log.change_id INTO change_id;
+              INSERT INTO operations_dedup(company_id, operation_id, command_type, entity_type, entity_id,
+                payload_hash, result_json, server_revision, accepted_at)
+              VALUES ('comp_novda', operation_id, 'CompletePartySeries', 'party_series', 'startup-sequence-reset',
+                repeat('0', 64), jsonb_build_object('status', 'APPLIED', 'serverRevision', 1,
+                  'cursor', change_id::text, 'committedAt', committed_at), 1, committed_at);
+            END IF;
+
+            FOR reset_event IN
+              SELECT change_row.change_id, change_row.operation_id, change_row.entity_revision, change_row.committed_at
+              FROM change_log change_row
+              WHERE change_row.company_id = 'comp_novda'
+                AND change_row.entity_type = 'party_series'
+                AND change_row.entity_id = 'startup-sequence-reset'
+                AND NOT EXISTS (
+                  SELECT 1 FROM operations_dedup dedup_row
+                  WHERE dedup_row.company_id = change_row.company_id
+                    AND dedup_row.operation_id = change_row.operation_id
+                )
+            LOOP
+              INSERT INTO operations_dedup(company_id, operation_id, command_type, entity_type, entity_id,
+                payload_hash, result_json, server_revision, accepted_at)
+              VALUES ('comp_novda', reset_event.operation_id, 'CompletePartySeries', 'party_series', 'startup-sequence-reset',
+                repeat('0', 64), jsonb_build_object('status', 'APPLIED', 'serverRevision', reset_event.entity_revision,
+                  'cursor', reset_event.change_id::text, 'committedAt', reset_event.committed_at),
+                reset_event.entity_revision, reset_event.committed_at);
+            END LOOP;
+
+            IF NOT EXISTS (
+              SELECT 1 FROM change_log change_row
+              WHERE change_row.company_id = 'comp_novda'
+                AND change_row.entity_type = 'party_series'
+                AND change_row.entity_id = 'startup-sequence-reset'
+            ) THEN
+              INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
+              VALUES ('comp_novda', 'party_series', 'startup-sequence-reset', 1, operation_id, 'UPDATE',
+                jsonb_build_object('pattaSequenceReset', true, 'nextPattaNumber', 1), committed_at)
+              RETURNING change_log.change_id INTO change_id;
+              INSERT INTO operations_dedup(company_id, operation_id, command_type, entity_type, entity_id,
+                payload_hash, result_json, server_revision, accepted_at)
+              VALUES ('comp_novda', operation_id, 'CompletePartySeries', 'party_series', 'startup-sequence-reset',
+                repeat('0', 64), jsonb_build_object('status', 'APPLIED', 'serverRevision', 1,
+                  'cursor', change_id::text, 'committedAt', committed_at), 1, committed_at);
+            END IF;
+
             IF (SELECT next_patta_number FROM company_patta_sequences WHERE company_id = 'comp_novda') <> 1
               OR (SELECT count(*) FROM parties WHERE company_id = 'comp_novda' AND is_archived = FALSE) <> 54 THEN
               RAISE EXCEPTION 'SEQUENCE_RESET_POSTCONDITION_FAILED';
+            END IF;
+            IF EXISTS (
+              SELECT 1 FROM change_log change_row
+              WHERE change_row.company_id = 'comp_novda'
+                AND change_row.entity_type = 'party_series'
+                AND change_row.entity_id = 'startup-sequence-reset'
+                AND NOT EXISTS (
+                  SELECT 1 FROM operations_dedup dedup_row
+                  WHERE dedup_row.company_id = change_row.company_id
+                    AND dedup_row.operation_id = change_row.operation_id
+                )
+            ) THEN
+              RAISE EXCEPTION 'SEQUENCE_RESET_DEDUP_POSTCONDITION_FAILED';
             END IF;
           END
           $reset$;
