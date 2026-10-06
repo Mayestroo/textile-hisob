@@ -120,6 +120,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
       if (sql.includes('FROM pg_indexes')) return { rows: evidence.businessIndexes };
       if (sql.includes('unmatched_change_log_operations')) return { rows: evidence.operations };
       if (sql.includes('owner_exclusion_rows')) return { rows: evidence.baseline };
+      if (sql.includes('FROM migration_baseline_decisions decision_row')) return { rows: evidence.retrospectiveBaselines || [] };
       throw new Error(`Unexpected PostgreSQL integrity query: ${sql}`);
     })
   };
@@ -257,6 +258,98 @@ describe('PostgreSQL release-integrity evidence', () => {
     });
     expect(baselineQuery).toContain("scope_json->>'excludedEvidenceQuantityTotal'");
     expect(baselineQuery).toContain("scope_json->>'excludedEvidenceRowCount'");
+  });
+
+  it('accepts complete retrospective import evidence with no excluded business rows', async () => {
+    const sourceSnapshotHash = 'b'.repeat(64);
+    const client = createEvidenceClient({
+      baseline: [{
+        owner_decision_count: '1', owner_exclusion_rows: '0', owner_excluded_quantity: '0',
+        owner_scope_mismatch_rows: '0', owner_decision_quantity_mismatch_count: '0'
+      }],
+      retrospectiveBaselines: [{
+        company_id: 'company-a', decision: 'CLEAN_PRODUCTION_LEDGER_BASELINE',
+        source_snapshot_hash: sourceSnapshotHash,
+        scope_json: {
+          decisionType: 'CLEAN_PRODUCTION_LEDGER_BASELINE',
+          recordingMode: 'RETROSPECTIVE_EVIDENCE_RECONCILIATION',
+          businessRowsReimported: false,
+          localOutboxImported: false,
+          source: {
+            sha256: sourceSnapshotHash, stagedSha256: sourceSnapshotHash,
+            sqliteSchemaVersion: 15, integrityCheck: 'ok'
+          },
+          sourceTableCounts: { tickets: 1, ticket_entries: 2, production_adjustments: 1 },
+          evidence: {
+            historicalTransactionalImportDocumented: true,
+            postgresSchemaMigrations: [16, 17],
+            baselineTicketIds: ['baseline-ticket'],
+            baselineTicketEntries: 2,
+            currentPostImportAcceptedSubmitTicketOperations: 2,
+            currentTicketRows: 3,
+            baselineProductionAdjustments: 1,
+            currentAcceptedProductionAdjustmentOperations: 1,
+            currentProductionAdjustments: 2
+          }
+        },
+        current_ticket_rows: '3', present_baseline_ticket_rows: '1',
+        present_baseline_ticket_entries: '2', accepted_submit_operations: '2',
+        current_production_adjustments: '2', accepted_production_adjustment_operations: '1',
+        baseline_exclusion_rows: '0'
+      }]
+    });
+
+    const report = await verifyPostgresReleaseState(client);
+    expect(report.baseline).toMatchObject({
+      ownerDecisionCount: 1,
+      ownerDecisionQuantityMismatchCount: 0,
+      scopePreserved: true
+    });
+  });
+
+  it('fails closed when retrospective baseline counts no longer reconcile with server rows', async () => {
+    const sourceSnapshotHash = 'c'.repeat(64);
+    const client = createEvidenceClient({
+      baseline: [{
+        owner_decision_count: '1', owner_exclusion_rows: '0', owner_excluded_quantity: '0',
+        owner_scope_mismatch_rows: '0', owner_decision_quantity_mismatch_count: '0'
+      }],
+      retrospectiveBaselines: [{
+        company_id: 'company-a', decision: 'CLEAN_PRODUCTION_LEDGER_BASELINE',
+        source_snapshot_hash: sourceSnapshotHash,
+        scope_json: {
+          decisionType: 'CLEAN_PRODUCTION_LEDGER_BASELINE',
+          recordingMode: 'RETROSPECTIVE_EVIDENCE_RECONCILIATION',
+          businessRowsReimported: false,
+          localOutboxImported: false,
+          source: {
+            sha256: sourceSnapshotHash, stagedSha256: sourceSnapshotHash,
+            sqliteSchemaVersion: 15, integrityCheck: 'ok'
+          },
+          sourceTableCounts: { tickets: 1, ticket_entries: 2, production_adjustments: 1 },
+          evidence: {
+            historicalTransactionalImportDocumented: true,
+            postgresSchemaMigrations: [16, 17],
+            baselineTicketIds: ['baseline-ticket'],
+            baselineTicketEntries: 2,
+            currentPostImportAcceptedSubmitTicketOperations: 2,
+            currentTicketRows: 4,
+            baselineProductionAdjustments: 1,
+            currentAcceptedProductionAdjustmentOperations: 1,
+            currentProductionAdjustments: 2
+          }
+        },
+        current_ticket_rows: '3', present_baseline_ticket_rows: '1',
+        present_baseline_ticket_entries: '2', accepted_submit_operations: '2',
+        current_production_adjustments: '2', accepted_production_adjustment_operations: '1',
+        baseline_exclusion_rows: '0'
+      }]
+    });
+
+    await expect(verifyPostgresReleaseState(client)).rejects.toMatchObject({
+      code: 'POSTGRES_RELEASE_INTEGRITY_FAILED',
+      details: { problems: expect.arrayContaining([expect.stringContaining('baseline')]) }
+    });
   });
 
   it('refuses PostgreSQL preflight before creating a client without explicit disposable opt-in', async () => {
