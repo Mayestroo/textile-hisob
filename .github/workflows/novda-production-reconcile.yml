@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Inspect current production state or archive the four startup parties
+        description: Inspect production state or reset the already archived startup patta sequence
         type: choice
         required: true
         default: inspect
         options:
           - inspect
-          - archive-startup-parties
+          - reset-startup-sequence
 
 permissions:
   contents: read
@@ -34,7 +34,7 @@ jobs:
           : "${VPS_PORT:?Missing GitHub secret VPS_PORT}"
           : "${VPS_SSH_KEY:?Missing GitHub secret VPS_SSH_KEY}"
           : "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
-          [[ "$RECONCILE_ACTION" == inspect || "$RECONCILE_ACTION" == archive-startup-parties ]]
+          [[ "$RECONCILE_ACTION" == inspect || "$RECONCILE_ACTION" == reset-startup-sequence ]]
           install -d -m 700 "$HOME/.ssh"
           key_file="$HOME/.ssh/novda_vps_key"
           askpass_file="$RUNNER_TEMP/novda-ssh-askpass.sh"
@@ -62,7 +62,7 @@ jobs:
           set -Eeuo pipefail
           [[ "$(id -un)" == root ]]
           action="$1"
-          db=(docker exec -u postgres novda-postgres psql -X -v ON_ERROR_STOP=1 -U novda_owner -d novda_prod)
+          db=(docker exec -i -u postgres novda-postgres psql -X -v ON_ERROR_STOP=1 -U novda_owner -d novda_prod)
 
           if [[ "$action" == inspect ]]; then
             "${db[@]}" -At -F '|' -c "
@@ -103,12 +103,12 @@ jobs:
             exit 0
           fi
 
-          [[ "$action" == archive-startup-parties ]]
+          [[ "$action" == reset-startup-sequence ]]
           backup_dir=/srv/novda/backups
           [[ -d "$backup_dir" && -w "$backup_dir" ]] || { printf '%s\n' 'NOVDA_BACKUP_DIRECTORY_NOT_WRITABLE' >&2; exit 1; }
           timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          backup="$backup_dir/novda_prod_before_startup_party_archive_${timestamp}.dump"
-          temporary="$backup_dir/.novda_prod_before_startup_party_archive_${timestamp}.$$.tmp"
+          backup="$backup_dir/novda_prod_before_startup_sequence_reset_${timestamp}.dump"
+          temporary="$backup_dir/.novda_prod_before_startup_sequence_reset_${timestamp}.$$.tmp"
           trap 'rm -f -- "$temporary"' EXIT
           docker exec novda-postgres pg_dump --format=custom --username=novda_owner --dbname=novda_prod > "$temporary"
           [[ -s "$temporary" ]]
@@ -121,7 +121,8 @@ jobs:
           "${db[@]}" <<'SQL'
           BEGIN;
           LOCK TABLE parties IN SHARE ROW EXCLUSIVE MODE;
-          DO $cleanup$
+          LOCK TABLE company_patta_sequences IN SHARE ROW EXCLUSIVE MODE;
+          DO $reset$
           DECLARE
             target_ids text[] := ARRAY[
               '284be4e6-c01d-41d3-b145-56fa5b8a4862',
@@ -131,29 +132,31 @@ jobs:
             ];
             total_count integer;
             target_count integer;
+            archived_target_count integer;
             retained_closed_count integer;
             retained_visible_closed_count integer;
-            unarchived_target_count integer;
             linked_count bigint;
-            operation_id text := 'admin-archive-' || gen_random_uuid()::text;
+            current_sequence bigint;
+            operation_id text := 'admin-sequence-reset-' || gen_random_uuid()::text;
             committed_at timestamptz := NOW();
-            party_row record;
-            archived_ids text[] := ARRAY[]::text[];
           BEGIN
             PERFORM pg_advisory_xact_lock(hashtext('novda:startup-party-archive:comp_novda'));
             SELECT count(*) INTO total_count FROM parties WHERE company_id = 'comp_novda';
             SELECT count(*) INTO target_count FROM parties WHERE company_id = 'comp_novda' AND id = ANY(target_ids);
+            SELECT count(*) INTO archived_target_count FROM parties
+              WHERE company_id = 'comp_novda' AND id = ANY(target_ids)
+                AND status = 'CLOSED' AND is_closed = 1 AND is_archived = TRUE;
             SELECT count(*) INTO retained_closed_count FROM parties
               WHERE company_id = 'comp_novda' AND NOT (id = ANY(target_ids)) AND status = 'CLOSED';
             SELECT count(*) INTO retained_visible_closed_count FROM parties
               WHERE company_id = 'comp_novda' AND NOT (id = ANY(target_ids))
                 AND status = 'CLOSED' AND is_archived = FALSE;
-            SELECT count(*) INTO unarchived_target_count FROM parties
-              WHERE company_id = 'comp_novda' AND id = ANY(target_ids) AND is_archived = FALSE;
-            IF total_count <> 58 OR target_count <> 4 OR retained_closed_count <> 54
-              OR retained_visible_closed_count <> 54 OR unarchived_target_count <> 4 THEN
-              RAISE EXCEPTION 'PARTY_CLEANUP_GUARD_FAILED total=% targets=% retained_closed=% retained_visible_closed=% unarchived_targets=%',
-                total_count, target_count, retained_closed_count, retained_visible_closed_count, unarchived_target_count;
+            SELECT next_patta_number INTO current_sequence FROM company_patta_sequences WHERE company_id = 'comp_novda' FOR UPDATE;
+            IF total_count <> 58 OR target_count <> 4 OR archived_target_count <> 4
+              OR retained_closed_count <> 54 OR retained_visible_closed_count <> 54
+              OR current_sequence IS DISTINCT FROM 27 THEN
+              RAISE EXCEPTION 'SEQUENCE_RESET_GUARD_FAILED total=% targets=% archived_targets=% retained_closed=% retained_visible_closed=% sequence=%',
+                total_count, target_count, archived_target_count, retained_closed_count, retained_visible_closed_count, current_sequence;
             END IF;
 
             SELECT count(*) INTO linked_count FROM (
@@ -166,35 +169,20 @@ jobs:
               UNION ALL SELECT 1 FROM migration_party_resolutions WHERE company_id = 'comp_novda' AND party_id = ANY(target_ids)
             ) references_to_targets;
             IF linked_count <> 0 THEN
-              RAISE EXCEPTION 'PARTY_CLEANUP_REFERENCES_FOUND count=%', linked_count;
+              RAISE EXCEPTION 'ARCHIVED_PARTY_REFERENCES_FOUND count=%', linked_count;
             END IF;
 
-            FOR party_row IN
-              UPDATE parties SET status = 'CLOSED', is_closed = 1, is_archived = TRUE,
-                closed_at = COALESCE(closed_at, committed_at),
-                server_revision = server_revision + 1, updated_at = committed_at
-              WHERE company_id = 'comp_novda' AND id = ANY(target_ids)
-              RETURNING id, server_revision, closed_at
-            LOOP
-              archived_ids := array_append(archived_ids, party_row.id);
-              INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
-              VALUES ('comp_novda', 'party', party_row.id, party_row.server_revision, operation_id, 'UPDATE',
-                jsonb_build_object('partyRecordId', party_row.id, 'status', 'CLOSED', 'isClosed', true,
-                  'isArchived', true, 'closedAt', party_row.closed_at), committed_at);
-            END LOOP;
-
+            UPDATE company_patta_sequences SET next_patta_number = 1, updated_at = committed_at
+              WHERE company_id = 'comp_novda';
             INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
-            VALUES ('comp_novda', 'party_history', 'comp_novda', 1, operation_id, 'UPDATE',
-              jsonb_build_object('partyRecordIds', archived_ids, 'missingPartyRecordIds', ARRAY[]::text[], 'archivedAt', committed_at), committed_at);
-
-            INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
-            VALUES ('comp_novda', 1, committed_at)
-            ON CONFLICT (company_id) DO UPDATE SET next_patta_number = 1, updated_at = committed_at;
-            INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
-            VALUES ('comp_novda', 'party_series', 'startup-cleanup', 1, operation_id, 'UPDATE',
+            VALUES ('comp_novda', 'party_series', 'startup-sequence-reset', 1, operation_id, 'UPDATE',
               jsonb_build_object('pattaSequenceReset', true, 'nextPattaNumber', 1), committed_at);
+            IF (SELECT next_patta_number FROM company_patta_sequences WHERE company_id = 'comp_novda') <> 1
+              OR (SELECT count(*) FROM parties WHERE company_id = 'comp_novda' AND is_archived = FALSE) <> 54 THEN
+              RAISE EXCEPTION 'SEQUENCE_RESET_POSTCONDITION_FAILED';
+            END IF;
           END
-          $cleanup$;
+          $reset$;
           COMMIT;
 
           SELECT 'PARTY_TOTAL|' || count(*) FROM parties WHERE company_id = 'comp_novda';
