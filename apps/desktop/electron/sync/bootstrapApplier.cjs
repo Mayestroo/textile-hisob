@@ -236,11 +236,16 @@ function validateBootstrapResponse(response, companyId) {
     const entryIds = new Set();
     for (const ticket of snapshot.tickets) {
       requireCondition(typeof ticket.id === 'string' && UUID_PATTERN.test(ticket.id) && modelIds.has(ticket.modelId));
-      const party = partyById.get(ticket.partyRecordId);
-      requireCondition(partyIds.has(ticket.partyRecordId) && requireString(ticket.partyNumber));
-      requireCondition(party.modelId === ticket.modelId && party.partyNumber === ticket.partyNumber);
+      requireCondition(requireString(ticket.partyNumber));
+      const hasPartyRecord = ticket.partyRecordId !== null && ticket.partyRecordId !== undefined;
+      if (hasPartyRecord) {
+        const party = partyById.get(ticket.partyRecordId);
+        requireCondition(partyIds.has(ticket.partyRecordId));
+        requireCondition(party.modelId === ticket.modelId && party.partyNumber === ticket.partyNumber);
+      }
       requireCondition(ticket.periodId === null || ticket.periodId === undefined || periodIds.has(ticket.periodId));
-      requireCondition(Number.isSafeInteger(ticket.pattaNumber) && ticket.pattaNumber > 0);
+      requireCondition(Number.isSafeInteger(ticket.pattaNumber)
+        && (hasPartyRecord ? ticket.pattaNumber > 0 : ticket.pattaNumber >= 0));
       requireCondition(Number.isSafeInteger(ticket.qty) && ticket.qty > 0);
       requireCondition(TICKET_STATUSES.has(ticket.status) && Array.isArray(ticket.entries));
       requireCondition((ticket.isClosed === true || ticket.isClosed === false)

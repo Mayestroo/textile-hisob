@@ -385,6 +385,44 @@ describe(' SQLite authoritative bootstrap', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM tickets').get().count).toBe(0);
   });
 
+  it('bootstraps tickets that intentionally have no party record', () => {
+    const response = makeProductionLikeBootstrap();
+    response.snapshot.tickets = [{
+      id: '00000000-0000-4000-8000-000000000002',
+      companyId: COMPANY_ID,
+      modelId: 'model_1',
+      periodId: 'period-current',
+      partyNumber: "No'malum Partiya",
+      partyRecordId: null,
+      pattaNumber: 0,
+      qty: 2,
+      size: null,
+      color: null,
+      konveyer: null,
+      status: 'CONFIRMED',
+      isClosed: false,
+      submittedAt: '2026-09-01T00:00:00.000Z',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      serverRevision: 1,
+      entries: [{
+        id: 'entry-free-party-1', companyId: COMPANY_ID, opName: 'Sew', workerId: 1,
+        workerNameSnapshot: 'Worker 1', rateSnapshot: 12.5, brak: null, qty: 2,
+        createdAt: '2026-09-01T00:00:00.000Z'
+      }]
+    }];
+    response.counts.tickets = 1;
+    response.counts.ticketEntries = 1;
+
+    expect(() => validateBootstrapResponse(response, COMPANY_ID)).not.toThrow();
+    expect(applyBootstrapSnapshot(db, COMPANY_ID, response)).toMatchObject({
+      status: 'APPLIED',
+      counts: { tickets: 1, ticketEntries: 1 }
+    });
+    expect(db.prepare('SELECT party_record_id, party_number FROM tickets WHERE id = ?')
+      .get('00000000-0000-4000-8000-000000000002'))
+      .toEqual({ party_record_id: null, party_number: "No'malum Partiya" });
+  });
+
   it('accepts a completed  database only with a valid durable cursor', () => {
     db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, ?, datetime('now'))`).run('_bootstrap_complete', '1');
     db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, ?, datetime('now'))`).run('sync_cursor', '42');
