@@ -62,6 +62,40 @@ async function connect(connectionString) {
   return client;
 }
 
+async function applyMigrations(migrator, options = {}) {
+  const migrationDirectory = options.migrationDirectory
+    || path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'migrations');
+  const schemaPath = options.schemaPath
+    || path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'schema.sql');
+  const readFile = options.readFile || ((filePath) => fs.readFileSync(filePath, 'utf8'));
+
+  for (let index = 0; index < MIGRATIONS.length; index += 1) {
+    const filename = MIGRATIONS[index];
+    if (index > 0) {
+      const version = index + 1;
+      const result = await migrator.query(
+        'SELECT name FROM schema_migrations WHERE version = $1',
+        [version]
+      );
+      const applied = result.rows[0];
+      if (applied) {
+        if (applied.name !== filename) {
+          const error = new Error(`POSTGRES_MIGRATION_VERSION_CONFLICT version=${version}`);
+          error.code = 'POSTGRES_MIGRATION_VERSION_CONFLICT';
+          throw error;
+        }
+        process.stdout.write(`POSTGRES_MIGRATION_ALREADY_APPLIED version=${version}\n`);
+        continue;
+      }
+    }
+
+    const sqlPath = filename === 'schema.sql'
+      ? schemaPath
+      : path.join(migrationDirectory, filename);
+    await migrator.query(readFile(sqlPath));
+  }
+}
+
 async function main(env = process.env) {
   if (env.NODE_ENV !== 'production') {
     const error = new Error('NODE_ENV_PRODUCTION_REQUIRED');
@@ -88,12 +122,7 @@ async function main(env = process.env) {
     clients.push(app);
 
     const target = await verifyPostgres16(migrator);
-    for (const filename of MIGRATIONS) {
-      const sqlPath = filename === 'schema.sql'
-        ? path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'schema.sql')
-        : path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'migrations', filename);
-      await migrator.query(fs.readFileSync(sqlPath, 'utf8'));
-    }
+    await applyMigrations(migrator);
 
     await owner.query(
       fs.readFileSync(path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'production_roles.sql'), 'utf8')
@@ -130,4 +159,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { MIGRATIONS, requireDsn, verifyPostgres16, main };
+module.exports = { MIGRATIONS, requireDsn, verifyPostgres16, applyMigrations, main };
