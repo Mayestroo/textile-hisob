@@ -1,0 +1,54 @@
+name: Build Novda desktop 1.1.6 candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate candidate version and install dependencies
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version").Trim()
+          $lockVersion = (node -p "require('./package-lock.json').version").Trim()
+          if ($version -ne '1.1.6' -or $lockVersion -ne $version) {
+            throw "Expected package and lockfile version 1.1.6; found $version / $lockVersion"
+          }
+          npm ci
+
+      - name: Build production renderer
+        env:
+          VITE_APP_VERSION: 1.1.6
+        run: npm run build
+
+      - name: Package Windows x64 installer without publishing
+        run: npx electron-builder --win nsis --x64 --publish never --config.directories.output=dist-build/local-candidate-1.1.6-windows
+
+      - name: Verify candidate identity
+        shell: pwsh
+        run: |
+          $artifact = 'dist-build/local-candidate-1.1.6-windows/Novda-hisob-kitob-Setup-1.1.6-win10-11-x64.exe'
+          if (-not (Test-Path $artifact -PathType Leaf)) { throw "Expected installer not found: $artifact" }
+          $file = Get-Item $artifact
+          $hash = (Get-FileHash $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+          $signature = (Get-AuthenticodeSignature $artifact).Status
+          Write-Host "LOCAL_RC_ARTIFACT file=$($file.Name) sizeBytes=$($file.Length) sha256=$hash authenticode=$signature"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Novda-1.1.6-Windows-Installer
+          path: dist-build/local-candidate-1.1.6-windows/Novda-hisob-kitob-Setup-1.1.6-win10-11-x64.exe
+          if-no-files-found: error
+          retention-days: 14
