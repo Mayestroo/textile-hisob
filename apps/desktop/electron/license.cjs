@@ -414,7 +414,9 @@ async function checkRemoteActivation(userDataDir, options = {}) {
       activationRequestId: request.requestId
     };
   } catch (error) {
-    return localStatus.isActivated ? localStatus : pendingStatus(machineId, error?.code === 'ACTIVATION_TLS_REQUIRED' || error?.code === 'SYNC_SERVER_TLS_REQUIRED'
+    return localStatus.isActivated ? localStatus : pendingStatus(machineId, error?.code === 'MACHINE_ALREADY_ACTIVATED'
+      ? 'Bu PC uchun VPS tasdig‘i boshqa so‘rovda mavjud. Telegram administratoridan ushbu qurilma so‘rovini tekshirishni so‘rang.'
+      : error?.code === 'ACTIVATION_TLS_REQUIRED' || error?.code === 'SYNC_SERVER_TLS_REQUIRED'
       ? 'Aktivatsiya uchun xavfsiz TLS ulanishi talab qilinadi'
       : error?.code === 'PUBLIC_ACTIVATION_API_URL_NOT_CONFIGURED'
       ? 'Ommaviy HTTPS server manzili sozlanmagan'

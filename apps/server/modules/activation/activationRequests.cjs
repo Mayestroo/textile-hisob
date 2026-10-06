@@ -64,7 +64,18 @@ async function createActivationRequest(pool, rawBody) {
       if (row.machine_id !== body.machineId || row.request_token_hash !== tokenHash) {
         throw activationError('ACTIVATION_REQUEST_ID_CONFLICT', 409);
       }
-      return { requestId: row.request_id, status: row.status, requestedAt: row.requested_at, replay: true };
+      let requestedAt = row.requested_at;
+      if (row.status === 'PENDING') {
+        const refreshed = await client.query(
+          `UPDATE activation_requests
+           SET client_context = $2, updated_at = NOW()
+           WHERE request_id = $1 AND status = 'PENDING'
+           RETURNING requested_at`,
+          [row.request_id, JSON.stringify(body.context)]
+        );
+        requestedAt = refreshed.rows[0]?.requested_at || requestedAt;
+      }
+      return { requestId: row.request_id, status: row.status, requestedAt, replay: true };
     }
 
     const active = await client.query(

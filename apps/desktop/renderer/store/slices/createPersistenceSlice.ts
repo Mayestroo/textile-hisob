@@ -105,6 +105,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             models: hydrated.models,
             availableSizes: hydrated.availableSizes,
             nextPartyNumber: hydrated.nextPartyNumber,
+            nextPattaNumber: hydrated.nextPattaNumber,
             printedPartyHistory: hydrated.printedPartyHistory,
             submittedTickets: hydrated.submittedTickets,
             currentPeriod: hydrated.currentPeriod,
@@ -132,6 +133,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
                 models: latest.models,
                 availableSizes: latest.availableSizes,
                 nextPartyNumber: latest.nextPartyNumber,
+                nextPattaNumber: latest.nextPattaNumber,
                 printedPartyHistory: latest.printedPartyHistory,
                 submittedTickets: latest.submittedTickets,
                 currentPeriod: latest.currentPeriod,
@@ -193,6 +195,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             models: cleanModels,
             availableSizes: customSizes,
             nextPartyNumber: nextParty,
+            nextPattaNumber: 1,
             printedPartyHistory: [],
             submittedTickets: [],
             currentPeriod: freshPeriod,
@@ -232,6 +235,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             models: cleanModels,
             availableSizes: customSizes,
             nextPartyNumber: nextParty,
+            nextPattaNumber: hydrated.nextPattaNumber,
             printedPartyHistory: cleanHistory,
             submittedTickets: subTickets,
             currentPeriod: hydrated.currentPeriod,
@@ -318,6 +322,10 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
         overrideState?.nextPartyNumber !== undefined
           ? overrideState.nextPartyNumber
           : state.nextPartyNumber || 1,
+      nextPattaNumber:
+        overrideState?.nextPattaNumber !== undefined
+          ? overrideState.nextPattaNumber
+          : state.nextPattaNumber || 1,
       printedPartyHistory: overrideState?.printedPartyHistory || state.printedPartyHistory || [],
       submittedTickets: rawTickets,
       currentPeriod: overrideState?.currentPeriod || state.currentPeriod,
@@ -497,6 +505,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
         submittedTickets: state.submittedTickets || [],
         printedPartyHistory: state.printedPartyHistory || [],
         nextPartyNumber: state.nextPartyNumber || 1,
+        nextPattaNumber: state.nextPattaNumber || 1,
         activeSheet: firstSheetName,
         companyId,
         activeCell: {

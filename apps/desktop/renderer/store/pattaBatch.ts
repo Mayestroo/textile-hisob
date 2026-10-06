@@ -2,7 +2,7 @@ import { WorkbookStore } from './types';
 import { ModelPattaBatchConfig, PrintedPartyRecord } from '../types/workbook';
 
 type BatchState = Pick<WorkbookStore,
-  'models' | 'workers' | 'nextPartyNumber' | 'pattaBatchConfigs' | 'printedPartyHistory' |
+  'models' | 'workers' | 'nextPartyNumber' | 'nextPattaNumber' | 'pattaBatchConfigs' | 'printedPartyHistory' |
   'submittedTickets' | 'availableSizes' | 'deletedPartyIds'>;
 
 type PrintedItem = {
@@ -50,13 +50,6 @@ function computeCumulative(history: PrintedPartyRecord[]) {
   });
 }
 
-export function getNextPattaNumberInActiveSeries(history: PrintedPartyRecord[] = []) {
-  return history.reduce((next, party) => {
-    if (party.isClosed) return next;
-    return Math.max(next, Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1);
-  }, 1);
-}
-
 export function buildBatchSettingsPayload(
   state: BatchState,
   pattaBatchConfigs: Record<string, ModelPattaBatchConfig> = state.pattaBatchConfigs,
@@ -80,6 +73,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   parties: PrintedPartyRecord[];
   settings: ReturnType<typeof buildBatchSettingsPayload>;
   nextPartyNumber: number;
+  nextPattaNumber: number;
   deletedPartyIds: string[];
 } {
   if (!Array.isArray(printedItems) || printedItems.length === 0 || printedItems.length > 128) {
@@ -97,7 +91,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   let nextSequential = Math.max(state.nextPartyNumber || 1, highestActiveParty + 1);
   const working = [...history];
   const changedPartyIds = new Set<string>();
-  let nextGlobalPatta = getNextPattaNumberInActiveSeries(working);
+  let nextGlobalPatta = Math.max(1, Number(state.nextPattaNumber) || 1);
   for (const item of printedItems) {
     let partyNumber = String(item.partyNumber).trim();
     const conflictingModel = working.find((party) => !party.isClosed && party.modelId !== item.modelId && String(party.partyNumber).trim() === partyNumber);
@@ -163,6 +157,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
     parties: updatedHistory.filter((party) => changedPartyIds.has(party.id)),
     settings: buildBatchSettingsPayload(state, configs),
     nextPartyNumber,
+    nextPattaNumber: nextGlobalPatta,
     deletedPartyIds
   };
 }

@@ -368,6 +368,8 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
   const printedPartyHistory = loadPartiesFromSqlite(db, companyId);
   const batchSettings = loadBatchSettingsFromSqlite(db, companyId, models);
   const submittedTickets = visibleTickets.map(toSubmittedTicket);
+  const nextPattaNumber = Number(db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?`)
+    .get(companyId)?.next_patta_number || 1);
   const currentPeriod = openPeriod || periods[0] || {
     id: 'period_default',
     name: 'Default period',
@@ -391,6 +393,7 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
     currentPeriod,
     periods,
     nextPartyNumber,
+    nextPattaNumber,
     ticketForms: loadTicketFormsFromSqlite(db, companyId),
     pattaBatchConfigs: batchSettings.pattaBatchConfigs,
     availableSizes: batchSettings.availableSizes,

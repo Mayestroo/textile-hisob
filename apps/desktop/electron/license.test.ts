@@ -149,6 +149,23 @@ describe('Ed25519 license verification', () => {
     });
   });
 
+  it('explains when the VPS already has approval under a different request ID', async () => {
+    const status = await license.checkRemoteActivation(userData, {
+      baseUrl: 'https://sync.novdatextile.uz',
+      requestJson: async (_url: URL, options: any = {}) => {
+        if (options.method === 'POST') {
+          const error: any = new Error('already approved');
+          error.code = 'MACHINE_ALREADY_ACTIVATED';
+          throw error;
+        }
+        throw new Error('GET should not run');
+      },
+      ...requestTokenStorage
+    });
+
+    expect(status).toMatchObject({ isActivated: false, message: expect.stringContaining('VPS tasdig‘i boshqa so‘rovda mavjud') });
+  });
+
   it('hands the approved activation request credential to OS-protected  device storage', async () => {
     const machineId = license.getHardwareId();
     const captured: any[] = [];

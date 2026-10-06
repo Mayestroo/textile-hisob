@@ -880,6 +880,8 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       payload: { operations: [{ operationId: 'op_a2', companyId: COMPANY_A, commandType: 'SubmitTicket', entityType: 'ticket', entityId: pA2.ticketId, payloadHash: computePayloadHash(canonicalStringify(pA2)), payload: pA2 }] }
     });
 
+    await pool.query(`INSERT INTO company_patta_sequences(company_id, next_patta_number) VALUES ($1, 13)`, [COMPANY_A]);
+
     // Pull changes for Company A from cursor 0
     const pullA = await app.inject({
       method: 'GET',
@@ -888,6 +890,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     });
     const bodyA = JSON.parse(pullA.payload);
     expect(bodyA.items.length).toBe(2);
+    expect(bodyA.nextPattaNumber).toBe(13);
     expect(bodyA.items[0].entityId).toBe('00000000-0000-4000-8000-000000000103');
     expect(bodyA.items[1].entityId).toBe('00000000-0000-4000-8000-000000000105');
     expect(bodyA.items.every((i: any) => i.companyId === COMPANY_A)).toBe(true);
@@ -900,6 +903,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     });
     const bodyB = JSON.parse(pullB.payload);
     expect(bodyB.items.length).toBe(1);
+    expect(bodyB.nextPattaNumber).toBe(1);
     expect(bodyB.items[0].entityId).toBe('00000000-0000-4000-8000-000000000104');
     expect(bodyB.items[0].companyId).toBe(COMPANY_B);
   });
@@ -1195,9 +1199,14 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       expect(created.statusCode).toBe(201);
       expect(JSON.parse(created.payload).request).toMatchObject({ requestId, status: 'PENDING', replay: false });
 
-      const replay = await app.inject({ method: 'POST', url: '/api/activation/requests', payload });
+      const replay = await app.inject({
+        method: 'POST', url: '/api/activation/requests',
+        payload: { ...payload, context: { appVersion: '1.1.5', platform: 'win32' } }
+      });
       expect(replay.statusCode).toBe(200);
       expect(JSON.parse(replay.payload).request).toMatchObject({ requestId, status: 'PENDING', replay: true });
+      const refreshedContext = await pool.query('SELECT client_context FROM activation_requests WHERE request_id = $1', [requestId]);
+      expect(refreshedContext.rows[0].client_context).toEqual({ appVersion: '1.1.5', platform: 'win32' });
 
       const unauthorized = await app.inject({ method: 'GET', url: `/api/activation/requests/${requestId}` });
       expect(unauthorized.statusCode).toBe(404);

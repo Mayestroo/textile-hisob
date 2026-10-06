@@ -54,6 +54,7 @@ async function reloadProjection(eAPI: any, companyId: string) {
     })),
     availableSizes: hydrated.availableSizes,
     nextPartyNumber: hydrated.nextPartyNumber,
+    nextPattaNumber: hydrated.nextPattaNumber,
     printedPartyHistory: hydrated.printedPartyHistory,
     submittedTickets: hydrated.submittedTickets,
     currentPeriod: hydrated.currentPeriod,

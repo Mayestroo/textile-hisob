@@ -156,6 +156,7 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
       productionAdjustments: 0
     });
     expect(result.cursor).toBe('0');
+    expect(result.nextPattaNumber).toBe(1);
     expect(JSON.stringify(result.snapshot)).not.toContain('telegram');
     expect(result.snapshot).not.toHaveProperty('deletedWorkerIds');
     expect(result.snapshot).not.toHaveProperty('printedPattas');

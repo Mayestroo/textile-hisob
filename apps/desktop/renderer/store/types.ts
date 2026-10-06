@@ -143,6 +143,10 @@ export interface PattaBatchSlice {
   completePartySeries: () => Promise<void>;
 }
 
+export interface PattaSequenceSlice {
+  nextPattaNumber: number;
+}
+
 export interface LicenseSlice {
   licenseStatus: LicenseStatus | null;
   theme: 'light' | 'dark';
@@ -202,6 +206,7 @@ export interface PersistenceSlice {
       pattaBatchConfigs?: Record<string, ModelPattaBatchConfig>;
       availableSizes?: string[];
       nextPartyNumber?: number;
+      nextPattaNumber?: number;
       printedPartyHistory?: PrintedPartyRecord[];
       submittedTickets?: SubmittedTicketRecord[];
       currentPeriod?: PayrollPeriod;
@@ -225,6 +230,7 @@ export type WorkbookStore = ModelSlice &
   TicketSlice &
   PeriodSlice &
   PattaBatchSlice &
+  PattaSequenceSlice &
   LicenseSlice &
   UiSlice &
   PersistenceSlice;

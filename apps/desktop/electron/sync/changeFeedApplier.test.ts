@@ -121,6 +121,18 @@ describe(' workbook change-feed application', () => {
       .toEqual({ next_patta_number: 1 });
   });
 
+  it('reconciles a stale local sequence to the VPS high-water mark even when no changes are pending', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+      VALUES (?, 578, ?)`).run(companyId, new Date().toISOString());
+
+    const result = applyChangesBatch(db, companyId, [], '0', { nextPattaNumber: 13 });
+
+    expect(result.appliedCount).toBe(0);
+    expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(companyId))
+      .toEqual({ next_patta_number: 13 });
+  });
+
   it('resolves an in-flight old model ID to its canonical UUID without creating a duplicate model', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();
