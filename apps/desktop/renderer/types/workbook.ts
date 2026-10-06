@@ -67,8 +67,8 @@ export interface PrintedPartyRecord {
   color: string;
   pattaCount: number;           // Ushbu partiyadagi patta soni (masalan: 15)
   cumulativePattaCount: number; // Jami to'plangan patta soni (oldingi + yangi)
-  pattaStartNumber?: number;    // Korxona bo'yicha ajratilgan birinchi global patta raqami
-  pattaEndNumber?: number;      // Korxona bo'yicha ajratilgan oxirgi global patta raqami
+  pattaStartNumber?: number;    // Faol partiyalar turkumidagi birinchi patta raqami
+  pattaEndNumber?: number;      // Faol partiyalar turkumidagi oxirgi patta raqami
   ishSoniPerPatta?: number;     // 1 ta patta uchun ish soni (masalan: 50)
   totalIshSoni?: number;        // Jami ish soni = pattaCount * ishSoniPerPatta
   ishSoni: number;              // Ushbu partiyadagi jami ish soni (masalan: 750)

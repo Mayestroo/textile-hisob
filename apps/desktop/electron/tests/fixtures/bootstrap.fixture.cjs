@@ -36,6 +36,7 @@ function getBootstrapFixture(companyId) {
     success: true,
     snapshot,
     cursor: '42',
+    nextPattaNumber: 1,
     counts: {
       models: 1, workers: 1, periods: 1, parties: 1, workerAdjustments: 0,
       legacyPartyCollisionExceptions: 0,

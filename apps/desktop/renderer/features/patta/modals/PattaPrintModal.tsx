@@ -4,6 +4,7 @@ import { ModelConfig } from '../../../types/workbook';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
 import { formatDateOnly } from '../../../utils/formatters';
+import { getNextPattaNumberInActiveSeries } from '../../../store/pattaBatch';
 
 export interface PrintBatchItem {
   model: ModelConfig;
@@ -72,16 +73,8 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
     const list: PrintableTicket[] = [];
     const today = formatDateOnly(new Date());
 
-    // Global high-water mark across every model; stored party ranges are authoritative.
-    const activeHistory = (printedPartyHistory || []).filter((h) => !h.isClosed);
-    const globalPrevPattas = (activeHistory && activeHistory.length > 0)
-      ? Math.max(0, ...activeHistory.map((h) => {
-          const end = h.pattaEndNumber ?? h.cumulativePattaCount;
-          return typeof end === 'number' && Number.isFinite(end) ? end : 0;
-        }))
-      : 0;
-
-    let currentPattaNum = globalPrevPattas + 1;
+    // Restart patta numbering after the party series is authoritatively closed.
+    let currentPattaNum = getNextPattaNumberInActiveSeries(printedPartyHistory || []);
 
     for (const { item, workTickets, sizesSummary } of printableItems) {
       const opsList = item.model.pattaOpsOrder.map((opName) => ({

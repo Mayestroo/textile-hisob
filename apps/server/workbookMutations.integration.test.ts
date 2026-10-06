@@ -49,7 +49,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_free_mode_ticket_party_migration.sql',
       'deploy_patta_work_quantity_migration.sql',
       'deploy_canonical_ids_global_patta_sequence.sql',
-      'deploy_production_adjustment_provenance_migration.sql'
+      'deploy_production_adjustment_provenance_migration.sql',
+      'deploy_patta_series_sequence_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'
@@ -343,15 +344,38 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       cumulativeIshSoni: 155, sizes: { M: 1 }, printedAt: '2026-10-05T10:00:00.000Z'
     };
     expect(await apply('CreateParty', 'party', 'party_4', nextParty)).toMatchObject({ status: 'APPLIED' });
+    await pool!.query(`INSERT INTO company_patta_sequences(company_id, next_patta_number)
+      VALUES ($1, 578) ON CONFLICT (company_id) DO UPDATE SET next_patta_number = 578`, [companyId]);
     expect(await apply('CompletePartySeries', 'party_series', 'period_2026_10', {
       commandId: 'cmd_party_series', operationId: 'op_party_series', companyId,
       periodId: 'period_2026_10', endDate: '2026-10-31'
     })).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1', [companyId])).rows)
+      .toEqual([{ next_patta_number: 1 }]);
+    const newSeriesBatch = {
+      commandId: 'cmd_series_batch', operationId: 'op_series_batch', companyId, batchId: 'batch_after_series',
+      parties: [{ commandId: 'cmd_series_batch', operationId: 'op_series_batch', companyId,
+        partyRecordId: 'party_after_series', partyNumber: '1', modelId: 'model_2', modelName: 'Model 2',
+        pattaCount: 2, sizes: { M: 2 }, printedAt: '2026-11-01T10:00:00.000Z' }],
+      availableSizes: ['M'], configs: [{ modelId: 'model_2', partyNumber: '', isCustomParty: false,
+        totalIshSoni: '', color: 'Qora', sizes: { M: '' } }]
+    };
+    expect(await apply('CompletePattaBatch', 'patta_batch', 'batch_after_series', newSeriesBatch))
+      .toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query(`SELECT patta_start_number, patta_end_number FROM parties
+      WHERE company_id = $1 AND id = 'party_after_series'`, [companyId])).rows)
+      .toEqual([{ patta_start_number: 1, patta_end_number: 2 }]);
+    await pool!.query(`INSERT INTO tickets (
+      id, company_id, model_id, period_id, party_number, party_record_id, patta_number, qty, status, is_closed, submitted_at
+    ) VALUES ('00000000-0000-4000-8000-000000000824', $1, 'model_2', 'period_2026_10', '1',
+      'party_after_series', 2, 1, 'CONFIRMED', 0, '2026-11-01T10:00:00Z')`, [companyId]);
+    expect((await pool!.query(`SELECT COUNT(*)::int AS count FROM tickets
+      WHERE company_id = $1 AND patta_number = 2`, [companyId])).rows[0].count).toBe(2);
 
-    const archived = { commandId: 'cmd_archive', operationId: 'op_archive', companyId, partyRecordIds: ['party_1', 'party_2', 'party_4'] };
+    const archived = { commandId: 'cmd_archive', operationId: 'op_archive', companyId, partyRecordIds: ['party_1', 'party_2', 'party_4', 'party_after_series'] };
     expect(await apply('ArchivePartyHistory', 'party_history', companyId, archived)).toMatchObject({ status: 'APPLIED' });
     const archivedRows = await pool!.query('SELECT COUNT(*) AS count FROM parties WHERE company_id = $1 AND is_archived = TRUE', [companyId]);
-    expect(Number(archivedRows.rows[0].count)).toBe(3);
+    expect(Number(archivedRows.rows[0].count)).toBe(4);
   });
 
   it('rolls back every party when a completed batch contains an invalid model reference', async () => {

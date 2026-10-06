@@ -17,7 +17,8 @@ const EXPECTED_MIGRATIONS = Object.freeze({
   14: 'deploy_free_mode_ticket_party_migration.sql',
   15: 'deploy_patta_work_quantity_migration.sql',
   16: 'deploy_canonical_ids_global_patta_sequence.sql',
-  17: 'deploy_production_adjustment_provenance_migration.sql'
+  17: 'deploy_production_adjustment_provenance_migration.sql',
+  18: 'deploy_patta_series_sequence_migration.sql'
 });
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([
@@ -111,7 +112,10 @@ async function verifyPostgresReleaseState(client) {
     },
     orphanCounts: {},
     partyPolicy: { triggerExists: false, callsExactPolicyFunction: false, persistedExceptionPolicy: false },
-    constraints: { ticketUuidCheckValidated: false, businessKeyAbsent: false },
+    constraints: {
+      ticketUuidCheckValidated: false, businessKeyAbsent: false,
+      partyPattaUnique: false, companyWidePattaIndexAbsent: false
+    },
     operations: { unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 },
     businessMutations: { requiredTables: 3, presentTables: 0, requiredColumns: 18, presentColumns: 0 },
     baseline: {
@@ -323,6 +327,24 @@ async function verifyPostgresReleaseState(client) {
     && businessIndexRows.length === 0;
   if (!report.constraints.ticketUuidCheckValidated) problems.push('validated RFC 4122 ticket identity check is missing');
   if (!report.constraints.businessKeyAbsent) problems.push('forbidden ticket business-key constraint or index is present');
+
+  const pattaIndexRows = await rowsFor('active-series patta index evidence', `
+    SELECT indexname, indexdef FROM pg_indexes
+    WHERE schemaname = current_schema() AND tablename = 'tickets'
+      AND indexname IN ('idx_tickets_company_global_patta', 'idx_tickets_party_patta')
+  `);
+  const pattaIndex = pattaIndexRows.find((row) => row.indexname === 'idx_tickets_party_patta');
+  const pattaIndexDefinition = String(pattaIndex?.indexdef || '').toLowerCase().replace(/\s+/g, '');
+  report.constraints.partyPattaUnique = Boolean(pattaIndex)
+    && pattaIndexDefinition.includes('uniqueindexidx_tickets_party_patta')
+    && pattaIndexDefinition.includes('(company_id,party_record_id,patta_number)')
+    && pattaIndexDefinition.includes('where(party_record_idisnotnull)');
+  report.constraints.companyWidePattaIndexAbsent = !pattaIndexRows.some(
+    (row) => row.indexname === 'idx_tickets_company_global_patta'
+  );
+  if (!report.constraints.partyPattaUnique || !report.constraints.companyWidePattaIndexAbsent) {
+    problems.push('ticket patta uniqueness is not scoped to the party series');
+  }
 
   const operationRows = await rowsFor('operation idempotency evidence', `
     SELECT

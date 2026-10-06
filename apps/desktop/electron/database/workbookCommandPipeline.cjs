@@ -1102,6 +1102,10 @@ function executeCompletePartySeries(db, normalized) {
     UPDATE patta_batch_settings SET party_number = '', is_custom_party = 0, total_ish_soni = '',
       sizes_json = '{}', updated_at = ? WHERE company_id = ?
   `).run(now, normalized.companyId);
+  db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+    VALUES (?, 1, ?)
+    ON CONFLICT(company_id) DO UPDATE SET next_patta_number = 1, updated_at = excluded.updated_at
+  `).run(normalized.companyId, now);
   return 0;
 }
 

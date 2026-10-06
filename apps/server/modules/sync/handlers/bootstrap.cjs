@@ -23,6 +23,7 @@ function createBootstrapHandler(pool, options = {}) {
         success: true,
         snapshot: result.snapshot,
         cursor: result.cursor,
+        nextPattaNumber: result.nextPattaNumber,
         counts: result.counts
       });
     } catch (error) {

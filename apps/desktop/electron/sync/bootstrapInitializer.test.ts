@@ -83,6 +83,7 @@ function getProductionLikeBootstrapFixture(companyId: string) {
     success: true,
     snapshot,
     cursor: '0',
+    nextPattaNumber: base.nextPattaNumber,
     counts: {
       models: models.length,
       workers: workers.length,

@@ -505,7 +505,20 @@ describe(' workbook local command pipeline', () => {
       availableSizes: ['M', 'L'], configs: [{ modelId: 'model_one', partyNumber: '41', isCustomParty: false, totalIshSoni: '10', color: 'Qora', sizes: { M: '2', L: '' } }]
     }).committed).toBe(true);
     expect(apply('CloseParty', 'op_party_close', 'party', 'party_current', { partyRecordId: 'party_current' }).committed).toBe(true);
+    db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+      VALUES (?, 566, ?) ON CONFLICT(company_id) DO UPDATE SET next_patta_number = 566, updated_at = excluded.updated_at`)
+      .run(companyId, now);
     expect(apply('CompletePartySeries', 'op_series', 'party_series', 'period_current', { periodId: 'period_current', endDate: '2026-09-30' }).committed).toBe(true);
+    expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(companyId).next_patta_number).toBe(1);
+    expect(apply('CompletePattaBatch', 'op_new_series_batch', 'patta_batch', 'batch_new_series', {
+      batchId: 'batch_new_series',
+      parties: [{ id: 'party_new_series', partyNumber: '1', modelId: 'model_one', modelName: 'Model One',
+        pattaCount: 12, ishSoniPerPatta: 10, totalIshSoni: 120, ishSoni: 120, sizes: { M: '12' }, printedAt: now }],
+      availableSizes: ['M'],
+      configs: [{ modelId: 'model_one', partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizes: { M: '' } }]
+    }).committed).toBe(true);
+    expect(db.prepare('SELECT patta_start_number, patta_end_number FROM parties WHERE company_id = ? AND id = ?')
+      .get(companyId, 'party_new_series')).toEqual({ patta_start_number: 1, patta_end_number: 12 });
     expect(apply('DeactivateWorker', 'op_worker_deactivate', 'worker', '81', { workerId: 81 }).committed).toBe(true);
     expect(apply('DeactivateModel', 'op_model_deactivate', 'model', 'model_one', { modelId: 'model_one' }).committed).toBe(true);
 
@@ -515,6 +528,6 @@ describe(' workbook local command pipeline', () => {
       .toMatchObject({ is_closed: 0, status: 'OPEN' });
     expect(db.prepare('SELECT status, is_archived FROM parties WHERE company_id = ? AND id = ?').get(companyId, 'party_current'))
       .toMatchObject({ status: 'CLOSED', is_archived: 0 });
-    expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(9);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(10);
   });
 });

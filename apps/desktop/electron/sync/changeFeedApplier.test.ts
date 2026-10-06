@@ -105,6 +105,22 @@ describe(' workbook change-feed application', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM parties WHERE company_id = ? AND is_archived = 0').get(companyId).count).toBe(0);
   });
 
+  it('resets the local patta sequence when a completed series is received', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+      VALUES (?, 578, ?)`).run(companyId, new Date().toISOString());
+
+    const result = applyChangesBatch(db, companyId, [{
+      changeId: '1', companyId, entityType: 'party_series', entityId: 'period-a',
+      entityRevision: 1, changeType: 'UPDATE',
+      payload: { periodId: 'period-a', partiesClosed: 2, ticketsClosed: 12, pattaSequenceReset: true, nextPattaNumber: 1 }
+    }], '1');
+
+    expect(result.appliedCount).toBe(1);
+    expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(companyId))
+      .toEqual({ next_patta_number: 1 });
+  });
+
   it('resolves an in-flight old model ID to its canonical UUID without creating a duplicate model', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();
