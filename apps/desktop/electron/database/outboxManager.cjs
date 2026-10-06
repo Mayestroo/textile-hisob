@@ -270,6 +270,14 @@ function getOutboxDiagnostics(db, companyId) {
     stats.oldestPendingCreatedAt = oldest.created_at;
   }
 
+  stats.failedOperations = db.prepare(`
+    SELECT command_type, status, last_error, error_message, updated_at
+    FROM local_outbox
+    WHERE company_id = ? AND status IN ('CONFLICT', 'DEAD_LETTER')
+    ORDER BY updated_at DESC, causal_sequence DESC
+    LIMIT 5
+  `).all(companyId);
+
   return stats;
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useOnline } from '../../hooks/useOnline';
 import { useSyncStore } from '../../store/syncStore';
 import { useAuthStore } from '../../store/authStore';
@@ -19,6 +19,15 @@ export function allowsManualSync(runtime: ElectronRuntimeModeResult): boolean {
   return runtime.success && runtime.mode === 'sync';
 }
 
+export function summarizeFailedOutboxOperations(operations: unknown): string[] {
+  if (!Array.isArray(operations)) return [];
+  return operations.slice(0, 5).map((operation: any) => {
+    const command = typeof operation?.command_type === 'string' ? operation.command_type : 'Buyruq';
+    const reason = operation?.last_error || operation?.error_message || operation?.status || 'SYNC_FAILED';
+    return `${command}: ${String(reason).replace(/[\r\n]+/g, ' ').slice(0, 180)}`;
+  });
+}
+
 export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ style }) => {
   const online = useOnline();
   const status = useSyncStore((s) => s.status);
@@ -29,6 +38,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
   const setStatus = useSyncStore((s) => s.setStatus);
   const isServerConnected = useWorkbookStore((s) => s.isServerConnected);
   const syncing = status === 'syncing';
+  const [failedOperationDetails, setFailedOperationDetails] = useState<string[]>([]);
   const authCompanyId = useAuthStore((s) => s.companyId);
   const licenseCompanyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
   const activeCompanyId = resolveManualSyncCompany(authCompanyId, licenseCompanyId);
@@ -44,6 +54,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     if (!activeCompanyId || typeof eAPI?.OutboxPending !== 'function') {
       setPending(0);
       setFailed(0);
+      setFailedOperationDetails([]);
       return;
     }
     try {
@@ -53,6 +64,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         const diagnostics = result.diagnostics || {};
         setPending(Number(diagnostics.pendingCount || 0) + Number(diagnostics.sendingCount || 0));
         setFailed(Number(diagnostics.conflictCount || 0) + Number(diagnostics.deadLetterCount || 0));
+        setFailedOperationDetails(summarizeFailedOutboxOperations(diagnostics.failedOperations));
         return;
       }
       const result = await eAPI.OutboxPending({ companyId: activeCompanyId, limit: 1000 });
@@ -128,7 +140,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
   const statusTitle = syncContextError || (!online
     ? 'Tarmoq uzilgan: o‘zgarishlar lokal navbatda saqlanadi.'
     : hasSyncFailures
-      ? `${failedChanges} ta buyruq conflict yoki rad javobi olgan. Tafsilotlar outboxda saqlangan.`
+      ? `${failedChanges} ta buyruq conflict yoki rad javobi olgan.${failedOperationDetails.length ? `\n${failedOperationDetails.join('\n')}` : ' Outbox tafsilotlarini tekshiring.'}`
       : hasPendingChanges
         ? `${pendingChanges} ta o‘zgarish VPSga yuborish navbatida. Qayta sinxronlash uchun bosing.`
         : isServerConnected
