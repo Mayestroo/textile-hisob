@@ -173,6 +173,32 @@ function listPendingOperations(db, companyId, limit = 100) {
   `).all(companyId, limit);
 }
 
+function listOutboxReconciliationCandidates(db, companyId, limit = 100) {
+  return db.prepare(`
+    SELECT operation_id, payload_hash, status
+    FROM local_outbox
+    WHERE company_id = ? AND status IN ('PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER')
+    ORDER BY CASE status WHEN 'PENDING' THEN 0 WHEN 'SENDING' THEN 1 WHEN 'CONFLICT' THEN 2 ELSE 3 END,
+      causal_sequence ASC, created_at ASC
+    LIMIT ?
+  `).all(companyId, limit);
+}
+
+function acknowledgeOutboxOperation(db, companyId, operationId, acceptedPayloadHash) {
+  const op = getOperation(db, companyId, operationId);
+  if (!op || op.status === 'SYNCED') return false;
+  if (acceptedPayloadHash && op.payload_hash !== acceptedPayloadHash) return false;
+  if (!['PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER'].includes(op.status)) return false;
+
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    UPDATE local_outbox
+    SET status = 'SYNCED', last_error = NULL, error_message = NULL, updated_at = ?
+    WHERE company_id = ? AND operation_id = ? AND status IN ('PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER')
+  `).run(now, companyId, operationId);
+  return result.changes === 1;
+}
+
 /**
  * Updates an operation's status with transition validation.
  *
@@ -347,6 +373,8 @@ module.exports = {
   insertOutboxOperation,
   getOperation,
   listPendingOperations,
+  listOutboxReconciliationCandidates,
+  acknowledgeOutboxOperation,
   updateOperationStatus,
   getOutboxDiagnostics,
   recoverStrandedSendingOperations

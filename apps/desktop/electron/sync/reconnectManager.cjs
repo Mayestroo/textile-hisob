@@ -3,7 +3,33 @@
 const { getLocalCursor, applyChangesBatch } = require('./changeFeedApplier.cjs');
 const { dispatchOutbox } = require('./outboxDispatcher.cjs');
 const { rebuildCompanyProjections } = require('../database/projectionReader.cjs');
-const { recoverStrandedSendingOperations } = require('../database/outboxManager.cjs');
+const {
+  acknowledgeOutboxOperation,
+  listOutboxReconciliationCandidates,
+  recoverStrandedSendingOperations
+} = require('../database/outboxManager.cjs');
+
+async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
+  if (typeof syncClient?.getOperationStatuses !== 'function') return 0;
+  const candidates = listOutboxReconciliationCandidates(db, companyId, 100);
+  if (!candidates.length) return 0;
+
+  const response = await syncClient.getOperationStatuses(candidates.map(({ operation_id, payload_hash }) => ({
+    operationId: operation_id,
+    payloadHash: payload_hash
+  })));
+  if (!Array.isArray(response?.results)) return 0;
+  const results = new Map(response.results.map((result) => [result.operationId, result]));
+  let reconciledCount = 0;
+  db.transaction(() => {
+    for (const candidate of candidates) {
+      const result = results.get(candidate.operation_id);
+      if (result?.status !== 'APPLIED' || result.payloadHash !== candidate.payload_hash) continue;
+      if (acknowledgeOutboxOperation(db, companyId, candidate.operation_id, result.payloadHash)) reconciledCount++;
+    }
+  }).immediate();
+  return reconciledCount;
+}
 
 /**
  * Executes the 4-Phase Pull-First Reconnect Protocol.
@@ -58,6 +84,16 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     hasMore = Boolean(pullRes.hasMore);
   }
 
+  // A previous process can lose the HTTP acknowledgement after the server commits.
+  // Reconcile those exact operation IDs before local causal dependencies are evaluated.
+  let reconciledCount = 0;
+  try {
+    reconciledCount = await reconcileAcceptedOutboxOperations(db, companyId, syncClient);
+  } catch (error) {
+    // Status reconciliation is a recovery aid; the normal idempotent push path still runs.
+    options.onOperationStatusReconciliationError?.(error);
+  }
+
   // ----------------------------------------------------
   // STEP 3 & 4 & 5: Push pending local outbox operations
   // ----------------------------------------------------
@@ -86,6 +122,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     success: true,
     recoveredCount,
     pulledInitial,
+    reconciledCount,
     pushed: pushRes,
     pulledFinal,
     finalCursor: getLocalCursor(db),
@@ -94,5 +131,6 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
 }
 
 module.exports = {
+  reconcileAcceptedOutboxOperations,
   executeReconnectProtocol
 };

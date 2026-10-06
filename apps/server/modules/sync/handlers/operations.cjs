@@ -51,6 +51,66 @@ function createOperationsHandler(pool) {
   };
 }
 
+function createOperationStatusHandler(pool) {
+  return async function handleOperationStatuses(req, reply) {
+    const operations = req.body?.operations;
+    if (!Array.isArray(operations) || operations.length === 0 || operations.length > MAX_OPERATIONS) {
+      return reply.code(400).send({
+        success: false,
+        error: { code: 'INVALID_OPERATION_STATUS_REQUEST', message: 'operations must contain between 1 and 100 identities' }
+      });
+    }
+
+    const seen = new Set();
+    for (const operation of operations) {
+      if (!operation || typeof operation !== 'object' || Array.isArray(operation)
+        || typeof operation.operationId !== 'string' || !operation.operationId.trim()
+        || operation.operationId.length > 128
+        || typeof operation.payloadHash !== 'string' || !/^[a-f0-9]{64}$/.test(operation.payloadHash)) {
+        return reply.code(400).send({
+          success: false,
+          error: { code: 'INVALID_OPERATION_STATUS_REQUEST', message: 'Each operation requires a valid operationId and payloadHash' }
+        });
+      }
+      if (seen.has(operation.operationId)) {
+        return reply.code(400).send({
+          success: false,
+          error: { code: 'INVALID_OPERATION_STATUS_REQUEST', message: 'operationId values must be unique' }
+        });
+      }
+      seen.add(operation.operationId);
+    }
+
+    const companyId = req.auth.companyId;
+    const rows = await pool.query(`
+      SELECT operation_id, payload_hash, result_json, server_revision, accepted_at
+      FROM operations_dedup
+      WHERE company_id = $1 AND operation_id = ANY($2::varchar[])
+    `, [companyId, operations.map((operation) => operation.operationId)]);
+    const acceptedById = new Map(rows.rows.map((row) => [row.operation_id, row]));
+
+    return reply.send({
+      success: true,
+      results: operations.map((operation) => {
+        const accepted = acceptedById.get(operation.operationId);
+        if (!accepted) return { operationId: operation.operationId, status: 'NOT_FOUND' };
+        if (accepted.payload_hash !== operation.payloadHash) {
+          return { operationId: operation.operationId, status: 'IDEMPOTENCY_CONFLICT' };
+        }
+        return {
+          operationId: operation.operationId,
+          payloadHash: accepted.payload_hash,
+          status: 'APPLIED',
+          serverRevision: accepted.server_revision,
+          cursor: accepted.result_json?.cursor || null,
+          committedAt: accepted.accepted_at,
+          isReplay: true
+        };
+      })
+    });
+  };
+}
+
 /**
  * Processes a single operation inside ONE isolated PostgreSQL transaction.
  */
@@ -1223,6 +1283,7 @@ function assertReconciliationAuthority(req) {
 
 module.exports = {
   createOperationsHandler,
+  createOperationStatusHandler,
   processSingleOperation,
   resolveTrustedAuditActor,
   resolveTicketValidationMode,
