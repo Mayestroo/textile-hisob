@@ -21,7 +21,7 @@ import {
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
 import { buildPartyTicketsList, getPartyHealth } from '../../domain/partyAnalytics';
-import { selectPartyHistoryForView } from '../../domain/partyHistoryVisibility';
+import { selectPartyHistoryForView, selectPartySeriesTab } from '../../domain/partyHistoryVisibility';
 import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
 import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
@@ -46,6 +46,7 @@ export const PattaHisobView: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'mismatch' | 'complete' | 'in_progress'>('all');
+  const [seriesTab, setSeriesTab] = useState<'active' | 'closed'>('active');
   
   // Phase 2: Pagination for large party history
   const [currentPage, setCurrentPage] = useState(1);
@@ -240,6 +241,7 @@ export const PattaHisobView: React.FC = () => {
     : (livePrintedPartyHistory || []);
   const partyHistoryViewMode = isAllTimeMode ? 'all-time' : isArchiveMode ? 'archive' : 'live';
   const printedPartyHistory = selectPartyHistoryForView(sourcePrintedPartyHistory, partyHistoryViewMode);
+  const visiblePartyHistory = selectPartySeriesTab(printedPartyHistory, seriesTab, partyHistoryViewMode);
 
   const submittedTickets: SubmittedTicketRecord[] = isAllTimeMode
     ? (allTimeData?.submittedTickets || liveSubmittedTickets || [])
@@ -281,7 +283,7 @@ export const PattaHisobView: React.FC = () => {
 
   // Detect any duplicate party numbers among active parties
   const duplicatePartyNumbers = useMemo(() => {
-    const activeParties = (printedPartyHistory || []).filter((h) => !h.isClosed);
+    const activeParties = (visiblePartyHistory || []).filter((h) => !h.isClosed);
     const counts = new Map<string, number>();
     for (const p of activeParties) {
       const num = String(p.partyNumber || '').trim();
@@ -296,11 +298,11 @@ export const PattaHisobView: React.FC = () => {
       }
     }
     return dupes;
-  }, [printedPartyHistory]);
+  }, [visiblePartyHistory]);
 
   // Group party history by Model
   const modelHistoryGroups = useMemo(() => {
-    if (!printedPartyHistory || printedPartyHistory.length === 0) return [];
+    if (!visiblePartyHistory || visiblePartyHistory.length === 0) return [];
 
     const grouped: Record<string, {
       modelId: string;
@@ -318,7 +320,7 @@ export const PattaHisobView: React.FC = () => {
       statusLabel: string;
     }> = {};
 
-    for (const record of printedPartyHistory) {
+    for (const record of visiblePartyHistory) {
       const mId = record.modelId;
       if (!grouped[mId]) {
         grouped[mId] = {
@@ -406,7 +408,7 @@ export const PattaHisobView: React.FC = () => {
     }
 
     return groups;
-  }, [printedPartyHistory, submittedTickets, activeSizes, searchQuery, statusFilter, isArchiveMode]);
+  }, [visiblePartyHistory, submittedTickets, activeSizes, searchQuery, statusFilter, isArchiveMode]);
 
   // Phase 2: Pagination - flatten all parties from all groups
   const allPartiesFlat = useMemo(() => {
@@ -449,7 +451,10 @@ export const PattaHisobView: React.FC = () => {
   }, [searchQuery, statusFilter, isArchiveMode]);
 
   // Overall KPIs
-  const totalActualSubmittedIshCount = submittedTickets?.reduce((acc, t) => acc + (t.qty || 0), 0) || 0;
+  const visiblePartyIds = useMemo(() => new Set(visiblePartyHistory.map((party) => party.id)), [visiblePartyHistory]);
+  const totalActualSubmittedIshCount = submittedTickets
+    ?.filter((ticket) => ticket.partyRecordId && visiblePartyIds.has(ticket.partyRecordId))
+    .reduce((acc, ticket) => acc + (ticket.qty || 0), 0) || 0;
 
   // Total submitted and unsubmitted tickets & parties
   const { totalPartiesCount, totalPattasCount, totalExpectedIshCount, totalSubmittedPattasCount, totalUnsubmittedPattasCount, totalUnsubmittedIshCount } = useMemo(() => {
@@ -460,7 +465,7 @@ export const PattaHisobView: React.FC = () => {
     let partyCount = 0;
     let unsubIsh = 0;
 
-    for (const p of printedPartyHistory || []) {
+    for (const p of visiblePartyHistory || []) {
       const tickets = buildPartyTicketsList(p, submittedTickets, activeSizes, isArchiveMode, isArchiveMode);
       if (isArchiveMode && tickets.length === 0) {
         continue;
@@ -486,7 +491,7 @@ export const PattaHisobView: React.FC = () => {
       totalUnsubmittedPattasCount: unsub,
       totalUnsubmittedIshCount: unsubIsh
     };
-  }, [printedPartyHistory, submittedTickets, activeSizes, isArchiveMode]);
+  }, [visiblePartyHistory, submittedTickets, activeSizes, isArchiveMode]);
 
   // Combine closed periods for selection
   const closedPeriodsList = useMemo(() => {
@@ -1090,6 +1095,42 @@ export const PattaHisobView: React.FC = () => {
           </div>
         </div>
 
+        {!isArchiveMode && !isAllTimeMode && (
+          <div role="tablist" aria-label="Partiyalar holati" style={{ display: 'flex', gap: '8px', marginTop: '14px', borderBottom: '1px solid var(--border-subtle)' }}>
+            {([
+              { id: 'active', label: 'Patta hisob', count: (printedPartyHistory || []).filter((party) => !party.isClosed).length },
+              { id: 'closed', label: 'Yopilgan · Yakunlangan', count: (printedPartyHistory || []).filter((party) => party.isClosed).length }
+            ] as const).map((tab) => {
+              const selected = seriesTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setSeriesTab(tab.id);
+                    setCurrentPage(1);
+                    setStatusFilter('all');
+                  }}
+                  style={{
+                    padding: '10px 14px',
+                    border: 'none',
+                    borderBottom: selected ? '2px solid var(--primary)' : '2px solid transparent',
+                    background: 'transparent',
+                    color: selected ? 'var(--primary)' : 'var(--text-secondary)',
+                    fontSize: '12.5px',
+                    fontWeight: selected ? 700 : 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {tab.label} <span style={{ opacity: 0.75 }}>({tab.count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Filter Bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
@@ -1112,7 +1153,7 @@ export const PattaHisobView: React.FC = () => {
               className={`soft-btn ${statusFilter === 'all' ? 'soft-btn-primary' : 'soft-btn-secondary'}`}
               style={{ fontSize: '11.5px', padding: '5px 12px' }}
             >
-              Barchasi ({printedPartyHistory?.length || 0})
+              Barchasi ({visiblePartyHistory?.length || 0})
             </button>
             <button
               onClick={() => setStatusFilter('mismatch')}
@@ -1181,11 +1222,19 @@ export const PattaHisobView: React.FC = () => {
           >
             <Layers size={36} color="var(--text-muted)" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.5 }} />
             <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              {isArchiveMode ? 'Ushbu arxivda chop etilgan partiyalar topilmadi' : 'Hozircha faol partiyalar mavjud emas'}
+              {isArchiveMode
+                ? 'Ushbu arxivda chop etilgan partiyalar topilmadi'
+                : !isAllTimeMode && seriesTab === 'closed'
+                ? 'Yakunlangan partiyalar tarixi hozircha bo‘sh'
+                : !isAllTimeMode
+                ? 'Hozircha faol partiyalar mavjud emas'
+                : 'Ushbu davrda partiyalar topilmadi'}
             </div>
             <div>
               {isArchiveMode
                 ? 'Arxivlangan oylikda partiya ma\'lumotlari yo\'q.'
+                : !isAllTimeMode && seriesTab === 'closed'
+                ? 'Partiyalar “Partiyani yakunlash” bilan yopilgach, ularning tarixi shu tabda qoladi.'
                 : 'Oldingi oydagi barcha partiyalar to\'liq kiritilib arxivga o\'tgan bo\'lishi mumkin. «Patta» varag\'ida yangi partiyalarni chop eting.'}
             </div>
           </div>

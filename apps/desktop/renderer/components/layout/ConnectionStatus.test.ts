@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allowsManualSync, resolveManualSyncCompany } from './ConnectionStatus';
+import { allowsManualSync, resolveManualSyncCompany, summarizeFailedOutboxOperations } from './ConnectionStatus';
 
 describe('manual sync company authority', () => {
   it('fails closed when auth and licensed companies disagree', () => {
@@ -22,5 +22,12 @@ describe('manual sync company authority', () => {
     expect(allowsManualSync({ success: true, mode: 'sync' })).toBe(true);
     expect(allowsManualSync({ success: false, mode: 'sync', code: '_RUNTIME_NOT_READY' })).toBe(false);
     expect(allowsManualSync({ success: true, mode: 'legacy' })).toBe(false);
+  });
+
+  it('summarizes failed outbox commands without exposing their payloads', () => {
+    expect(summarizeFailedOutboxOperations([
+      { command_type: 'CompletePattaBatch', status: 'DEAD_LETTER', last_error: 'PATTA_NUMBER_OUT_OF_RANGE', payload_json: 'secret' }
+    ])).toEqual(['CompletePattaBatch: PATTA_NUMBER_OUT_OF_RANGE']);
+    expect(summarizeFailedOutboxOperations(null)).toEqual([]);
   });
 });
