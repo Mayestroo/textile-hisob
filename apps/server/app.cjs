@@ -3,7 +3,7 @@
 const fastify = require('fastify');
 const { getServerPool } = require('./infrastructure/db.cjs');
 const { createAuthMiddleware } = require('./auth/auth.cjs');
-const { createOperationsHandler } = require('./modules/sync/handlers/operations.cjs');
+const { createOperationsHandler, createOperationStatusHandler } = require('./modules/sync/handlers/operations.cjs');
 const { createChangeFeedHandler } = require('./modules/sync/handlers/changeFeed.cjs');
 const { createBootstrapHandler } = require('./modules/sync/handlers/bootstrap.cjs');
 const { createLeasesHandler } = require('./modules/sync/handlers/leases.cjs');
@@ -37,6 +37,7 @@ function buildFastifyServer(options = {}) {
   });
 
   const operationsHandler = createOperationsHandler(pool);
+  const operationStatusHandler = createOperationStatusHandler(pool);
   const changeFeedHandler = createChangeFeedHandler(pool);
   const bootstrapHandler = createBootstrapHandler(pool, { testHook: options.bootstrapTestHook });
   const leasesHandler = createLeasesHandler(pool);
@@ -94,6 +95,7 @@ function buildFastifyServer(options = {}) {
 
     // Distributed Operations Endpoint
     apiScope.post('/api/sync/operations', { preHandler: businessMutationFence }, operationsHandler);
+    apiScope.post('/api/sync/operations/status', operationStatusHandler);
 
     // Single atomic create: operationId is only idempotency; worker.id is assigned by PostgreSQL.
     apiScope.post('/api/workers', { preHandler: businessMutationFence }, async (req, reply) => {

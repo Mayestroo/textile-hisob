@@ -372,6 +372,58 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     expect(body.items).toEqual([]);
   });
 
+  it('reconciles exact server-accepted outbox operation identities by company and payload hash', async () => {
+    const acceptedOperationId = 'op_status_reconciliation_1';
+    const acceptedPayloadHash = 'a'.repeat(64);
+    const committedAt = new Date().toISOString();
+    await pool.query(`
+      INSERT INTO operations_dedup (
+        company_id, operation_id, command_type, entity_type, entity_id,
+        payload_hash, result_json, server_revision, accepted_at
+      ) VALUES ($1, $2, 'UpdateBatchSettings', 'batch_settings', $1, $3,
+        $4::jsonb, 7, $5)
+    `, [COMPANY_A, acceptedOperationId, acceptedPayloadHash,
+      JSON.stringify({ status: 'APPLIED', serverRevision: 7, cursor: '42', committedAt }), committedAt]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sync/operations/status',
+      headers: { authorization: `Bearer ${TOKEN_A}`, 'x-client-version': '2.0.0' },
+      payload: { operations: [
+        { operationId: acceptedOperationId, payloadHash: acceptedPayloadHash },
+        { operationId: 'op_status_not_found', payloadHash: 'b'.repeat(64) }
+      ] }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().results).toEqual([
+      expect.objectContaining({
+        operationId: acceptedOperationId, payloadHash: acceptedPayloadHash,
+        status: 'APPLIED', serverRevision: 7, cursor: '42', isReplay: true
+      }),
+      { operationId: 'op_status_not_found', status: 'NOT_FOUND' }
+    ]);
+
+    const payloadMismatch = await app.inject({
+      method: 'POST',
+      url: '/api/sync/operations/status',
+      headers: { authorization: `Bearer ${TOKEN_A}`, 'x-client-version': '2.0.0' },
+      payload: { operations: [{ operationId: acceptedOperationId, payloadHash: 'c'.repeat(64) }] }
+    });
+    expect(payloadMismatch.json().results).toEqual([
+      { operationId: acceptedOperationId, status: 'IDEMPOTENCY_CONFLICT' }
+    ]);
+
+    const crossCompany = await app.inject({
+      method: 'POST',
+      url: '/api/sync/operations/status',
+      headers: { authorization: `Bearer ${TOKEN_B}`, 'x-client-version': '2.0.0' },
+      payload: { operations: [{ operationId: acceptedOperationId, payloadHash: acceptedPayloadHash }] }
+    });
+    expect(crossCompany.statusCode).toBe(200);
+    expect(crossCompany.json().results).toEqual([{ operationId: acceptedOperationId, status: 'NOT_FOUND' }]);
+  });
+
   it('4. fails closed with 403 COMPANY_SCOPE_MISMATCH on cross-company token claim', async () => {
     const payload = {
       commandId: 'cmd_1',

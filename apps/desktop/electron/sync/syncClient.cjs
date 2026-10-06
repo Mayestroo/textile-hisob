@@ -105,6 +105,26 @@ class SyncClient {
     return { success: true, results };
   }
 
+  async getOperationStatuses(operations) {
+    if (!Array.isArray(operations) || operations.length === 0) return { success: true, results: [] };
+    const url = `${this.baseUrl}/api/sync/operations/status`;
+    const res = await this.fetchWithTimeout(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ operations })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new SyncError(
+        data.error?.message || 'Operation status reconciliation failed',
+        data.error?.code || `OPERATION_STATUS_HTTP_${res.status}`,
+        res.status,
+        data.error
+      );
+    }
+    return data;
+  }
+
   async pushOperationBatch(operations) {
     if (!Array.isArray(operations) || operations.length === 0) return { success: true, results: [] };
 
