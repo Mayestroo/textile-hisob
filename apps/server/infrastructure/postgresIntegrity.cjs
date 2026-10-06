@@ -391,7 +391,9 @@ async function verifyPostgresReleaseState(client) {
       COALESCE(SUM(excluded_quantity), 0) AS owner_excluded_quantity,
       COALESCE(SUM(mismatch_rows), 0) AS owner_scope_mismatch_rows,
       COUNT(*) FILTER (
-        WHERE (decision_id IS NOT NULL AND (
+      WHERE (decision_id IS NOT NULL
+        AND scope_json->>'recordingMode' IS DISTINCT FROM 'RETROSPECTIVE_EVIDENCE_RECONCILIATION'
+        AND (
           excluded_quantity <> CASE
             WHEN scope_json ? 'excludedEvidenceQuantityTotal'
               THEN (scope_json->>'excludedEvidenceQuantityTotal')::numeric
@@ -418,6 +420,85 @@ async function verifyPostgresReleaseState(client) {
   report.baseline.ownerScopeMismatchRows = asCount(baselineRow.owner_scope_mismatch_rows);
   report.baseline.ownerDecisionQuantityMismatchCount = asCount(baselineRow.owner_decision_quantity_mismatch_count);
   report.baseline.ownerDecisionCount = asCount(baselineRow.owner_decision_count);
+
+  const retrospectiveBaselineRows = await rowsFor('retrospective clean-baseline evidence', `
+    SELECT decision_row.company_id, decision_row.decision, decision_row.source_snapshot_hash,
+      decision_row.scope_json,
+      (SELECT COUNT(*) FROM tickets ticket_row
+       WHERE ticket_row.company_id = decision_row.company_id) AS current_ticket_rows,
+      (SELECT COUNT(*) FROM tickets ticket_row
+       WHERE ticket_row.company_id = decision_row.company_id
+         AND ticket_row.id IN (
+           SELECT jsonb_array_elements_text(decision_row.scope_json->'evidence'->'baselineTicketIds')
+         )) AS present_baseline_ticket_rows,
+      (SELECT COUNT(*) FROM ticket_entries entry_row
+       JOIN tickets ticket_row ON ticket_row.company_id = entry_row.company_id
+         AND ticket_row.id = entry_row.ticket_id
+       WHERE ticket_row.company_id = decision_row.company_id
+         AND ticket_row.id IN (
+           SELECT jsonb_array_elements_text(decision_row.scope_json->'evidence'->'baselineTicketIds')
+         )) AS present_baseline_ticket_entries,
+      (SELECT COUNT(*) FROM operations_dedup operation_row
+       WHERE operation_row.company_id = decision_row.company_id
+         AND operation_row.command_type = 'SubmitTicket') AS accepted_submit_operations,
+      (SELECT COUNT(*) FROM production_adjustments adjustment_row
+       WHERE adjustment_row.company_id = decision_row.company_id) AS current_production_adjustments,
+      (SELECT COUNT(*) FROM operations_dedup operation_row
+       WHERE operation_row.company_id = decision_row.company_id
+         AND operation_row.command_type = 'RecordProductionAdjustment') AS accepted_production_adjustment_operations,
+      (SELECT COUNT(*) FROM migration_baseline_exclusions exclusion_row
+       WHERE exclusion_row.company_id = decision_row.company_id
+         AND exclusion_row.baseline_decision_id = decision_row.baseline_decision_id) AS baseline_exclusion_rows
+    FROM migration_baseline_decisions decision_row
+    WHERE decision_row.decision = 'CLEAN_PRODUCTION_LEDGER_BASELINE'
+      AND decision_row.scope_json->>'recordingMode' = 'RETROSPECTIVE_EVIDENCE_RECONCILIATION'
+  `);
+  const validNonnegativeInteger = (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0;
+  const retrospectiveBaselineMismatches = retrospectiveBaselineRows.filter((row) => {
+    const scope = row.scope_json;
+    const source = scope?.source;
+    const sourceCounts = scope?.sourceTableCounts;
+    const evidence = scope?.evidence;
+    const baselineTicketIds = evidence?.baselineTicketIds;
+    if (!scope || !source || !sourceCounts || !evidence || !Array.isArray(baselineTicketIds)) return true;
+    const baselineTicketCount = Number(sourceCounts.tickets);
+    const baselineEntryCount = Number(sourceCounts.ticket_entries);
+    const baselineAdjustmentCount = Number(sourceCounts.production_adjustments);
+    const currentSubmitCount = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
+    const currentAdjustmentOperationCount = Number(evidence.currentAcceptedProductionAdjustmentOperations);
+    const currentTicketCount = Number(evidence.currentTicketRows);
+    const currentAdjustmentCount = Number(evidence.currentProductionAdjustments);
+    return scope.decisionType !== row.decision
+      || scope.businessRowsReimported !== false
+      || scope.localOutboxImported !== false
+      || source.integrityCheck !== 'ok'
+      || Number(source.sqliteSchemaVersion) !== 15
+      || source.sha256 !== row.source_snapshot_hash
+      || source.stagedSha256 !== row.source_snapshot_hash
+      || evidence.historicalTransactionalImportDocumented !== true
+      || !Array.isArray(evidence.postgresSchemaMigrations)
+      || ![16, 17].every((version) => evidence.postgresSchemaMigrations.includes(version))
+      || !validNonnegativeInteger(baselineTicketCount)
+      || !validNonnegativeInteger(baselineEntryCount)
+      || !validNonnegativeInteger(baselineAdjustmentCount)
+      || !validNonnegativeInteger(currentSubmitCount)
+      || !validNonnegativeInteger(currentAdjustmentOperationCount)
+      || !validNonnegativeInteger(currentTicketCount)
+      || !validNonnegativeInteger(currentAdjustmentCount)
+      || baselineTicketIds.length !== baselineTicketCount
+      || Number(evidence.baselineTicketEntries) !== baselineEntryCount
+      || Number(evidence.baselineProductionAdjustments) !== baselineAdjustmentCount
+      || currentTicketCount !== Number(row.current_ticket_rows)
+      || currentTicketCount !== baselineTicketCount + currentSubmitCount
+      || Number(row.present_baseline_ticket_rows) !== baselineTicketCount
+      || Number(row.present_baseline_ticket_entries) !== baselineEntryCount
+      || currentSubmitCount !== Number(row.accepted_submit_operations)
+      || currentAdjustmentCount !== Number(row.current_production_adjustments)
+      || currentAdjustmentCount !== baselineAdjustmentCount + currentAdjustmentOperationCount
+      || currentAdjustmentOperationCount !== Number(row.accepted_production_adjustment_operations)
+      || Number(row.baseline_exclusion_rows) !== 0;
+  });
+  report.baseline.ownerDecisionQuantityMismatchCount += retrospectiveBaselineMismatches.length;
   report.baseline.scopePreserved = report.baseline.ownerScopeMismatchRows === 0
     && report.baseline.ownerDecisionQuantityMismatchCount === 0;
   if (!report.baseline.scopePreserved) problems.push('owner-approved baseline exclusion category, source, or source-scoped quantity changed');
