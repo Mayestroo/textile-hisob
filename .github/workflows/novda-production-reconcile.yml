@@ -1,0 +1,218 @@
+name: Novda production reconciliation
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Inspect current production state or archive the four startup parties
+        type: choice
+        required: true
+        default: inspect
+        options:
+          - inspect
+          - archive-startup-parties
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect or reconcile Novda production records
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_PASSPHRASE: ${{ secrets.VPS_SSH_PASSPHRASE }}
+          RECONCILE_ACTION: ${{ inputs.action }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${VPS_HOST:?Missing GitHub secret VPS_HOST}"
+          : "${VPS_PORT:?Missing GitHub secret VPS_PORT}"
+          : "${VPS_SSH_KEY:?Missing GitHub secret VPS_SSH_KEY}"
+          : "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          [[ "$RECONCILE_ACTION" == inspect || "$RECONCILE_ACTION" == archive-startup-parties ]]
+          install -d -m 700 "$HOME/.ssh"
+          key_file="$HOME/.ssh/novda_vps_key"
+          askpass_file="$RUNNER_TEMP/novda-ssh-askpass.sh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          cat > "$askpass_file" <<'ASKPASS'
+          #!/usr/bin/env bash
+          printf '%s\n' "${VPS_SSH_PASSPHRASE:?Missing GitHub secret VPS_SSH_PASSPHRASE}"
+          ASKPASS
+          chmod 700 "$askpass_file"
+          eval "$(ssh-agent -s)" >/dev/null
+          cleanup() {
+            ssh-agent -k >/dev/null 2>&1 || true
+            rm -f "$key_file" "$askpass_file"
+          }
+          trap cleanup EXIT
+          export SSH_ASKPASS="$askpass_file"
+          export SSH_ASKPASS_REQUIRE=force
+          export DISPLAY="${DISPLAY:-:0}"
+          ssh-add "$key_file" </dev/null
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
+          ssh -i "$key_file" -p "$VPS_PORT" \
+            -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            "root@$VPS_HOST" "bash -s -- '$RECONCILE_ACTION'" <<'REMOTE'
+          set -Eeuo pipefail
+          [[ "$(id -un)" == root ]]
+          action="$1"
+          db=(docker exec -u postgres novda-postgres psql -X -v ON_ERROR_STOP=1 -U novda_owner -d novda_prod)
+
+          if [[ "$action" == inspect ]]; then
+            "${db[@]}" -At -F '|' -c "
+              SELECT 'PARTY_TOTAL|' || count(*) FROM parties WHERE company_id = 'comp_novda';
+              SELECT 'RETAINED_CLOSED|' || count(*) FROM parties
+                WHERE company_id = 'comp_novda' AND id NOT IN (
+                  '284be4e6-c01d-41d3-b145-56fa5b8a4862',
+                  '957e9c75-009b-4010-8d5f-44e696f2f841',
+                  '7c8fe683-0a14-4530-88ee-c236e1280c0c',
+                  '772d408a-b97d-430e-84ae-b3c7ca5968a8'
+                ) AND status = 'CLOSED';
+              SELECT 'RETAINED_VISIBLE_CLOSED|' || count(*) FROM parties
+                WHERE company_id = 'comp_novda' AND id NOT IN (
+                  '284be4e6-c01d-41d3-b145-56fa5b8a4862',
+                  '957e9c75-009b-4010-8d5f-44e696f2f841',
+                  '7c8fe683-0a14-4530-88ee-c236e1280c0c',
+                  '772d408a-b97d-430e-84ae-b3c7ca5968a8'
+                ) AND status = 'CLOSED' AND is_archived = FALSE;
+              SELECT 'SEQUENCE|' || COALESCE(next_patta_number::text, 'missing')
+                FROM company_patta_sequences WHERE company_id = 'comp_novda';
+              SELECT 'STARTUP_PARTY|' || p.id || '|' || p.party_number || '|' || p.status || '|' ||
+                p.is_closed || '|' || p.is_archived || '|' || COALESCE(p.patta_start_number::text, '') || '|' ||
+                COALESCE(p.patta_end_number::text, '') || '|tickets=' ||
+                (SELECT count(*) FROM tickets t WHERE t.company_id = p.company_id AND t.party_record_id = p.id) ||
+                '|printed=' || (SELECT count(*) FROM printed_pattas pp WHERE pp.company_id = p.company_id AND pp.party_record_id = p.id) ||
+                '|protected=' || (SELECT count(*) FROM protected_party_patta_ranges r WHERE r.company_id = p.company_id AND r.party_record_id = p.id)
+              FROM parties p WHERE p.company_id = 'comp_novda' AND p.id IN (
+                '284be4e6-c01d-41d3-b145-56fa5b8a4862',
+                '957e9c75-009b-4010-8d5f-44e696f2f841',
+                '7c8fe683-0a14-4530-88ee-c236e1280c0c',
+                '772d408a-b97d-430e-84ae-b3c7ca5968a8'
+              ) ORDER BY p.created_at, p.id;
+              SELECT 'DEVICE_REQUEST|' || request_id || '|' || status || '|' ||
+                COALESCE(client_context->>'appVersion', '') || '|' || requested_at::text || '|' || COALESCE(approved_at::text, '')
+              FROM activation_requests WHERE machine_id = 'D9A7-CC62-ED18-A8B8'
+              ORDER BY requested_at DESC;
+            "
+            exit 0
+          fi
+
+          [[ "$action" == archive-startup-parties ]]
+          backup_dir=/srv/novda/backups
+          [[ -d "$backup_dir" && -w "$backup_dir" ]] || { printf '%s\n' 'NOVDA_BACKUP_DIRECTORY_NOT_WRITABLE' >&2; exit 1; }
+          timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          backup="$backup_dir/novda_prod_before_startup_party_archive_${timestamp}.dump"
+          temporary="$backup_dir/.novda_prod_before_startup_party_archive_${timestamp}.$$.tmp"
+          trap 'rm -f -- "$temporary"' EXIT
+          docker exec novda-postgres pg_dump --format=custom --username=novda_owner --dbname=novda_prod > "$temporary"
+          [[ -s "$temporary" ]]
+          docker exec -i novda-postgres pg_restore --exit-on-error --list < "$temporary" >/dev/null
+          chmod 0600 "$temporary"
+          mv -- "$temporary" "$backup"
+          printf 'NOVDA_BACKUP_PASS file=%s bytes=%s sha256=%s\n' \
+            "$(basename "$backup")" "$(stat -c '%s' "$backup")" "$(sha256sum "$backup" | cut -d ' ' -f 1)"
+
+          "${db[@]}" <<'SQL'
+          BEGIN;
+          LOCK TABLE parties IN SHARE ROW EXCLUSIVE MODE;
+          DO $cleanup$
+          DECLARE
+            target_ids text[] := ARRAY[
+              '284be4e6-c01d-41d3-b145-56fa5b8a4862',
+              '957e9c75-009b-4010-8d5f-44e696f2f841',
+              '7c8fe683-0a14-4530-88ee-c236e1280c0c',
+              '772d408a-b97d-430e-84ae-b3c7ca5968a8'
+            ];
+            total_count integer;
+            target_count integer;
+            retained_closed_count integer;
+            retained_visible_closed_count integer;
+            unarchived_target_count integer;
+            linked_count bigint;
+            operation_id text := 'admin-archive-' || gen_random_uuid()::text;
+            committed_at timestamptz := NOW();
+            party_row record;
+            archived_ids text[] := ARRAY[]::text[];
+          BEGIN
+            PERFORM pg_advisory_xact_lock(hashtext('novda:startup-party-archive:comp_novda'));
+            SELECT count(*) INTO total_count FROM parties WHERE company_id = 'comp_novda';
+            SELECT count(*) INTO target_count FROM parties WHERE company_id = 'comp_novda' AND id = ANY(target_ids);
+            SELECT count(*) INTO retained_closed_count FROM parties
+              WHERE company_id = 'comp_novda' AND NOT (id = ANY(target_ids)) AND status = 'CLOSED';
+            SELECT count(*) INTO retained_visible_closed_count FROM parties
+              WHERE company_id = 'comp_novda' AND NOT (id = ANY(target_ids))
+                AND status = 'CLOSED' AND is_archived = FALSE;
+            SELECT count(*) INTO unarchived_target_count FROM parties
+              WHERE company_id = 'comp_novda' AND id = ANY(target_ids) AND is_archived = FALSE;
+            IF total_count <> 58 OR target_count <> 4 OR retained_closed_count <> 54
+              OR retained_visible_closed_count <> 54 OR unarchived_target_count <> 4 THEN
+              RAISE EXCEPTION 'PARTY_CLEANUP_GUARD_FAILED total=% targets=% retained_closed=% retained_visible_closed=% unarchived_targets=%',
+                total_count, target_count, retained_closed_count, retained_visible_closed_count, unarchived_target_count;
+            END IF;
+
+            SELECT count(*) INTO linked_count FROM (
+              SELECT 1 FROM tickets WHERE company_id = 'comp_novda' AND party_record_id = ANY(target_ids)
+              UNION ALL SELECT 1 FROM printed_pattas WHERE company_id = 'comp_novda' AND party_record_id = ANY(target_ids)
+              UNION ALL SELECT 1 FROM protected_party_patta_ranges WHERE company_id = 'comp_novda' AND party_record_id = ANY(target_ids)
+              UNION ALL SELECT 1 FROM party_id_aliases WHERE company_id = 'comp_novda'
+                AND (legacy_party_id = ANY(target_ids) OR canonical_party_id = ANY(target_ids))
+              UNION ALL SELECT 1 FROM legacy_party_collision_exceptions WHERE company_id = 'comp_novda' AND party_id = ANY(target_ids)
+              UNION ALL SELECT 1 FROM migration_party_resolutions WHERE company_id = 'comp_novda' AND party_id = ANY(target_ids)
+            ) references_to_targets;
+            IF linked_count <> 0 THEN
+              RAISE EXCEPTION 'PARTY_CLEANUP_REFERENCES_FOUND count=%', linked_count;
+            END IF;
+
+            FOR party_row IN
+              UPDATE parties SET status = 'CLOSED', is_closed = 1, is_archived = TRUE,
+                closed_at = COALESCE(closed_at, committed_at),
+                server_revision = server_revision + 1, updated_at = committed_at
+              WHERE company_id = 'comp_novda' AND id = ANY(target_ids)
+              RETURNING id, server_revision, closed_at
+            LOOP
+              archived_ids := array_append(archived_ids, party_row.id);
+              INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
+              VALUES ('comp_novda', 'party', party_row.id, party_row.server_revision, operation_id, 'UPDATE',
+                jsonb_build_object('partyRecordId', party_row.id, 'status', 'CLOSED', 'isClosed', true,
+                  'isArchived', true, 'closedAt', party_row.closed_at), committed_at);
+            END LOOP;
+
+            INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
+            VALUES ('comp_novda', 'party_history', 'comp_novda', 1, operation_id, 'UPDATE',
+              jsonb_build_object('partyRecordIds', archived_ids, 'missingPartyRecordIds', ARRAY[]::text[], 'archivedAt', committed_at), committed_at);
+
+            INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+            VALUES ('comp_novda', 1, committed_at)
+            ON CONFLICT (company_id) DO UPDATE SET next_patta_number = 1, updated_at = committed_at;
+            INSERT INTO change_log(company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at)
+            VALUES ('comp_novda', 'party_series', 'startup-cleanup', 1, operation_id, 'UPDATE',
+              jsonb_build_object('pattaSequenceReset', true, 'nextPattaNumber', 1), committed_at);
+          END
+          $cleanup$;
+          COMMIT;
+
+          SELECT 'PARTY_TOTAL|' || count(*) FROM parties WHERE company_id = 'comp_novda';
+          SELECT 'VISIBLE_PARTIES|' || count(*) FROM parties WHERE company_id = 'comp_novda' AND is_archived = FALSE;
+          SELECT 'CLOSED_RETAINED|' || count(*) FROM parties
+            WHERE company_id = 'comp_novda' AND id NOT IN (
+              '284be4e6-c01d-41d3-b145-56fa5b8a4862',
+              '957e9c75-009b-4010-8d5f-44e696f2f841',
+              '772d408a-b97d-430e-84ae-b3c7ca5968a8',
+              '7c8fe683-0a14-4530-88ee-c236e1280c0c'
+            ) AND status = 'CLOSED';
+          SELECT 'VISIBLE_RETAINED|' || count(*) FROM parties WHERE company_id = 'comp_novda' AND is_archived = FALSE;
+          SELECT 'ARCHIVED_STARTUP|' || count(*) FROM parties WHERE company_id = 'comp_novda' AND is_archived = TRUE AND id IN (
+            '284be4e6-c01d-41d3-b145-56fa5b8a4862',
+            '957e9c75-009b-4010-8d5f-44e696f2f841',
+            '772d408a-b97d-430e-84ae-b3c7ca5968a8',
+            '7c8fe683-0a14-4530-88ee-c236e1280c0c'
+          );
+          SELECT 'NEXT_PATTA|' || next_patta_number FROM company_patta_sequences WHERE company_id = 'comp_novda';
+          SQL
+          REMOTE

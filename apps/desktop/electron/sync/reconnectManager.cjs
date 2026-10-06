@@ -45,12 +45,14 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     const pullRes = await syncClient.pullChanges(currentCursor, 100);
 
     if (pullRes.items && pullRes.items.length > 0) {
-      const applyRes = applyChangesBatch(db, companyId, pullRes.items, pullRes.nextCursor);
+      const applyRes = applyChangesBatch(db, companyId, pullRes.items, pullRes.nextCursor, {
+        nextPattaNumber: pullRes.nextPattaNumber
+      });
       pulledInitial += applyRes.appliedCount;
     } else {
-      if (pullRes.nextCursor && pullRes.nextCursor !== String(currentCursor)) {
-        applyChangesBatch(db, companyId, [], pullRes.nextCursor);
-      }
+      applyChangesBatch(db, companyId, [], pullRes.nextCursor ?? String(currentCursor), {
+        nextPattaNumber: pullRes.nextPattaNumber
+      });
     }
 
     hasMore = Boolean(pullRes.hasMore);
@@ -66,10 +68,11 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // ----------------------------------------------------
   const finalCursor = getLocalCursor(db);
   const finalPullRes = await syncClient.pullChanges(finalCursor, 100);
-  if (finalPullRes.items && finalPullRes.items.length > 0) {
-    const applyRes = applyChangesBatch(db, companyId, finalPullRes.items, finalPullRes.nextCursor);
-    pulledFinal += applyRes.appliedCount;
-  }
+  const finalItems = Array.isArray(finalPullRes.items) ? finalPullRes.items : [];
+  const applyRes = applyChangesBatch(db, companyId, finalItems, finalPullRes.nextCursor, {
+    nextPattaNumber: finalPullRes.nextPattaNumber
+  });
+  pulledFinal += applyRes.appliedCount;
 
   // ----------------------------------------------------
   // STEP 7: Deterministic projection rebuild

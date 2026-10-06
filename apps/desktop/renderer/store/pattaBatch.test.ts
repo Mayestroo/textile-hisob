@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildBatchSettingsPayload, buildBatchPrintMutation, getNextPattaNumberInActiveSeries } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation } from './pattaBatch';
 import { buildPartyWorkSummary } from '../domain/pattaQuantity';
 
 describe(' patta batch command payloads', () => {
@@ -14,6 +14,7 @@ describe(' patta batch command payloads', () => {
       models,
       workers: [],
       nextPartyNumber: 1,
+      nextPattaNumber: 1,
       availableSizes: ['M', 'L'],
       pattaBatchConfigs: {
         'model-a': { partyNumber: '1', isCustomParty: false, totalIshSoni: '972', color: 'Qora', sizes: { M: '9', L: '' } },
@@ -51,6 +52,7 @@ describe(' patta batch command payloads', () => {
       models,
       workers: [],
       nextPartyNumber: 1,
+      nextPattaNumber: 1,
       availableSizes: ['M'],
       pattaBatchConfigs: { 'model-a': { partyNumber: '2', isCustomParty: true, totalIshSoni: '25', sizes: { M: '1' } } },
       printedPartyHistory: [],
@@ -60,13 +62,25 @@ describe(' patta batch command payloads', () => {
     expect(settings).toMatchObject({ availableSizes: ['M'], configs: [expect.objectContaining({ modelId: 'model-a', partyNumber: '2', isCustomParty: true })] });
   });
 
-  it('continues within the active series and restarts after all earlier parties are closed', () => {
-    const history = [
-      { partyNumber: '1', pattaCount: 12, pattaStartNumber: 1, pattaEndNumber: 12, cumulativePattaCount: 12, isClosed: true },
-      { partyNumber: '1', pattaCount: 12, pattaStartNumber: 566, pattaEndNumber: 577, cumulativePattaCount: 577, isClosed: false }
-    ] as any;
+  it('uses the synchronized series counter independently of closed-party history', () => {
+    vi.stubGlobal('crypto', { randomUUID: () => '00000000-0000-4000-8000-000000000502' });
+    const history = [{
+      id: 'closed-party', partyNumber: '1', modelId: 'model-a', modelName: 'Model A', color: 'Qora',
+      pattaCount: 12, cumulativePattaCount: 577, pattaStartNumber: 566, pattaEndNumber: 577,
+      ishSoni: 100, cumulativeIshSoni: 100, printedAt: '2026-09-20T10:00:00.000Z', isClosed: true
+    }];
+    const state: any = {
+      models, workers: [], nextPartyNumber: 2, nextPattaNumber: 13,
+      availableSizes: ['M'],
+      pattaBatchConfigs: { 'model-b': { partyNumber: '2', isCustomParty: false, totalIshSoni: '100', color: 'Qora', sizes: { M: '12' } } },
+      printedPartyHistory: history, submittedTickets: [], deletedPartyIds: []
+    };
+    const result = buildBatchPrintMutation(state, [{
+      modelId: 'model-b', partyNumber: '2', pattaCount: 12,
+      ...buildPartyWorkSummary(120, 12), sizes: { M: '12' }, color: 'Qora'
+    }], new Date('2026-10-06T10:00:00.000Z'));
 
-    expect(getNextPattaNumberInActiveSeries(history)).toBe(578);
-    expect(getNextPattaNumberInActiveSeries(history.map((party: any) => ({ ...party, isClosed: true })))).toBe(1);
+    expect(result.parties[0]).toMatchObject({ pattaStartNumber: 13, pattaEndNumber: 24 });
+    expect(result.nextPattaNumber).toBe(25);
   });
 });

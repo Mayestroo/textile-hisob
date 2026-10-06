@@ -27,6 +27,7 @@ export interface HydratedWorkbookData {
   models: ModelConfig[];
   availableSizes: string[];
   nextPartyNumber: number;
+  nextPattaNumber: number;
   printedPartyHistory: any[];
   submittedTickets: SubmittedTicketRecord[];
   currentPeriod: PayrollPeriod;
@@ -56,6 +57,7 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     ? source.availableSizes
     : fallback?.availableSizes || [...DEFAULT_BATCH_SIZES];
   const nextPartyNumber = Number(source.nextPartyNumber || fallback?.nextPartyNumber || 1);
+  const nextPattaNumber = Number(source.nextPattaNumber ?? fallback?.nextPattaNumber ?? 1);
   const currentPeriod = source.currentPeriod || fallback?.currentPeriod || {
     id: 'period_default',
     name: getUzbekMonthName(),
@@ -69,6 +71,7 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     models,
     availableSizes,
     nextPartyNumber,
+    nextPattaNumber,
     printedPartyHistory,
     submittedTickets,
     currentPeriod,

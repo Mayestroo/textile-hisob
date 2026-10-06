@@ -4,7 +4,6 @@ import { ModelConfig } from '../../../types/workbook';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
 import { formatDateOnly } from '../../../utils/formatters';
-import { getNextPattaNumberInActiveSeries } from '../../../store/pattaBatch';
 
 export interface PrintBatchItem {
   model: ModelConfig;
@@ -48,7 +47,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
   onPrinted,
   onClose
 }) => {
-  const printedPartyHistory = useWorkbookStore((s) => s.printedPartyHistory);
+  const nextPattaNumber = useWorkbookStore((s) => s.nextPattaNumber);
   const confirmAction = useWorkbookStore((s) => s.confirmAction);
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
@@ -73,8 +72,8 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
     const list: PrintableTicket[] = [];
     const today = formatDateOnly(new Date());
 
-    // Restart patta numbering after the party series is authoritatively closed.
-    let currentPattaNum = getNextPattaNumberInActiveSeries(printedPartyHistory || []);
+    // Use the synchronized company counter; closing a single party doesn't reset the series.
+    let currentPattaNum = Math.max(1, Number(nextPattaNumber) || 1);
 
     for (const { item, workTickets, sizesSummary } of printableItems) {
       const opsList = item.model.pattaOpsOrder.map((opName) => ({
@@ -107,7 +106,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
       }
     }
     return list;
-  }, [printableItems, printedPartyHistory]);
+  }, [printableItems, nextPattaNumber]);
 
   // Group tickets into pairs (2 tickets per A4 page in Portrait / Kitob format)
   const a4Pages: PrintableTicket[][] = React.useMemo(() => {

@@ -6,6 +6,7 @@ import { createWorkerSlice } from './slices/createWorkerSlice';
 import { createPeriodSlice } from './slices/createPeriodSlice';
 import { createModelSlice } from './slices/createModelSlice';
 import { createPattaBatchSlice } from './slices/createPattaBatchSlice';
+import { createPattaSequenceSlice } from './slices/createPattaSequenceSlice';
 import { createTicketSlice } from './slices/createTicketSlice';
 import { createPersistenceSlice } from './slices/createPersistenceSlice';
 import { getElectronApi, resolveElectronRuntimeMode } from './runtimeMode';
@@ -25,6 +26,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
     ...createPeriodSlice(...args),
     ...createModelSlice(...args),
     ...createPattaBatchSlice(...args),
+    ...createPattaSequenceSlice(...args),
     ...createTicketSlice(...args),
     ...createPersistenceSlice(...args)
   } as WorkbookStore;
@@ -193,7 +195,12 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
     },
     batchPrintCompleted: async (printedItems: Parameters<WorkbookStore['batchPrintCompleted']>[0]) => {
       const context = await getContext();
-      if (!context) return slices.batchPrintCompleted(printedItems);
+      if (!context) {
+        const mutation = buildBatchPrintMutation(get(), printedItems);
+        await slices.batchPrintCompleted(printedItems);
+        set({ nextPattaNumber: mutation.nextPattaNumber });
+        return;
+      }
       if (!context.success) return;
       cancelDebouncedSave(batchTimerKey(context.companyId));
       try {
@@ -212,7 +219,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
           configs: mutation.settings.configs
         });
         if (success) {
-          set({ nextPartyNumber: mutation.nextPartyNumber, deletedPartyIds: mutation.deletedPartyIds });
+          set({ nextPartyNumber: mutation.nextPartyNumber, nextPattaNumber: mutation.nextPattaNumber, deletedPartyIds: mutation.deletedPartyIds });
           get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`${mutation.parties.length} ta partiya saqlandi.`));
         }
       } catch (error) {
@@ -279,7 +286,11 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
     },
     completePartySeries: async () => {
       const context = await getContext();
-      if (!context) return slices.completePartySeries();
+      if (!context) {
+        await slices.completePartySeries();
+        set({ nextPattaNumber: 1 });
+        return;
+      }
       if (!context.success) return;
       const periodId = get().periods.find((period) => !period.isClosed)?.id;
       if (!periodId) {
@@ -287,7 +298,10 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         return;
       }
       const success = await submit(context, 'CompletePartySeries', periodId, { periodId, endDate: formatDateIso() });
-      if (success) get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice('Faol partiya va pattalar yakunlandi.'));
+      if (success) {
+        set({ nextPattaNumber: 1 });
+        get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice('Faol partiya va pattalar yakunlandi.'));
+      }
     }
   } as WorkbookStore;
 });

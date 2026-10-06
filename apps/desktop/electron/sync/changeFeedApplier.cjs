@@ -68,13 +68,17 @@ function resetPattaSequence(db, companyId, nextPattaNumber) {
  * @param {string|number} nextCursor
  * @param {object} [options={}]
  * @param {() => void} [options.testHookBeforeCommit]
+ * @param {number} [options.nextPattaNumber]
  * @returns {object} { appliedCount, nextCursor }
  */
 function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
   if (!Array.isArray(items) || items.length === 0) {
-    if (nextCursor !== undefined && nextCursor !== null) {
-      setLocalCursor(db, nextCursor);
-    }
+    db.transaction(() => {
+      if (options.nextPattaNumber !== undefined) {
+        resetPattaSequence(db, companyId, Number(options.nextPattaNumber));
+      }
+      if (nextCursor !== undefined && nextCursor !== null) setLocalCursor(db, nextCursor);
+    }).immediate();
     return { appliedCount: 0, nextCursor: getLocalCursor(db) };
   }
 
@@ -131,6 +135,10 @@ function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
         // The typed fact events for these aggregates carry their row-level changes.
         appliedCount++;
       }
+    }
+
+    if (options.nextPattaNumber !== undefined) {
+      resetPattaSequence(db, companyId, Number(options.nextPattaNumber));
     }
 
     // Advance cursor inside the same commit boundary

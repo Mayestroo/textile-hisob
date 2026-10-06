@@ -646,7 +646,9 @@ if (isSyncEnabled) {
       const syncClient = createSyncClient(compId, false);
       const cursor = getLocalCursor(db);
       const pullRes = await syncClient.pullChanges(cursor, 100);
-      const applyRes = applyChangesBatch(db, compId, pullRes.items, pullRes.nextCursor);
+      const applyRes = applyChangesBatch(db, compId, pullRes.items, pullRes.nextCursor, {
+        nextPattaNumber: pullRes.nextPattaNumber
+      });
       return { success: true, pull: pullRes, applied: applyRes };
     } catch (err) {
       return ErrorResponse(err, 'SYNC_PULL_FAILED');

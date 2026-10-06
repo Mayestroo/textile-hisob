@@ -81,12 +81,23 @@ function createChangeFeedHandler(pool) {
     }
 
     const hasMore = items.length === limit;
+    const sequenceResult = await pool.query(`
+      SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1
+    `, [companyId]);
+    const nextPattaNumber = Number(sequenceResult.rows[0]?.next_patta_number || 1);
+    if (!Number.isSafeInteger(nextPattaNumber) || nextPattaNumber < 1) {
+      return reply.code(500).send({
+        success: false,
+        error: { code: 'PATTA_SEQUENCE_INVALID', message: 'Company patta sequence is invalid' }
+      });
+    }
 
     return reply.send({
       success: true,
       items,
       nextCursor,
-      hasMore
+      hasMore,
+      nextPattaNumber
     });
   };
 }
