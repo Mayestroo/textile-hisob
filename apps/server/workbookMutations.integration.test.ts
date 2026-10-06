@@ -350,8 +350,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       commandId: 'cmd_party_series', operationId: 'op_party_series', companyId,
       periodId: 'period_2026_10', endDate: '2026-10-31'
     })).toMatchObject({ status: 'APPLIED' });
-    expect((await pool!.query('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1', [companyId])).rows)
-      .toEqual([{ next_patta_number: 1 }]);
+    expect(Number((await pool!.query('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1', [companyId])).rows[0].next_patta_number))
+      .toBe(1);
     const newSeriesBatch = {
       commandId: 'cmd_series_batch', operationId: 'op_series_batch', companyId, batchId: 'batch_after_series',
       parties: [{ commandId: 'cmd_series_batch', operationId: 'op_series_batch', companyId,

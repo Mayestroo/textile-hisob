@@ -433,7 +433,8 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       'deploy_free_mode_ticket_party_migration.sql',
       'deploy_patta_work_quantity_migration.sql',
       'deploy_canonical_ids_global_patta_sequence.sql',
-      'deploy_production_adjustment_provenance_migration.sql'
+      'deploy_production_adjustment_provenance_migration.sql',
+      'deploy_patta_series_sequence_migration.sql'
     ]) {
       await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
     }
