@@ -62,7 +62,7 @@ jobs:
           set -Eeuo pipefail
           [[ "$(id -un)" == root ]]
           action="$1"
-          db=(docker exec -u postgres novda-postgres psql -X -v ON_ERROR_STOP=1 -U novda_owner -d novda_prod)
+          db=(docker exec -i -u postgres novda-postgres psql -X -v ON_ERROR_STOP=1 -U novda_owner -d novda_prod)
 
           if [[ "$action" == inspect ]]; then
             "${db[@]}" -At -F '|' -c "
