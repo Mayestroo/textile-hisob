@@ -116,6 +116,7 @@ function makeProductionLikeBootstrap() {
     success: true,
     snapshot,
     cursor: '9223372036854775000',
+    nextPattaNumber: 1,
     counts: {
       models: models.length,
       workers: workers.length,
@@ -387,6 +388,7 @@ describe(' SQLite authoritative bootstrap', () => {
 
   it('bootstraps tickets that intentionally have no party record', () => {
     const response = makeProductionLikeBootstrap();
+    response.nextPattaNumber = 13;
     response.snapshot.tickets = [{
       id: '00000000-0000-4000-8000-000000000002',
       companyId: COMPANY_ID,
@@ -421,6 +423,8 @@ describe(' SQLite authoritative bootstrap', () => {
     expect(db.prepare('SELECT party_record_id, party_number FROM tickets WHERE id = ?')
       .get('00000000-0000-4000-8000-000000000002'))
       .toEqual({ party_record_id: null, party_number: "No'malum Partiya" });
+    expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(COMPANY_ID))
+      .toEqual({ next_patta_number: 13 });
   });
 
   it('accepts a completed  database only with a valid durable cursor', () => {

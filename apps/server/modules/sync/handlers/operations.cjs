@@ -441,7 +441,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
     }
     if (party.patta_start_number !== null && party.patta_end_number !== null
       && (Number(pattaNumber) < Number(party.patta_start_number) || Number(pattaNumber) > Number(party.patta_end_number))) {
-      throw createOpError('PATTA_NUMBER_OUT_OF_RANGE', 'Ticket patta number is outside the assigned company-wide range');
+      throw createOpError('PATTA_NUMBER_OUT_OF_RANGE', 'Ticket patta number is outside the assigned party-series range');
     }
   }
 

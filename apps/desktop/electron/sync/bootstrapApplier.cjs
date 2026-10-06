@@ -100,6 +100,7 @@ function validateBootstrapResponse(response, companyId) {
     requireCondition(typeof response.cursor === 'string' && /^\d{1,19}$/.test(response.cursor));
     const cursor = BigInt(response.cursor);
     requireCondition(cursor >= 0n && cursor <= PG_BIGINT_MAX);
+    requireCondition(Number.isSafeInteger(response.nextPattaNumber) && response.nextPattaNumber >= 1);
 
     for (const forbidden of ['deletedWorkerIds', 'deletedModelIds', 'deletedPartyIds', 'deletedTicketIds', 'printedPattas', 'legacyState']) {
       requireCondition(!Object.prototype.hasOwnProperty.call(snapshot, forbidden));
@@ -316,7 +317,7 @@ function validateBootstrapResponse(response, companyId) {
     for (const [key, expected] of Object.entries(expectedCounts)) {
       requireCondition(Number.isSafeInteger(response.counts[key]) && response.counts[key] === expected);
     }
-    return { snapshot, cursor: cursor.toString(), counts: expectedCounts };
+    return { snapshot, cursor: cursor.toString(), counts: expectedCounts, nextPattaNumber: response.nextPattaNumber };
   } catch (error) {
     if (error?.code === 'BOOTSTRAP_RESPONSE_INVALID') throw error;
     throw bootstrapError('BOOTSTRAP_RESPONSE_INVALID');
@@ -354,7 +355,7 @@ function getBootstrapState(db, companyId) {
   return { status: 'COMPLETE', companyId, cursor: cursor.toString() };
 }
 
-function insertBootstrapRows(db, companyId, snapshot) {
+function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
   const insertModel = db.prepare(`INSERT INTO models (
     id, company_id, name, hisob_sheet_name, title, party, color, size, operations_json,
     patta_ops_order_json, legacy_hisob_quantities_json, created_at, updated_at, provenance,
@@ -425,10 +426,6 @@ function insertBootstrapRows(db, companyId, snapshot) {
       saveProtectedRange.run(companyId, party.id, party.pattaStartNumber, party.pattaEndNumber);
     }
   }
-  const nextPattaNumber = snapshot.parties.reduce((next, party) => Math.max(
-    next,
-    Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1
-  ), 1);
   db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
     VALUES (?, ?, ?)
     ON CONFLICT(company_id) DO UPDATE SET next_patta_number = excluded.next_patta_number, updated_at = excluded.updated_at`)
@@ -504,7 +501,7 @@ function applyBootstrapSnapshot(db, companyId, response, options = {}) {
       result = { status: 'ALREADY_BOOTSTRAPPED', cursor: state.cursor };
       return;
     }
-    insertBootstrapRows(db, companyId, validated.snapshot);
+    insertBootstrapRows(db, companyId, validated.snapshot, validated.nextPattaNumber);
     const foreignKeyViolations = db.prepare('PRAGMA foreign_key_check').all();
     if (foreignKeyViolations.length) {
       throw bootstrapError('BOOTSTRAP_FOREIGN_KEY_VIOLATION', 'Bootstrap rows violate canonical SQLite references');

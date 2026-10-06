@@ -28,6 +28,18 @@ describe('company bootstrap projection', () => {
     })]);
   });
 
+  it('returns the authoritative next patta number independently of closed history', async () => {
+    const client = {
+      query: async (sql: string) => {
+        if (/FROM company_patta_sequences/i.test(sql)) return { rows: [{ next_patta_number: '13' }] };
+        return { rows: [] };
+      }
+    };
+
+    const result = await readCompanySnapshot(client, 'comp_novda');
+    expect(result.nextPattaNumber).toBe(13);
+  });
+
   it('includes active persisted Party collision provenance in the bootstrap snapshot', async () => {
     const client = {
       query: async (sql: string) => {

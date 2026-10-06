@@ -48,6 +48,17 @@ function advancePattaSequence(db, companyId, pattaEndNumber) {
       updated_at = excluded.updated_at`).run(companyId, end + 1, new Date().toISOString());
 }
 
+function resetPattaSequence(db, companyId, nextPattaNumber) {
+  if (!Number.isSafeInteger(nextPattaNumber) || nextPattaNumber < 1) {
+    throw new Error('REMOTE_PARTY_SERIES_SEQUENCE_INVALID');
+  }
+  db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(company_id) DO UPDATE SET
+      next_patta_number = excluded.next_patta_number,
+      updated_at = excluded.updated_at`).run(companyId, nextPattaNumber, new Date().toISOString());
+}
+
 /**
  * Applies a batch of pulled changes to local SQLite transactionally.
  *
@@ -111,7 +122,12 @@ function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
       } else if (entityType === 'batch_settings') {
         applyBatchSettingsChange(db, companyId, payload, item.entityRevision);
         appliedCount++;
-      } else if (entityType === 'patta_batch' || entityType === 'party_series' || entityType === 'period_archive' || entityType === 'party_history') {
+      } else if (entityType === 'party_series') {
+        if (payload.pattaSequenceReset === true) {
+          resetPattaSequence(db, companyId, Number(payload.nextPattaNumber));
+        }
+        appliedCount++;
+      } else if (entityType === 'patta_batch' || entityType === 'period_archive' || entityType === 'party_history') {
         // The typed fact events for these aggregates carry their row-level changes.
         appliedCount++;
       }

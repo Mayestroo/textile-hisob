@@ -50,6 +50,13 @@ function computeCumulative(history: PrintedPartyRecord[]) {
   });
 }
 
+export function getNextPattaNumberInActiveSeries(history: PrintedPartyRecord[] = []) {
+  return history.reduce((next, party) => {
+    if (party.isClosed) return next;
+    return Math.max(next, Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1);
+  }, 1);
+}
+
 export function buildBatchSettingsPayload(
   state: BatchState,
   pattaBatchConfigs: Record<string, ModelPattaBatchConfig> = state.pattaBatchConfigs,
@@ -90,10 +97,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   let nextSequential = Math.max(state.nextPartyNumber || 1, highestActiveParty + 1);
   const working = [...history];
   const changedPartyIds = new Set<string>();
-  let nextGlobalPatta = working.reduce((next, party) => Math.max(
-    next,
-    Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1
-  ), 1);
+  let nextGlobalPatta = getNextPattaNumberInActiveSeries(working);
   for (const item of printedItems) {
     let partyNumber = String(item.partyNumber).trim();
     const conflictingModel = working.find((party) => !party.isClosed && party.modelId !== item.modelId && String(party.partyNumber).trim() === partyNumber);

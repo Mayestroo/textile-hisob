@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildBatchSettingsPayload, buildBatchPrintMutation } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation, getNextPattaNumberInActiveSeries } from './pattaBatch';
 import { buildPartyWorkSummary } from '../domain/pattaQuantity';
 
 describe(' patta batch command payloads', () => {
@@ -58,5 +58,15 @@ describe(' patta batch command payloads', () => {
       deletedPartyIds: []
     });
     expect(settings).toMatchObject({ availableSizes: ['M'], configs: [expect.objectContaining({ modelId: 'model-a', partyNumber: '2', isCustomParty: true })] });
+  });
+
+  it('continues within the active series and restarts after all earlier parties are closed', () => {
+    const history = [
+      { partyNumber: '1', pattaCount: 12, pattaStartNumber: 1, pattaEndNumber: 12, cumulativePattaCount: 12, isClosed: true },
+      { partyNumber: '1', pattaCount: 12, pattaStartNumber: 566, pattaEndNumber: 577, cumulativePattaCount: 577, isClosed: false }
+    ] as any;
+
+    expect(getNextPattaNumberInActiveSeries(history)).toBe(578);
+    expect(getNextPattaNumberInActiveSeries(history.map((party: any) => ({ ...party, isClosed: true })))).toBe(1);
   });
 });

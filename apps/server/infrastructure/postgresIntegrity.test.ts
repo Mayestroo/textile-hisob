@@ -28,7 +28,8 @@ const exactMigrations = [
   'deploy_free_mode_ticket_party_migration.sql',
   'deploy_patta_work_quantity_migration.sql',
   'deploy_canonical_ids_global_patta_sequence.sql',
-  'deploy_production_adjustment_provenance_migration.sql'
+  'deploy_production_adjustment_provenance_migration.sql',
+  'deploy_patta_series_sequence_migration.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -86,6 +87,10 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
     constraints: [{ constraint_name: 'ck_tickets_id_rfc4122', validated: true }],
     businessIndexes: [],
     operations: [{ unmatched_change_log_operations: '0', duplicate_operation_identities: '0' }],
+    partyPattaIndexes: [{
+      indexname: 'idx_tickets_party_patta',
+      indexdef: 'CREATE UNIQUE INDEX idx_tickets_party_patta ON public.tickets USING btree (company_id, party_record_id, patta_number) WHERE (party_record_id IS NOT NULL)'
+    }],
     baseline: [{ owner_exclusion_rows: '0', owner_excluded_quantity: '0', owner_scope_mismatch_rows: '0' }],
     activationTables: [
       'activation_companies', 'activation_requests', 'activation_request_limits',
@@ -117,6 +122,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
       if (sql.includes('AS tickets_parties')) return { rows: evidence.orphans };
       if (sql.includes('trg_parties_active_uniqueness')) return { rows: evidence.partyTrigger };
       if (sql.includes("'ck_tickets_id_rfc4122'")) return { rows: evidence.constraints };
+      if (sql.includes("'idx_tickets_company_global_patta', 'idx_tickets_party_patta'")) return { rows: evidence.partyPattaIndexes };
       if (sql.includes('FROM pg_indexes')) return { rows: evidence.businessIndexes };
       if (sql.includes('unmatched_change_log_operations')) return { rows: evidence.operations };
       if (sql.includes('owner_exclusion_rows')) return { rows: evidence.baseline };
@@ -149,6 +155,7 @@ describe('PostgreSQL release-integrity evidence', () => {
     expect(report.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(report.constraints.ticketUuidCheckValidated).toBe(true);
     expect(report.constraints.businessKeyAbsent).toBe(true);
+    expect(report.constraints).toMatchObject({ partyPattaUnique: true, companyWidePattaIndexAbsent: true });
     expect(report.operations).toEqual({ unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 });
     expect(report.baseline.scopePreserved).toBe(true);
   });
@@ -163,6 +170,7 @@ describe('PostgreSQL release-integrity evidence', () => {
         { constraint_name: 'uq_tickets_business_key', validated: true }
       ],
       businessIndexes: [{ indexname: 'idx_tickets_business_key' }],
+      partyPattaIndexes: [],
       operations: [{ unmatched_change_log_operations: '1', duplicate_operation_identities: '1' }],
       baseline: [{ owner_exclusion_rows: '5', owner_excluded_quantity: '748', owner_scope_mismatch_rows: '1' }]
     });
@@ -175,6 +183,7 @@ describe('PostgreSQL release-integrity evidence', () => {
           expect.stringContaining('foreign keys'),
           expect.stringContaining('orphan'),
           expect.stringContaining('business-key'),
+          expect.stringContaining('patta uniqueness'),
           expect.stringContaining('operation'),
           expect.stringContaining('baseline')
         ])
@@ -441,7 +450,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
 
   it('verifies a fresh schema after applying all ordered deployment migrations', async () => {
     const freshReport = await verifyPostgresReleaseState(isolatedPool);
-    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
     expect(freshReport.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(freshReport.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(freshReport.baseline.scopePreserved).toBe(true);

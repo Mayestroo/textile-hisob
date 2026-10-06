@@ -280,6 +280,14 @@ async function readCompanySnapshot(client, companyId) {
     archivedAt: dateValue(row.archived_at)
   }));
 
+  const sequenceResult = await client.query(`
+    SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1
+  `, [companyId]);
+  const nextPattaNumber = numberValue(sequenceResult.rows[0]?.next_patta_number, 1);
+  if (!Number.isSafeInteger(nextPattaNumber) || nextPattaNumber < 1) {
+    throw new Error('BOOTSTRAP_PATTA_SEQUENCE_INVALID');
+  }
+
   const snapshot = {
     schemaVersion: 1,
     company: { companyId },
@@ -306,7 +314,7 @@ async function readCompanySnapshot(client, companyId) {
     productionAdjustments: productionAdjustments.length,
     periodArchives: periodArchives.length
   };
-  return { snapshot, counts };
+  return { snapshot, counts, nextPattaNumber };
 }
 
 /**
@@ -326,7 +334,7 @@ async function withCompanyBootstrapSnapshot(pool, companyId, options = {}) {
     lockHeld = true;
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     transactionStarted = true;
-    const { snapshot, counts } = await readCompanySnapshot(client, companyId);
+    const { snapshot, counts, nextPattaNumber } = await readCompanySnapshot(client, companyId);
     const watermarkResult = await client.query(
       'SELECT COALESCE(MAX(change_id), 0)::text AS cursor FROM change_log WHERE company_id = $1',
       [companyId]
@@ -338,7 +346,7 @@ async function withCompanyBootstrapSnapshot(pool, companyId, options = {}) {
     }
     await client.query('COMMIT');
     transactionStarted = false;
-    return { snapshot, cursor, counts };
+    return { snapshot, cursor, counts, nextPattaNumber };
   } catch (error) {
     if (transactionStarted) {
       try { await client.query('ROLLBACK'); } catch { discardClient = true; }

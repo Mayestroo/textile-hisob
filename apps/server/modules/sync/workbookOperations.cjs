@@ -554,8 +554,13 @@ async function executeCompletePartySeries(client, companyId, operationId, payloa
     sizes: Object.fromEntries(availableSizes.map((size) => [size, '']))
   }));
   await executeUpdateBatchSettings(client, companyId, operationId, { configs }, { baseRevision: null }, { skipRevision: true });
+  await client.query(`INSERT INTO company_patta_sequences(company_id, next_patta_number)
+    VALUES ($1, 1) ON CONFLICT (company_id) DO NOTHING`, [companyId]);
+  await client.query(`UPDATE company_patta_sequences SET next_patta_number = 1, updated_at = NOW()
+    WHERE company_id = $1`, [companyId]);
   const seriesChange = await appendChange(client, companyId, 'party_series', payload.periodId, 1, operationId, 'UPDATE',
-    { periodId: payload.periodId, partiesClosed: parties.rows.length, ticketsClosed: tickets.rows.length }, now);
+    { periodId: payload.periodId, partiesClosed: parties.rows.length, ticketsClosed: tickets.rows.length,
+      pattaSequenceReset: true, nextPattaNumber: 1 }, now);
   lastChangeId = Number(seriesChange.rows[0].change_id);
   return { serverRevision: 1, entityId: payload.periodId, changeId: lastChangeId, committedAt: now };
 }
