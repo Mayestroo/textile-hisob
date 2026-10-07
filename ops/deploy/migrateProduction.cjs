@@ -161,7 +161,17 @@ if (require.main === module) {
     const problems = code === 'POSTGRES_RELEASE_INTEGRITY_FAILED' && Array.isArray(error?.details?.problems)
       ? ` checks=${JSON.stringify(error.details.problems)}`
       : '';
-    process.stderr.write(`${code}${problems}\n`);
+    const baseline = code === 'POSTGRES_RELEASE_INTEGRITY_FAILED' ? error?.details?.report?.baseline : null;
+    const baselineState = baseline
+      ? ` baseline=${JSON.stringify({
+        scopePreserved: baseline.scopePreserved,
+        ownerDecisionCount: baseline.ownerDecisionCount,
+        ownerExclusionRows: baseline.ownerExclusionRows,
+        ownerScopeMismatchRows: baseline.ownerScopeMismatchRows,
+        ownerDecisionQuantityMismatchCount: baseline.ownerDecisionQuantityMismatchCount
+      })}`
+      : '';
+    process.stderr.write(`${code}${problems}${baselineState}\n`);
     process.exitCode = 1;
   });
 }
