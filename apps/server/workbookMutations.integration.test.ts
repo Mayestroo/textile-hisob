@@ -239,6 +239,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(await apply('SubmitTicket', 'ticket', duplicateTicketId,
       submit(duplicateTicketId, 'op_ticket_active_duplicate')))
       .toMatchObject({ status: 'REJECTED', error: { code: '23505' } });
+    await pool!.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1
+      WHERE company_id = $1 AND id = $2`, [companyId, partyId]);
   });
 
   it('updates ticket worker assignments canonically, increments revision, and publishes replacement entries', async () => {
