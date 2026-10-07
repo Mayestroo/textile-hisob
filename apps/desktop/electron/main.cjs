@@ -641,7 +641,7 @@ if (isSyncEnabled) {
       const ready = assertRuntimeReady(targetCompanyId);
       const compId = ready.companyId;
       const syncClient = createSyncClient(compId, false);
-      const result = await executePullOnlyProtocol(ready.db, compId, syncClient, { maxPages: 10 });
+      const result = await executePullOnlyProtocol(ready.db, compId, syncClient, { maxPages: 1 });
       return { success: true, result };
     } catch (err) {
       return ErrorResponse(err, 'SYNC_PULL_FAILED');

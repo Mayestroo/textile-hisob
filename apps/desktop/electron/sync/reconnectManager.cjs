@@ -45,13 +45,21 @@ async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) 
     const currentCursor = getLocalCursor(db);
     lastPull = await syncClient.pullChanges(currentCursor, 100);
     const items = Array.isArray(lastPull.items) ? lastPull.items : [];
-    const applyResult = applyChangesBatch(db, companyId, items, lastPull.nextCursor ?? currentCursor, {
-      nextPattaNumber: lastPull.nextPattaNumber
-    });
-    pulledCount += applyResult.appliedCount;
+    const nextCursor = lastPull.nextCursor ?? currentCursor;
+    const remoteNextPatta = Number(lastPull.nextPattaNumber);
+    const localNextPatta = Number(db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?`)
+      .get(companyId)?.next_patta_number || 1);
+    const cursorChanged = String(nextCursor) !== String(currentCursor);
+    const pattaSequenceChanged = Number.isSafeInteger(remoteNextPatta) && remoteNextPatta !== localNextPatta;
+    if (items.length > 0 || cursorChanged || pattaSequenceChanged) {
+      const applyOptions = pattaSequenceChanged ? { nextPattaNumber: remoteNextPatta } : {};
+      const applyResult = applyChangesBatch(db, companyId, items, nextCursor, applyOptions);
+      pulledCount += applyResult.appliedCount;
+    }
     pages += 1;
     hasMore = lastPull.hasMore === true;
     if (hasMore && items.length === 0) throw new Error('SYNC_PULL_CURSOR_DID_NOT_ADVANCE');
+    if (hasMore) await new Promise((resolve) => setImmediate(resolve));
   }
 
   return {

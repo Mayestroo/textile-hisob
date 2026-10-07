@@ -101,6 +101,22 @@ describe('reconnect accepted-operation reconciliation', () => {
     expect(syncClient.pushOperations).not.toHaveBeenCalled();
   });
 
+  it('does not open a SQLite write transaction for an unchanged empty poll', async () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+      VALUES (?, 1, '2000-01-01T00:00:00.000Z')`).run(companyId);
+    const before = db.prepare(`SELECT updated_at FROM company_patta_sequences WHERE company_id = ?`).get(companyId);
+    const syncClient = {
+      pullChanges: async () => ({ items: [], nextCursor: '0', hasMore: false, nextPattaNumber: 1 })
+    };
+
+    const result = await executePullOnlyProtocol(db, companyId, syncClient, { maxPages: 1 });
+
+    expect(result).toMatchObject({ pulledCount: 0, pages: 1, hasMore: false, finalCursor: 0 });
+    expect(db.prepare(`SELECT updated_at FROM company_patta_sequences WHERE company_id = ?`).get(companyId))
+      .toEqual(before);
+  });
+
   it.each([
     { featureEnabled: false, expectedStatus: 'DEAD_LETTER', expectedPushes: 0, expectedRecovered: 0 },
     { featureEnabled: true, expectedStatus: 'SYNCED', expectedPushes: 1, expectedRecovered: 1 }

@@ -105,6 +105,8 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     : null;
   const syncInFlight = useRef(false);
   const pullInFlight = useRef(false);
+  const projectionDirty = useRef(false);
+  const pullContinuationTimer = useRef<number | undefined>(undefined);
 
   const refreshPendingCount = async () => {
     const eAPI = getElectronApi();
@@ -159,8 +161,9 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
              useWorkbookStore.getState(),
              isEditableInputTarget(document.activeElement)
            );
-           const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
-           useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
+            const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
+            useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
+            projectionDirty.current = false;
          } catch {
            useWorkbookStore.setState({ isServerConnected: true });
          }
@@ -200,17 +203,35 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       const response = await runSyncPull(eAPI, activeCompanyId);
       if (!isCurrent()) return;
       if (response?.success !== true || response.result?.success !== true) {
-        useWorkbookStore.setState({ isServerConnected: false });
+        if (useWorkbookStore.getState().isServerConnected) {
+          useWorkbookStore.setState({ isServerConnected: false });
+        }
         return;
       }
 
       const result = response.result;
       const pulledCount = Number(result.pulledCount ?? result.applied?.appliedCount ?? 0);
       const nextPattaNumber = Number(result.nextPattaNumber ?? result.pull?.nextPattaNumber);
-      const projectionChanged = pulledCount > 0
-        || (Number.isSafeInteger(nextPattaNumber) && nextPattaNumber !== useWorkbookStore.getState().nextPattaNumber);
-      if (!projectionChanged) {
-        useWorkbookStore.setState({ isServerConnected: true });
+      if (pulledCount > 0
+        || (Number.isSafeInteger(nextPattaNumber) && nextPattaNumber !== useWorkbookStore.getState().nextPattaNumber)) {
+        projectionDirty.current = true;
+      }
+      if (result.hasMore === true) {
+        if (!useWorkbookStore.getState().isServerConnected) {
+          useWorkbookStore.setState({ isServerConnected: true });
+        }
+        if (pullContinuationTimer.current === undefined) {
+          pullContinuationTimer.current = window.setTimeout(() => {
+            pullContinuationTimer.current = undefined;
+            void pullRemoteChanges();
+          }, 150);
+        }
+        return;
+      }
+      if (!projectionDirty.current) {
+        if (!useWorkbookStore.getState().isServerConnected) {
+          useWorkbookStore.setState({ isServerConnected: true });
+        }
         return;
       }
 
@@ -223,8 +244,11 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       );
       const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
       useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
+      projectionDirty.current = false;
     } catch {
-      if (isCurrent()) useWorkbookStore.setState({ isServerConnected: false });
+      if (isCurrent() && useWorkbookStore.getState().isServerConnected) {
+        useWorkbookStore.setState({ isServerConnected: false });
+      }
     } finally {
       pullInFlight.current = false;
     }
@@ -257,6 +281,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
   // Pull-only polling keeps other PCs' committed changes visible within two
   // seconds without dispatching local outbox work on every poll.
   useEffect(() => {
+    projectionDirty.current = false;
     const pullWhileVisible = () => {
       if (!shouldRunBackgroundSync(online, Boolean(activeCompanyId), document.visibilityState === 'visible')) return;
       void pullRemoteChanges();
@@ -270,6 +295,10 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (pullContinuationTimer.current !== undefined) {
+        window.clearTimeout(pullContinuationTimer.current);
+        pullContinuationTimer.current = undefined;
+      }
     };
   }, [activeCompanyId, online]);
 
