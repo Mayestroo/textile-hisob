@@ -127,6 +127,7 @@ async function verifyPostgresReleaseState(client) {
       ownerScopeMismatchRows: 0,
       ownerDecisionMismatchCount: 0,
       retrospectiveEvidenceMismatchCount: 0,
+      retrospectiveEvidenceChecks: [],
       ownerDecisionQuantityMismatchCount: 0,
       ownerDecisionCount: 0,
       scopePreserved: true
@@ -503,6 +504,48 @@ async function verifyPostgresReleaseState(client) {
       AND decision_row.scope_json->>'recordingMode' = 'RETROSPECTIVE_EVIDENCE_RECONCILIATION'
   `);
   const validNonnegativeInteger = (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0;
+  report.baseline.retrospectiveEvidenceChecks = retrospectiveBaselineRows.map((row) => {
+    const scope = row.scope_json;
+    const source = scope?.source;
+    const sourceCounts = scope?.sourceTableCounts;
+    const evidence = scope?.evidence;
+    const baselineTicketIds = evidence?.baselineTicketIds;
+    if (!scope || !source || !sourceCounts || !evidence || !Array.isArray(baselineTicketIds)) {
+      return { evidencePresent: false };
+    }
+    const baselineTicketCount = Number(sourceCounts.tickets);
+    const baselineEntryCount = Number(sourceCounts.ticket_entries);
+    const baselineAdjustmentCount = Number(sourceCounts.production_adjustments);
+    const currentSubmitCount = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
+    const currentAdjustmentOperationCount = Number(evidence.currentAcceptedProductionAdjustmentOperations);
+    const currentTicketCount = Number(evidence.currentTicketRows);
+    const currentAdjustmentCount = Number(evidence.currentProductionAdjustments);
+    return {
+      evidencePresent: true,
+      decisionTypeMatches: scope.decisionType === row.decision,
+      transactionalImportDocumented: evidence.historicalTransactionalImportDocumented === true,
+      sqliteSourceValid: source.integrityCheck === 'ok' && Number(source.sqliteSchemaVersion) === 15,
+      sourceHashesMatch: source.sha256 === row.source_snapshot_hash && source.stagedSha256 === row.source_snapshot_hash,
+      noBusinessRowsOrOutboxImported: scope.businessRowsReimported === false && scope.localOutboxImported === false,
+      migrationEvidenceValid: Array.isArray(evidence.postgresSchemaMigrations)
+        && [16, 17].every((version) => evidence.postgresSchemaMigrations.includes(version)),
+      sourceCountsValid: [baselineTicketCount, baselineEntryCount, baselineAdjustmentCount,
+        currentSubmitCount, currentAdjustmentOperationCount, currentTicketCount, currentAdjustmentCount]
+        .every(validNonnegativeInteger),
+      baselineTicketIdsMatchSource: baselineTicketIds.length === baselineTicketCount,
+      baselineTicketEntriesMatchSource: Number(evidence.baselineTicketEntries) === baselineEntryCount,
+      baselineAdjustmentsMatchSource: Number(evidence.baselineProductionAdjustments) === baselineAdjustmentCount,
+      currentTicketsMatchRecordedEvidence: currentTicketCount === Number(row.current_ticket_rows),
+      currentTicketsMatchAcceptedSubmits: currentTicketCount === baselineTicketCount + currentSubmitCount,
+      presentBaselineTicketsMatchSource: Number(row.present_baseline_ticket_rows) === baselineTicketCount,
+      presentBaselineEntriesMatchSource: Number(row.present_baseline_ticket_entries) === baselineEntryCount,
+      acceptedSubmitsMatchDedupRows: currentSubmitCount === Number(row.accepted_submit_operations),
+      currentAdjustmentsMatchRecordedEvidence: currentAdjustmentCount === Number(row.current_production_adjustments),
+      currentAdjustmentsMatchAcceptedOperations: currentAdjustmentCount === baselineAdjustmentCount + currentAdjustmentOperationCount,
+      acceptedAdjustmentOperationsMatchDedupRows: currentAdjustmentOperationCount === Number(row.accepted_production_adjustment_operations),
+      noBaselineExclusionRows: Number(row.baseline_exclusion_rows) === 0
+    };
+  });
   const retrospectiveBaselineMismatches = retrospectiveBaselineRows.filter((row) => {
     const scope = row.scope_json;
     const source = scope?.source;
