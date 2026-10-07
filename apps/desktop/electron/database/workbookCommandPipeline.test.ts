@@ -81,6 +81,65 @@ describe(' workbook local command pipeline', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(1);
   });
 
+  it('supersedes an older batch-settings revision conflict after a newer full snapshot is accepted', async () => {
+    const db = seedModel();
+    const stalePayload = {
+      companyId,
+      operationId: 'op_batch_settings_old',
+      commandId: 'cmd_batch_settings_old',
+      availableSizes: ['M', 'L'],
+      configs: [{ modelId: 'model_one', partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizes: { M: '', L: '' } }]
+    };
+    const acceptedPayload = {
+      ...stalePayload,
+      operationId: 'op_batch_settings_new',
+      commandId: 'cmd_batch_settings_new',
+      configs: [{ ...stalePayload.configs[0], partyNumber: '17' }]
+    };
+    const insertOperation = (operationId: string, baseRevision: number, payload: Record<string, any>, status: string, error?: string) => {
+      const payloadJson = canonicalStringify(payload);
+      outboxManager.insertOutboxOperation(db, {
+        operation_id: operationId,
+        company_id: companyId,
+        command_type: 'UpdateBatchSettings',
+        entity_type: 'batch_settings',
+        entity_id: companyId,
+        base_revision: baseRevision,
+        payload_json: payloadJson,
+        payload_hash: computePayloadHash(payloadJson),
+        status,
+        last_error: error,
+        error_message: error,
+        causal_sequence: 0
+      });
+    };
+
+    db.transaction(() => {
+      insertOperation('op_batch_settings_old', 336, stalePayload, 'CONFLICT', JSON.stringify({
+        code: 'REVISION_CONFLICT', message: 'Batch settings revision conflict; expected 337, supplied 336'
+      }));
+      insertOperation('op_batch_settings_new', 337, acceptedPayload, 'PENDING');
+    })();
+
+    const result = await outboxDispatcher.dispatchOutbox(db, companyId, {
+      pushOperations: async (operations: any[]) => ({
+        results: operations.map((operation) => ({
+          operationId: operation.operationId,
+          status: 'APPLIED',
+          serverRevision: 338,
+          committedAt: new Date().toISOString()
+        }))
+      })
+    });
+
+    expect(result).toMatchObject({ attempted: 1, synced: 1, conflict: 0, deadLetter: 0 });
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_batch_settings_new'))
+      .toEqual({ status: 'SYNCED' });
+    expect(db.prepare('SELECT status, last_error FROM local_outbox WHERE operation_id = ?').get('op_batch_settings_old'))
+      .toEqual({ status: 'SUPERSEDED', last_error: 'SUPERSEDED_BY_NEWER_BATCH_SETTINGS' });
+    expect(outboxManager.getOutboxDiagnostics(db, companyId).conflictCount).toBe(0);
+  });
+
   it('reports pending, conflict, and dead-letter outbox counts separately', () => {
     const db = seedModel();
     const statuses = ['PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER'];
@@ -395,6 +454,52 @@ describe(' workbook local command pipeline', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(0);
   });
 
+  it('accepts a period archive larger than the ticket-edit rollback limit', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, created_at)
+      VALUES ('period_large_archive', ?, 'Current', '2026-09-01', ?)`).run(companyId, now);
+    const localArchive = {
+      period: { id: 'period_large_archive', name: 'Current', startDate: '2026-09-01' },
+      submittedTickets: [],
+      details: 'x'.repeat(100 * 1024)
+    };
+
+    const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'ClosePeriod',
+      commandId: 'cmd_period_large_archive',
+      operationId: 'op_period_large_archive',
+      companyId,
+      entityId: 'period_large_archive',
+      payload: {
+        periodId: 'period_large_archive',
+        endDate: '2026-09-30',
+        nextPeriod: { id: 'period_after_large_archive', name: 'Next', startDate: '2026-10-01' },
+        archiveFilename: 'archive_period_large.json'
+      },
+      localArchive
+    });
+
+    expect(result).toMatchObject({ committed: true, status: 'PENDING_SYNC' });
+    expect(db.prepare('SELECT length(local_archive_json) AS length FROM local_outbox WHERE operation_id = ?')
+      .get('op_period_large_archive').length).toBeGreaterThan(64 * 1024);
+    expect(db.prepare('SELECT length(archive_json) AS length FROM period_archives WHERE company_id = ? AND period_id = ?')
+      .get(companyId, 'period_large_archive').length).toBeGreaterThan(64 * 1024);
+  });
+
+  it('keeps the 64 KiB rollback snapshot limit for ticket edits', () => {
+    const ticketId = '11111111-1111-4111-8111-111111111111';
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateTicket',
+      commandId: 'cmd_large_ticket_archive',
+      operationId: 'op_large_ticket_archive',
+      companyId,
+      entityId: ticketId,
+      payload: { ticketId, entries: [{ opName: 'Cut', workerId: 1 }] },
+      localArchive: { entries: [], details: 'x'.repeat(70 * 1024) }
+    })).toThrow(/TICKET_EDIT_ARCHIVE_TOO_LARGE/);
+  });
+
   it('derives completed and rolled-over parties from local canonical tickets during period closure', () => {
     const db = seedModel();
     const now = new Date().toISOString();
@@ -453,8 +558,9 @@ describe(' workbook local command pipeline', () => {
     const db = seedModel();
     const now = new Date().toISOString();
     db.prepare(`
-      INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status, created_at, updated_at)
-      VALUES ('party_archive', ?, '81', '81', 'model_one', 'ACTIVE', ?, ?)
+      INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id,
+        patta_count, cumulative_patta_count, patta_start_number, patta_end_number, status, created_at, updated_at)
+      VALUES ('party_archive', ?, '81', '81', 'model_one', 3, 3, 1, 3, 'ACTIVE', ?, ?)
     `).run(companyId, now, now);
     const command = {
       commandType: 'ArchivePartyHistory',
@@ -473,6 +579,51 @@ describe(' workbook local command pipeline', () => {
     expect(result.committed).toBe(true);
     expect(archived).toEqual({ status: 'CLOSED', is_closed: 1, is_archived: 1 });
     expect(projection.printedPartyHistory).toEqual([]);
+    expect(projection.reusablePattaRanges).toEqual([{ start: 1, end: 3 }]);
+  });
+
+  it('reuses archived patta ranges and keeps the remaining allocated ranges unique', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO parties (
+      id, company_id, party_number, physical_party_number, model_id, patta_count,
+      cumulative_patta_count, patta_start_number, patta_end_number, status, created_at, updated_at
+    ) VALUES ('party_releasable', ?, '81', '81', 'model_one', 3, 3, 1, 3, 'ACTIVE', ?, ?)`)
+      .run(companyId, now, now);
+    db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
+      VALUES (?, 4, ?) ON CONFLICT(company_id) DO UPDATE SET next_patta_number = 4, updated_at = excluded.updated_at`)
+      .run(companyId, now);
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'ArchivePartyHistory', commandId: 'cmd_release_range', operationId: 'op_release_range',
+      companyId, entityId: companyId, payload: { partyRecordIds: ['party_releasable'] }
+    });
+
+    const createBatch = (batchId: string, firstPartyId: string, secondPartyId: string) =>
+      workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+        commandType: 'CompletePattaBatch', commandId: `cmd_${batchId}`, operationId: `op_${batchId}`,
+        companyId, entityId: batchId,
+        payload: {
+          batchId,
+          parties: [
+            { id: firstPartyId, partyNumber: '82', modelId: 'model_one', modelName: 'Model One', color: 'Qora', pattaCount: 2, ishSoni: 10, totalIshSoni: 10, sizes: { M: 2 }, printedAt: now },
+            { id: secondPartyId, partyNumber: '83', modelId: 'model_one', modelName: 'Model One', color: 'Qora', pattaCount: 2, ishSoni: 10, totalIshSoni: 10, sizes: { M: 2 }, printedAt: now }
+          ],
+          availableSizes: ['M'],
+          configs: [{ modelId: 'model_one', partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizes: { M: '' } }]
+        }
+      });
+
+    const result = createBatch('batch_after_archive', 'party_reused', 'party_after_free_range');
+    const ranges = db.prepare(`SELECT id, patta_start_number, patta_end_number FROM parties
+      WHERE company_id = ? AND id IN ('party_reused', 'party_after_free_range') ORDER BY id`).all(companyId);
+
+    expect(result).toMatchObject({ committed: true, status: 'PENDING_SYNC' });
+    expect(ranges).toEqual([
+      { id: 'party_after_free_range', patta_start_number: 4, patta_end_number: 5 },
+      { id: 'party_reused', patta_start_number: 1, patta_end_number: 2 }
+    ]);
+    expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(companyId).next_patta_number)
+      .toBe(6);
   });
 
   it('routes period, party, settings, series, and deactivation writes through the same durable outbox', () => {

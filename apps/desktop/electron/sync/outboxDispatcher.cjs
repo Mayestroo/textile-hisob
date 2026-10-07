@@ -48,6 +48,37 @@ function restoreTicketEntries(db, companyId, op) {
   return true;
 }
 
+function isRevisionConflict(errorValue) {
+  if (typeof errorValue !== 'string' || !errorValue) return false;
+  try {
+    return JSON.parse(errorValue)?.code === 'REVISION_CONFLICT';
+  } catch {
+    return false;
+  }
+}
+
+function supersedeOlderBatchSettingsConflicts(db, companyId, acceptedOperation) {
+  const acceptedPayload = JSON.parse(acceptedOperation.payload_json);
+  if (!Array.isArray(acceptedPayload.availableSizes) || !Array.isArray(acceptedPayload.configs)) return 0;
+
+  const conflicts = db.prepare(`
+    SELECT operation_id, base_revision, last_error, error_message
+    FROM local_outbox
+    WHERE company_id = ? AND entity_id = ? AND command_type = 'UpdateBatchSettings' AND status = 'CONFLICT'
+      AND operation_id <> ?
+    ORDER BY causal_sequence ASC, created_at ASC
+  `).all(companyId, acceptedOperation.entity_id, acceptedOperation.operation_id);
+
+  let superseded = 0;
+  for (const conflict of conflicts) {
+    if (Number(conflict.base_revision) >= Number(acceptedOperation.base_revision)) continue;
+    if (!isRevisionConflict(conflict.last_error) && !isRevisionConflict(conflict.error_message)) continue;
+    updateOperationStatus(db, companyId, conflict.operation_id, 'SUPERSEDED', 'SUPERSEDED_BY_NEWER_BATCH_SETTINGS');
+    superseded++;
+  }
+  return superseded;
+}
+
 /**
  * Dispatches eligible local outbox operations to the authoritative server.
  *
@@ -250,6 +281,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         } else if (op.command_type === 'UpdateBatchSettings') {
           db.prepare(`UPDATE company_batch_settings SET server_revision = ?, updated_at = ? WHERE company_id = ?`)
             .run(res.serverRevision, res.committedAt || new Date().toISOString(), companyId);
+          supersedeOlderBatchSettingsConflicts(db, companyId, op);
           factsUpdated++;
         } else if (op.command_type === 'CompletePattaBatch' || op.command_type === 'CompletePartySeries') {
           factsUpdated++;
@@ -320,5 +352,6 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
 module.exports = {
   isDependencySatisfied,
   dispatchOutbox,
-  restoreTicketEntries
+  restoreTicketEntries,
+  supersedeOlderBatchSettingsConflicts
 };

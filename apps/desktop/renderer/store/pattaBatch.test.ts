@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildBatchSettingsPayload, buildBatchPrintMutation } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation, findNextPartyNumber } from './pattaBatch';
 import { buildPartyWorkSummary } from '../domain/pattaQuantity';
 
 describe(' patta batch command payloads', () => {
@@ -57,7 +57,8 @@ describe(' patta batch command payloads', () => {
       pattaBatchConfigs: { 'model-a': { partyNumber: '2', isCustomParty: true, totalIshSoni: '25', sizes: { M: '1' } } },
       printedPartyHistory: [],
       submittedTickets: [],
-      deletedPartyIds: []
+      deletedPartyIds: [],
+      reusablePattaRanges: []
     });
     expect(settings).toMatchObject({ availableSizes: ['M'], configs: [expect.objectContaining({ modelId: 'model-a', partyNumber: '2', isCustomParty: true })] });
   });
@@ -82,5 +83,41 @@ describe(' patta batch command payloads', () => {
 
     expect(result.parties[0]).toMatchObject({ pattaStartNumber: 13, pattaEndNumber: 24 });
     expect(result.nextPattaNumber).toBe(25);
+  });
+
+  it('reuses free patta numbers from an archived party without overlapping active ranges', () => {
+    let id = 0;
+    vi.stubGlobal('crypto', { randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}` });
+    const history: any[] = [
+      { id: 'archived', partyNumber: '20', modelId: 'model-a', pattaCount: 12, cumulativePattaCount: 12,
+        pattaStartNumber: 1, pattaEndNumber: 12, ishSoni: 0, cumulativeIshSoni: 0, printedAt: '', isClosed: true, isArchived: true },
+      { id: 'active-one', partyNumber: '21', modelId: 'model-a', pattaCount: 4, cumulativePattaCount: 4,
+        pattaStartNumber: 1, pattaEndNumber: 4, ishSoni: 0, cumulativeIshSoni: 0, printedAt: '' },
+      { id: 'active-two', partyNumber: '22', modelId: 'model-b', pattaCount: 2, cumulativePattaCount: 8,
+        pattaStartNumber: 7, pattaEndNumber: 8, ishSoni: 0, cumulativeIshSoni: 0, printedAt: '' }
+    ];
+    const state: any = {
+      models, workers: [], nextPartyNumber: 1, nextPattaNumber: 13,
+      availableSizes: ['M'],
+      pattaBatchConfigs: {},
+      printedPartyHistory: history, submittedTickets: [], deletedPartyIds: [], reusablePattaRanges: [{ start: 1, end: 12 }]
+    };
+
+    const result = buildBatchPrintMutation(state, [
+      { modelId: 'model-a', partyNumber: '1', pattaCount: 3, ...buildPartyWorkSummary(30, 3), color: 'Qora' },
+      { modelId: 'model-b', partyNumber: '2', pattaCount: 3, ...buildPartyWorkSummary(30, 3), color: 'Ko\'k' }
+    ], new Date('2026-10-07T10:00:00.000Z'));
+
+    expect(result.parties.map((party) => [party.pattaStartNumber, party.pattaEndNumber])).toEqual([[9, 11], [13, 15]]);
+    expect(result.nextPattaNumber).toBe(16);
+  });
+
+  it('makes archived party numbers available for reuse', () => {
+    expect(findNextPartyNumber([
+      { id: 'archived', partyNumber: '1', modelId: 'model-a', modelName: 'Model A', color: 'Qora', pattaCount: 1, cumulativePattaCount: 1,
+        ishSoni: 0, cumulativeIshSoni: 0, printedAt: '', isClosed: true, isArchived: true },
+      { id: 'active', partyNumber: '2', modelId: 'model-a', modelName: 'Model A', color: 'Qora', pattaCount: 1, cumulativePattaCount: 2,
+        ishSoni: 0, cumulativeIshSoni: 0, printedAt: '' }
+    ])).toBe(1);
   });
 });

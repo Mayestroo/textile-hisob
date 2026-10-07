@@ -51,7 +51,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_canonical_ids_global_patta_sequence.sql',
       'deploy_production_adjustment_provenance_migration.sql',
       'deploy_patta_series_sequence_migration.sql',
-      'deploy_patta_sequence_runtime_grant_migration.sql'
+      'deploy_patta_sequence_runtime_grant_migration.sql',
+      'deploy_voided_ticket_patta_reuse_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'
@@ -201,6 +202,43 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     }, 1)).toMatchObject({ status: 'APPLIED', serverRevision: 2 });
     const parties = await pool!.query(`SELECT id, party_number FROM parties WHERE company_id = $1 AND model_id = 'model_2' ORDER BY id`, [companyId]);
     expect(parties.rows.map((row) => row.party_number)).toEqual(['1', '2']);
+  });
+
+  it('releases the unique party/patta key after DeleteTicket and still blocks active duplicates', async () => {
+    const modelId = 'ticket-delete-reuse-model';
+    const partyId = 'ticket-delete-reuse-party';
+    const workerId = 882;
+    const oldTicketId = '00000000-0000-4000-8000-000000000891';
+    const replacementTicketId = '00000000-0000-4000-8000-000000000892';
+    const duplicateTicketId = '00000000-0000-4000-8000-000000000893';
+    await pool!.query(`INSERT INTO models (id, company_id, name, operations_json, status)
+      VALUES ($1, $2, 'Delete Reuse Model', '[{"name":"Sew","rate":1}]', 'ACTIVE')`, [modelId, companyId]);
+    await pool!.query(`INSERT INTO workers (id, company_id, name, status)
+      VALUES ($1, $2, 'Delete Reuse Worker', 'ACTIVE')`, [workerId, companyId]);
+    await pool!.query(`INSERT INTO parties (
+      id, company_id, party_number, physical_party_number, model_id, patta_count,
+      patta_start_number, patta_end_number, status
+    ) VALUES ($1, $2, '51', '51', $3, 1, 7, 7, 'ACTIVE')`, [partyId, companyId, modelId]);
+    await pool!.query(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number, qty, status,
+      is_closed, submitted_at
+    ) VALUES ($1, $2, $3, '51', $4, 7, 1, 'CONFIRMED', 0, '2026-10-07T10:00:00Z')`,
+    [oldTicketId, companyId, modelId, partyId]);
+
+    expect(await apply('DeleteTicket', 'ticket', oldTicketId, {
+      commandId: 'cmd_ticket_delete_reuse', operationId: 'op_ticket_delete_reuse', companyId, ticketId: oldTicketId
+    })).toMatchObject({ status: 'APPLIED' });
+
+    const submit = (ticketId: string, operationId: string) => ({
+      commandId: `cmd_${operationId}`, operationId, companyId, ticketId, modelId,
+      partyNumber: '51', partyRecordId: partyId, pattaNumber: 7, qty: 1,
+      effectiveDate: '2026-10-07', entries: [{ opName: 'Sew', workerId }]
+    });
+    expect(await apply('SubmitTicket', 'ticket', replacementTicketId,
+      submit(replacementTicketId, 'op_ticket_replacement'))).toMatchObject({ status: 'APPLIED' });
+    expect(await apply('SubmitTicket', 'ticket', duplicateTicketId,
+      submit(duplicateTicketId, 'op_ticket_active_duplicate')))
+      .toMatchObject({ status: 'REJECTED', error: { code: '23505' } });
   });
 
   it('updates ticket worker assignments canonically, increments revision, and publishes replacement entries', async () => {
@@ -381,6 +419,21 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       commandId: 'cmd_archive_stale_local_party', operationId: 'op_archive_stale_local_party',
       companyId, partyRecordIds: ['stale-local-party-record']
     })).toMatchObject({ status: 'APPLIED' });
+
+    const reusedRangeBatch = {
+      commandId: 'cmd_reused_archive_range', operationId: 'op_reused_archive_range', companyId,
+      batchId: 'batch_reused_archive_range',
+      parties: [{ commandId: 'cmd_reused_archive_range', operationId: 'op_reused_archive_range', companyId,
+        partyRecordId: 'party_reused_archive_range', partyNumber: '91', modelId: 'model_2',
+        pattaCount: 2, sizes: { M: 2 }, printedAt: '2026-11-02T10:00:00.000Z' }],
+      availableSizes: ['M'],
+      configs: [{ modelId: 'model_2', partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizes: { M: '' } }]
+    };
+    expect(await apply('CompletePattaBatch', 'patta_batch', reusedRangeBatch.batchId, reusedRangeBatch))
+      .toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query(`SELECT patta_start_number, patta_end_number FROM parties
+      WHERE company_id = $1 AND id = 'party_reused_archive_range'`, [companyId])).rows)
+      .toEqual([{ patta_start_number: 1, patta_end_number: 2 }]);
   });
 
   it('rolls back every party when a completed batch contains an invalid model reference', async () => {

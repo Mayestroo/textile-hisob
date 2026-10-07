@@ -6,7 +6,9 @@ const { rebuildCompanyProjections } = require('../database/projectionReader.cjs'
 const {
   acknowledgeOutboxOperation,
   listOutboxReconciliationCandidates,
-  recoverStrandedSendingOperations
+  recoverStrandedSendingOperations,
+  recoverVoidedPattaDuplicateTickets,
+  supersedeBatchSettingsAlreadyApplied
 } = require('../database/outboxManager.cjs');
 
 async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
@@ -66,9 +68,11 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // STEP 1 & 2: Pull remote authoritative changes & apply
   // ----------------------------------------------------
   let hasMore = true;
+  let voidedPattaReuseSupported = false;
   while (hasMore) {
     const currentCursor = getLocalCursor(db);
     const pullRes = await syncClient.pullChanges(currentCursor, 100);
+    if (pullRes.capabilities?.voidedPattaReuse === true) voidedPattaReuseSupported = true;
 
     if (pullRes.items && pullRes.items.length > 0) {
       const applyRes = applyChangesBatch(db, companyId, pullRes.items, pullRes.nextCursor, {
@@ -83,6 +87,11 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
 
     hasMore = Boolean(pullRes.hasMore);
   }
+
+  const supersededBatchSettingsCount = supersedeBatchSettingsAlreadyApplied(db, companyId);
+  const recoveredVoidedPattaDuplicateCount = voidedPattaReuseSupported
+    ? recoverVoidedPattaDuplicateTickets(db, companyId)
+    : 0;
 
   // A previous process can lose the HTTP acknowledgement after the server commits.
   // Reconcile those exact operation IDs before local causal dependencies are evaluated.
@@ -122,6 +131,8 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     success: true,
     recoveredCount,
     pulledInitial,
+    supersededBatchSettingsCount,
+    recoveredVoidedPattaDuplicateCount,
     reconciledCount,
     pushed: pushRes,
     pulledFinal,

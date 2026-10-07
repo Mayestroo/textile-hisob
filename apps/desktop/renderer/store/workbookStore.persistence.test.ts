@@ -90,6 +90,19 @@ describe(' workbook batch command routing', () => {
     expect(useWorkbookStore.getState().saveToDisk).not.toHaveBeenCalled();
   });
 
+  it('updates controlled batch-setting input state before async runtime readiness resolves', async () => {
+    let resolveRuntime: ((value: any) => void) | undefined;
+    const api = installApi();
+    api.getRuntimeMode = vi.fn(() => new Promise((resolve) => { resolveRuntime = resolve; }));
+
+    const update = useWorkbookStore.getState().updatePattaBatchConfig('model-a', { totalIshSoni: '30' });
+
+    expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].totalIshSoni).toBe('30');
+    resolveRuntime?.({ success: false, mode: 'sync', code: '_RUNTIME_NOT_READY', error: 'runtime not ready' });
+    await update;
+    expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].totalIshSoni).toBe('30');
+  });
+
   it('archives a party through the canonical  command without saving to legacy disk', async () => {
     const api = installApi([{ ...party, isClosed: true, isArchived: true }]);
     await useWorkbookStore.getState().deletePrintedPartyRecord('party-50');

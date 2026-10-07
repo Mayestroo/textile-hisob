@@ -13,6 +13,17 @@ describe('canonical hydration', () => {
     expect(data.pattaBatchConfigs.m).toBeDefined();
   });
 
+  it('preserves reusable patta ranges from archived local history', () => {
+    const data = hydrateWorkbookData({
+      companyId: 'company_a',
+      printedPartyHistory: [{ id: 'archived', partyNumber: '1', modelId: 'm', pattaCount: 4,
+        cumulativePattaCount: 4, pattaStartNumber: 1, pattaEndNumber: 4,
+        isClosed: true, isArchived: true }]
+    });
+
+    expect(data.reusablePattaRanges).toEqual([{ start: 1, end: 4 }]);
+  });
+
   it('rejects missing, unassigned, and malformed company contexts', () => {
     expect(isValidCompanyId('company_a')).toBe(true);
     expect(isValidCompanyId('unassigned')).toBe(false);

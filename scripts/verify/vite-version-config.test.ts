@@ -17,5 +17,5 @@ it('uses a local VITE_APP_VERSION override and otherwise follows the package ver
 
   delete process.env.VITE_APP_VERSION;
   const canonical = await loadConfigFromFile({ command: 'build', mode: 'production' }, configPath);
-  expect(canonical?.config.define?.['import.meta.env.VITE_APP_VERSION']).toBe('"1.1.6"');
+  expect(canonical?.config.define?.['import.meta.env.VITE_APP_VERSION']).toBe('"1.1.7"');
 });

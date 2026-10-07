@@ -117,7 +117,7 @@ export const PeriodManagerModal: React.FC = () => {
       setIsEditingCurrent(false);
       fetchArchives();
     }
-  }, [modalType, currentPeriod]);
+  }, [modalType, currentPeriod.id]);
 
   // When close date changes, auto-suggest next start date & name if user hasn't typed custom name
   const handleCloseDateChange = (val: string) => {

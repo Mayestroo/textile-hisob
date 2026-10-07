@@ -57,9 +57,9 @@ export interface ModelSlice {
   renameModel: (modelId: string, newName: string) => Promise<void> | void;
   syncNewOperation: (modelId: string, opName: string, rate: number) => Promise<void> | void;
   syncDeleteOperation: (modelId: string, opName: string) => Promise<void> | void;
-  updateOperationRate: (modelId: string, opName: string, rate: number) => Promise<void> | void;
+  updateOperationRate: (modelId: string, opName: string, rate: number) => Promise<boolean> | boolean;
   updateOperationName: (modelId: string, oldOpName: string, newName: string) => Promise<void> | void;
-  updateHisobQuantity: (modelId: string, workerId: number, opName: string, qty: number) => Promise<void> | void;
+  updateHisobQuantity: (modelId: string, workerId: number, opName: string, qty: number) => Promise<boolean> | boolean;
   reorderOperations: (modelId: string, newOrder: string[]) => Promise<void> | void;
 }
 
@@ -145,6 +145,7 @@ export interface PattaBatchSlice {
 
 export interface PattaSequenceSlice {
   nextPattaNumber: number;
+  reusablePattaRanges: Array<{ start: number; end: number }>;
 }
 
 export interface LicenseSlice {
@@ -207,6 +208,7 @@ export interface PersistenceSlice {
       availableSizes?: string[];
       nextPartyNumber?: number;
       nextPattaNumber?: number;
+      reusablePattaRanges?: Array<{ start: number; end: number }>;
       printedPartyHistory?: PrintedPartyRecord[];
       submittedTickets?: SubmittedTicketRecord[];
       currentPeriod?: PayrollPeriod;

@@ -19,7 +19,8 @@ const EXPECTED_MIGRATIONS = Object.freeze({
   16: 'deploy_canonical_ids_global_patta_sequence.sql',
   17: 'deploy_production_adjustment_provenance_migration.sql',
   18: 'deploy_patta_series_sequence_migration.sql',
-  19: 'deploy_patta_sequence_runtime_grant_migration.sql'
+  19: 'deploy_patta_sequence_runtime_grant_migration.sql',
+  20: 'deploy_voided_ticket_patta_reuse_migration.sql'
 });
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([
@@ -115,7 +116,7 @@ async function verifyPostgresReleaseState(client) {
     partyPolicy: { triggerExists: false, callsExactPolicyFunction: false, persistedExceptionPolicy: false },
     constraints: {
       ticketUuidCheckValidated: false, businessKeyAbsent: false,
-      partyPattaUnique: false, companyWidePattaIndexAbsent: false
+      partyPattaUnique: false, voidedTicketPattaReusable: false, companyWidePattaIndexAbsent: false
     },
     pattaSequencePrivileges: { canSelect: false, canInsert: false, canUpdate: false },
     operations: { unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 },
@@ -337,15 +338,20 @@ async function verifyPostgresReleaseState(client) {
   `);
   const pattaIndex = pattaIndexRows.find((row) => row.indexname === 'idx_tickets_party_patta');
   const pattaIndexDefinition = String(pattaIndex?.indexdef || '').toLowerCase().replace(/\s+/g, '');
+  const pattaIndexPredicate = pattaIndexDefinition.split('where')[1] || '';
   report.constraints.partyPattaUnique = Boolean(pattaIndex)
     && pattaIndexDefinition.includes('uniqueindexidx_tickets_party_patta')
     && pattaIndexDefinition.includes('(company_id,party_record_id,patta_number)')
-    && pattaIndexDefinition.includes('where(party_record_idisnotnull)');
+    && pattaIndexPredicate.includes('party_record_idisnotnull');
+  report.constraints.voidedTicketPattaReusable = pattaIndexPredicate.includes('status')
+    && pattaIndexPredicate.includes('<>')
+    && pattaIndexPredicate.includes('voided');
   report.constraints.companyWidePattaIndexAbsent = !pattaIndexRows.some(
     (row) => row.indexname === 'idx_tickets_company_global_patta'
   );
-  if (!report.constraints.partyPattaUnique || !report.constraints.companyWidePattaIndexAbsent) {
-    problems.push('ticket patta uniqueness is not scoped to the party series');
+  if (!report.constraints.partyPattaUnique || !report.constraints.voidedTicketPattaReusable
+    || !report.constraints.companyWidePattaIndexAbsent) {
+    problems.push('ticket patta uniqueness must be party-scoped and release keys for voided tickets');
   }
 
   const pattaSequencePrivilegeRows = await rowsFor('party sequence runtime permissions', `

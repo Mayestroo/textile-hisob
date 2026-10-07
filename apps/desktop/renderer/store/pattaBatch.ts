@@ -3,7 +3,7 @@ import { ModelPattaBatchConfig, PrintedPartyRecord } from '../types/workbook';
 
 type BatchState = Pick<WorkbookStore,
   'models' | 'workers' | 'nextPartyNumber' | 'nextPattaNumber' | 'pattaBatchConfigs' | 'printedPartyHistory' |
-  'submittedTickets' | 'availableSizes' | 'deletedPartyIds'>;
+  'submittedTickets' | 'availableSizes' | 'deletedPartyIds' | 'reusablePattaRanges'>;
 
 type PrintedItem = {
   modelId: string;
@@ -50,6 +50,57 @@ function computeCumulative(history: PrintedPartyRecord[]) {
   });
 }
 
+export function findAvailablePattaStart(
+  history: PrintedPartyRecord[],
+  pattaCount: number,
+  nextPattaNumber: number,
+  reusablePattaRanges: Array<{ start: number; end: number }> = []
+): number {
+  const highWater = Math.max(1, Number(nextPattaNumber) || 1);
+  const count = Number(pattaCount);
+  if (!Number.isSafeInteger(count) || count < 1) throw new Error('INVALID_PATTA_COUNT');
+  const historyRanges = history.flatMap((party) => {
+    const start = Number(party.pattaStartNumber);
+    const end = Number(party.pattaEndNumber);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) return [];
+    return [{ start, end, archived: party.isArchived === true, closed: party.isClosed === true }];
+  });
+  const ranges = historyRanges.concat(reusablePattaRanges.map((range) => ({
+    start: Number(range.start), end: Number(range.end), archived: true, closed: true
+  })).filter((range) => Number.isSafeInteger(range.start) && Number.isSafeInteger(range.end)
+    && range.start > 0 && range.end >= range.start));
+  const occupied = ranges.filter((range) => !range.archived && !range.closed).sort((a, b) => a.start - b.start);
+  const released = ranges.filter((range) => range.archived && range.start < highWater)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  for (const range of released) {
+    let candidate = range.start;
+    const releasedEnd = Math.min(range.end, highWater - 1);
+    while (candidate + count - 1 <= releasedEnd) {
+      const conflict = occupied.find((item) => item.start <= candidate + count - 1 && item.end >= candidate);
+      if (!conflict) return candidate;
+      candidate = conflict.end + 1;
+    }
+  }
+
+  let candidate = highWater;
+  while (candidate + count - 1 <= Number.MAX_SAFE_INTEGER) {
+    const conflict = occupied.find((item) => item.start <= candidate + count - 1 && item.end >= candidate);
+    if (!conflict) return candidate;
+    candidate = conflict.end + 1;
+  }
+  throw new Error('INVALID_PATTA_COUNT');
+}
+
+export function findNextPartyNumber(history: PrintedPartyRecord[]): number {
+  const activeNumbers = new Set(history.filter((party) => !party.isClosed && party.isArchived !== true)
+    .map((party) => Number.parseInt(String(party.partyNumber).trim(), 10))
+    .filter((number) => Number.isSafeInteger(number) && number > 0));
+  let next = 1;
+  while (activeNumbers.has(next)) next += 1;
+  return next;
+}
+
 export function buildBatchSettingsPayload(
   state: BatchState,
   pattaBatchConfigs: Record<string, ModelPattaBatchConfig> = state.pattaBatchConfigs,
@@ -81,14 +132,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   }
   const history = [...(state.printedPartyHistory || [])];
   const printedModelIds = new Set(printedItems.map((item) => item.modelId));
-  let highestActiveParty = 0;
-  for (const party of history) {
-    if (!party.isClosed) {
-      const number = Number.parseInt(String(party.partyNumber), 10);
-      if (Number.isFinite(number) && number > highestActiveParty) highestActiveParty = number;
-    }
-  }
-  let nextSequential = Math.max(state.nextPartyNumber || 1, highestActiveParty + 1);
+  let nextSequential = findNextPartyNumber(history);
   const working = [...history];
   const changedPartyIds = new Set<string>();
   let nextGlobalPatta = Math.max(1, Number(state.nextPattaNumber) || 1);
@@ -104,9 +148,10 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
     const existingIndex = working.findIndex((party) => !party.isClosed && party.modelId === item.modelId && String(party.partyNumber).trim() === partyNumber);
     const existing = existingIndex >= 0 ? working[existingIndex] : undefined;
     const pattaCount = Number(item.pattaCount || 0);
-    const pattaStartNumber = existing?.pattaStartNumber ?? nextGlobalPatta;
+    const pattaStartNumber = existing?.pattaStartNumber
+      ?? findAvailablePattaStart(working, pattaCount, nextGlobalPatta, state.reusablePattaRanges);
     const pattaEndNumber = existing?.pattaEndNumber ?? (pattaStartNumber + pattaCount - 1);
-    if (!existing) nextGlobalPatta = pattaEndNumber + 1;
+    if (!existing && pattaStartNumber >= nextGlobalPatta) nextGlobalPatta = pattaEndNumber + 1;
     const totalIshSoni = Number(item.totalIshSoni ?? item.ishSoni ?? 0);
     const party: PrintedPartyRecord = {
       id: existingIndex >= 0 ? working[existingIndex].id : createRecordId(),
@@ -146,10 +191,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
       sizes
     };
   }
-  const activeNumbers = new Set(updatedHistory.filter((party) => !party.isClosed)
-    .map((party) => Number.parseInt(String(party.partyNumber), 10)).filter((number) => Number.isSafeInteger(number)));
-  let nextPartyNumber = 1;
-  while (activeNumbers.has(nextPartyNumber)) nextPartyNumber += 1;
+  const nextPartyNumber = findNextPartyNumber(updatedHistory);
   const printedKeys = new Set(printedItems.map((item) => `${item.modelId}#${item.partyNumber}`));
   const deletedPartyIds = (state.deletedPartyIds || []).filter((id) => !printedKeys.has(id));
   return {

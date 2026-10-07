@@ -87,6 +87,41 @@ describe(' model mutation boundary', () => {
     expect(state.saveToDisk).not.toHaveBeenCalled();
   });
 
+  it('commits an operation rate only as the submitted final numeric value', async () => {
+    const licenseStatus = { companyId: 'company-a' };
+    const model = {
+      id: 'model-a', name: 'Model A', hisobSheetName: 'Model A-hisob', title: 'Model A', party: '', color: 'Qora', size: 'XL',
+      operations: [{ id: 'op-sew', name: 'Sew', rate: 10 }], pattaOpsOrder: ['Sew'], hisobQuantities: {}
+    };
+    const state: any = {
+      licenseStatus,
+      models: [model], workers: [], ticketForms: {}, pattaBatchConfigs: {}, submittedTickets: [], printedPartyHistory: [],
+      deletedModelIds: [], activeSheet: 'model-a', addNotification: vi.fn(), saveToDisk: vi.fn()
+    };
+    const set = vi.fn((next: any) => Object.assign(state, next));
+    const api = {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      WorkbookCommand: vi.fn().mockResolvedValue({ success: true, result: { committed: true } }),
+      dbRead: vi.fn().mockResolvedValue({ success: true, data: {
+        companyId: 'company-a', models: [{ ...model, operations: [{ id: 'op-sew', name: 'Sew', rate: 42 }] }],
+        workers: [], printedPartyHistory: [], submittedTickets: [], periods: []
+      } }),
+      SyncReconnect: vi.fn().mockResolvedValue({ success: false })
+    };
+    vi.stubGlobal('window', { electronAPI: api });
+    const slice = createModelSlice(set as any, (() => state) as any, {} as any);
+
+    const saved = await slice.updateOperationRate('model-a', 'Sew', 42);
+
+    expect(saved).toBe(true);
+    expect(api.WorkbookCommand).toHaveBeenCalledTimes(1);
+    expect(api.WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
+      commandType: 'UpsertModel',
+      payload: expect.objectContaining({ operations: [{ id: 'op-sew', name: 'Sew', rate: 42 }] })
+    }));
+    expect(state.models.find((item: any) => item.id === 'model-a').operations[0].rate).toBe(42);
+  });
+
   it('maps  hisob edits to a production-adjustment command rather than a snapshot write', async () => {
     const model = {
       id: 'model-a', name: 'Model A', hisobSheetName: 'Model A-hisob', title: 'Model A', party: '', color: 'Qora', size: 'XL',

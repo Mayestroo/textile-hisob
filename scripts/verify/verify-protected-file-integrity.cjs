@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const expected = {
-  'apps/desktop/renderer/store/slices/createPattaBatchSlice.ts': '8c966e35f2d6c2e8cf784260c4f18f8f15489a883179df600d876ab58a8cdb44',
+  'apps/desktop/renderer/store/slices/createPattaBatchSlice.ts': '68cb6c35b3ab817efcf848d02e4254794d33d2608f5662e370a4d3e7adc36e3e',
 };
 
 let failed = false;

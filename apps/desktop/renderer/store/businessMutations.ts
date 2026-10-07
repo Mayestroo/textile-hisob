@@ -82,6 +82,7 @@ export function hydrateWorkbookProjection(data: any, companyId: string) {
     availableSizes: hydrated.availableSizes,
     nextPartyNumber: hydrated.nextPartyNumber,
     nextPattaNumber: hydrated.nextPattaNumber,
+    reusablePattaRanges: hydrated.reusablePattaRanges,
     printedPartyHistory: hydrated.printedPartyHistory,
     submittedTickets: hydrated.submittedTickets,
     currentPeriod: hydrated.currentPeriod,
@@ -141,6 +142,29 @@ export function preserveBatchSettingsDraft(projection: any, current: Pick<Workbo
   };
 }
 
+export function preserveWorkbookProjectionDrafts(
+  projection: any,
+  current: Pick<WorkbookStore, 'ticketForms' | 'availableSizes' | 'pattaBatchConfigs'>,
+  preserveBatchSettings = false
+) {
+  return {
+    ...projection,
+    // Ticket forms are device-local drafts and can be newer than their debounced SQLite save.
+    ticketForms: current.ticketForms,
+    ...(preserveBatchSettings ? {
+      availableSizes: current.availableSizes,
+      pattaBatchConfigs: current.pattaBatchConfigs
+    } : {})
+  };
+}
+
+export function hasFocusedEditableControl(): boolean {
+  if (typeof document === 'undefined') return false;
+  const active = document.activeElement as HTMLElement | null;
+  if (!active) return false;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable === true;
+}
+
 function refreshAfterReconnect(
   eAPI: any,
   companyId: string,
@@ -156,7 +180,11 @@ function refreshAfterReconnect(
     if (!isCompanySessionCurrent(get, session, companyId, initialLicenseStatus)) return;
     const refreshed = await reloadWorkbookProjection(eAPI, companyId);
     if (!isCompanySessionCurrent(get, session, companyId, initialLicenseStatus)) return;
-    const safeProjection = preserveBatchDraft ? preserveBatchSettingsDraft(refreshed, get()) : refreshed;
+    const safeProjection = preserveWorkbookProjectionDrafts(
+      refreshed,
+      get(),
+      preserveBatchDraft || hasFocusedEditableControl()
+    );
     set({ ...safeProjection, isServerConnected: true } as Partial<WorkbookStore>);
   }).catch(() => {
     // Offline  writes remain durable in SQLite/outbox; never fall back to legacy storage.
@@ -209,9 +237,11 @@ export async function submitWorkbookCommand(
   try {
     const projection = await reloadWorkbookProjection(eAPI, command.companyId);
     if (isCurrent()) {
-      const safeProjection = command.commandType === 'UpdateBatchSettings'
-        ? preserveBatchSettingsDraft(projection, get())
-        : projection;
+      const safeProjection = preserveWorkbookProjectionDrafts(
+        projection,
+        get(),
+        command.commandType === 'UpdateBatchSettings' || hasFocusedEditableControl()
+      );
       set(safeProjection as Partial<WorkbookStore>);
       projectionLoaded = true;
     }

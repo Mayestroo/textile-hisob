@@ -4,7 +4,7 @@ import { ModelPattaBatchConfig, PrintedPartyRecord } from '../../types/workbook'
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { formatDateTime } from '../../utils/formatters';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
-import { createRecordId } from '../pattaBatch';
+import { createRecordId, findAvailablePattaStart, findNextPartyNumber } from '../pattaBatch';
 
 export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBatchSlice> = (set, get) => ({
   availableSizes: [...DEFAULT_BATCH_SIZES],
@@ -126,11 +126,8 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       (h) => !h.isClosed && h.modelId === item.modelId && String(h.partyNumber).trim() === String(item.partyNumber).trim()
     );
     const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
-    const lastReservedPatta = history.reduce((last, party) => Math.max(
-      last,
-      Number(party.pattaEndNumber || party.cumulativePattaCount || 0)
-    ), 0);
-    const pattaStartNumber = existing?.pattaStartNumber ?? (lastReservedPatta + 1);
+    const pattaStartNumber = existing?.pattaStartNumber
+      ?? findAvailablePattaStart(history, Number(item.pattaCount || 1), state.nextPattaNumber, state.reusablePattaRanges);
     const pattaEndNumber = existing?.pattaEndNumber ?? (pattaStartNumber + Number(item.pattaCount || 0) - 1);
 
     const newRecord: PrintedPartyRecord = {
@@ -192,22 +189,8 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     let workingHistory = [...history];
     const printedModelIds = new Set(printedItems.map((p) => p.modelId));
 
-    // Find highest active party number
-    let highestActiveParty = 0;
-    for (const h of workingHistory) {
-      if (!h.isClosed) {
-        const num = parseInt(h.partyNumber, 10);
-        if (!isNaN(num) && num > highestActiveParty) {
-          highestActiveParty = num;
-        }
-      }
-    }
-
-    let maxPrintedParty = Math.max(state.nextPartyNumber || 1, highestActiveParty + 1);
-    let nextGlobalPatta = workingHistory.reduce((next, party) => Math.max(
-      next,
-      Number(party.pattaEndNumber || party.cumulativePattaCount || 0) + 1
-    ), 1);
+    let nextAvailableParty = findNextPartyNumber(workingHistory);
+    let nextGlobalPatta = Math.max(1, Number(state.nextPattaNumber) || 1);
 
     for (const p of printedItems) {
       let resolvedPartyNumber = String(p.partyNumber).trim();
@@ -217,14 +200,9 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         (h) => !h.isClosed && h.modelId !== p.modelId && String(h.partyNumber).trim() === resolvedPartyNumber
       );
       if (conflictOtherModelIndex >= 0) {
-        highestActiveParty = Math.max(highestActiveParty + 1, maxPrintedParty);
-        resolvedPartyNumber = String(highestActiveParty);
-        maxPrintedParty = highestActiveParty + 1;
-      }
-
-      const pNum = parseInt(resolvedPartyNumber, 10);
-      if (!isNaN(pNum) && pNum >= maxPrintedParty) {
-        maxPrintedParty = pNum + 1;
+        while (workingHistory.some((party) => !party.isClosed && party.isArchived !== true
+          && String(party.partyNumber).trim() === String(nextAvailableParty))) nextAvailableParty += 1;
+        resolvedPartyNumber = String(nextAvailableParty++);
       }
 
       const model = state.models.find((m) => m.id === p.modelId);
@@ -232,9 +210,10 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         (h) => !h.isClosed && h.modelId === p.modelId && String(h.partyNumber).trim() === resolvedPartyNumber
       );
       const existingRecord = existingIndex >= 0 ? workingHistory[existingIndex] : undefined;
-      const pattaStartNumber = existingRecord?.pattaStartNumber ?? nextGlobalPatta;
+      const pattaStartNumber = existingRecord?.pattaStartNumber
+        ?? findAvailablePattaStart(workingHistory, Number(p.pattaCount || 1), nextGlobalPatta, state.reusablePattaRanges);
       const pattaEndNumber = existingRecord?.pattaEndNumber ?? (pattaStartNumber + p.pattaCount - 1);
-      if (!existingRecord) nextGlobalPatta = pattaEndNumber + 1;
+      if (!existingRecord && pattaStartNumber >= nextGlobalPatta) nextGlobalPatta = pattaEndNumber + 1;
 
       const recordData: PrintedPartyRecord = {
         id: existingIndex >= 0 ? workingHistory[existingIndex].id : createRecordId(),
@@ -311,16 +290,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     }
 
     // Calculate nextPartyNumber as lowest unused positive integer among active parties
-    const activeNums = new Set(
-      updatedHistory
-        .filter((r) => !r.isClosed)
-        .map((r) => parseInt(r.partyNumber, 10))
-        .filter((n) => !isNaN(n))
-    );
-    let nextAvailable = 1;
-    while (activeNums.has(nextAvailable)) {
-      nextAvailable++;
-    }
+    const nextAvailable = findNextPartyNumber(updatedHistory);
 
     // Clean any tombstones from deletedPartyIds for re-printed parties so they are never blocked
     const newlyPrintedKeys = new Set(
@@ -348,35 +318,31 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
   deletePrintedPartyRecord: (id: string) => {
     const state = get();
     const target = (state.printedPartyHistory || []).find((r) => r.id === id);
-    const filtered = (state.printedPartyHistory || []).filter((r) => r.id !== id);
-
-    // Calculate nextPartyNumber as lowest unused positive integer among all printed parties
-    const allPartyNums = new Set(
-      filtered
-        .map((r) => parseInt(String(r.partyNumber).trim(), 10))
-        .filter((n) => !isNaN(n) && n > 0)
-    );
-    let nextUnused = 1;
-    while (allPartyNums.has(nextUnused)) {
-      nextUnused++;
-    }
-    const resolvedNextParty = Math.max(state.nextPartyNumber || 1, nextUnused);
+    const filtered = (state.printedPartyHistory || []).map((party) => party.id === id
+      ? { ...party, isClosed: true, isArchived: true }
+      : party);
+    const resolvedNextParty = findNextPartyNumber(filtered);
 
     const tombstoneKeys = [id];
     if (target) {
       tombstoneKeys.push(`${target.modelId}#${target.partyNumber}`);
     }
     const updatedDeletedPartyIds = Array.from(new Set([...(state.deletedPartyIds || []), ...tombstoneKeys]));
+    const reusablePattaRanges = target?.pattaStartNumber && target.pattaEndNumber
+      ? [...(state.reusablePattaRanges || []), { start: target.pattaStartNumber, end: target.pattaEndNumber }]
+      : state.reusablePattaRanges || [];
 
     set({
       printedPartyHistory: filtered,
       nextPartyNumber: resolvedNextParty,
-      deletedPartyIds: updatedDeletedPartyIds
+      deletedPartyIds: updatedDeletedPartyIds,
+      reusablePattaRanges
     });
     get().saveToDisk({
       printedPartyHistory: filtered,
       nextPartyNumber: resolvedNextParty,
-      deletedPartyIds: updatedDeletedPartyIds
+      deletedPartyIds: updatedDeletedPartyIds,
+      reusablePattaRanges
     });
   },
 
@@ -389,8 +355,16 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       isDanger: true
     });
     if (ok) {
-      set({ printedPartyHistory: [] });
-      get().saveToDisk({ printedPartyHistory: [] });
+      const history = state.printedPartyHistory || [];
+      const archivedHistory = history.map((party) => ({ ...party, isClosed: true, isArchived: true }));
+      const reusablePattaRanges = [
+        ...(state.reusablePattaRanges || []),
+        ...history.flatMap((party) => party.pattaStartNumber && party.pattaEndNumber
+          ? [{ start: party.pattaStartNumber, end: party.pattaEndNumber }]
+          : [])
+      ];
+      set({ printedPartyHistory: archivedHistory, nextPartyNumber: 1, reusablePattaRanges });
+      get().saveToDisk({ printedPartyHistory: archivedHistory, nextPartyNumber: 1, reusablePattaRanges });
     }
   },
 

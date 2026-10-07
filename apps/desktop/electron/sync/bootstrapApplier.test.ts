@@ -232,6 +232,59 @@ describe(' SQLite authoritative bootstrap', () => {
       WHERE company_id = ? AND party_number = '2' AND status = 'ACTIVE'`).get(COMPANY_ID).count).toBe(2);
   });
 
+  it('bootstraps closed historical Party #2 exceptions without exempting a new Party #2', () => {
+    const response = makeProductionLikeBootstrap();
+    const firstParty = response.snapshot.parties.find((party: any) => party.id === 'party_2');
+    const secondParty = {
+      ...firstParty,
+      id: 'party_2-grandfathered',
+      modelId: 'model_3',
+      modelName: 'Model 3',
+      serverRevision: 2,
+      isClosed: true,
+      closedAt: '2026-09-02T00:00:00.000Z',
+      status: 'CLOSED'
+    };
+    for (const party of [firstParty, secondParty]) {
+      party.isClosed = true;
+      party.closedAt = '2026-09-02T00:00:00.000Z';
+      party.status = 'CLOSED';
+    }
+    response.snapshot.parties.push(secondParty, {
+      ...firstParty,
+      id: 'party_2-current',
+      modelId: 'model_4',
+      modelName: 'Model 4',
+      serverRevision: 3,
+      isClosed: false,
+      closedAt: null,
+      status: 'ACTIVE'
+    });
+    response.snapshot.legacyPartyCollisionExceptions = [
+      {
+        exceptionId: 'exception-party-2-a', companyId: COMPANY_ID, partyNumber: '2', partyId: firstParty.id,
+        collisionGroupId: 'collision-party-2', approvedBy: 'OWNER_BUSINESS_DECISION',
+        approvedAt: '2026-09-01T00:00:00.000Z', reason: 'Preserve the approved historical Party #2 pair',
+        status: 'ACTIVE', createdAt: '2026-09-01T00:00:00.000Z'
+      },
+      {
+        exceptionId: 'exception-party-2-b', companyId: COMPANY_ID, partyNumber: '2', partyId: secondParty.id,
+        collisionGroupId: 'collision-party-2', approvedBy: 'OWNER_BUSINESS_DECISION',
+        approvedAt: '2026-09-01T00:00:00.000Z', reason: 'Preserve the approved historical Party #2 pair',
+        status: 'ACTIVE', createdAt: '2026-09-01T00:00:00.000Z'
+      }
+    ];
+    response.counts.parties = response.snapshot.parties.length;
+    response.counts.legacyPartyCollisionExceptions = 2;
+
+    expect(() => validateBootstrapResponse(response, COMPANY_ID)).not.toThrow();
+    expect(applyBootstrapSnapshot(db, COMPANY_ID, response)).toMatchObject({ status: 'APPLIED' });
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM legacy_party_collision_exceptions
+      WHERE company_id = ? AND party_id = 'party_2-current'`).get(COMPANY_ID).count).toBe(0);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM parties
+      WHERE company_id = ? AND party_number = '2' AND status != 'CLOSED'`).get(COMPANY_ID).count).toBe(1);
+  });
+
   it('accepts and atomically imports the production default batch-settings contract', () => {
     const response = makeProductionCanaryBootstrapFailureFixture();
 

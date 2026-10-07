@@ -35,7 +35,7 @@ and Docker build contexts within the main repository.
 
 ### Repository and client
 
-- Canonical project package and lockfile version: **1.1.6**.
+- Canonical project package and lockfile version: **1.1.7**.
 - Git branch/HEAD at deployment capture: `main`, `ec52cc7`, synchronized with
   `origin/main`.
 - SQLite schema source lineage is at migration 15. PostgreSQL source migration
@@ -263,6 +263,237 @@ changes to packaged inputs require the 1.7.15 candidate to be qualified anew.
 Preserve prior release artifacts and local evidence unless an exact artifact is
 proven invalid and its identity is recorded.
 
+### 1.1.7 local bootstrap-correction candidate
+
+- Artifact: `dist-build/local-candidate-1.1.7-windows/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121246555` bytes
+- SHA-256: `d87f2d5f2c4e3ee789f175cdbaa6690282f8b1e380ba7f8a94057977255a2a0b`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled. This is a candidate installer, not a
+  published update.
+- The fix accepts persisted Party #2 collision provenance when its exact legacy
+  party rows are closed. The exception remains bound to those party IDs; a new
+  Party #2 does not inherit it.
+- Targeted bootstrap/version/NSIS tests passed (20 tests), as did the production
+  build, protected-file integrity check, and secret scan. The non-PostgreSQL
+  suite had 472 passing tests and one unrelated signer-environment failure
+  because Python `cryptography` is not installed on the local host.
+
+### 1.1.7 local sync-diagnostics candidate
+
+- Artifact: `dist-build/local-candidate-1.1.7-sync-diagnostics/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121247160` bytes
+- SHA-256: `a986606e914f72a36d86701137bf7dab3fa32354f3ac5a9b24228ad10b700313`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled. This diagnostic candidate retains
+  version 1.1.7 and does not overwrite the bootstrap-correction artifact.
+- The sync indicator now reports push transport errors, blocked outbox
+  dependencies, missing operation results, and persisted pending-operation
+  errors instead of showing only a generic queue count.
+
+### 1.1.7 local party-feed correction candidate
+
+- Artifact: `dist-build/local-candidate-1.1.7-party-feed-fix/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121247059` bytes
+- SHA-256: `335acfea43e68bef418fad5188d54320d43fd4b16fcbc2448261cff734abf311`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; this supersedes the sync-diagnostics
+  candidate for installation while preserving that earlier artifact.
+- Fixes change-feed updates for a party already present in local SQLite by
+  binding boolean flags as SQLite integers (`0`/`1`). The added regression test
+  reproduced the exact `SQLite3 can only bind numbers...` error before the fix.
+- The feed replay test for cursors 629–631, targeted sync/outbox tests, TypeScript
+  build, and protected-file check pass.
+
+### 1.1.7 local batch-settings conflict-recovery candidate
+
+- Artifact: `dist-build/local-candidate-1.1.7-batch-settings-conflict-fix/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121247835` bytes
+- SHA-256: `4f950a2408d28fcead1b6fd7ae464a301701c2a695cf97cac621379347d0a2d1`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; this is the latest 1.1.7 candidate
+  and supersedes the party-feed correction candidate for installation.
+- After pulling authoritative batch settings, the client now marks an older
+  revision-conflicted `UpdateBatchSettings` operation superseded only when its
+  complete settings snapshot exactly matches the current server snapshot. A
+  later accepted full settings snapshot also supersedes older revision conflicts.
+  Different settings remain in conflict rather than overwriting server data.
+- Batch-settings conflict recovery and related outbox tests pass (20 tests);
+  TypeScript build and protected-file integrity check pass.
+
+### 1.1.7 prior input-and-sync pacing candidate (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-input-sync-fix/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248001` bytes
+- SHA-256: `302560cc4cac5fb0998fff19272dce099fe979ec04a979913937f28152cd6f1b`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; preserved as the earlier draft/input
+  protection candidate.
+- Projection refresh now preserves local ticket drafts and active batch-setting
+  edits. Idle change-feed polling is 60 seconds, pauses while an editable field
+  is focused, and resumes after focus leaves the field. Local writes still
+  trigger immediate reconnects.
+- Input-preservation/reconnect tests (29 tests), TypeScript build, and
+  protected-file integrity check pass.
+
+### 1.1.7 prior all-input typing correction candidate (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-all-input-fix/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248173` bytes
+- SHA-256: `8c811f432069b331e361f7081449a7b5dee450d98a94960688baa1ef7cb11875`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; preserved as an earlier input-fix
+  candidate.
+- Hisob operation-rate and quantity values remain as local drafts while typing
+  and commit once on blur/Enter. Patta batch config edits update store state
+  immediately before async runtime checks. The 60-second idle sync pauses during
+  typing and resumes after focus leaves the input.
+- Relevant renderer/store tests (26 tests), TypeScript build, and protected-file
+  integrity check pass.
+
+### 1.1.7 prior period-close archive correction candidate (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-period-close-archive-fix/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248304` bytes
+- SHA-256: `8e11ef80b2c74af00ef50f473bf8a51514e71d324b90e53fa99626426b6f0c92`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; preserved as an earlier period-close
+  candidate.
+- `ClosePeriod` local archives now use the existing 8 MiB archive limit;
+  ticket-edit rollback snapshots retain their stricter 64 KiB limit.
+- Period-close tests, TypeScript build, and protected-file integrity check pass.
+
+### 1.1.7 prior complete input and period-close correction candidate (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-all-inputs-final/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248295` bytes
+- SHA-256: `7c24297e95ca4b7e5fa49941c0c0657c80b5972d62756daeaa3a7c5df490ac4e`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; preserved as an earlier combined
+  input and period-close candidate.
+- Adds local draft/commit behavior for Hisob operation-rate and quantity cells;
+  no sync command is emitted for each typed character. Batch-setting input
+  updates are immediate and protected against async readiness races.
+- Related renderer/store tests (27 tests), TypeScript build, and protected-file
+  integrity check pass.
+
+### 1.1.7 prior cross-PC refresh candidate (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-all-inputs-live-refresh/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248342` bytes
+- SHA-256: `d948b809a1f879bfdf2aac9b131d067fa4e2e7442bc9efd4ecf4b4f31eea5f91`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; preserved as an earlier refresh
+  candidate.
+- Successful background sync now re-reads the SQLite projection into the UI,
+  while preserving in-progress ticket and focused batch drafts. Visible PCs
+  poll every 60 seconds even if an input is focused; local changes still trigger
+  immediate sync, and focus-out triggers an idle refresh.
+- Related renderer/store tests (28 tests), TypeScript build, and protected-file
+  integrity check pass.
+
+### 1.1.7 cross-PC live refresh and complete input correction candidate
+
+- Artifact: `dist-build/local-candidate-1.1.7-cross-pc-live-input-fix/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248704` bytes
+- SHA-256: `4469797e192b9a7eb2d8c5543e50b92947ac0370c9a73a282ed3232a749ade74`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; includes all prior 1.1.7 fixes.
+- Background sync now polls every 15 seconds for visible clients, including
+  while an input is focused, and refreshes the renderer projection after pull.
+  Ticket/batch drafts remain protected; background polling does not flash the
+  manual-sync spinner. Local writes still trigger immediate reconnects.
+- Operation rate and quantity inputs commit once on blur/Enter; batch-setting
+  inputs update their local store values before async readiness checks.
+- Renderer/store tests (31 tests), TypeScript build, and protected-file
+  integrity check pass.
+
+### PostgreSQL v20 migration — reuse voided-ticket patta keys
+
+- Migration source: `apps/server/database/migrations/deploy_voided_ticket_patta_reuse_migration.sql`.
+- It recreates `idx_tickets_party_patta` so only non-voided tickets reserve a
+  party/patta key. Before this release, the VPS was read-only checked at
+  migration 19 with the old predicate that includes `VOIDED` rows.
+- A PostgreSQL 16 isolated test is included for delete-and-reuse behavior and
+  continued rejection of duplicate active tickets. The local host has no
+  configured disposable PostgreSQL DSN, so that integration test remains
+  unexecuted locally. The production workflow runs the PostgreSQL integration
+  suite against its PostgreSQL 16 service.
+- On a push to `main`, the workflow is configured to run verification, connect
+  to the VPS as root to create a custom-format `pg_dump`, validate it with
+  `pg_restore --list`, then run `ops/deploy/deploy.sh` as the dedicated deploy
+  user. That script builds the checked-out revision, applies ordered migrations,
+  restarts services, and health-checks them.
+
+### Archived party number and patta-range reuse
+
+- `ArchivePartyHistory` retains the canonical party but marks it archived. The
+  next party number is recalculated from non-archived active parties, allowing
+  the lowest unused number to be used again.
+- Patta allocation now first-fits the requested count into a range released by
+  an archived party, skipping ranges still owned by active parties. When no
+  released range fits, it continues at the company sequence high-water mark.
+  The same rule is used by local SQLite, the server, batch preparation, and the
+  print preview.
+- Archived ranges are exposed to the client projection separately from visible
+  party history. Local and server mutation tests cover range reuse and ensure
+  allocations do not overlap active parties.
+
+### 1.1.7 prior client candidate — voided-patta retry (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-voided-patta-reuse/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248755` bytes
+- SHA-256: `26ac7b21146e357aef8398e7de9cf88c18621cef7d10b46192b3af11d1f90a35`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled; preserved as an earlier candidate.
+
+### Prior 1.1.7 client candidate — migration-gated voided-patta retry (superseded)
+
+- Artifact: `dist-build/local-candidate-1.1.7-voided-ticket-retry-v20/Novda-hisob-kitob-Setup-1.1.7-win10-11-x64.exe`
+- Size: `121248710` bytes
+- SHA-256: `aca77c76b9d6d3a5bf65fba72660764d772756270725a9baede19737192eff79`
+- Authenticode: `NotSigned`.
+- Built locally with publishing disabled. It retries one failed patta-key
+  `SubmitTicket` only after the change-feed API advertises migration-20 support
+  and the matching prior ticket is locally confirmed `VOIDED`.
+- It predates archived-party range reuse and should not be used to qualify that
+  behavior.
+
+### Current 1.1.7 Windows packaging status
+
+- `npm run build` passes for the current renderer and TypeScript source.
+- Local NSIS packaging was attempted with publishing disabled, but electron
+  native rebuild stopped because this workstation has no Visual Studio C++ build
+  tools. `.github/workflows/build-desktop-1.1.7.yml` can build the source on a
+  Windows runner and upload a non-published candidate artifact when dispatched.
+
+### 2026-10-07 `comp_novda` party cleanup
+
+- Pre-change backup: `/srv/novda/backups/novda_prod_before_party_cleanup_20261007T034007Z.dump`
+  (282,998 bytes; SHA-256
+  `f981ee70867aea7227d87715f6c6fff066c13479a2c5f61bb6ff346afd8fdce8`).
+  `pg_restore --list` passed before cleanup.
+- Sequence-reset backup: `/srv/novda/backups/novda_prod_before_sequence1_reset_20261007T042329Z.dump`
+  (283,008 bytes; SHA-256
+  `b7870bcf30de73e64919f3e20a38e8b58e6822bd797186ea44c6240312d5a83d`).
+  `pg_restore --list` passed before changing the next-patta value.
+- Removed one unlinked active party and four unlinked archived startup-party
+  rows. The 54 visible closed parties and their ticket history were preserved.
+- Post-change `comp_novda`: 54 parties, 210 workers, 20 models, 1 period,
+  203 tickets, 3,001 ticket entries, 63 worker adjustments, 31 production
+  adjustments, 20 patta-batch settings, and `next_patta_number = 1`.
+- Owner clarified that no pattas were actually issued in the deleted active
+  series. The sequence was therefore reset from 13 to 1 in a guarded transaction
+  and a `party_series` change-feed event was recorded at cursor 618.
+- A subsequent client operation was accepted at 2026-10-07 04:40 UTC: Party 1
+  received the range 1–12. The live state is now 55 parties (54 retained closed
+  plus that active Party 1) with `next_patta_number = 13`. Another client was
+  still requesting the feed from cursor 628, immediately before that party's
+  change event at cursor 629; client-side apply/rebootstrap remains to verify.
+- The server is healthy. 1.1.7 rollout and bootstrap completion on both desktops
+  remain unconfirmed; their previous company folders should remain as local
+  rollback copies until sync is verified.
+
 ### Installer recovery behavior
 
 NSIS remains one-click and per-user, with `deleteAppDataOnUninstall: false`.
@@ -302,6 +533,9 @@ make current source state appear applied.
 This continuation added or changed source for:
 
 - Strict bootstrap-response and persisted metadata validation.
+- Bootstrap accepts persisted Party #2 collision provenance when its exact
+  historical party rows are closed; the exception remains scoped to those
+  canonical IDs and does not grant eligibility to a new Party #2.
 - Scoped Party #2 policy and PostgreSQL/SQLite migrations 12–17.
 - Electron window navigation restrictions and unverified-updater blocking.
 - Removal of the legacy release auto-publisher and unused dependency entries.

@@ -210,7 +210,10 @@ function validateBootstrapResponse(response, companyId) {
         && requireTimestamp(exception.approvedAt)
         && requireOptionalTimestamp(exception.createdAt));
       const party = partyById.get(exception.partyId);
-      requireCondition(party && party.partyNumber === exception.partyNumber && party.status !== 'CLOSED');
+      // Collision exceptions are attached to exact historical party IDs. They
+      // can remain active provenance after those parties are closed; they do
+      // not grant an exception to a new party that reuses the display number.
+      requireCondition(party && party.partyNumber === exception.partyNumber);
       requireCondition(!collisionExceptionIds.has(exception.exceptionId));
       requireCondition(!collisionPartyIds.has(exception.partyId));
       collisionExceptionIds.add(exception.exceptionId);

@@ -4,7 +4,7 @@ import { ModelConfig } from '../../types/workbook';
 import { STANDARD_OPERATIONS } from '../../constants/operationConstants';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
-import { createWorkbookCommand, localCommitSyncNotice, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
+import { createWorkbookCommand, hasFocusedEditableControl, localCommitSyncNotice, preserveWorkbookProjectionDrafts, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
 import { formatDateIso } from '../../utils/formatters';
 
 async function tryModelMutation(
@@ -124,7 +124,7 @@ async function tryHisobAdjustment(
       state.addNotification('error', '_SESSION_CHANGED', 'The company session changed before the  projection reloaded.');
       return { handled: true, success: false };
     }
-    set(projection as Partial<WorkbookStore>);
+    set(preserveWorkbookProjectionDrafts(projection, get(), hasFocusedEditableControl()) as Partial<WorkbookStore>);
   } catch {
     state.addNotification('warning', '_PROJECTION_RELOAD_PENDING', 'The quantity change is saved locally and will appear after the next reload.');
   }
@@ -523,18 +523,20 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     });
 
     const updatedModel = updatedModels.find((model) => model.id === modelId);
+    if (!updatedModel) return false;
     const sync = updatedModel
       ? await tryModelMutation(state, get, set, 'UpsertModel', modelId, modelCommandPayload(updatedModel))
       : null;
     if (sync?.handled) {
       if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${opName}" stavkasi yangilandi.`));
-      return;
+      return sync.success;
     }
 
     set({ models: updatedModels });
     triggerDebouncedSave(() => {
       get().saveToDisk({ models: updatedModels, companyId: state.licenseStatus?.companyId });
       }, 1200, 'model', () => get().licenseStatus === state.licenseStatus);
+    return true;
   },
 
   updateOperationName: async (modelId: string, oldOpName: string, newOpName: string) => {
@@ -617,7 +619,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
   updateHisobQuantity: async (modelId: string, workerId: number, opName: string, qty: number) => {
     const state = get();
     const sync = await tryHisobAdjustment(state, get, set, modelId, workerId, opName, qty);
-    if (sync?.handled) return;
+    if (sync?.handled) return sync.success;
     const updatedModels = state.models.map((m) => {
       if (m.id === modelId) {
         const hq = m.hisobQuantities || {};
@@ -642,6 +644,7 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     triggerDebouncedSave(() => {
       get().saveToDisk({ models: updatedModels, companyId: state.licenseStatus?.companyId }, { skipReconcile: true });
       }, 1200, 'model', () => get().licenseStatus === state.licenseStatus);
+    return true;
   },
 
   reorderOperations: async (modelId: string, newOrder: string[]) => {

@@ -127,17 +127,30 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       scheduleBatchSettings(context);
     },
     updatePattaBatchConfig: async (modelId: string, updates: any) => {
+      const current = get();
+      if (!current.models.some((model) => model.id === modelId)) {
+        current.addNotification('error', 'MODEL_NOT_FOUND', `Model "${modelId}" was not found.`);
+        return;
+      }
+      const existing = current.pattaBatchConfigs[modelId] || {
+        partyNumber: '',
+        isCustomParty: false,
+        totalIshSoni: '',
+        color: '',
+        sizes: {}
+      };
+      // Apply each keystroke synchronously. Runtime readiness is asynchronous;
+      // waiting for it before updating the controlled input lets older values win.
+      set({
+        pattaBatchConfigs: {
+          ...current.pattaBatchConfigs,
+          [modelId]: { ...existing, ...updates }
+        }
+      });
       const context = await getContext();
       if (!context) return slices.updatePattaBatchConfig(modelId, updates);
       if (!context.success) return;
-      const state = get();
-      const model = state.models.find((item) => item.id === modelId);
-      if (!model) {
-        get().addNotification('error', 'MODEL_NOT_FOUND', `Model "${modelId}" was not found.`);
-        return;
-      }
-      const current = state.pattaBatchConfigs[modelId] || { partyNumber: '', totalIshSoni: '', color: model.color || 'Кора', sizes: {} };
-      set({ pattaBatchConfigs: { ...state.pattaBatchConfigs, [modelId]: { ...current, ...updates } } });
+      if (get().licenseStatus !== context.licenseStatus) return;
       scheduleBatchSettings(context);
     },
     updatePattaBatchSize: async (modelId: string, size: string, count: string) => {

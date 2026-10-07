@@ -11,11 +11,11 @@
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 
 const LEGAL_TRANSITIONS = new Map([
-  ['PENDING', new Set(['SENDING'])],
+  ['PENDING', new Set(['SENDING', 'SUPERSEDED'])],
   ['SENDING', new Set(['SYNCED', 'PENDING', 'CONFLICT', 'DEAD_LETTER'])],
   ['SYNCED', new Set()], // terminal
-  ['CONFLICT', new Set(['PENDING'])], // explicit manual retry
-  ['DEAD_LETTER', new Set()] // terminal unless explicit recovery
+  ['CONFLICT', new Set(['PENDING', 'SUPERSEDED'])], // explicit retry or superseded by a newer accepted snapshot
+  ['DEAD_LETTER', new Set(['PENDING'])] // only a validated voided-patta duplicate may be recovered
 ]);
 
 /**
@@ -296,6 +296,15 @@ function getOutboxDiagnostics(db, companyId) {
     stats.oldestPendingCreatedAt = oldest.created_at;
   }
 
+  stats.pendingErrors = db.prepare(`
+    SELECT command_type, status, last_error, error_message, updated_at
+    FROM local_outbox
+    WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
+      AND (last_error IS NOT NULL OR error_message IS NOT NULL)
+    ORDER BY updated_at DESC, causal_sequence DESC
+    LIMIT 5
+  `).all(companyId);
+
   stats.failedOperations = db.prepare(`
     SELECT command_type, status, last_error, error_message, updated_at
     FROM local_outbox
@@ -305,6 +314,108 @@ function getOutboxDiagnostics(db, companyId) {
   `).all(companyId);
 
   return stats;
+}
+
+function normalizeBatchSettingsConfigs(configs) {
+  if (!Array.isArray(configs)) return null;
+  const normalized = [];
+  for (const config of configs) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)
+      || typeof config.modelId !== 'string' || !config.modelId) return null;
+    normalized.push({
+      modelId: config.modelId,
+      partyNumber: config.partyNumber || '',
+      isCustomParty: config.isCustomParty === true || Number(config.is_custom_party) === 1,
+      totalIshSoni: config.totalIshSoni || '',
+      color: config.color || '',
+      sizes: config.sizes && typeof config.sizes === 'object' && !Array.isArray(config.sizes) ? config.sizes : {}
+    });
+  }
+  normalized.sort((left, right) => left.modelId.localeCompare(right.modelId));
+  return normalized;
+}
+
+function supersedeBatchSettingsAlreadyApplied(db, companyId) {
+  const current = db.prepare(`SELECT available_sizes_json, server_revision
+    FROM company_batch_settings WHERE company_id = ?`).get(companyId);
+  if (!current || !Number.isSafeInteger(Number(current.server_revision))) return 0;
+
+  let availableSizes;
+  try { availableSizes = JSON.parse(current.available_sizes_json || '[]'); } catch { return 0; }
+  if (!Array.isArray(availableSizes)) return 0;
+
+  let currentConfigs;
+  try {
+    const rows = db.prepare(`SELECT model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json
+      FROM patta_batch_settings WHERE company_id = ?`).all(companyId);
+    currentConfigs = normalizeBatchSettingsConfigs(rows.map((row) => ({
+      modelId: row.model_id,
+      partyNumber: row.party_number,
+      is_custom_party: row.is_custom_party,
+      totalIshSoni: row.total_ish_soni,
+      color: row.color,
+      sizes: JSON.parse(row.sizes_json || '{}')
+    })));
+  } catch {
+    return 0;
+  }
+  if (!currentConfigs) return 0;
+
+  const candidates = db.prepare(`SELECT operation_id, base_revision, payload_json, last_error, error_message, status
+    FROM local_outbox WHERE company_id = ? AND command_type = 'UpdateBatchSettings'
+      AND status IN ('PENDING', 'CONFLICT') ORDER BY causal_sequence, created_at`).all(companyId);
+  let superseded = 0;
+  for (const candidate of candidates) {
+    if (Number(candidate.base_revision) >= Number(current.server_revision)) continue;
+    if (candidate.status === 'CONFLICT') {
+      let error;
+      try { error = JSON.parse(candidate.last_error || candidate.error_message || '{}'); } catch { continue; }
+      if (error?.code !== 'REVISION_CONFLICT') continue;
+    }
+    let payload;
+    try { payload = JSON.parse(candidate.payload_json); } catch { continue; }
+    const payloadConfigs = normalizeBatchSettingsConfigs(payload.configs);
+    if (!Array.isArray(payload.availableSizes) || !payloadConfigs
+      || canonicalStringify(payload.availableSizes) !== canonicalStringify(availableSizes)
+      || canonicalStringify(payloadConfigs) !== canonicalStringify(currentConfigs)) continue;
+
+    updateOperationStatus(db, companyId, candidate.operation_id, 'SUPERSEDED', 'SUPERSEDED_BY_AUTHORITATIVE_BATCH_SETTINGS');
+    superseded++;
+  }
+  return superseded;
+}
+
+function isVoidedPattaUniqueViolation(errorValue) {
+  if (typeof errorValue !== 'string' || !errorValue) return false;
+  try {
+    const error = JSON.parse(errorValue);
+    return error?.code === '23505' && typeof error.message === 'string'
+      && error.message.includes('idx_tickets_party_patta');
+  } catch {
+    return false;
+  }
+}
+
+function recoverVoidedPattaDuplicateTickets(db, companyId) {
+  const operations = db.prepare(`SELECT * FROM local_outbox
+    WHERE company_id = ? AND command_type = 'SubmitTicket' AND status = 'DEAD_LETTER'
+    ORDER BY causal_sequence, created_at`).all(companyId);
+  let recovered = 0;
+  for (const operation of operations) {
+    if (Number(operation.attempt_count) !== 1
+      || (!isVoidedPattaUniqueViolation(operation.last_error) && !isVoidedPattaUniqueViolation(operation.error_message))) continue;
+    let payload;
+    try { payload = JSON.parse(operation.payload_json); } catch { continue; }
+    if (typeof payload.partyRecordId !== 'string' || !payload.partyRecordId
+      || !Number.isSafeInteger(payload.pattaNumber) || payload.pattaNumber < 1) continue;
+    const releasedTicket = db.prepare(`SELECT 1 FROM tickets
+      WHERE company_id = ? AND party_record_id = ? AND patta_number = ? AND status = 'VOIDED' AND id <> ?
+      LIMIT 1`).get(companyId, payload.partyRecordId, payload.pattaNumber, payload.ticketId);
+    if (!releasedTicket) continue;
+    updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_AFTER_VOIDED_PATTA_RELEASE');
+    recovered++;
+  }
+  return recovered;
 }
 
 /**
@@ -377,5 +488,7 @@ module.exports = {
   acknowledgeOutboxOperation,
   updateOperationStatus,
   getOutboxDiagnostics,
+  supersedeBatchSettingsAlreadyApplied,
+  recoverVoidedPattaDuplicateTickets,
   recoverStrandedSendingOperations
 };

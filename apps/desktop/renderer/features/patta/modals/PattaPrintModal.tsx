@@ -2,6 +2,7 @@ import React from 'react';
 import { Printer, X, FileText } from 'lucide-react';
 import { ModelConfig } from '../../../types/workbook';
 import { useWorkbookStore } from '../../../store/workbookStore';
+import { findAvailablePattaStart } from '../../../store/pattaBatch';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
 import { formatDateOnly } from '../../../utils/formatters';
 
@@ -48,6 +49,8 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
   onClose
 }) => {
   const nextPattaNumber = useWorkbookStore((s) => s.nextPattaNumber);
+  const printedPartyHistory = useWorkbookStore((s) => s.printedPartyHistory);
+  const reusablePattaRanges = useWorkbookStore((s) => s.reusablePattaRanges);
   const confirmAction = useWorkbookStore((s) => s.confirmAction);
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
@@ -72,10 +75,34 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
     const list: PrintableTicket[] = [];
     const today = formatDateOnly(new Date());
 
-    // Use the synchronized company counter; closing a single party doesn't reset the series.
+    // Reuse ranges released by archived parties before advancing the company counter.
+    const allocationHistory = [...(printedPartyHistory || [])];
     let currentPattaNum = Math.max(1, Number(nextPattaNumber) || 1);
 
     for (const { item, workTickets, sizesSummary } of printableItems) {
+      const existingParty = allocationHistory.find((party) => !party.isClosed && party.isArchived !== true
+        && party.modelId === item.model.id && String(party.partyNumber).trim() === String(item.partyNumber).trim());
+      const pattaStart = existingParty?.pattaStartNumber
+        ?? findAvailablePattaStart(allocationHistory, Math.max(1, workTickets.length), currentPattaNum, reusablePattaRanges);
+      if (!existingParty && workTickets.length > 0) {
+        const pattaEnd = pattaStart + workTickets.length - 1;
+        allocationHistory.push({
+          id: `preview-${item.model.id}-${item.partyNumber}-${list.length}`,
+          partyNumber: String(item.partyNumber),
+          modelId: item.model.id,
+          modelName: item.model.title || item.model.name,
+          color: item.color || item.model.color || '',
+          pattaCount: workTickets.length,
+          cumulativePattaCount: pattaEnd,
+          pattaStartNumber: pattaStart,
+          pattaEndNumber: pattaEnd,
+          ishSoni: 0,
+          cumulativeIshSoni: 0,
+          printedAt: ''
+        });
+        if (pattaStart >= currentPattaNum) currentPattaNum = pattaEnd + 1;
+      }
+
       const opsList = item.model.pattaOpsOrder.map((opName) => ({
         name: opName
       }));
@@ -89,10 +116,11 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
       const cleanColor = finalColor.replace(/^(Ранг\s*)+/i, '').trim();
 
       const pachkaCount = workTickets.length;
-      for (const workTicket of workTickets) {
+      for (let index = 0; index < workTickets.length; index += 1) {
+        const workTicket = workTickets[index];
         list.push({
           ticketIndex: list.length + 1,
-          pattaNumber: currentPattaNum++,
+          pattaNumber: pattaStart + index,
           party: item.partyNumber || '1',
           size: workTicket.size,
           modelTitle: cleanTitle,
@@ -106,7 +134,7 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
       }
     }
     return list;
-  }, [printableItems, nextPattaNumber]);
+  }, [printableItems, nextPattaNumber, printedPartyHistory, reusablePattaRanges]);
 
   // Group tickets into pairs (2 tickets per A4 page in Portrait / Kitob format)
   const a4Pages: PrintableTicket[][] = React.useMemo(() => {

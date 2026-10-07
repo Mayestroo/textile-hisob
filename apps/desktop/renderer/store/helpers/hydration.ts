@@ -28,6 +28,7 @@ export interface HydratedWorkbookData {
   availableSizes: string[];
   nextPartyNumber: number;
   nextPattaNumber: number;
+  reusablePattaRanges: Array<{ start: number; end: number }>;
   printedPartyHistory: any[];
   submittedTickets: SubmittedTicketRecord[];
   currentPeriod: PayrollPeriod;
@@ -58,6 +59,14 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     : fallback?.availableSizes || [...DEFAULT_BATCH_SIZES];
   const nextPartyNumber = Number(source.nextPartyNumber || fallback?.nextPartyNumber || 1);
   const nextPattaNumber = Number(source.nextPattaNumber ?? fallback?.nextPattaNumber ?? 1);
+  const rawReusableRanges = Array.isArray(source.reusablePattaRanges)
+    ? source.reusablePattaRanges
+    : fallback?.reusablePattaRanges || printedPartyHistory.filter((party) => party.isArchived === true);
+  const reusablePattaRanges = rawReusableRanges.flatMap((range: any) => {
+    const start = Number(range.start ?? range.pattaStartNumber ?? range.patta_start_number);
+    const end = Number(range.end ?? range.pattaEndNumber ?? range.patta_end_number);
+    return Number.isSafeInteger(start) && Number.isSafeInteger(end) && start > 0 && end >= start ? [{ start, end }] : [];
+  });
   const currentPeriod = source.currentPeriod || fallback?.currentPeriod || {
     id: 'period_default',
     name: getUzbekMonthName(),
@@ -72,6 +81,7 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     availableSizes,
     nextPartyNumber,
     nextPattaNumber,
+    reusablePattaRanges,
     printedPartyHistory,
     submittedTickets,
     currentPeriod,

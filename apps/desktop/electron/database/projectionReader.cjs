@@ -370,6 +370,15 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
   const submittedTickets = visibleTickets.map(toSubmittedTicket);
   const nextPattaNumber = Number(db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?`)
     .get(companyId)?.next_patta_number || 1);
+  const reusablePattaRanges = db.prepare(`SELECT COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+    COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number
+    FROM parties p LEFT JOIN protected_party_patta_ranges r
+      ON r.company_id = p.company_id AND r.party_record_id = p.id
+    WHERE p.company_id = ? AND p.is_archived = 1
+      AND COALESCE(p.patta_start_number, r.patta_start_number) IS NOT NULL
+      AND COALESCE(p.patta_end_number, r.patta_end_number) IS NOT NULL
+    ORDER BY COALESCE(p.patta_start_number, r.patta_start_number), p.id`).all(companyId)
+    .map((row) => ({ start: Number(row.patta_start_number), end: Number(row.patta_end_number) }));
   const currentPeriod = openPeriod || periods[0] || {
     id: 'period_default',
     name: 'Default period',
@@ -394,6 +403,7 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
     periods,
     nextPartyNumber,
     nextPattaNumber,
+    reusablePattaRanges,
     ticketForms: loadTicketFormsFromSqlite(db, companyId),
     pattaBatchConfigs: batchSettings.pattaBatchConfigs,
     availableSizes: batchSettings.availableSizes,

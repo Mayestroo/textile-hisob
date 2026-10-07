@@ -7,6 +7,7 @@ const { insertOutboxOperation, getOperation } = require('./outboxManager.cjs');
 const { rebuildCompanyProjections } = require('./projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 const { validateCausalOrdering } = require('./commandPipeline.cjs');
+const { findAvailablePattaStart } = require('../../../../packages/domain/pattaSequence.cjs');
 
 const COMMAND_ENTITY_TYPES = Object.freeze({
   UpsertModel: 'model',
@@ -503,7 +504,11 @@ function normalizeCommand(command, activeCompanyId) {
   const commandLocalArchiveJson = command.localArchive === undefined
     ? null
     : JSON.stringify(command.localArchive);
-  if (commandLocalArchiveJson && Buffer.byteLength(commandLocalArchiveJson, 'utf8') > 64 * 1024) {
+  const maxLocalArchiveBytes = commandType === 'ClosePeriod' ? 8 * 1024 * 1024 : 64 * 1024;
+  if (commandLocalArchiveJson && Buffer.byteLength(commandLocalArchiveJson, 'utf8') > maxLocalArchiveBytes) {
+    if (commandType === 'ClosePeriod') {
+      throw createCommandError('PERIOD_ARCHIVE_TOO_LARGE', 'Period archive exceeds 8 MiB');
+    }
     throw createCommandError('TICKET_EDIT_ARCHIVE_TOO_LARGE', 'Ticket edit rollback snapshot exceeds 64 KiB');
   }
   return {
@@ -1063,11 +1068,20 @@ function executeCompletePattaBatch(db, normalized) {
       updatePartyRecord(db, normalized.companyId, party);
     } else {
       if (party.pattaCount < 1) throw createCommandError('INVALID_PATTA_COUNT', 'A printed party must contain at least one patta');
-      party.pattaStartNumber = nextPattaNumber;
-      party.pattaEndNumber = nextPattaNumber + party.pattaCount - 1;
+      const partyRanges = db.prepare(`SELECT COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+        COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number, p.status, p.is_archived
+        FROM parties p LEFT JOIN protected_party_patta_ranges r
+          ON r.company_id = p.company_id AND r.party_record_id = p.id
+        WHERE p.company_id = ?`).all(normalized.companyId);
+      party.pattaStartNumber = findAvailablePattaStart({
+        nextPattaNumber,
+        pattaCount: party.pattaCount,
+        parties: partyRanges
+      });
+      party.pattaEndNumber = party.pattaStartNumber + party.pattaCount - 1;
       if (!Number.isSafeInteger(party.pattaEndNumber)) throw createCommandError('INVALID_PATTA_COUNT', 'Patta sequence exceeds the safe integer range');
       party.cumulativePattaCount = party.pattaEndNumber;
-      nextPattaNumber = party.pattaEndNumber + 1;
+      if (party.pattaStartNumber >= nextPattaNumber) nextPattaNumber = party.pattaEndNumber + 1;
       insertPartyRecord(db, normalized.companyId, party);
     }
   }

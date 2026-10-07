@@ -108,6 +108,25 @@ jobs:
           ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> "$HOME/.ssh/known_hosts"
           ssh -i "$key_file" -p "$VPS_PORT" \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "root@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          [[ "$(id -un)" == root ]]
+          backup_dir=/srv/novda/backups
+          [[ -d "$backup_dir" && -w "$backup_dir" ]] || { printf '%s\n' 'NOVDA_BACKUP_DIRECTORY_NOT_WRITABLE' >&2; exit 1; }
+          timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          backup="$backup_dir/novda_prod_before_deploy_${timestamp}.dump"
+          temporary="$backup_dir/.novda_prod_before_deploy_${timestamp}.$$.tmp"
+          trap 'rm -f -- "$temporary"' EXIT
+          docker exec novda-postgres pg_dump --format=custom --username=novda_owner --dbname=novda_prod > "$temporary"
+          [[ -s "$temporary" ]] || { printf '%s\n' 'NOVDA_PREDEPLOY_BACKUP_EMPTY' >&2; exit 1; }
+          docker exec -i novda-postgres pg_restore --exit-on-error --list < "$temporary" >/dev/null
+          chmod 0600 "$temporary"
+          mv -- "$temporary" "$backup"
+          printf 'NOVDA_PREDEPLOY_BACKUP_PASS file=%s bytes=%s sha256=%s\n' \
+            "$(basename "$backup")" "$(stat -c '%s' "$backup")" "$(sha256sum "$backup" | cut -d ' ' -f 1)"
+          REMOTE
+          ssh -i "$key_file" -p "$VPS_PORT" \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" 'bash /srv/novda/repository/ops/deploy/deploy.sh'
 
   bootstrap-novda-paths:

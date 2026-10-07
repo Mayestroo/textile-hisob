@@ -13,7 +13,8 @@ import { useAuthStore } from '../authStore';
 import { hydrateWorkbookData, isPayloadOwnedByCompany, isValidCompanyId } from '../helpers/hydration';
 import { captureSessionIdentity, isSessionCurrent } from '../sessionGuard';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
-import { runReconnect } from '../businessMutations';
+import { hasFocusedEditableControl, preserveWorkbookProjectionDrafts, runReconnect } from '../businessMutations';
+import { findNextPartyNumber } from '../pattaBatch';
 
 function notifyRejection(state: Pick<WorkbookStore, 'addNotification'>, code = '_COMMAND_REQUIRED', message?: string) {
   state.addNotification(
@@ -106,6 +107,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             availableSizes: hydrated.availableSizes,
             nextPartyNumber: hydrated.nextPartyNumber,
             nextPattaNumber: hydrated.nextPattaNumber,
+            reusablePattaRanges: hydrated.reusablePattaRanges,
             printedPartyHistory: hydrated.printedPartyHistory,
             submittedTickets: hydrated.submittedTickets,
             currentPeriod: hydrated.currentPeriod,
@@ -127,13 +129,18 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
               }
               const refreshed = await eAPI.dbRead(currentCompanyId);
               if (!isCurrentCompany() || !refreshed?.success || !refreshed.data || !isPayloadOwnedByCompany(refreshed.data, currentCompanyId)) return;
-              const latest = hydrateSqliteProjection(refreshed.data, currentCompanyId);
+              const latest = preserveWorkbookProjectionDrafts(
+                hydrateSqliteProjection(refreshed.data, currentCompanyId),
+                get(),
+                hasFocusedEditableControl()
+              );
               set({
                 workers: latest.workers,
                 models: latest.models,
                 availableSizes: latest.availableSizes,
                 nextPartyNumber: latest.nextPartyNumber,
                 nextPattaNumber: latest.nextPattaNumber,
+                reusablePattaRanges: latest.reusablePattaRanges,
                 printedPartyHistory: latest.printedPartyHistory,
                 submittedTickets: latest.submittedTickets,
                 currentPeriod: latest.currentPeriod,
@@ -196,6 +203,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             availableSizes: customSizes,
             nextPartyNumber: nextParty,
             nextPattaNumber: 1,
+            reusablePattaRanges: [],
             printedPartyHistory: [],
             submittedTickets: [],
             currentPeriod: freshPeriod,
@@ -220,14 +228,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
           const cleanModels = hydrated.models;
           const subTickets = hydrated.submittedTickets;
           const cleanHistory = hydrated.printedPartyHistory;
-          const allNums = new Set(
-            cleanHistory.map((h) => parseInt(String(h.partyNumber).trim(), 10)).filter((n) => !isNaN(n) && n > 0)
-          );
-          let lowestUnused = 1;
-          while (allNums.has(lowestUnused)) {
-            lowestUnused++;
-          }
-          const nextParty = Math.max(hydrated.nextPartyNumber || 1, lowestUnused);
+          const nextParty = findNextPartyNumber(cleanHistory);
           const customSizes = hydrated.availableSizes;
 
           set({
@@ -236,6 +237,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             availableSizes: customSizes,
             nextPartyNumber: nextParty,
             nextPattaNumber: hydrated.nextPattaNumber,
+            reusablePattaRanges: hydrated.reusablePattaRanges,
             printedPartyHistory: cleanHistory,
             submittedTickets: subTickets,
             currentPeriod: hydrated.currentPeriod,
@@ -326,6 +328,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
         overrideState?.nextPattaNumber !== undefined
           ? overrideState.nextPattaNumber
           : state.nextPattaNumber || 1,
+      reusablePattaRanges: overrideState?.reusablePattaRanges || state.reusablePattaRanges || [],
       printedPartyHistory: overrideState?.printedPartyHistory || state.printedPartyHistory || [],
       submittedTickets: rawTickets,
       currentPeriod: overrideState?.currentPeriod || state.currentPeriod,
@@ -506,6 +509,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
         printedPartyHistory: state.printedPartyHistory || [],
         nextPartyNumber: state.nextPartyNumber || 1,
         nextPattaNumber: state.nextPattaNumber || 1,
+        reusablePattaRanges: state.reusablePattaRanges || [],
         activeSheet: firstSheetName,
         companyId,
         activeCell: {

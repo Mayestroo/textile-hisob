@@ -133,6 +133,62 @@ describe(' workbook change-feed application', () => {
       .toEqual({ next_patta_number: 13 });
   });
 
+  it('applies the party, batch-settings, and patta-batch feed sequence after cursor 628', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    const modelIds = Array.from({ length: 20 }, (_, index) => `model-${index + 1}`);
+    const insertModel = db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES (?, ?, ?, '[]', ?, ?)`);
+    for (const [index, modelId] of modelIds.entries()) {
+      insertModel.run(modelId, companyId, `Model ${index + 1}`, now, now);
+    }
+
+    const items: any[] = [
+      {
+        changeId: '629', companyId, entityType: 'party', entityId: 'party-series-1',
+        entityRevision: 1, changeType: 'INSERT',
+        payload: {
+          partyRecordId: 'party-series-1', partyNumber: '1', physicalPartyNumber: '1', modelId: modelIds[0],
+          modelName: 'Model 1', color: 'Qora', pattaCount: 12, cumulativePattaCount: 12,
+          pattaStartNumber: 1, pattaEndNumber: 12, ishSoniPerPatta: 1, totalIshSoni: 12,
+          ishSoni: 0, cumulativeIshSoni: 0, sizes: { M: 12 }, printedAt: now
+        }
+      },
+      {
+        changeId: '630', companyId, entityType: 'batch_settings', entityId: companyId,
+        entityRevision: 337, changeType: 'UPDATE',
+        payload: {
+          companyId,
+          availableSizes: ['S', 'M'],
+          serverRevision: 337,
+          configs: modelIds.map((modelId, index) => ({
+            modelId,
+            partyNumber: String(index + 1),
+            isCustomParty: false,
+            totalIshSoni: '12',
+            color: 'Qora',
+            sizes: { S: '', M: '12' }
+          }))
+        }
+      },
+      {
+        changeId: '631', companyId, entityType: 'patta_batch', entityId: 'batch-series-1',
+        entityRevision: 1, changeType: 'INSERT',
+        payload: { batchId: 'batch-series-1', parties: ['party-series-1'] }
+      }
+    ];
+
+    const applied = applyChangesBatch(db, companyId, items, '631', { nextPattaNumber: 13 });
+
+    expect(applied).toEqual({ appliedCount: 3, nextCursor: 631 });
+    expect(db.prepare('SELECT status, patta_end_number FROM parties WHERE company_id = ? AND id = ?')
+      .get(companyId, 'party-series-1')).toEqual({ status: 'ACTIVE', patta_end_number: 12 });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM patta_batch_settings WHERE company_id = ?')
+      .get(companyId)).toEqual({ count: 20 });
+    expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?')
+      .get(companyId)).toEqual({ next_patta_number: 13 });
+  });
+
   it('resolves an in-flight old model ID to its canonical UUID without creating a duplicate model', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();
@@ -194,6 +250,32 @@ describe(' workbook change-feed application', () => {
         is_archived: 1,
         server_revision: 5
       });
+  });
+
+  it('applies a full party feed update to an existing active row', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = '2026-10-07T05:00:00.000Z';
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('model-a', ?, 'Model A', '[]', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO parties (
+      id, company_id, party_number, physical_party_number, model_id, status, created_at, updated_at
+    ) VALUES ('party-a', ?, '1', '1', 'model-a', 'ACTIVE', ?, ?)`).run(companyId, now, now);
+
+    const result = applyChangesBatch(db, companyId, [{
+      changeId: '629', companyId, entityType: 'party', entityId: 'party-a', entityRevision: 2, changeType: 'UPDATE',
+      payload: {
+        partyRecordId: 'party-a', partyNumber: '1', physicalPartyNumber: '1', modelId: 'model-a',
+        modelName: 'Model A', color: 'Qora', pattaCount: 12, cumulativePattaCount: 12,
+        pattaStartNumber: 1, pattaEndNumber: 12, ishSoniPerPatta: 1, totalIshSoni: 12,
+        ishSoni: 0, cumulativeIshSoni: 0, sizes: { M: 12 }, printedAt: now,
+        status: 'ACTIVE', isClosed: false, isArchived: false, closedAt: null, archivedPattaNumbers: []
+      }
+    }], '629');
+
+    expect(result).toEqual({ appliedCount: 1, nextCursor: 629 });
+    expect(db.prepare(`SELECT status, is_closed, is_archived, server_revision, patta_end_number
+      FROM parties WHERE company_id = ? AND id = 'party-a'`).get(companyId))
+      .toEqual({ status: 'ACTIVE', is_closed: 0, is_archived: 0, server_revision: 2, patta_end_number: 12 });
   });
 
   it('round-trips PostgreSQL BIGINT cursors above JavaScript safe-integer precision exactly', () => {

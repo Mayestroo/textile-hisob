@@ -25,7 +25,8 @@ const MIGRATIONS = [
   'deploy_canonical_ids_global_patta_sequence.sql',
   'deploy_production_adjustment_provenance_migration.sql',
   'deploy_patta_series_sequence_migration.sql',
-  'deploy_patta_sequence_runtime_grant_migration.sql'
+  'deploy_patta_sequence_runtime_grant_migration.sql',
+  'deploy_voided_ticket_patta_reuse_migration.sql'
 ];
 
 function requireDsn(env, name, requiredUsername) {

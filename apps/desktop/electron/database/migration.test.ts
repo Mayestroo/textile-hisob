@@ -1189,7 +1189,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
 
     const pattaBatchSha = crypto.createHash('sha256').update(fs.readFileSync(pattaBatchPath)).digest('hex').toLowerCase();
 
-    expect(pattaBatchSha).toBe('8c966e35f2d6c2e8cf784260c4f18f8f15489a883179df600d876ab58a8cdb44');
+    expect(pattaBatchSha).toBe('68cb6c35b3ab817efcf848d02e4254794d33d2608f5662e370a4d3e7adc36e3e');
   });
 
   // 23. legacy staj maps to workers.staj, not adjustment ledger

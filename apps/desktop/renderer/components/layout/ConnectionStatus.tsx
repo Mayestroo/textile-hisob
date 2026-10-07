@@ -6,7 +6,7 @@ import { useWorkbookStore } from '../../store/workbookStore';
 import { isValidCompanyId } from '../../store/helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode, ElectronRuntimeModeResult } from '../../store/runtimeMode';
 import { captureSessionIdentity, isSessionCurrent } from '../../store/sessionGuard';
-import { runReconnect } from '../../store/businessMutations';
+import { preserveWorkbookProjectionDrafts, reloadWorkbookProjection, runReconnect } from '../../store/businessMutations';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export function resolveManualSyncCompany(authCompanyId: unknown, licenseCompanyId: unknown): string | undefined {
@@ -19,6 +19,17 @@ export function allowsManualSync(runtime: ElectronRuntimeModeResult): boolean {
   return runtime.success && runtime.mode === 'sync';
 }
 
+export function isEditableInputTarget(target: unknown): boolean {
+  if (!target || typeof target !== 'object') return false;
+  const element = target as { tagName?: unknown; isContentEditable?: unknown };
+  const tagName = typeof element.tagName === 'string' ? element.tagName.toUpperCase() : '';
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName) || element.isContentEditable === true;
+}
+
+export function shouldRunBackgroundSync(online: boolean, hasCompany: boolean, documentVisible: boolean): boolean {
+  return online && hasCompany && documentVisible;
+}
+
 export function summarizeFailedOutboxOperations(operations: unknown): string[] {
   if (!Array.isArray(operations)) return [];
   return operations.slice(0, 5).map((operation: any) => {
@@ -28,9 +39,52 @@ export function summarizeFailedOutboxOperations(operations: unknown): string[] {
   });
 }
 
+export function summarizeReconnectFailure(result: any, pendingCount = 0): string | undefined {
+  if (result?.success !== true) {
+    const message = typeof result?.error === 'string'
+      ? result.error
+      : typeof result?.error?.message === 'string'
+        ? result.error.message
+        : result?.code;
+    return `Sinxronlash bajarilmadi${message ? `: ${message}` : '.'}`;
+  }
+
+  const push = result?.result?.pushed;
+  if (!push || typeof push !== 'object') {
+    return pendingCount > 0
+      ? `${pendingCount} ta navbatdagi buyruq bor, lekin sinxronlash natijasida yuborish holati qaytmadi.`
+      : undefined;
+  }
+
+  const count = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0;
+  const transientErrors = count(push.transientErrors);
+  if (transientErrors) {
+    return `VPSga yuborishda vaqtinchalik xato (${transientErrors} ta buyruq): ${push.error || 'tarmoq so‘rovi bajarilmadi'}`;
+  }
+
+  const reauth = count(push.operatorReauthRequired);
+  if (reauth) return `${reauth} ta buyruq uchun operator seansini qayta tasdiqlash kerak.`;
+
+  const blocked = count(push.blockedCount);
+  if (blocked) return `${blocked} ta buyruq oldingi sinxronlanmagan buyruqqa bog‘liq bo‘lgani uchun to‘xtab turibdi.`;
+
+  const attempted = count(push.attempted);
+  const accounted = count(push.synced) + count(push.conflict) + count(push.deadLetter) + reauth;
+  if (attempted > accounted) {
+    return `${attempted - accounted} ta yuborilgan buyruq uchun serverdan natija olinmadi.`;
+  }
+
+  if (pendingCount > 0 && attempted === 0) {
+    return `${pendingCount} ta buyruq lokal navbatda bor, ammo yuborish uchun outbox’dan olinmadi.`;
+  }
+
+  return undefined;
+}
+
 export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ style }) => {
   const online = useOnline();
   const status = useSyncStore((s) => s.status);
+  const errorMessage = useSyncStore((s) => s.errorMessage);
   const pendingChanges = useSyncStore((s) => s.pendingChanges);
   const failedChanges = useSyncStore((s) => s.failedChanges);
   const setPending = useSyncStore((s) => s.setPending);
@@ -64,7 +118,10 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         const diagnostics = result.diagnostics || {};
         setPending(Number(diagnostics.pendingCount || 0) + Number(diagnostics.sendingCount || 0));
         setFailed(Number(diagnostics.conflictCount || 0) + Number(diagnostics.deadLetterCount || 0));
-        setFailedOperationDetails(summarizeFailedOutboxOperations(diagnostics.failedOperations));
+        setFailedOperationDetails([
+          ...summarizeFailedOutboxOperations(diagnostics.failedOperations),
+          ...summarizeFailedOutboxOperations(diagnostics.pendingErrors)
+        ].slice(0, 5));
         return;
       }
       const result = await eAPI.OutboxPending({ companyId: activeCompanyId, limit: 1000 });
@@ -87,14 +144,34 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       const eAPI = getElectronApi();
       const runtime = await resolveElectronRuntimeMode(eAPI);
       if (!allowsManualSync(runtime) || !isCurrent() || typeof eAPI?.SyncReconnect !== 'function') return;
-      setStatus('syncing');
-      const result = await runReconnect(eAPI, activeCompanyId);
-      if (!isCurrent()) return;
-      useWorkbookStore.setState({ isServerConnected: Boolean(result?.success) });
-      await refreshPendingCount();
+      if (manual) setStatus('syncing');
+       const result = await runReconnect(eAPI, activeCompanyId);
+       if (!isCurrent()) return;
+       if (result?.success) {
+         try {
+           const refreshed = await reloadWorkbookProjection(eAPI, activeCompanyId);
+           if (!isCurrent()) return;
+           const safeProjection = preserveWorkbookProjectionDrafts(
+             refreshed,
+             useWorkbookStore.getState(),
+             isEditableInputTarget(document.activeElement)
+           );
+           const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
+           useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
+         } catch {
+           useWorkbookStore.setState({ isServerConnected: true });
+         }
+       } else {
+         useWorkbookStore.setState({ isServerConnected: false });
+       }
+       await refreshPendingCount();
       const failures = useSyncStore.getState().failedChanges;
-      setStatus(result?.success && failures === 0 ? 'synced' : 'error',
-        failures > 0 ? `${failures} ta outbox buyrug'i serverda rad etilgan yoki conflict bo'lgan.` : result?.error || result?.code);
+      const pending = useSyncStore.getState().pendingChanges;
+      const reconnectFailure = summarizeReconnectFailure(result, pending);
+      const error = failures > 0
+        ? `${failures} ta outbox buyrug'i serverda rad etilgan yoki conflict bo'lgan.`
+        : reconnectFailure;
+      setStatus(result?.success && failures === 0 && !reconnectFailure ? 'synced' : 'error', error);
     } catch (error) {
       useWorkbookStore.setState({ isServerConnected: false });
       setStatus('error', error instanceof Error ? error.message : 'VPS sync failed');
@@ -111,28 +188,39 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     return () => clearInterval(interval);
   }, [activeCompanyId]);
 
-  // Pull remote changes periodically so an idle second/third workstation sees
-  // updates without requiring a click or another local write.
+  // Poll visible clients frequently, including while an input is focused.
+  // Background polls do not show the manual-sync spinner; projection hydration
+  // preserves active form drafts.
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (online && activeCompanyId) void synchronize(false);
-    }, 15_000);
-    return () => clearInterval(timer);
+    const syncWhileVisible = () => {
+      if (!shouldRunBackgroundSync(online, Boolean(activeCompanyId), document.visibilityState === 'visible')) return;
+      void synchronize(false);
+    };
+    const timer = setInterval(syncWhileVisible, 15_000);
+    // Let the 1.2-second ticket/batch draft persistence debounce finish before
+    // reconnecting and re-reading the SQLite projection.
+    const handleFocusOut = () => window.setTimeout(syncWhileVisible, 1_500);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
   }, [activeCompanyId, online]);
 
   const hasSyncFailures = failedChanges > 0;
+  const hasSyncError = hasSyncFailures || status === 'error';
   const hasPendingChanges = pendingChanges > 0;
-  const statusColor = !online || hasSyncFailures
+  const statusColor = !online || hasSyncError
     ? '#fca5a5'
     : hasPendingChanges || !isServerConnected
       ? '#fde047'
       : '#6ee7b7';
-  const statusBackground = !online || hasSyncFailures
+  const statusBackground = !online || hasSyncError
     ? 'rgba(239, 68, 68, 0.15)'
     : hasPendingChanges || !isServerConnected
       ? 'rgba(245, 158, 11, 0.15)'
       : 'rgba(16, 185, 129, 0.15)';
-  const statusBorder = !online || hasSyncFailures
+  const statusBorder = !online || hasSyncError
     ? 'rgba(239, 68, 68, 0.35)'
     : hasPendingChanges || !isServerConnected
       ? 'rgba(251, 191, 36, 0.35)'
@@ -141,11 +229,13 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     ? 'Tarmoq uzilgan: o‘zgarishlar lokal navbatda saqlanadi.'
     : hasSyncFailures
       ? `${failedChanges} ta buyruq conflict yoki rad javobi olgan.${failedOperationDetails.length ? `\n${failedOperationDetails.join('\n')}` : ' Outbox tafsilotlarini tekshiring.'}`
-      : hasPendingChanges
-        ? `${pendingChanges} ta o‘zgarish VPSga yuborish navbatida. Qayta sinxronlash uchun bosing.`
-        : isServerConnected
-          ? 'Oxirgi tekshiruvda VPS bilan sync xatosiz yakunlandi.'
-          : 'Internet bor, lekin VPS bilan sync hali tasdiqlanmagan. Qayta sinxronlash uchun bosing.');
+      : status === 'error'
+        ? `${errorMessage || 'Sinxronlash xatosi aniqlandi.'}${failedOperationDetails.length ? `\n${failedOperationDetails.join('\n')}` : ''}`
+        : hasPendingChanges
+          ? `${pendingChanges} ta o‘zgarish VPSga yuborish navbatida. Qayta sinxronlash uchun bosing.${failedOperationDetails.length ? `\n${failedOperationDetails.join('\n')}` : ''}`
+          : isServerConnected
+            ? 'Oxirgi tekshiruvda VPS bilan sync xatosiz yakunlandi.'
+            : 'Internet bor, lekin VPS bilan sync hali tasdiqlanmagan. Qayta sinxronlash uchun bosing.');
 
   return (
     <div
@@ -173,10 +263,10 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         ? <RefreshCw size={13} className="spin-animation" color={statusColor} />
         : !online
           ? <WifiOff size={13} color={statusColor} />
-          : hasSyncFailures
+          : hasSyncError
             ? <AlertTriangle size={13} color={statusColor} />
             : <Wifi size={13} color={statusColor} />}
-      <span>{syncing ? 'Sinxron...' : !online ? 'Oflayn' : hasSyncFailures ? 'Sync xatosi' : hasPendingChanges ? 'Navbatda' : isServerConnected ? 'Sinxron' : 'VPS?'}</span>
+      <span>{syncing ? 'Sinxron...' : !online ? 'Oflayn' : hasSyncError ? 'Sync xatosi' : hasPendingChanges ? 'Navbatda' : isServerConnected ? 'Sinxron' : 'VPS?'}</span>
       {pendingChanges > 0 && (
         <span style={{ marginLeft: '2px', background: '#d97706', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
           {pendingChanges}

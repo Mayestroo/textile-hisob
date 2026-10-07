@@ -530,9 +530,9 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
         JSON.stringify(payload.archivedPattaNumbers || []),
         payloadIsClosed ? 'CLOSED' : 'ACTIVE',
         payloadIsClosed ? 1 : 0,
-        payloadIsClosed,
+        payloadIsClosed ? 1 : 0,
         payload.closedAt || now,
-        payload.isArchived === true
+        payload.isArchived === true ? 1 : 0
       );
     }
     partyValues.push(entityRevision, now, companyId, partyId);

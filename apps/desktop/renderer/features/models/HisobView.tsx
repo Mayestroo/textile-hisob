@@ -9,6 +9,98 @@ import { Search, Plus, Trash2, ArrowLeft, DollarSign } from 'lucide-react';
 const VIRTUAL_THRESHOLD = 30;
 const ROW_HEIGHT = 32;
 
+interface EditableNumericInputProps {
+  value: number;
+  min?: number;
+  onCommit: (value: number) => Promise<boolean> | boolean | void;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onDoubleClick?: React.MouseEventHandler<HTMLInputElement>;
+  placeholder?: string;
+  title?: string;
+  style?: React.CSSProperties;
+}
+
+export function parseEditableNumericDraft(raw: string, min = 0): number | null {
+  if (raw.trim() === '') return 0;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= min ? parsed : null;
+}
+
+const EditableNumericInput: React.FC<EditableNumericInputProps> = React.memo(({
+  value,
+  min = 0,
+  onCommit,
+  onFocus,
+  onDoubleClick,
+  placeholder,
+  title,
+  style
+}) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const draftRef = useRef<string | null>(null);
+  const savingRef = useRef(false);
+
+  const changeDraft = (next: string | null) => {
+    draftRef.current = next;
+    setDraft(next);
+  };
+
+  const commitDraft = async () => {
+    if (savingRef.current) return;
+    const raw = draftRef.current;
+    if (raw === null) return;
+    const parsed = parseEditableNumericDraft(raw, min);
+    if (parsed === null) return;
+    if (parsed === Number(value || 0)) {
+      changeDraft(null);
+      return;
+    }
+
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const result = await onCommit(parsed);
+      if (result !== false) changeDraft(null);
+    } catch {
+      // Keep the draft visible when the local command is rejected.
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min={min}
+      step="any"
+      value={draft ?? (value > 0 ? String(value) : '')}
+      onChange={(event) => changeDraft(event.target.value)}
+      onFocus={(event) => {
+        if (draftRef.current === null) changeDraft(value > 0 ? String(value) : '');
+        onFocus?.(event);
+      }}
+      onBlur={() => void commitDraft()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.currentTarget.blur();
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          changeDraft(null);
+          event.currentTarget.blur();
+        }
+      }}
+      onDoubleClick={onDoubleClick}
+      disabled={saving}
+      placeholder={placeholder}
+      title={title}
+      style={style}
+    />
+  );
+});
+
 interface HisobViewProps {
   model: ModelConfig;
 }
@@ -27,7 +119,7 @@ interface WorkerRowProps {
   workerTot: number;
   isSelected: boolean;
   onSelectRow: (workerId: number, toggle?: boolean) => void;
-  onQuantityChange: (workerId: number, opName: string, valStr: string) => void;
+  onQuantityChange: (workerId: number, opName: string, value: number) => Promise<boolean> | boolean | void;
   onCellFocus: (cellId: string, value: string, formula?: string) => void;
   onOpenWorkerDetail?: (workerId: number, modelId?: string, opName?: string) => void;
 }
@@ -195,10 +287,10 @@ const WorkerRow = React.memo<WorkerRowProps>(({
               }}
               title="2 marta bosing: Qaysi pattalardan kelib tushganini ko'rish"
             >
-              <input
-                type="number"
-                value={qty > 0 ? qty : ''}
-                onChange={(e) => onQuantityChange(worker.id, op.name, e.target.value)}
+              <EditableNumericInput
+                value={qty}
+                min={0}
+                onCommit={(value) => onQuantityChange(worker.id, op.name, value)}
                 onFocus={() => {
                   onCellFocus(`${qtyColLetter}${rowNum}`, String(qty));
                   onSelectRow(worker.id, false);
@@ -223,7 +315,7 @@ const WorkerRow = React.memo<WorkerRowProps>(({
                   transition: 'all 0.15s',
                   cursor: 'pointer'
                 }}
-                title="2 marta bosing: Qaysi pattalardan kelib tushganini ko'rish"
+                title="Ish sonini kiritish; ikki marta bosib kelib tushgan pattalarni ko‘ring"
               />
             </td>
           </React.Fragment>
@@ -322,9 +414,8 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
     });
   }, [model.hisobSheetName, setActiveCell]);
 
-  const handleQuantityChange = useCallback((workerId: number, opName: string, valStr: string) => {
-    const qty = Number(valStr);
-    updateHisobQuantity(model.id, workerId, opName, isNaN(qty) ? 0 : qty);
+  const handleQuantityChange = useCallback((workerId: number, opName: string, qty: number) => {
+    return updateHisobQuantity(model.id, workerId, opName, qty);
   }, [model.id, updateHisobQuantity]);
 
   // Phase 2: virtualization for large worker counts
@@ -544,12 +635,13 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                       title={`Operatsiya narxi: ${op.rate} so'm`}
                       onClick={() => handleCellFocus(`${rateColLet}2`, String(op.rate))}
                     >
-                      <input
-                        type="number"
-                        value={op.rate > 0 ? op.rate : ''}
-                        onChange={(e) => updateOperationRate(model.id, op.name, Number(e.target.value) || 0)}
+                      <EditableNumericInput
+                        value={Number(op.rate) || 0}
+                        min={0}
+                        onCommit={(rate) => updateOperationRate(model.id, op.name, rate)}
                         onFocus={() => handleCellFocus(`${rateColLet}2`, String(op.rate))}
                         placeholder=""
+                        title="Dona narxini o'zgartirish"
                         style={{
                           width: '100%',
                           height: '24px',
@@ -564,7 +656,6 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                           fontWeight: 700,
                           color: '#f59e0b'
                         }}
-                        title="Dona narxini o'zgartirish"
                       />
                     </td>
                     <td

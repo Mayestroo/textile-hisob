@@ -9,6 +9,7 @@ const {
   validateCommandPayload
 } = require('../payloadValidation.cjs');
 const { isAllowedGrandfatheredPair } = require('../../../../../packages/domain/partyPolicy.cjs');
+const { findAvailablePattaStart } = require('../../../../../packages/domain/pattaSequence.cjs');
 const { executeWorkbookOperation, appendChange } = require('../workbookOperations.cjs');
 const { acquireCompanyChangeLock } = require('../changeFeedWatermark.cjs');
 
@@ -840,14 +841,26 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
       VALUES ($1, 1) ON CONFLICT (company_id) DO NOTHING`, [companyId]);
     const sequence = await client.query(`SELECT next_patta_number FROM company_patta_sequences
       WHERE company_id = $1 FOR UPDATE`, [companyId]);
-    pattaStartNumber = Number(sequence.rows[0].next_patta_number);
+    const currentNextPattaNumber = Number(sequence.rows[0].next_patta_number);
+    const partyRanges = await client.query(`SELECT COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
+      COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number, p.status, p.is_archived
+      FROM parties p LEFT JOIN protected_party_patta_ranges r
+        ON r.company_id = p.company_id AND r.party_record_id = p.id
+      WHERE p.company_id = $1`, [companyId]);
+    pattaStartNumber = findAvailablePattaStart({
+      nextPattaNumber: currentNextPattaNumber,
+      pattaCount: Number(payload.pattaCount),
+      parties: partyRanges.rows
+    });
     pattaEndNumber = pattaStartNumber + Number(payload.pattaCount) - 1;
     if (!Number.isSafeInteger(pattaEndNumber)) {
       throw createOpError('INVALID_PATTA_COUNT', 'Patta sequence exceeds the safe integer range');
     }
     cumulativePattaCount = pattaEndNumber;
-    await client.query(`UPDATE company_patta_sequences SET next_patta_number = $2, updated_at = NOW()
-      WHERE company_id = $1`, [companyId, pattaEndNumber + 1]);
+    if (pattaStartNumber >= currentNextPattaNumber) {
+      await client.query(`UPDATE company_patta_sequences SET next_patta_number = $2, updated_at = NOW()
+        WHERE company_id = $1`, [companyId, pattaEndNumber + 1]);
+    }
   }
 
   // 4. Insert Authoritative Party Fact
