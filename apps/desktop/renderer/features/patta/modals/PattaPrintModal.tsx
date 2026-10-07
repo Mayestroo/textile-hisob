@@ -2,7 +2,7 @@ import React from 'react';
 import { Printer, X, FileText } from 'lucide-react';
 import { ModelConfig } from '../../../types/workbook';
 import { useWorkbookStore } from '../../../store/workbookStore';
-import { findAvailablePattaStart } from '../../../store/pattaBatch';
+import { buildPattaPreviewStarts } from '../../../store/pattaBatch';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
 import { formatDateOnly } from '../../../utils/formatters';
 
@@ -75,33 +75,20 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
     const list: PrintableTicket[] = [];
     const today = formatDateOnly(new Date());
 
-    // Reuse ranges released by archived parties before advancing the company counter.
-    const allocationHistory = [...(printedPartyHistory || [])];
-    let currentPattaNum = Math.max(1, Number(nextPattaNumber) || 1);
+    const pattaStarts = buildPattaPreviewStarts(
+      printedPartyHistory || [],
+      printableItems.map(({ item, workTickets }) => ({
+        modelId: item.model.id,
+        partyNumber: String(item.partyNumber),
+        pattaCount: workTickets.length
+      })),
+      nextPattaNumber,
+      reusablePattaRanges
+    );
 
-    for (const { item, workTickets, sizesSummary } of printableItems) {
-      const existingParty = allocationHistory.find((party) => !party.isClosed && party.isArchived !== true
-        && party.modelId === item.model.id && String(party.partyNumber).trim() === String(item.partyNumber).trim());
-      const pattaStart = existingParty?.pattaStartNumber
-        ?? findAvailablePattaStart(allocationHistory, Math.max(1, workTickets.length), currentPattaNum, reusablePattaRanges);
-      if (!existingParty && workTickets.length > 0) {
-        const pattaEnd = pattaStart + workTickets.length - 1;
-        allocationHistory.push({
-          id: `preview-${item.model.id}-${item.partyNumber}-${list.length}`,
-          partyNumber: String(item.partyNumber),
-          modelId: item.model.id,
-          modelName: item.model.title || item.model.name,
-          color: item.color || item.model.color || '',
-          pattaCount: workTickets.length,
-          cumulativePattaCount: pattaEnd,
-          pattaStartNumber: pattaStart,
-          pattaEndNumber: pattaEnd,
-          ishSoni: 0,
-          cumulativeIshSoni: 0,
-          printedAt: ''
-        });
-        if (pattaStart >= currentPattaNum) currentPattaNum = pattaEnd + 1;
-      }
+    for (let itemIndex = 0; itemIndex < printableItems.length; itemIndex += 1) {
+      const { item, workTickets, sizesSummary } = printableItems[itemIndex];
+      const pattaStart = pattaStarts[itemIndex];
 
       const opsList = item.model.pattaOpsOrder.map((opName) => ({
         name: opName

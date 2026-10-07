@@ -33,6 +33,37 @@ async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
   return reconciledCount;
 }
 
+async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) {
+  if (typeof syncClient?.pullChanges !== 'function') throw new Error('SYNC_PULL_UNAVAILABLE');
+  const maxPages = Number.isSafeInteger(options.maxPages) && options.maxPages > 0 ? options.maxPages : 10;
+  let pulledCount = 0;
+  let pages = 0;
+  let hasMore = true;
+  let lastPull = { items: [], nextCursor: getLocalCursor(db), hasMore: false };
+
+  while (hasMore && pages < maxPages) {
+    const currentCursor = getLocalCursor(db);
+    lastPull = await syncClient.pullChanges(currentCursor, 100);
+    const items = Array.isArray(lastPull.items) ? lastPull.items : [];
+    const applyResult = applyChangesBatch(db, companyId, items, lastPull.nextCursor ?? currentCursor, {
+      nextPattaNumber: lastPull.nextPattaNumber
+    });
+    pulledCount += applyResult.appliedCount;
+    pages += 1;
+    hasMore = lastPull.hasMore === true;
+    if (hasMore && items.length === 0) throw new Error('SYNC_PULL_CURSOR_DID_NOT_ADVANCE');
+  }
+
+  return {
+    success: true,
+    pulledCount,
+    pages,
+    hasMore,
+    finalCursor: getLocalCursor(db),
+    nextPattaNumber: lastPull.nextPattaNumber
+  };
+}
+
 /**
  * Executes the 4-Phase Pull-First Reconnect Protocol.
  * Phase 2 — Step 4: Authoritative Distributed Synchronization & Leases
@@ -143,5 +174,6 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
 
 module.exports = {
   reconcileAcceptedOutboxOperations,
+  executePullOnlyProtocol,
   executeReconnectProtocol
 };

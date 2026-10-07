@@ -101,6 +101,42 @@ export function findNextPartyNumber(history: PrintedPartyRecord[]): number {
   return next;
 }
 
+export function buildPattaPreviewStarts(
+  history: PrintedPartyRecord[],
+  requests: Array<{ modelId: string; partyNumber: string; pattaCount: number }>,
+  nextPattaNumber: number,
+  reusablePattaRanges: Array<{ start: number; end: number }> = []
+): number[] {
+  const working = [...history];
+  let highWater = Math.max(1, Number(nextPattaNumber) || 1);
+  return requests.map((request, index) => {
+    const existing = working.find((party) => !party.isClosed && party.isArchived !== true
+      && party.modelId === request.modelId && String(party.partyNumber).trim() === String(request.partyNumber).trim());
+    const count = Math.max(1, Number(request.pattaCount) || 1);
+    const start = existing?.pattaStartNumber
+      ?? findAvailablePattaStart(working, count, highWater, reusablePattaRanges);
+    if (!existing && request.pattaCount > 0) {
+      const end = start + request.pattaCount - 1;
+      working.push({
+        id: `preview-${index}`,
+        partyNumber: String(request.partyNumber),
+        modelId: request.modelId,
+        modelName: '',
+        color: '',
+        pattaCount: request.pattaCount,
+        cumulativePattaCount: end,
+        pattaStartNumber: start,
+        pattaEndNumber: end,
+        ishSoni: 0,
+        cumulativeIshSoni: 0,
+        printedAt: ''
+      });
+      if (start >= highWater) highWater = end + 1;
+    }
+    return start;
+  });
+}
+
 export function buildBatchSettingsPayload(
   state: BatchState,
   pattaBatchConfigs: Record<string, ModelPattaBatchConfig> = state.pattaBatchConfigs,

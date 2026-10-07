@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +7,7 @@ const databaseManager = require('../database/databaseManager.cjs');
 const { insertOutboxOperation, getOperation } = require('../database/outboxManager.cjs');
 const { canonicalStringify, computePayloadHash } = require('../database/canonicalPayload.cjs');
 const { isDependencySatisfied } = require('./outboxDispatcher.cjs');
-const { executeReconnectProtocol, reconcileAcceptedOutboxOperations } = require('./reconnectManager.cjs');
+const { executePullOnlyProtocol, executeReconnectProtocol, reconcileAcceptedOutboxOperations } = require('./reconnectManager.cjs');
 
 describe('reconnect accepted-operation reconciliation', () => {
   let userData: string;
@@ -72,6 +72,33 @@ describe('reconnect accepted-operation reconciliation', () => {
       { operationId: 'op-dependent', payloadHash: getOperation(db, companyId, 'op-dependent').payload_hash },
       { operationId: 'op-hash-mismatch', payloadHash: mismatchHash }
     ]]);
+  });
+
+  it('pulls every available change-feed page without dispatching local outbox operations', async () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const cursors: Array<string | number> = [];
+    const syncClient = {
+      pullChanges: async (cursor: string | number) => {
+        cursors.push(cursor);
+        if (cursors.length === 1) {
+          return {
+            items: [{
+              changeId: '10', companyId, entityType: 'party_history', entityId: companyId,
+              changeType: 'UPDATE', payload: { archivedAt: '2026-10-07T10:00:00.000Z' }
+            }],
+            nextCursor: '10', hasMore: true, nextPattaNumber: 13
+          };
+        }
+        return { items: [], nextCursor: '11', hasMore: false, nextPattaNumber: 13 };
+      },
+      pushOperations: vi.fn()
+    };
+
+    const result = await executePullOnlyProtocol(db, companyId, syncClient);
+
+    expect(cursors).toEqual([0, 10]);
+    expect(result).toMatchObject({ pulledCount: 1, pages: 2, hasMore: false, finalCursor: 11, nextPattaNumber: 13 });
+    expect(syncClient.pushOperations).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -571,8 +571,7 @@ if (isSyncEnabled) {
   const { SyncClient } = require('./sync/syncClient.cjs');
   const { ensureCompanyBootstrapped } = require('./sync/bootstrapInitializer.cjs');
   const { dispatchOutbox } = require('./sync/outboxDispatcher.cjs');
-  const { applyChangesBatch, getLocalCursor } = require('./sync/changeFeedApplier.cjs');
-  const { executeReconnectProtocol } = require('./sync/reconnectManager.cjs');
+  const { executePullOnlyProtocol, executeReconnectProtocol } = require('./sync/reconnectManager.cjs');
   const { acquireAndStoreLease, consumeNextPartyNumber } = require('./sync/leaseManager.cjs');
 
   function createSyncClient(compId, withOperator = true) {
@@ -641,15 +640,9 @@ if (isSyncEnabled) {
     try {
       const ready = assertRuntimeReady(targetCompanyId);
       const compId = ready.companyId;
-      const userData = app.getPath('userData');
-      const db = ready.db;
       const syncClient = createSyncClient(compId, false);
-      const cursor = getLocalCursor(db);
-      const pullRes = await syncClient.pullChanges(cursor, 100);
-      const applyRes = applyChangesBatch(db, compId, pullRes.items, pullRes.nextCursor, {
-        nextPattaNumber: pullRes.nextPattaNumber
-      });
-      return { success: true, pull: pullRes, applied: applyRes };
+      const result = await executePullOnlyProtocol(ready.db, compId, syncClient, { maxPages: 10 });
+      return { success: true, result };
     } catch (err) {
       return ErrorResponse(err, 'SYNC_PULL_FAILED');
     }

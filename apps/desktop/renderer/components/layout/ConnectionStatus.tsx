@@ -6,8 +6,10 @@ import { useWorkbookStore } from '../../store/workbookStore';
 import { isValidCompanyId } from '../../store/helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode, ElectronRuntimeModeResult } from '../../store/runtimeMode';
 import { captureSessionIdentity, isSessionCurrent } from '../../store/sessionGuard';
-import { preserveWorkbookProjectionDrafts, reloadWorkbookProjection, runReconnect } from '../../store/businessMutations';
+import { preserveWorkbookProjectionDrafts, reloadWorkbookProjection, runReconnect, runSyncPull } from '../../store/businessMutations';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
+
+export const BACKGROUND_CHANGE_POLL_INTERVAL_MS = 2_000;
 
 export function resolveManualSyncCompany(authCompanyId: unknown, licenseCompanyId: unknown): string | undefined {
   if (!isValidCompanyId(licenseCompanyId)) return undefined;
@@ -102,6 +104,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     ? 'Sinxronizatsiya bloklandi: autentifikatsiya va litsenziya korxonalari mos emas.'
     : null;
   const syncInFlight = useRef(false);
+  const pullInFlight = useRef(false);
 
   const refreshPendingCount = async () => {
     const eAPI = getElectronApi();
@@ -180,6 +183,53 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     }
   };
 
+  const pullRemoteChanges = async () => {
+    if (!online || !isValidCompanyId(activeCompanyId) || syncInFlight.current || pullInFlight.current) return;
+    pullInFlight.current = true;
+    const initialLicenseStatus = useWorkbookStore.getState().licenseStatus;
+    const session = captureSessionIdentity(activeCompanyId);
+    const isCurrent = () => useWorkbookStore.getState().licenseStatus === initialLicenseStatus
+      && isSessionCurrent(session, useWorkbookStore.getState().licenseStatus?.companyId || useAuthStore.getState().companyId)
+      && useWorkbookStore.getState().licenseStatus?.companyId === activeCompanyId
+      && (!useAuthStore.getState().companyId || useAuthStore.getState().companyId === activeCompanyId);
+    try {
+      const eAPI = getElectronApi();
+      const runtime = await resolveElectronRuntimeMode(eAPI);
+      if (!allowsManualSync(runtime) || !isCurrent() || typeof eAPI?.SyncPull !== 'function') return;
+
+      const response = await runSyncPull(eAPI, activeCompanyId);
+      if (!isCurrent()) return;
+      if (response?.success !== true || response.result?.success !== true) {
+        useWorkbookStore.setState({ isServerConnected: false });
+        return;
+      }
+
+      const result = response.result;
+      const pulledCount = Number(result.pulledCount ?? result.applied?.appliedCount ?? 0);
+      const nextPattaNumber = Number(result.nextPattaNumber ?? result.pull?.nextPattaNumber);
+      const projectionChanged = pulledCount > 0
+        || (Number.isSafeInteger(nextPattaNumber) && nextPattaNumber !== useWorkbookStore.getState().nextPattaNumber);
+      if (!projectionChanged) {
+        useWorkbookStore.setState({ isServerConnected: true });
+        return;
+      }
+
+      const refreshed = await reloadWorkbookProjection(eAPI, activeCompanyId);
+      if (!isCurrent()) return;
+      const safeProjection = preserveWorkbookProjectionDrafts(
+        refreshed,
+        useWorkbookStore.getState(),
+        isEditableInputTarget(document.activeElement)
+      );
+      const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
+      useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
+    } catch {
+      if (isCurrent()) useWorkbookStore.setState({ isServerConnected: false });
+    } finally {
+      pullInFlight.current = false;
+    }
+  };
+
   const handleManualSync = () => synchronize(true);
 
   useEffect(() => {
@@ -188,22 +238,38 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     return () => clearInterval(interval);
   }, [activeCompanyId]);
 
-  // Poll visible clients frequently, including while an input is focused.
-  // Background polls do not show the manual-sync spinner; projection hydration
-  // preserves active form drafts.
+  // Periodically run the full protocol to flush/recover local outbox operations.
   useEffect(() => {
     const syncWhileVisible = () => {
       if (!shouldRunBackgroundSync(online, Boolean(activeCompanyId), document.visibilityState === 'visible')) return;
       void synchronize(false);
     };
     const timer = setInterval(syncWhileVisible, 15_000);
-    // Let the 1.2-second ticket/batch draft persistence debounce finish before
-    // reconnecting and re-reading the SQLite projection.
+    // Let the ticket/batch draft persistence debounce finish before the full reconnect.
     const handleFocusOut = () => window.setTimeout(syncWhileVisible, 1_500);
     document.addEventListener('focusout', handleFocusOut);
     return () => {
       clearInterval(timer);
       document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, [activeCompanyId, online]);
+
+  // Pull-only polling keeps other PCs' committed changes visible within two
+  // seconds without dispatching local outbox work on every poll.
+  useEffect(() => {
+    const pullWhileVisible = () => {
+      if (!shouldRunBackgroundSync(online, Boolean(activeCompanyId), document.visibilityState === 'visible')) return;
+      void pullRemoteChanges();
+    };
+    const timer = setInterval(pullWhileVisible, BACKGROUND_CHANGE_POLL_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') pullWhileVisible();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    pullWhileVisible();
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [activeCompanyId, online]);
 

@@ -114,15 +114,24 @@ export function requestReconnect(eAPI: any, companyId: string) {
   });
 }
 
-export function runReconnect(eAPI: any, companyId: string): Promise<any> {
-  if (typeof eAPI?.SyncReconnect !== 'function') return Promise.resolve({ success: false, code: '_SYNC_UNAVAILABLE' });
+function enqueueCompanySync(companyId: string, operation: () => Promise<any>): Promise<any> {
   const previous = reconnectQueues.get(companyId) || Promise.resolve();
-  const next = previous.catch(() => {}).then(() => eAPI.SyncReconnect(companyId));
+  const next = previous.catch(() => {}).then(operation);
   reconnectQueues.set(companyId, next);
   void next.finally(() => {
     if (reconnectQueues.get(companyId) === next) reconnectQueues.delete(companyId);
   }).catch(() => {});
   return next;
+}
+
+export function runReconnect(eAPI: any, companyId: string): Promise<any> {
+  if (typeof eAPI?.SyncReconnect !== 'function') return Promise.resolve({ success: false, code: '_SYNC_UNAVAILABLE' });
+  return enqueueCompanySync(companyId, () => eAPI.SyncReconnect(companyId));
+}
+
+export function runSyncPull(eAPI: any, companyId: string): Promise<any> {
+  if (typeof eAPI?.SyncPull !== 'function') return Promise.resolve({ success: false, code: '_SYNC_PULL_UNAVAILABLE' });
+  return enqueueCompanySync(companyId, () => eAPI.SyncPull(companyId));
 }
 
 function isCompanySessionCurrent(get: () => WorkbookStore, session: ReturnType<typeof captureSessionIdentity>, companyId: string, initialLicenseStatus: WorkbookStore['licenseStatus']) {

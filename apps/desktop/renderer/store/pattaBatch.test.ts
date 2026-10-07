@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildBatchSettingsPayload, buildBatchPrintMutation, findNextPartyNumber } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPattaPreviewStarts, findNextPartyNumber } from './pattaBatch';
 import { buildPartyWorkSummary } from '../domain/pattaQuantity';
 
 describe(' patta batch command payloads', () => {
@@ -119,5 +119,18 @@ describe(' patta batch command payloads', () => {
       { id: 'active', partyNumber: '2', modelId: 'model-a', modelName: 'Model A', color: 'Qora', pattaCount: 1, cumulativePattaCount: 2,
         ishSoni: 0, cumulativeIshSoni: 0, printedAt: '' }
     ])).toBe(1);
+  });
+
+  it('previews archived patta ranges before the high-water sequence without overlapping active ranges', () => {
+    const starts = buildPattaPreviewStarts([{
+      id: 'active', partyNumber: '2', modelId: 'model-b', modelName: 'Model B', color: 'Qora',
+      pattaCount: 12, cumulativePattaCount: 24, pattaStartNumber: 13, pattaEndNumber: 24,
+      ishSoni: 0, cumulativeIshSoni: 0, printedAt: ''
+    }], [
+      { modelId: 'model-a', partyNumber: '1', pattaCount: 12 },
+      { modelId: 'model-c', partyNumber: '3', pattaCount: 2 }
+    ], 25, [{ start: 1, end: 12 }]);
+
+    expect(starts).toEqual([1, 25]);
   });
 });

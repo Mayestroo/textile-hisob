@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allowsManualSync, isEditableInputTarget, resolveManualSyncCompany, shouldRunBackgroundSync, summarizeFailedOutboxOperations, summarizeReconnectFailure } from './ConnectionStatus';
+import { allowsManualSync, BACKGROUND_CHANGE_POLL_INTERVAL_MS, isEditableInputTarget, resolveManualSyncCompany, shouldRunBackgroundSync, summarizeFailedOutboxOperations, summarizeReconnectFailure } from './ConnectionStatus';
 
 describe('manual sync company authority', () => {
   it('fails closed when auth and licensed companies disagree', () => {
@@ -37,6 +37,10 @@ describe('manual sync company authority', () => {
     expect(shouldRunBackgroundSync(true, true, false)).toBe(false);
     expect(shouldRunBackgroundSync(false, true, true)).toBe(false);
     expect(shouldRunBackgroundSync(true, false, true)).toBe(false);
+  });
+
+  it('uses a two-second foreground change-feed poll interval', () => {
+    expect(BACKGROUND_CHANGE_POLL_INTERVAL_MS).toBe(2_000);
   });
 
   it('summarizes failed outbox commands without exposing their payloads', () => {

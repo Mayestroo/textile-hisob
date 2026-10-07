@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import {
   X,
@@ -67,7 +67,7 @@ export const PeriodManagerModal: React.FC = () => {
   const [serverArchives, setServerArchives] = useState<ArchiveItem[]>([]);
   const [searchHistory, setSearchHistory] = useState('');
 
-  const fetchArchives = async () => {
+  const fetchArchives = useCallback(async () => {
     const eAPI = getElectronApi();
     const runtime = await resolveElectronRuntimeMode(eAPI);
     if (runtime.mode === 'sync') {
@@ -103,21 +103,31 @@ export const PeriodManagerModal: React.FC = () => {
     } catch (e) {
       console.warn('Could not fetch server archives', e);
     }
-  };
+  }, [companyId]);
+
+  // These are modal-local drafts. A remote projection may replace the current
+  // period ID while the modal is open, but must not overwrite dates being edited.
+  useEffect(() => {
+    if (modalType !== 'period_manager') return;
+    const today = formatDateIso();
+    setCloseDate(today);
+    setNextPeriodStartDate(today);
+    setNextPeriodName(getUzbekMonthName(today));
+    setIsAutoName(true);
+    setCurrentEditName(currentPeriod.name || getUzbekMonthName(currentPeriod.startDate));
+    setCurrentEditStartDate(currentPeriod.startDate || today);
+    setIsEditingCurrent(false);
+  }, [modalType]);
 
   useEffect(() => {
-    if (modalType === 'period_manager') {
-      const today = formatDateIso();
-      setCloseDate(today);
-      setNextPeriodStartDate(today);
-      setNextPeriodName(getUzbekMonthName(today));
-      setIsAutoName(true);
-      setCurrentEditName(currentPeriod.name || getUzbekMonthName(currentPeriod.startDate));
-      setCurrentEditStartDate(currentPeriod.startDate || today);
-      setIsEditingCurrent(false);
-      fetchArchives();
-    }
-  }, [modalType, currentPeriod.id]);
+    if (modalType === 'period_manager') void fetchArchives();
+  }, [modalType, fetchArchives]);
+
+  useEffect(() => {
+    if (modalType !== 'period_manager' || isEditingCurrent) return;
+    setCurrentEditName(currentPeriod.name || getUzbekMonthName(currentPeriod.startDate));
+    setCurrentEditStartDate(currentPeriod.startDate || formatDateIso());
+  }, [modalType, currentPeriod.id, currentPeriod.name, currentPeriod.startDate, isEditingCurrent]);
 
   // When close date changes, auto-suggest next start date & name if user hasn't typed custom name
   const handleCloseDateChange = (val: string) => {
