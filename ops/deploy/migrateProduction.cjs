@@ -96,6 +96,7 @@ async function applyMigrations(migrator, options = {}) {
       ? schemaPath
       : path.join(migrationDirectory, filename);
     await migrator.query(readFile(sqlPath));
+    if (index > 0) process.stdout.write(`POSTGRES_MIGRATION_APPLIED version=${index + 1}\n`);
   }
 }
 
@@ -157,7 +158,10 @@ async function main(env = process.env) {
 if (require.main === module) {
   main().catch((error) => {
     const code = error?.code || 'NOVDA_PRODUCTION_SCHEMA_FAILED';
-    process.stderr.write(`${code}\n`);
+    const problems = code === 'POSTGRES_RELEASE_INTEGRITY_FAILED' && Array.isArray(error?.details?.problems)
+      ? ` checks=${JSON.stringify(error.details.problems)}`
+      : '';
+    process.stderr.write(`${code}${problems}\n`);
     process.exitCode = 1;
   });
 }

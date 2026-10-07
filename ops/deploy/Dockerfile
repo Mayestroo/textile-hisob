@@ -13,6 +13,7 @@ COPY ops/deploy/importSqliteBaseline.cjs ./ops/deploy/importSqliteBaseline.cjs
 COPY ops/deploy/verifyProductionDatabase.cjs ./ops/deploy/verifyProductionDatabase.cjs
 COPY packages/domain/periodWriteGuard.cjs ./packages/domain/periodWriteGuard.cjs
 COPY packages/domain/partyPolicy.cjs ./packages/domain/partyPolicy.cjs
+COPY packages/domain/pattaSequence.cjs ./packages/domain/pattaSequence.cjs
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
