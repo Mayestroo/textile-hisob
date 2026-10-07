@@ -168,7 +168,8 @@ if (require.main === module) {
         ownerDecisionCount: baseline.ownerDecisionCount,
         ownerExclusionRows: baseline.ownerExclusionRows,
         ownerScopeMismatchRows: baseline.ownerScopeMismatchRows,
-        ownerDecisionQuantityMismatchCount: baseline.ownerDecisionQuantityMismatchCount
+        ownerDecisionMismatchCount: baseline.ownerDecisionMismatchCount,
+        retrospectiveEvidenceMismatchCount: baseline.retrospectiveEvidenceMismatchCount
       })}`
       : '';
     process.stderr.write(`${code}${problems}${baselineState}\n`);

@@ -125,6 +125,8 @@ async function verifyPostgresReleaseState(client) {
       ownerExclusionRows: 0,
       ownerExcludedQuantity: 0,
       ownerScopeMismatchRows: 0,
+      ownerDecisionMismatchCount: 0,
+      retrospectiveEvidenceMismatchCount: 0,
       ownerDecisionQuantityMismatchCount: 0,
       ownerDecisionCount: 0,
       scopePreserved: true
@@ -465,6 +467,7 @@ async function verifyPostgresReleaseState(client) {
   report.baseline.ownerExcludedQuantity = Number(baselineRow.owner_excluded_quantity || 0);
   report.baseline.ownerScopeMismatchRows = asCount(baselineRow.owner_scope_mismatch_rows);
   report.baseline.ownerDecisionQuantityMismatchCount = asCount(baselineRow.owner_decision_quantity_mismatch_count);
+  report.baseline.ownerDecisionMismatchCount = report.baseline.ownerDecisionQuantityMismatchCount;
   report.baseline.ownerDecisionCount = asCount(baselineRow.owner_decision_count);
 
   const retrospectiveBaselineRows = await rowsFor('retrospective clean-baseline evidence', `
@@ -544,10 +547,13 @@ async function verifyPostgresReleaseState(client) {
       || currentAdjustmentOperationCount !== Number(row.accepted_production_adjustment_operations)
       || Number(row.baseline_exclusion_rows) !== 0;
   });
-  report.baseline.ownerDecisionQuantityMismatchCount += retrospectiveBaselineMismatches.length;
+  report.baseline.retrospectiveEvidenceMismatchCount = retrospectiveBaselineMismatches.length;
+  report.baseline.ownerDecisionQuantityMismatchCount += report.baseline.retrospectiveEvidenceMismatchCount;
   report.baseline.scopePreserved = report.baseline.ownerScopeMismatchRows === 0
     && report.baseline.ownerDecisionQuantityMismatchCount === 0;
-  if (!report.baseline.scopePreserved) problems.push('owner-approved baseline exclusion category, source, or source-scoped quantity changed');
+  if (report.baseline.ownerScopeMismatchRows > 0) problems.push('owner-approved baseline exclusion rows do not match their persisted decision');
+  if (report.baseline.ownerDecisionMismatchCount > 0) problems.push('owner-approved baseline decision metadata, exclusion count, or quantity mismatches recorded exclusions');
+  if (report.baseline.retrospectiveEvidenceMismatchCount > 0) problems.push('retrospective owner baseline evidence no longer reconciles with current server rows');
 
   if (problems.length) throw integrityFailure(problems, report);
   return report;
