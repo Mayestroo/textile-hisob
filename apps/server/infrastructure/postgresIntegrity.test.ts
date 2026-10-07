@@ -291,7 +291,7 @@ describe('PostgreSQL release-integrity evidence', () => {
     expect(baselineQuery).toContain("scope_json->>'excludedEvidenceRowCount'");
   });
 
-  it('accepts complete retrospective import evidence with no excluded business rows', async () => {
+  it('accepts current operations after a complete retrospective import snapshot', async () => {
     const sourceSnapshotHash = 'b'.repeat(64);
     const client = createEvidenceClient({
       baseline: [{
@@ -316,8 +316,8 @@ describe('PostgreSQL release-integrity evidence', () => {
             postgresSchemaMigrations: [16, 17],
             baselineTicketIds: ['baseline-ticket'],
             baselineTicketEntries: 2,
-            currentPostImportAcceptedSubmitTicketOperations: 2,
-            currentTicketRows: 3,
+            currentPostImportAcceptedSubmitTicketOperations: 1,
+            currentTicketRows: 2,
             baselineProductionAdjustments: 1,
             currentAcceptedProductionAdjustmentOperations: 1,
             currentProductionAdjustments: 2
@@ -325,7 +325,7 @@ describe('PostgreSQL release-integrity evidence', () => {
         },
         current_ticket_rows: '3', present_baseline_ticket_rows: '1',
         present_baseline_ticket_entries: '2', accepted_submit_operations: '2',
-        current_production_adjustments: '2', accepted_production_adjustment_operations: '1',
+        current_production_adjustments: '3', accepted_production_adjustment_operations: '2',
         baseline_exclusion_rows: '0'
       }]
     });

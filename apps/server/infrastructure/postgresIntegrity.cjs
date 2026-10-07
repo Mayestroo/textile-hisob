@@ -516,10 +516,14 @@ async function verifyPostgresReleaseState(client) {
     const baselineTicketCount = Number(sourceCounts.tickets);
     const baselineEntryCount = Number(sourceCounts.ticket_entries);
     const baselineAdjustmentCount = Number(sourceCounts.production_adjustments);
-    const currentSubmitCount = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
-    const currentAdjustmentOperationCount = Number(evidence.currentAcceptedProductionAdjustmentOperations);
-    const currentTicketCount = Number(evidence.currentTicketRows);
-    const currentAdjustmentCount = Number(evidence.currentProductionAdjustments);
+    const recordedSubmitSnapshot = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
+    const recordedAdjustmentOperationSnapshot = Number(evidence.currentAcceptedProductionAdjustmentOperations);
+    const recordedTicketSnapshot = Number(evidence.currentTicketRows);
+    const recordedAdjustmentSnapshot = Number(evidence.currentProductionAdjustments);
+    const liveSubmitCount = Number(row.accepted_submit_operations);
+    const liveAdjustmentOperationCount = Number(row.accepted_production_adjustment_operations);
+    const liveTicketCount = Number(row.current_ticket_rows);
+    const liveAdjustmentCount = Number(row.current_production_adjustments);
     return {
       evidencePresent: true,
       decisionTypeMatches: scope.decisionType === row.decision,
@@ -530,19 +534,18 @@ async function verifyPostgresReleaseState(client) {
       migrationEvidenceValid: Array.isArray(evidence.postgresSchemaMigrations)
         && [16, 17].every((version) => evidence.postgresSchemaMigrations.includes(version)),
       sourceCountsValid: [baselineTicketCount, baselineEntryCount, baselineAdjustmentCount,
-        currentSubmitCount, currentAdjustmentOperationCount, currentTicketCount, currentAdjustmentCount]
+        recordedSubmitSnapshot, recordedAdjustmentOperationSnapshot, recordedTicketSnapshot,
+        recordedAdjustmentSnapshot, liveSubmitCount, liveAdjustmentOperationCount, liveTicketCount, liveAdjustmentCount]
         .every(validNonnegativeInteger),
       baselineTicketIdsMatchSource: baselineTicketIds.length === baselineTicketCount,
       baselineTicketEntriesMatchSource: Number(evidence.baselineTicketEntries) === baselineEntryCount,
       baselineAdjustmentsMatchSource: Number(evidence.baselineProductionAdjustments) === baselineAdjustmentCount,
-      currentTicketsMatchRecordedEvidence: currentTicketCount === Number(row.current_ticket_rows),
-      currentTicketsMatchAcceptedSubmits: currentTicketCount === baselineTicketCount + currentSubmitCount,
+      recordedTicketSnapshotMatchesImportEvidence: recordedTicketSnapshot === baselineTicketCount + recordedSubmitSnapshot,
+      recordedAdjustmentSnapshotMatchesImportEvidence: recordedAdjustmentSnapshot === baselineAdjustmentCount + recordedAdjustmentOperationSnapshot,
+      currentTicketsMatchLiveOperations: liveTicketCount === baselineTicketCount + liveSubmitCount,
       presentBaselineTicketsMatchSource: Number(row.present_baseline_ticket_rows) === baselineTicketCount,
       presentBaselineEntriesMatchSource: Number(row.present_baseline_ticket_entries) === baselineEntryCount,
-      acceptedSubmitsMatchDedupRows: currentSubmitCount === Number(row.accepted_submit_operations),
-      currentAdjustmentsMatchRecordedEvidence: currentAdjustmentCount === Number(row.current_production_adjustments),
-      currentAdjustmentsMatchAcceptedOperations: currentAdjustmentCount === baselineAdjustmentCount + currentAdjustmentOperationCount,
-      acceptedAdjustmentOperationsMatchDedupRows: currentAdjustmentOperationCount === Number(row.accepted_production_adjustment_operations),
+      currentAdjustmentsMatchLiveOperations: liveAdjustmentCount === baselineAdjustmentCount + liveAdjustmentOperationCount,
       noBaselineExclusionRows: Number(row.baseline_exclusion_rows) === 0
     };
   });
@@ -556,10 +559,14 @@ async function verifyPostgresReleaseState(client) {
     const baselineTicketCount = Number(sourceCounts.tickets);
     const baselineEntryCount = Number(sourceCounts.ticket_entries);
     const baselineAdjustmentCount = Number(sourceCounts.production_adjustments);
-    const currentSubmitCount = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
-    const currentAdjustmentOperationCount = Number(evidence.currentAcceptedProductionAdjustmentOperations);
-    const currentTicketCount = Number(evidence.currentTicketRows);
-    const currentAdjustmentCount = Number(evidence.currentProductionAdjustments);
+    const recordedSubmitSnapshot = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
+    const recordedAdjustmentOperationSnapshot = Number(evidence.currentAcceptedProductionAdjustmentOperations);
+    const recordedTicketSnapshot = Number(evidence.currentTicketRows);
+    const recordedAdjustmentSnapshot = Number(evidence.currentProductionAdjustments);
+    const liveSubmitCount = Number(row.accepted_submit_operations);
+    const liveAdjustmentOperationCount = Number(row.accepted_production_adjustment_operations);
+    const liveTicketCount = Number(row.current_ticket_rows);
+    const liveAdjustmentCount = Number(row.current_production_adjustments);
     return scope.decisionType !== row.decision
       || scope.businessRowsReimported !== false
       || scope.localOutboxImported !== false
@@ -573,21 +580,23 @@ async function verifyPostgresReleaseState(client) {
       || !validNonnegativeInteger(baselineTicketCount)
       || !validNonnegativeInteger(baselineEntryCount)
       || !validNonnegativeInteger(baselineAdjustmentCount)
-      || !validNonnegativeInteger(currentSubmitCount)
-      || !validNonnegativeInteger(currentAdjustmentOperationCount)
-      || !validNonnegativeInteger(currentTicketCount)
-      || !validNonnegativeInteger(currentAdjustmentCount)
+      || !validNonnegativeInteger(recordedSubmitSnapshot)
+      || !validNonnegativeInteger(recordedAdjustmentOperationSnapshot)
+      || !validNonnegativeInteger(recordedTicketSnapshot)
+      || !validNonnegativeInteger(recordedAdjustmentSnapshot)
+      || !validNonnegativeInteger(liveSubmitCount)
+      || !validNonnegativeInteger(liveAdjustmentOperationCount)
+      || !validNonnegativeInteger(liveTicketCount)
+      || !validNonnegativeInteger(liveAdjustmentCount)
       || baselineTicketIds.length !== baselineTicketCount
       || Number(evidence.baselineTicketEntries) !== baselineEntryCount
       || Number(evidence.baselineProductionAdjustments) !== baselineAdjustmentCount
-      || currentTicketCount !== Number(row.current_ticket_rows)
-      || currentTicketCount !== baselineTicketCount + currentSubmitCount
+      || recordedTicketSnapshot !== baselineTicketCount + recordedSubmitSnapshot
+      || recordedAdjustmentSnapshot !== baselineAdjustmentCount + recordedAdjustmentOperationSnapshot
+      || liveTicketCount !== baselineTicketCount + liveSubmitCount
       || Number(row.present_baseline_ticket_rows) !== baselineTicketCount
       || Number(row.present_baseline_ticket_entries) !== baselineEntryCount
-      || currentSubmitCount !== Number(row.accepted_submit_operations)
-      || currentAdjustmentCount !== Number(row.current_production_adjustments)
-      || currentAdjustmentCount !== baselineAdjustmentCount + currentAdjustmentOperationCount
-      || currentAdjustmentOperationCount !== Number(row.accepted_production_adjustment_operations)
+      || liveAdjustmentCount !== baselineAdjustmentCount + liveAdjustmentOperationCount
       || Number(row.baseline_exclusion_rows) !== 0;
   });
   report.baseline.retrospectiveEvidenceMismatchCount = retrospectiveBaselineMismatches.length;
