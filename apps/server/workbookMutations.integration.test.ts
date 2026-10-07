@@ -436,6 +436,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect((await pool!.query(`SELECT patta_start_number, patta_end_number FROM parties
       WHERE company_id = $1 AND id = 'party_reused_archive_range'`, [companyId])).rows)
       .toEqual([{ patta_start_number: 1, patta_end_number: 2 }]);
+    await pool!.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1
+      WHERE company_id = $1 AND id = 'party_reused_archive_range'`, [companyId]);
   });
 
   it('rolls back every party when a completed batch contains an invalid model reference', async () => {
