@@ -2,6 +2,8 @@
 
 const { resolveApiBaseUrl } = require('../apiConfig.cjs');
 
+const DEFAULT_MAX_OPERATION_BATCH_BYTES = 48 * 1024;
+
 /**
  * Isolated Authoritative Sync Client for Electron Main.
  * Phase 2 — Step 4: Authoritative Distributed Synchronization & Leases
@@ -35,6 +37,10 @@ class SyncClient {
     this.deviceId = config.deviceId || 'electron-workstation';
     this.clientVersion = config.clientVersion || '1.0.0';
     this.timeoutMs = config.timeoutMs || 10000;
+    this.maxOperationBatchBytes = Number.isSafeInteger(config.maxOperationBatchBytes)
+      && config.maxOperationBatchBytes > 0
+      ? config.maxOperationBatchBytes
+      : DEFAULT_MAX_OPERATION_BATCH_BYTES;
   }
 
   getHeaders() {
@@ -86,11 +92,35 @@ class SyncClient {
 
     const results = [];
     let standardOperations = [];
+    const requestBytes = (batch) => Buffer.byteLength(JSON.stringify({ operations: batch }), 'utf8');
+    const pushStandardBatch = async (batch) => {
+      if (!batch.length) return;
+      try {
+        const response = await this.pushOperationBatch(batch);
+        results.push(...response.results);
+      } catch (error) {
+        if (error?.statusCode === 413) {
+          if (batch.length > 1) {
+            const split = Math.ceil(batch.length / 2);
+            await pushStandardBatch(batch.slice(0, split));
+            await pushStandardBatch(batch.slice(split));
+            return;
+          }
+          results.push({
+            operationId: batch[0].operationId,
+            status: 'REJECTED',
+            error: { code: 'REQUEST_PAYLOAD_TOO_LARGE', message: 'A single operation exceeds the server request-size limit' }
+          });
+          return;
+        }
+        throw error;
+      }
+    };
     const flushStandardOperations = async () => {
       if (!standardOperations.length) return;
-      const response = await this.pushOperationBatch(standardOperations);
-      if (Array.isArray(response?.results)) results.push(...response.results);
+      const batch = standardOperations;
       standardOperations = [];
+      await pushStandardBatch(batch);
     };
 
     for (const operation of operations) {
@@ -98,7 +128,14 @@ class SyncClient {
         await flushStandardOperations();
         results.push(await this.createWorker(operation));
       } else {
+        if (standardOperations.length > 0
+          && requestBytes([...standardOperations, operation]) > this.maxOperationBatchBytes) {
+          await flushStandardOperations();
+        }
         standardOperations.push(operation);
+        if (requestBytes(standardOperations) >= this.maxOperationBatchBytes) {
+          await flushStandardOperations();
+        }
       }
     }
     await flushStandardOperations();
@@ -160,10 +197,50 @@ class SyncClient {
       );
     }
 
+    if (res.status === 413) {
+      throw new SyncError(
+        data.error?.message || 'Operation batch exceeds the server request-size limit',
+        data.error?.code || 'REQUEST_BODY_TOO_LARGE',
+        res.status,
+        data.error
+      );
+    }
+
     if (!res.ok && res.status >= 500) {
       const err = new SyncNetworkError(`Server returned HTTP ${res.status}: ${data.error?.message || 'Internal error'}`);
       err.statusCode = res.status;
       throw err;
+    }
+
+    if (!res.ok) {
+      throw new SyncError(
+        data.error?.message || `Operation batch failed with HTTP ${res.status}`,
+        data.error?.code || `OPERATION_HTTP_${res.status}`,
+        res.status,
+        data.error
+      );
+    }
+
+    if (data.success !== true || !Array.isArray(data.results)) {
+      throw new SyncError(
+        data.error?.message || 'Server response did not include per-operation results',
+        data.error?.code || 'INVALID_OPERATION_BATCH_RESPONSE',
+        502,
+        data.error
+      );
+    }
+
+    const expectedIds = new Set(operations.map((operation) => String(operation.operationId)));
+    const resultIds = new Set();
+    for (const result of data.results) {
+      const operationId = typeof result?.operationId === 'string' ? result.operationId : '';
+      if (!expectedIds.has(operationId) || resultIds.has(operationId)) {
+        throw new SyncError('Server returned duplicate or unexpected operation results', 'INVALID_OPERATION_BATCH_RESPONSE', 502);
+      }
+      resultIds.add(operationId);
+    }
+    if (resultIds.size !== expectedIds.size) {
+      throw new SyncError('Server returned an incomplete operation-results batch', 'INCOMPLETE_OPERATION_BATCH_RESPONSE', 502);
     }
 
     return data;
