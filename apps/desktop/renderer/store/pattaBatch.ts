@@ -101,6 +101,21 @@ export function findNextPartyNumber(history: PrintedPartyRecord[]): number {
   return next;
 }
 
+export function removePattaSizeFromBatchConfigs(
+  configs: Record<string, ModelPattaBatchConfig>,
+  sizeName: string
+): Record<string, ModelPattaBatchConfig> {
+  const normalized = String(sizeName || '').trim().toUpperCase();
+  return Object.fromEntries(Object.entries(configs || {}).map(([modelId, config]) => [
+    modelId,
+    {
+      ...config,
+      sizes: Object.fromEntries(Object.entries(config.sizes || {})
+        .filter(([size]) => size.trim().toUpperCase() !== normalized))
+    }
+  ]));
+}
+
 export function buildPattaPreviewStarts(
   history: PrintedPartyRecord[],
   requests: Array<{ modelId: string; partyNumber: string; pattaCount: number }>,

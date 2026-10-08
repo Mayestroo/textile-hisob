@@ -44,6 +44,34 @@ describe('workbook store  patta boundary', () => {
     useWorkbookStore.setState(previousState, true);
   });
 
+  it('deletes custom size labels from the catalog and every model config, then allows them to be added again', async () => {
+    vi.stubGlobal('window', {
+      electronAPI: { getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'legacy' }) }
+    });
+    const previousState = useWorkbookStore.getState();
+    const saveToDisk = vi.fn().mockResolvedValue(true);
+    useWorkbookStore.setState({
+      models: [{ id: 'model-a', name: 'Model A', color: 'Qora' } as any],
+      availableSizes: ['S', '40-42'],
+      pattaBatchConfigs: {
+        'model-a': { partyNumber: '', totalIshSoni: '', color: 'Qora', sizes: { '40-42': '3', S: '2' } }
+      },
+      saveToDisk
+    } as any);
+
+    try {
+      await useWorkbookStore.getState().deleteCustomSize('40-42');
+      expect(useWorkbookStore.getState().availableSizes).toEqual(['S']);
+      expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizes).toEqual({ S: '2' });
+
+      await useWorkbookStore.getState().addCustomSize('40-42');
+      expect(useWorkbookStore.getState().availableSizes).toEqual(['S', '40-42']);
+      expect(saveToDisk).toHaveBeenCalled();
+    } finally {
+      useWorkbookStore.setState(previousState, true);
+    }
+  });
+
   it('updates a size count immediately while runtime readiness is still pending', async () => {
     let resolveRuntime!: (value: any) => void;
     vi.stubGlobal('window', {

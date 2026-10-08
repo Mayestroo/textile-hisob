@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPattaPreviewStarts, findNextPartyNumber } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPattaPreviewStarts, findNextPartyNumber, removePattaSizeFromBatchConfigs } from './pattaBatch';
 import { buildPartyWorkSummary } from '../domain/pattaQuantity';
 
 describe(' patta batch command payloads', () => {
@@ -132,5 +132,15 @@ describe(' patta batch command payloads', () => {
     ], 25, [{ start: 1, end: 12 }]);
 
     expect(starts).toEqual([1, 25]);
+  });
+
+  it('removes a deleted size from every stored model batch config', () => {
+    const result = removePattaSizeFromBatchConfigs({
+      'model-a': { partyNumber: '', totalIshSoni: '', color: 'Qora', sizes: { '40-42': '3', M: '2' } },
+      'model-b': { partyNumber: '', totalIshSoni: '', color: 'Ko\'k', sizes: { '40-42': '', L: '1' } }
+    }, '40-42');
+
+    expect(result['model-a'].sizes).toEqual({ M: '2' });
+    expect(result['model-b'].sizes).toEqual({ L: '1' });
   });
 });

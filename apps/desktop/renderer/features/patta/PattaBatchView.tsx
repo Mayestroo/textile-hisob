@@ -5,7 +5,7 @@ import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 import { ModelConfig } from '../../types/workbook';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { calculateBatchWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
-import { getPattaSizesForSystem, PattaSizeSystem } from '../../domain/pattaSizeSystem';
+import { getPattaSizesForSystem, isDefaultPattaSize, PattaSizeSystem } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { selectPartyDashboardRecords } from '../../store/selectors';
 
@@ -39,12 +39,8 @@ export const PattaBatchView: React.FC = () => {
 
   const canUseBatchMutation = () => runtimeMode !== 'checking';
 
-  const guardedAddCustomSize = (sizeName: string) => {
-    if (canUseBatchMutation()) addCustomSize(sizeName);
-  };
-  const guardedDeleteCustomSize = (sizeName: string) => {
-    if (canUseBatchMutation()) deleteCustomSize(sizeName);
-  };
+  const guardedAddCustomSize = (sizeName: string) => addCustomSize(sizeName);
+  const guardedDeleteCustomSize = (sizeName: string) => deleteCustomSize(sizeName);
   const guardedUpdateBatchConfig = (modelId: string, updates: any) => {
     // Keep controlled inputs responsive while runtime readiness is checked.
     // The store applies the change locally first and resolves persistence mode
@@ -63,11 +59,8 @@ export const PattaBatchView: React.FC = () => {
     for (const config of Object.values(pattaBatchConfigs || {})) {
       for (const size of Object.keys(config.sizes || {})) sizes.add(size);
     }
-    for (const party of printedPartyHistory || []) {
-      for (const size of Object.keys(party.sizes || {})) sizes.add(size);
-    }
     return Array.from(sizes);
-  }, [availableSizes, pattaBatchConfigs, printedPartyHistory]);
+  }, [availableSizes, pattaBatchConfigs]);
   const activeSizes = useMemo(
     () => getPattaSizesForSystem(allKnownSizes, sizeSystem),
     [allKnownSizes, sizeSystem]
@@ -344,13 +337,15 @@ export const PattaBatchView: React.FC = () => {
     }
   };
 
-  const handleAddCustomSizeSubmit = (e?: React.FormEvent) => {
+  const handleAddCustomSizeSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const clean = newCustomSizeInput.trim();
     if (!clean) return;
-    guardedAddCustomSize(clean);
-    setNewCustomSizeInput('');
-    setIsAddSizeModalOpen(false);
+    await guardedAddCustomSize(clean);
+    if (useWorkbookStore.getState().availableSizes.some((size) => size.toUpperCase() === clean.toUpperCase())) {
+      setNewCustomSizeInput('');
+      setIsAddSizeModalOpen(false);
+    }
   };
 
   // Barcha modellar bo'yicha saralangan partiya, patta va ish soni statistikasi
@@ -790,7 +785,7 @@ export const PattaBatchView: React.FC = () => {
                   {activeSizes.map((sizeName) => {
                     const sizeVal = config.sizes ? config.sizes[sizeName] || '' : '';
                     const key = `size_${model.id}_${sizeName}`;
-                    const isCustom = !DEFAULT_BATCH_SIZES.includes(sizeName);
+                    const isCustom = !isDefaultPattaSize(sizeName);
 
                     return (
                       <div key={sizeName} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -816,7 +811,7 @@ export const PattaBatchView: React.FC = () => {
                                   isDanger: true
                                 });
                                 if (ok) {
-                                   guardedDeleteCustomSize(sizeName);
+                                   await guardedDeleteCustomSize(sizeName);
                                 }
                               }}
                               style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: '0 2px' }}
@@ -1028,14 +1023,14 @@ export const PattaBatchView: React.FC = () => {
             <form onSubmit={handleAddCustomSizeSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Razmer nomi (masalan: 4XL, 5XL, 38, Standart):
+                  Razmer nomi (masalan: 4XL, 5XL, 40-42, Standart):
                 </label>
                 <input 
                   ref={customSizeInputRef}
                   type="text"
                   value={newCustomSizeInput}
                   onChange={(e) => setNewCustomSizeInput(e.target.value)}
-                  placeholder="Masalan: 4XL"
+                  placeholder="Masalan: 40-42"
                   className="soft-input"
                 />
               </div>

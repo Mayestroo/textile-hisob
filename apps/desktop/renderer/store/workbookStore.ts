@@ -12,7 +12,7 @@ import { createPersistenceSlice } from './slices/createPersistenceSlice';
 import { getElectronApi, resolveElectronRuntimeMode } from './runtimeMode';
 import { cancelDebouncedSave, triggerDebouncedSave } from './helpers/debounceSave';
 import { DEFAULT_BATCH_SIZES } from '../constants/batchConstants';
-import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary, removePattaSizeFromBatchConfigs } from './pattaBatch';
 import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from './businessMutations';
 import { normalizePattaSizeCounts } from '../domain/pattaQuantity';
 import { formatDateIso } from '../utils/formatters';
@@ -100,7 +100,8 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       if (!context.success) return;
       const clean = sizeName.trim().toUpperCase();
       const updated = (get().availableSizes || DEFAULT_BATCH_SIZES).filter((size) => size.toUpperCase() !== clean);
-      set({ availableSizes: updated });
+      const pattaBatchConfigs = removePattaSizeFromBatchConfigs(get().pattaBatchConfigs, clean);
+      set({ availableSizes: updated, pattaBatchConfigs });
       scheduleBatchSettings(context);
     },
     incrementPartyNumber: async (modelId: string, printedPartyStr: string) => {

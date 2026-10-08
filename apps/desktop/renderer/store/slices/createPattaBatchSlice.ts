@@ -4,7 +4,7 @@ import { ModelPattaBatchConfig, PrintedPartyRecord } from '../../types/workbook'
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { formatDateTime } from '../../utils/formatters';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
-import { createRecordId, findAvailablePattaStart, findNextPartyNumber } from '../pattaBatch';
+import { createRecordId, findAvailablePattaStart, findNextPartyNumber, removePattaSizeFromBatchConfigs } from '../pattaBatch';
 
 export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBatchSlice> = (set, get) => ({
   availableSizes: [...DEFAULT_BATCH_SIZES],
@@ -32,8 +32,9 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     const state = get();
     const current = state.availableSizes || DEFAULT_BATCH_SIZES;
     const updated = current.filter((s) => s.toUpperCase() !== clean);
-    set({ availableSizes: updated });
-    get().saveToDisk({ availableSizes: updated });
+    const pattaBatchConfigs = removePattaSizeFromBatchConfigs(state.pattaBatchConfigs, clean);
+    set({ availableSizes: updated, pattaBatchConfigs });
+    get().saveToDisk({ availableSizes: updated, pattaBatchConfigs });
     state.addNotification('info', "Razmer o'chirildi", `«${clean}» razmeri ro'yxatdan olib tashlandi.`);
   },
 

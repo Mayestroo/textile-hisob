@@ -1,6 +1,7 @@
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { ModelConfig, Worker, SubmittedTicketRecord, PayrollPeriod } from '../../types/workbook';
 import { formatDateIso, getUzbekMonthName } from '../../utils/formatters';
+import { isDeprecatedPattaSize } from '../../domain/pattaSizeSystem';
 import {
   reconcileModelHisobQuantities,
   sanitizeForms,
@@ -54,9 +55,11 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
   const printedPartyHistory = sanitizePrintedPartyHistory(
     source.printedPartyHistory || fallback?.printedPartyHistory || []
   );
-  const availableSizes = Array.isArray(source.availableSizes) && source.availableSizes.length > 0
+  const availableSizeSource = Array.isArray(source.availableSizes) && source.availableSizes.length > 0
     ? source.availableSizes
     : fallback?.availableSizes || [...DEFAULT_BATCH_SIZES];
+  const availableSizes = availableSizeSource.map((size: unknown) => String(size || '').trim())
+    .filter((size: string) => size.length > 0 && !isDeprecatedPattaSize(size));
   const nextPartyNumber = Number(source.nextPartyNumber || fallback?.nextPartyNumber || 1);
   const nextPattaNumber = Number(source.nextPattaNumber ?? fallback?.nextPattaNumber ?? 1);
   const rawReusableRanges = Array.isArray(source.reusablePattaRanges)

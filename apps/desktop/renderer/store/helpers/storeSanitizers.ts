@@ -1,6 +1,7 @@
 import { Worker, ModelConfig, TicketFormState, ModelPattaBatchConfig, SubmittedTicketRecord } from '../../types/workbook';
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { formatDateIso } from '../../utils/formatters';
+import { isDeprecatedPattaSize } from '../../domain/pattaSizeSystem';
 
 export function createInitialPattaBatchConfigs(
   models: ModelConfig[],
@@ -231,7 +232,7 @@ export function sanitizePattaBatchConfigs(
     }
     if (c && c.sizes) {
       for (const [szKey, szVal] of Object.entries(c.sizes)) {
-        if (sizesObj[szKey] === undefined) {
+        if (sizesObj[szKey] === undefined && !isDeprecatedPattaSize(szKey)) {
           sizesObj[szKey] = String(szVal || '');
         }
       }

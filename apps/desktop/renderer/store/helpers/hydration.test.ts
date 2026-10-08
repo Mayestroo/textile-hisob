@@ -24,6 +24,15 @@ describe('canonical hydration', () => {
     expect(data.reusablePattaRanges).toEqual([{ start: 1, end: 4 }]);
   });
 
+  it('filters retired 36/38 sizes but keeps a configured numeric range', () => {
+    const data = hydrateWorkbookData({
+      companyId: 'company_a',
+      availableSizes: ['S', '36', '38', '40-42']
+    });
+
+    expect(data.availableSizes).toEqual(['S', '40-42']);
+  });
+
   it('rejects missing, unassigned, and malformed company contexts', () => {
     expect(isValidCompanyId('company_a')).toBe(true);
     expect(isValidCompanyId('unassigned')).toBe(false);
