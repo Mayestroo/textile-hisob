@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Award, Calendar, DollarSign, Search, TrendingUp, Wallet } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { calculateMasterPayroll, formatMoney, WorkerPayrollSummary } from '../../engine/formulaEngine';
 import { useWorkbookStore } from '../../store/workbookStore';
-import { calculateMasterPayroll, formatMoney } from '../../engine/formulaEngine';
-import { Search, Calendar, DollarSign, Wallet, Award, TrendingUp } from 'lucide-react';
-import { WorkerPayrollSummary } from '../../engine/formulaEngine';
 import { formatUzbekDate } from '../../utils/formatters';
 
 const VIRTUAL_THRESHOLD = 30;
@@ -56,7 +55,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Col A: ID */}
-      <td 
+      <td
         style={{
           textAlign: 'center',
           fontWeight: 700,
@@ -79,12 +78,12 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         onDoubleClick={() => onOpenWorkerDetail(w.workerId)}
         title="Tanlash / Bekor qilish (2 marta: Ishchi hisoboti)"
       >
-        <span style={{ 
+        <span style={{
           background: isSelected
             ? '#2563eb'
-            : (isHovered ? 'var(--border-default)' : 'var(--bg-surface-subtle)'), 
+            : (isHovered ? 'var(--border-default)' : 'var(--bg-surface-subtle)'),
           color: isSelected ? '#ffffff' : (isHovered ? 'var(--text-primary)' : 'inherit'),
-          padding: '2px 8px', 
+          padding: '2px 8px',
           borderRadius: 'var(--radius-full)',
           fontSize: '11.5px',
           fontWeight: isSelected ? 800 : 700,
@@ -95,7 +94,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
       </td>
 
       {/* Col B: Name */}
-      <td 
+      <td
         style={{
           fontWeight: isSelected ? 700 : 600,
           paddingLeft: '14px',
@@ -130,8 +129,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           backgroundColor: isSelected
             ? 'rgba(16, 185, 129, 0.28)'
             : (isHovered
-                ? (w.sofFoyda > 0 ? 'rgba(16, 185, 129, 0.24)' : 'var(--bg-surface-hover)')
-                : (w.sofFoyda > 0 ? 'var(--primary-light)' : 'transparent')),
+              ? (w.sofFoyda > 0 ? 'rgba(16, 185, 129, 0.24)' : 'var(--bg-surface-hover)')
+              : (w.sofFoyda > 0 ? 'var(--primary-light)' : 'transparent')),
           color: w.sofFoyda > 0 ? 'var(--primary)' : w.sofFoyda < 0 ? '#ef4444' : 'var(--text-muted)',
           fontSize: '13.5px',
           borderRight: '1px solid var(--border-subtle)',
@@ -156,8 +155,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           backgroundColor: isSelected
             ? 'rgba(139, 92, 246, 0.28)'
             : (isHovered
-                ? (w.staj > 0 ? 'rgba(139, 92, 246, 0.24)' : 'var(--bg-surface-hover)')
-                : (w.staj > 0 ? 'rgba(139, 92, 246, 0.15)' : 'transparent')),
+              ? (w.staj > 0 ? 'rgba(139, 92, 246, 0.24)' : 'var(--bg-surface-hover)')
+              : (w.staj > 0 ? 'rgba(139, 92, 246, 0.15)' : 'transparent')),
           borderRight: '1px solid var(--border-subtle)',
           cursor: 'pointer',
           transition: 'background-color 0.12s ease'
@@ -173,15 +172,15 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
       </td>
 
       {/* Col E: Avans */}
-      <td 
-        style={{ 
-          textAlign: 'right', 
-          padding: '2px 6px', 
+      <td
+        style={{
+          textAlign: 'right',
+          padding: '2px 6px',
           backgroundColor: isSelected
             ? 'rgba(245, 158, 11, 0.28)'
             : (isHovered
-                ? (w.avans > 0 ? 'rgba(245, 158, 11, 0.24)' : 'var(--bg-surface-hover)')
-                : (w.avans > 0 ? 'rgba(245, 158, 11, 0.15)' : 'transparent')), 
+              ? (w.avans > 0 ? 'rgba(245, 158, 11, 0.24)' : 'var(--bg-surface-hover)')
+              : (w.avans > 0 ? 'rgba(245, 158, 11, 0.15)' : 'transparent')),
           borderRight: '1px solid var(--border-subtle)',
           cursor: 'pointer',
           transition: 'background-color 0.12s ease'
@@ -225,15 +224,15 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
       </td>
 
       {/* Col F: Jarima */}
-      <td 
-        style={{ 
-          textAlign: 'right', 
-          padding: '2px 6px', 
+      <td
+        style={{
+          textAlign: 'right',
+          padding: '2px 6px',
           backgroundColor: isSelected
             ? 'rgba(239, 68, 68, 0.28)'
             : (isHovered
-                ? (w.jarima > 0 ? 'rgba(239, 68, 68, 0.24)' : 'var(--bg-surface-hover)')
-                : (w.jarima > 0 ? 'rgba(239, 68, 68, 0.15)' : 'transparent')), 
+              ? (w.jarima > 0 ? 'rgba(239, 68, 68, 0.24)' : 'var(--bg-surface-hover)')
+              : (w.jarima > 0 ? 'rgba(239, 68, 68, 0.15)' : 'transparent')),
           borderRight: '1px solid var(--border-subtle)',
           cursor: 'pointer',
           transition: 'background-color 0.12s ease'
@@ -286,8 +285,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           backgroundColor: isSelected
             ? 'rgba(16, 185, 129, 0.28)'
             : (isHovered
-                ? (w.umumiy > 0 ? 'rgba(16, 185, 129, 0.24)' : 'var(--bg-surface-hover)')
-                : (w.umumiy > 0 ? 'var(--primary-light)' : 'transparent')),
+              ? (w.umumiy > 0 ? 'rgba(16, 185, 129, 0.24)' : 'var(--bg-surface-hover)')
+              : (w.umumiy > 0 ? 'var(--primary-light)' : 'transparent')),
           borderRight: '1px solid var(--border-subtle)',
           fontSize: '13.5px',
           cursor: 'pointer',
@@ -312,6 +311,7 @@ export const UmumiyView: React.FC = () => {
   const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
   const updateWorker = useWorkbookStore((s) => s.updateWorker);
   const setActiveCell = useWorkbookStore((s) => s.setActiveCell);
+  const setActiveSheet = useWorkbookStore((s) => s.setActiveSheet);
   const openModal = useWorkbookStore((s) => s.openModal);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -370,6 +370,26 @@ export const UmumiyView: React.FC = () => {
     return map;
   }, [models, submittedTickets, workers]);
 
+  const totalModelSewnQty = useMemo(() => {
+    return models.reduce((sum, m) => sum + (modelSewnQuantities[m.id] || 0), 0);
+  }, [models, modelSewnQuantities]);
+
+  const totalModelAmount = useMemo(() => {
+    return models.reduce((sum, m) => sum + (masterReport.modelTotals[m.id] || 0), 0);
+  }, [models, masterReport.modelTotals]);
+
+  const totalModelTavofut = useMemo(() => {
+    return models.reduce((sum, m) => {
+      const qty = modelSewnQuantities[m.id] || 0;
+      const amount = masterReport.modelTotals[m.id] || 0;
+      const modelPrice = (Array.isArray(m.operations) ? m.operations : []).reduce(
+        (s, op) => s + (Number(op?.rate) || 0),
+        0
+      );
+      return sum + ((modelPrice * qty) - amount);
+    }, 0);
+  }, [models, modelSewnQuantities, masterReport.modelTotals]);
+
   const filteredWorkers = useMemo(() => {
     if (!searchQuery.trim()) return masterReport.workers;
     const q = searchQuery.toLowerCase().trim();
@@ -424,10 +444,10 @@ export const UmumiyView: React.FC = () => {
   return (
     <div className="excel-grid-container" style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
       {/* Top Section: KPI Stat Summary Cards */}
-      <div style={{ 
-        padding: '14px 18px 12px', 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        padding: '14px 18px 12px',
+        display: 'flex',
+        flexDirection: 'column',
         gap: '12px',
         backgroundColor: 'var(--bg-surface)',
         borderBottom: '1px solid var(--border-subtle)',
@@ -736,29 +756,44 @@ export const UmumiyView: React.FC = () => {
             </tr>
 
             {/* Model Breakdown Section */}
-            <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', height: '32px', borderTop: '2px solid var(--border-default)' }}>
-              <td colSpan={2} style={{ fontWeight: 700, paddingLeft: '14px', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.4px', position: 'sticky', left: 0, zIndex: 6, backgroundColor: 'var(--bg-surface-subtle)' }}>
+            <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', height: '34px', borderTop: '2px solid var(--border-default)' }}>
+              <td colSpan={3} style={{ fontWeight: 700, paddingLeft: '14px', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.4px', position: 'sticky', left: 0, zIndex: 6, backgroundColor: 'var(--bg-surface-subtle)' }}>
                 Modellar kesimida jami:
               </td>
-              <td colSpan={3}></td>
+              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                Model narxi
+              </td>
               <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Tikilgan ish soni
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '14px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Jami summa
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '14px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                Tavofut
               </td>
             </tr>
 
             {models.map((m, mIdx) => {
               const qty = modelSewnQuantities[m.id] || 0;
               const amount = masterReport.modelTotals[m.id] || 0;
+              const modelPrice = (Array.isArray(m.operations) ? m.operations : []).reduce(
+                (sum, op) => sum + (Number(op?.rate) || 0),
+                0
+              );
+              const tavofut = (modelPrice * qty) - amount;
 
               return (
-                <tr key={m.id} style={{ height: '32px', backgroundColor: 'var(--bg-surface)' }}>
+                <tr key={m.id} className="fast-row" style={{ height: '32px', backgroundColor: 'var(--bg-surface)' }}>
                   <td style={{ textAlign: 'center', color: 'var(--text-muted)', position: 'sticky', left: 0, zIndex: 6, backgroundColor: 'var(--bg-surface)' }}>
                     {mIdx + 1}
                   </td>
-                  <td style={{ paddingLeft: '20px', color: 'var(--text-primary)', fontWeight: 500, position: 'sticky', left: '54px', zIndex: 6, backgroundColor: 'var(--bg-surface)' }}>
+                  <td
+                    colSpan={2}
+                    style={{ paddingLeft: '20px', color: 'var(--text-primary)', fontWeight: 500, position: 'sticky', left: '54px', zIndex: 6, backgroundColor: 'var(--bg-surface)', cursor: 'pointer' }}
+                    onDoubleClick={() => setActiveSheet(m.name)}
+                    title="2 marta bosing: Ushbu model hisobot varag'iga o'tish"
+                  >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366f1' }} />
                       <span style={{ fontWeight: 600 }}>{m.name}</span>
@@ -776,16 +811,92 @@ export const UmumiyView: React.FC = () => {
                       )}
                     </span>
                   </td>
-                  <td colSpan={3}></td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: qty > 0 ? '#10b981' : 'var(--text-muted)', fontSize: '13px' }}>
+                  <td
+                    style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: modelPrice > 0 ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
+                    onClick={() => handleCellFocus(`D${workers.length + 4 + mIdx}`, String(modelPrice), `=SUM(Operatsiyalar)`)}
+                    title={`Model narxi: ${formatMoney(modelPrice)} so'm (barcha operatsiyalar narxi yig'indisi)`}
+                  >
+                    {formatMoney(modelPrice)}
+                  </td>
+                  <td
+                    style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: qty > 0 ? '#10b981' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
+                    onClick={() => handleCellFocus(`E${workers.length + 4 + mIdx}`, String(qty))}
+                    title={`Tikilgan ish soni: ${qty.toLocaleString()} dona`}
+                  >
                     {qty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '14px', color: amount > 0 ? 'var(--primary)' : 'var(--text-muted)', fontSize: '13px' }}>
+                  <td
+                    style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: amount > 0 ? 'var(--primary)' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
+                    onClick={() => handleCellFocus(`F${workers.length + 4 + mIdx}`, String(amount))}
+                    title={`Jami summa: ${formatMoney(amount)} so'm`}
+                  >
                     {formatMoney(amount)}
+                  </td>
+                  <td
+                    style={{
+                      textAlign: 'right',
+                      fontWeight: 700,
+                      paddingRight: '14px',
+                      color: tavofut > 0 ? '#10b981' : tavofut < 0 ? '#ef4444' : 'var(--text-muted)',
+                      fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => handleCellFocus(`G${workers.length + 4 + mIdx}`, String(tavofut), `=D${workers.length + 4 + mIdx}*E${workers.length + 4 + mIdx}-F${workers.length + 4 + mIdx}`)}
+                    title={`Tavofut = (${formatMoney(modelPrice)} * ${qty}) - ${formatMoney(amount)} = ${formatMoney(tavofut)} so'm`}
+                  >
+                    {tavofut > 0 ? `+${formatMoney(tavofut)}` : formatMoney(tavofut)}
                   </td>
                 </tr>
               );
             })}
+
+            {/* Modellar Jami Row */}
+            <tr
+              style={{
+                backgroundColor: 'var(--bg-surface-subtle)',
+                fontWeight: 800,
+                height: '36px',
+                borderTop: '2px solid var(--border-default)',
+                borderBottom: '2px solid var(--border-default)'
+              }}
+            >
+              <td
+                colSpan={3}
+                style={{
+                  textAlign: 'right',
+                  paddingRight: '14px',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.3px',
+                  textTransform: 'uppercase',
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 6,
+                  backgroundColor: 'var(--bg-surface-subtle)'
+                }}
+              >
+                Modellar jami:
+              </td>
+              <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                —
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 800, paddingRight: '12px', color: '#10b981', fontSize: '13px' }}>
+                {totalModelSewnQty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 600 }}>dona</span>
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 800, paddingRight: '12px', color: 'var(--text-primary)', fontSize: '13px' }}>
+                {formatMoney(totalModelAmount)}
+              </td>
+              <td style={{
+                textAlign: 'right',
+                fontWeight: 800,
+                paddingRight: '14px',
+                color: totalModelTavofut > 0 ? '#10b981' : totalModelTavofut < 0 ? '#ef4444' : 'var(--text-muted)',
+                fontSize: '13px'
+              }}>
+                {totalModelTavofut > 0 ? `+${formatMoney(totalModelTavofut)}` : formatMoney(totalModelTavofut)}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>

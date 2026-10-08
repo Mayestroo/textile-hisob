@@ -24,6 +24,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('node_modules/xlsx-js-style')) {
+            return 'xlsx-vendor';
+          }
           if (id.includes('node_modules/lucide-react')) {
             return 'icons-vendor';
           }
@@ -33,6 +36,9 @@ export default defineConfig({
             id.includes('node_modules/zustand')
           ) {
             return 'framework-vendor';
+          }
+          if (id.includes('node_modules/@tanstack')) {
+            return 'tanstack-vendor';
           }
         }
       }
