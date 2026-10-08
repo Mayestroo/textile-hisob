@@ -85,6 +85,33 @@ describe(' workbook change-feed application', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM worker_adjustments WHERE company_id = ?').get(companyId).count).toBe(1);
   });
 
+  it('replaces a stale local ticket period with the server-authoritative period on replay', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('model-period-replay', ?, 'Model', '[]', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, created_at)
+      VALUES ('period-local-old', ?, 'Old', '2026-08-01', 1, 'CLOSED', ?),
+             ('period-server-current', ?, 'Current', '2026-09-01', 0, 'OPEN', ?)`)
+      .run(companyId, now, companyId, now);
+    const ticketId = '00000000-0000-4000-8000-000000001401';
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, period_id, party_number, patta_number, qty, status, submitted_at, created_at
+    ) VALUES (?, ?, 'model-period-replay', 'period-local-old', '1', 1, 1, 'PENDING_SYNC', ?, ?)`)
+      .run(ticketId, companyId, now, now);
+
+    applyChangesBatch(db, companyId, [{
+      changeId: '1', companyId, entityType: 'ticket', entityId: ticketId, entityRevision: 1,
+      changeType: 'INSERT', payload: {
+        ticketId, modelId: 'model-period-replay', periodId: 'period-server-current', partyNumber: '1',
+        pattaNumber: 1, qty: 1, submittedAt: now, entries: []
+      }
+    }], '1');
+
+    expect(db.prepare('SELECT period_id, status FROM tickets WHERE company_id = ? AND id = ?')
+      .get(companyId, ticketId)).toEqual({ period_id: 'period-server-current', status: 'CONFIRMED' });
+  });
+
   it('archives parties by flag while retaining the canonical fact row', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();

@@ -33,6 +33,18 @@ describe('canonical hydration', () => {
     expect(data.availableSizes).toEqual(['S', '40-42']);
   });
 
+  it('moves a stale ticket-form date into the active period while preserving valid draft dates', () => {
+    const data = hydrateWorkbookData({
+      models: [{ id: 'm', name: 'Model', operations: [], pattaOpsOrder: [] }],
+      currentPeriod: { id: 'period-current', name: 'Current', startDate: '2026-09-01', isClosed: false },
+      periods: [{ id: 'period-current', name: 'Current', startDate: '2026-09-01', isClosed: false }],
+      ticketForms: { m: { date: '2026-08-31', party: '1', qty: '', entries: {} } }
+    });
+
+    expect(data.ticketForms.m.date).not.toBe('2026-08-31');
+    expect(data.ticketForms.m.date >= '2026-09-01').toBe(true);
+  });
+
   it('rejects missing, unassigned, and malformed company contexts', () => {
     expect(isValidCompanyId('company_a')).toBe(true);
     expect(isValidCompanyId('unassigned')).toBe(false);

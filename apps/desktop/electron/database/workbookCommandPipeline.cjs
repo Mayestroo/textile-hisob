@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const { isSafeCompanyId } = require('./companyPath.cjs');
 const { getCompanyDatabase } = require('./databaseManager.cjs');
-const { insertOutboxOperation, getOperation } = require('./outboxManager.cjs');
+const { insertOutboxOperation, getOperation, updateOperationStatus } = require('./outboxManager.cjs');
 const { rebuildCompanyProjections } = require('./projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 const { validateCausalOrdering } = require('./commandPipeline.cjs');
@@ -1204,7 +1204,7 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
     let localOnlyDelete = false;
     let effectiveBaseRevision;
     if (normalized.commandType === 'DeleteTicket') {
-      const submitOperation = db.prepare(`SELECT status FROM local_outbox
+      const submitOperation = db.prepare(`SELECT operation_id, status FROM local_outbox
         WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
         ORDER BY created_at DESC LIMIT 1`).get(normalized.companyId, normalized.entityId);
       if (submitOperation?.status === 'DEAD_LETTER') {
@@ -1216,6 +1216,18 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
         }
         db.prepare(`UPDATE tickets SET status = 'VOIDED' WHERE company_id = ? AND id = ?`)
           .run(normalized.companyId, normalized.entityId);
+        const unresolvedTicketOperations = db.prepare(`SELECT operation_id FROM local_outbox
+          WHERE company_id = ? AND entity_type = 'ticket' AND entity_id = ?
+            AND status IN ('PENDING', 'CONFLICT', 'DEAD_LETTER')`).all(normalized.companyId, normalized.entityId);
+        for (const operation of unresolvedTicketOperations) {
+          updateOperationStatus(
+            db,
+            normalized.companyId,
+            operation.operation_id,
+            'SUPERSEDED',
+            'SUPERSEDED_AFTER_LOCAL_TICKET_DISCARD'
+          );
+        }
         effectiveBaseRevision = Number(current.server_revision || 0);
         localOnlyDelete = true;
       }

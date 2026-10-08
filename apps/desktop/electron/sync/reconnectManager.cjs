@@ -7,6 +7,7 @@ const {
   acknowledgeOutboxOperation,
   listOutboxReconciliationCandidates,
   recoverStrandedSendingOperations,
+  recoverPeriodScopeMismatchTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
 } = require('../database/outboxManager.cjs');
@@ -131,6 +132,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   const recoveredVoidedPattaDuplicateCount = voidedPattaReuseSupported
     ? recoverVoidedPattaDuplicateTickets(db, companyId)
     : 0;
+  const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
 
   // A previous process can lose the HTTP acknowledgement after the server commits.
   // Reconcile those exact operation IDs before local causal dependencies are evaluated.
@@ -172,6 +174,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     pulledInitial,
     supersededBatchSettingsCount,
     recoveredVoidedPattaDuplicateCount,
+    recoveredPeriodScopeMismatchCount,
     reconciledCount,
     pushed: pushRes,
     pulledFinal,

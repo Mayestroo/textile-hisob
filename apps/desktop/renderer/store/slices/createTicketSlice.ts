@@ -10,6 +10,7 @@ import { requestReconnect } from '../businessMutations';
 import { useAuthStore } from '../authStore';
 import { captureSessionIdentity, isSessionCurrent } from '../sessionGuard';
 import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from '../businessMutations';
+import { isTicketDateWithinPeriod } from '../../domain/ticketPeriodScope';
 
 type MutationResult = {
   success: false;
@@ -300,6 +301,15 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const initialLicenseStatus = state.licenseStatus;
     const partyRecordId = validation.partyOwner?.id ?? null;
     const effectiveDate = form.date || formatDateIso();
+    const activePeriod = state.periods?.find((period) => !period.isClosed) || null;
+    if (activePeriod && !isTicketDateWithinPeriod(effectiveDate, activePeriod)) {
+      const rejected = makeMutationResult(
+        'PERIOD_SCOPE_MISMATCH',
+        `Ticket sanasi (${effectiveDate}) ochiq davr (${activePeriod.startDate}${activePeriod.endDate ? ` — ${activePeriod.endDate}` : ' dan boshlab'}) oralig‘ida bo‘lishi kerak.`
+      );
+      notifyMutation(state, rejected);
+      return Promise.resolve(false);
+    }
     const fingerprint = JSON.stringify({
       companyId,
       modelId: model.id,
@@ -371,7 +381,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
             ticketId: createCanonicalUuid(),
             companyId,
             modelId: model.id,
-            periodId: state.periods?.find((period) => !period.isClosed)?.id,
+            periodId: activePeriod?.id,
             partyNumber: currentPartyStr,
             partyRecordId,
             pattaNumber: actualPattaNum,

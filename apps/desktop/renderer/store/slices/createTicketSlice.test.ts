@@ -189,6 +189,29 @@ describe(' ticket command routing', () => {
     expect(state().submittedTickets).toHaveLength(1);
   });
 
+  it('blocks a ticket date outside the active period before it reaches the local outbox', async () => {
+    const SubmitTicketCommand = vi.fn();
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+        SubmitTicketCommand
+      }
+    });
+    const { slice, state } = makeSlice();
+    state().currentPeriod = { id: 'period-current', name: 'Current', startDate: '2026-10-01', isClosed: false };
+    state().periods = [state().currentPeriod];
+
+    const result = await slice.jonatish('model-a');
+
+    expect(result).toBe(false);
+    expect(SubmitTicketCommand).not.toHaveBeenCalled();
+    expect(state().addNotification).toHaveBeenCalledWith(
+      'error',
+      'PERIOD_SCOPE_MISMATCH',
+      expect.stringContaining('2026-09-23')
+    );
+  });
+
   it('routes ticket worker edits through the canonical workbook command', async () => {
     const WorkbookCommand = vi.fn().mockResolvedValue({ success: true, result: { status: 'PENDING_SYNC' } });
     const dbRead = vi.fn().mockResolvedValue({

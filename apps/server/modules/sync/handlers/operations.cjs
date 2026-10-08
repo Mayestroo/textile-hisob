@@ -17,6 +17,33 @@ function dateOnly(value) {
   return value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
 }
 
+async function resolveTicketPeriodForDate(client, companyId, effectiveDate, requestedPeriodId = null) {
+  const openPeriodsResult = await client.query(`SELECT id, start_date, end_date FROM periods
+    WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC, id DESC`, [companyId]);
+  const openPeriods = openPeriodsResult.rows || [];
+  const matchingPeriod = openPeriods.find((period) => {
+    const startDate = dateOnly(period.start_date);
+    const endDate = period.end_date ? dateOnly(period.end_date) : null;
+    return effectiveDate >= startDate && (!endDate || effectiveDate <= endDate);
+  });
+  if (matchingPeriod) return matchingPeriod.id;
+
+  // Keep legacy companies without periods working, but never attach a dated ticket
+  // to an unrelated or closed period.
+  if (!openPeriods.length && !requestedPeriodId) return null;
+
+  const requestedPeriod = openPeriods.find((period) => period.id === requestedPeriodId);
+  const scope = requestedPeriod || openPeriods[0] || null;
+  const range = scope
+    ? `${dateOnly(scope.start_date)}${scope.end_date ? ` — ${dateOnly(scope.end_date)}` : ' дан бошлаб'}`
+    : 'очиқ давр';
+  throw createOpError(
+    'PERIOD_SCOPE_MISMATCH',
+    `Ticket sanasi (${effectiveDate}) ochiq davr (${range}) oralig‘ida emas`,
+    { effectiveDate, requestedPeriodId, openPeriodId: scope?.id || null }
+  );
+}
+
 /**
  * Creates operation execution handler for Fastify.
  *
@@ -104,6 +131,7 @@ function createOperationStatusHandler(pool) {
           status: 'APPLIED',
           serverRevision: accepted.server_revision,
           cursor: accepted.result_json?.cursor || null,
+          ...(accepted.result_json?.periodId ? { periodId: accepted.result_json.periodId } : {}),
           committedAt: accepted.accepted_at,
           isReplay: true
         };
@@ -179,6 +207,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
           status: 'APPLIED',
           serverRevision: existing.server_revision,
           cursor: existing.result_json?.cursor || null,
+          ...(existing.result_json?.periodId ? { periodId: existing.result_json.periodId } : {}),
           committedAt: existing.accepted_at,
           isReplay: true
         };
@@ -238,6 +267,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
       status: 'APPLIED',
       serverRevision,
       cursor: String(changeId),
+      ...(mutationResult.periodId ? { periodId: mutationResult.periodId } : {}),
       committedAt
     };
 
@@ -266,6 +296,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
       status: 'APPLIED',
       serverRevision,
       cursor: String(changeId),
+      ...(mutationResult.periodId ? { periodId: mutationResult.periodId } : {}),
       committedAt,
       isReplay: false
     };
@@ -508,22 +539,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
 
   const serverRevision = 1;
   const now = submittedAt || new Date().toISOString();
-  let periodId = payload.periodId || null;
-  const currentPeriodResult = await client.query(`SELECT id, start_date, end_date FROM periods
-    WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC LIMIT 1`, [companyId]);
-  const currentPeriod = currentPeriodResult.rows[0];
-  if (periodId) {
-    const periodRes = await client.query(`SELECT id, start_date, end_date, is_closed FROM periods WHERE company_id = $1 AND id = $2`, [companyId, periodId]);
-    const period = periodRes.rows[0];
-    if (!period || period.is_closed || effectiveDate < dateOnly(period.start_date) || (period.end_date && effectiveDate > dateOnly(period.end_date))) {
-      throw createOpError('PERIOD_SCOPE_MISMATCH', `Ticket date does not belong to open period "${periodId}"`);
-    }
-  } else if (currentPeriod) {
-    if (effectiveDate < dateOnly(currentPeriod.start_date) || (currentPeriod.end_date && effectiveDate > dateOnly(currentPeriod.end_date))) {
-      throw createOpError('PERIOD_SCOPE_MISMATCH', `Ticket date does not belong to open period "${currentPeriod.id}"`);
-    }
-    periodId = currentPeriod.id;
-  }
+  const periodId = await resolveTicketPeriodForDate(client, companyId, effectiveDate, payload.periodId || null);
 
   // 3. Insert Authoritative Ticket Fact
   await client.query(
@@ -591,6 +607,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   return {
     serverRevision,
     entityId: ticketId,
+    periodId,
     changeId: clRes.rows[0].change_id,
     committedAt: clRes.rows[0].committed_at
   };
@@ -1254,9 +1271,10 @@ async function executeResolveCandidate(client, companyId, operationId, payload, 
   };
 }
 
-function createOpError(code, message) {
+function createOpError(code, message, details = null) {
   const err = new Error(message);
   err.code = code;
+  if (details) err.details = details;
   return err;
 }
 
@@ -1300,5 +1318,6 @@ module.exports = {
   processSingleOperation,
   resolveTrustedAuditActor,
   resolveTicketValidationMode,
-  executeUpdateTicket
+  executeUpdateTicket,
+  resolveTicketPeriodForDate
 };

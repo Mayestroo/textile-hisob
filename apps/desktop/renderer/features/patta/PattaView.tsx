@@ -11,6 +11,8 @@ interface PattaViewProps {
 
 export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const workers = useWorkbookStore((s) => s.workers);
+  const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const hasActivePeriod = Boolean(currentPeriod && !currentPeriod.isClosed && currentPeriod.id !== 'period_default');
 
   const form = useWorkbookStore((s) => s.ticketForms[model.id]) || {
     date: formatDateIso(),
@@ -447,6 +449,8 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 <input
                   type="date"
                   value={form.date}
+                  min={hasActivePeriod ? currentPeriod?.startDate : undefined}
+                  max={hasActivePeriod ? currentPeriod?.endDate : undefined}
                   onChange={(e) => updateTicketField(model.id, 'date', e.target.value)}
                   onFocus={() => handleCellFocus('D2', form.date)}
                   className="soft-input"

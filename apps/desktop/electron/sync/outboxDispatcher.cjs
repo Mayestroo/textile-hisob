@@ -207,9 +207,9 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         if (op.command_type === 'SubmitTicket') {
           db.prepare(`
             UPDATE tickets
-            SET status = 'CONFIRMED', server_revision = MAX(server_revision, ?)
+            SET status = 'CONFIRMED', period_id = COALESCE(?, period_id), server_revision = MAX(server_revision, ?)
             WHERE company_id = ? AND id = ?
-          `).run(res.serverRevision || 0, companyId, op.entity_id);
+          `).run(res.periodId || null, res.serverRevision || 0, companyId, op.entity_id);
           factsUpdated++;
         } else if (op.command_type === 'DeleteTicket') {
           db.prepare(`UPDATE tickets SET status = 'VOIDED', server_revision = ? WHERE company_id = ? AND id = ?`)

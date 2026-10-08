@@ -197,6 +197,20 @@ describe(' workbook local command pipeline', () => {
     ) VALUES ('op_rejected_submit', ?, 'SubmitTicket', 'ticket', ?, 0, ?, ?, 'DEAD_LETTER', ?, ?, ?, ?)`)
       .run(companyId, ticketId, submitPayloadJson, computePayloadHash(submitPayloadJson), now, now,
         JSON.stringify({ code: 'PARTY_RECORD_REQUIRED' }), JSON.stringify({ code: 'PARTY_RECORD_REQUIRED' }));
+    const dependentPayload = { operationId: 'op_rejected_submit_edit', ticketId, entries: [] };
+    outboxManager.insertOutboxOperation(db, {
+      operation_id: dependentPayload.operationId,
+      company_id: companyId,
+      command_type: 'UpdateTicket',
+      entity_type: 'ticket',
+      entity_id: ticketId,
+      base_revision: 0,
+      payload_json: canonicalStringify(dependentPayload),
+      payload_hash: computePayloadHash(canonicalStringify(dependentPayload)),
+      depends_on_operation_id: 'op_rejected_submit',
+      causal_sequence: 1,
+      status: 'PENDING'
+    });
 
     const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
       commandType: 'DeleteTicket', commandId: 'cmd_delete_local_only_ticket', operationId: 'op_delete_local_only_ticket',
@@ -205,8 +219,13 @@ describe(' workbook local command pipeline', () => {
 
     expect(result).toMatchObject({ committed: true, entityId: ticketId, status: 'DELETED_LOCALLY', localOnly: true });
     expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('VOIDED');
+    expect(db.prepare('SELECT status, last_error FROM local_outbox WHERE operation_id = ?').get('op_rejected_submit'))
+      .toEqual({ status: 'SUPERSEDED', last_error: 'SUPERSEDED_AFTER_LOCAL_TICKET_DISCARD' });
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_rejected_submit_edit'))
+      .toEqual({ status: 'SUPERSEDED' });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_delete_local_only_ticket').status)
       .toBe('SUPERSEDED');
+    expect(require('./outboxManager.cjs').getOutboxDiagnostics(db, companyId).deadLetterCount).toBe(0);
     expect(db.prepare(`SELECT COUNT(*) AS count FROM local_outbox WHERE entity_id = ?
       AND command_type = 'DeleteTicket' AND status = 'PENDING'`).get(ticketId).count).toBe(0);
     expect(require('./projectionReader.cjs').loadWorkbookProjectionFromSqlite(db, companyId).submittedTickets)

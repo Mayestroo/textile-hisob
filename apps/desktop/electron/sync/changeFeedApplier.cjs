@@ -212,7 +212,7 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
     // If ticket exists locally, ensure ACK and server-owned fields are applied.
     db.prepare(`
       UPDATE tickets
-      SET status = COALESCE(?, 'CONFIRMED'), period_id = COALESCE(period_id, ?), server_revision = MAX(server_revision, ?)
+      SET status = COALESCE(?, 'CONFIRMED'), period_id = COALESCE(?, period_id), server_revision = MAX(server_revision, ?)
       WHERE company_id = ? AND id = ?
     `).run(payload.status || null, payload.periodId || null, entityRevision, companyId, ticketId);
     return; // Idempotent: do not duplicate

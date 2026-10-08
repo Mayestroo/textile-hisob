@@ -8,7 +8,13 @@ const {
   validateCommandPayload,
   validateOperationEnvelope
 } = require('./payloadValidation.cjs');
-const { processSingleOperation, resolveTrustedAuditActor, resolveTicketValidationMode, executeUpdateTicket } = require('./handlers/operations.cjs');
+const {
+  processSingleOperation,
+  resolveTrustedAuditActor,
+  resolveTicketValidationMode,
+  executeUpdateTicket,
+  resolveTicketPeriodForDate
+} = require('./handlers/operations.cjs');
 
 const COMPANY = 'company-validation';
 const TICKET_ID = '00000000-0000-4000-8000-000000000501';
@@ -72,6 +78,31 @@ function expectCode(action: () => unknown, code: string) {
 }
 
 describe(' payload and authority validation', () => {
+  it('resolves tickets to the open period containing their date even when a stale period ID was sent', async () => {
+    const client = {
+      query: async () => ({ rows: [
+        { id: 'period-current', start_date: '2026-09-01', end_date: null }
+      ] })
+    };
+
+    await expect(resolveTicketPeriodForDate(client, COMPANY, '2026-09-22', 'period-old'))
+      .resolves.toBe('period-current');
+  });
+
+  it('rejects ticket dates that are outside every open period without changing the date', async () => {
+    const client = {
+      query: async () => ({ rows: [
+        { id: 'period-current', start_date: '2026-10-01', end_date: null }
+      ] })
+    };
+
+    await expect(resolveTicketPeriodForDate(client, COMPANY, '2026-09-22', 'period-current'))
+      .rejects.toMatchObject({
+        code: 'PERIOD_SCOPE_MISMATCH',
+        details: { effectiveDate: '2026-09-22', requestedPeriodId: 'period-current' }
+      });
+  });
+
   it('validates canonical ticket deletion identity and company scope', () => {
     const payload = { commandId: 'delete-cmd', operationId: 'delete-op', companyId: COMPANY, ticketId: TICKET_ID };
     const operation = envelope('DeleteTicket', payload);

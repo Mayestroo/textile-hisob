@@ -76,6 +76,9 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     startDate: `${formatDateIso().slice(0, 7)}-01`,
     isClosed: false
   };
+  const ticketFormPeriod = (Array.isArray(source.periods) ? source.periods : fallback?.periods || [])
+    .find((period: PayrollPeriod) => !period.isClosed)
+    || (currentPeriod.id !== 'period_default' && !currentPeriod.isClosed ? currentPeriod : null);
 
   return {
     companyId: source.companyId || fallback?.companyId,
@@ -89,7 +92,7 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     submittedTickets,
     currentPeriod,
     periods: Array.isArray(source.periods) ? source.periods : fallback?.periods || [],
-    ticketForms: sanitizeForms(source.ticketForms || fallback?.ticketForms, models),
+    ticketForms: sanitizeForms(source.ticketForms || fallback?.ticketForms, models, ticketFormPeriod),
     pattaBatchConfigs: sanitizePattaBatchConfigs(
       source.pattaBatchConfigs || fallback?.pattaBatchConfigs,
       models,

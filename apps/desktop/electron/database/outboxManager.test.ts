@@ -9,10 +9,12 @@ const {
   getOutboxDiagnostics,
   insertOutboxOperation,
   listOutboxReconciliationCandidates,
+  recoverPeriodScopeMismatchTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
 } = require('./outboxManager.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
+const { dispatchOutbox } = require('../sync/outboxDispatcher.cjs');
 
 describe('outbox server-acceptance reconciliation', () => {
   let userData: string;
@@ -168,5 +170,80 @@ describe('outbox server-acceptance reconciliation', () => {
       .toEqual({ status: 'DEAD_LETTER' });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-do-not-retry-repeatedly'))
       .toEqual({ status: 'DEAD_LETTER' });
+  });
+
+  it('retries a period-mismatched ticket once only when its original date belongs to a local open period', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, server_revision, created_at, updated_at)
+      VALUES ('period-current', ?, 'Current', '2026-09-01', 0, 'OPEN', 1, ?, ?)`).run(companyId, now, now);
+
+    const insertPeriodMismatch = (operationId: string, ticketId: string, effectiveDate: string, attemptCount: number) => {
+      const payloadJson = canonicalStringify({
+        operationId,
+        companyId,
+        ticketId,
+        periodId: 'period-old',
+        effectiveDate,
+        submittedAt: `${effectiveDate}T10:00:00.000Z`
+      });
+      insertOutboxOperation(db, {
+        operation_id: operationId,
+        company_id: companyId,
+        command_type: 'SubmitTicket',
+        entity_type: 'ticket',
+        entity_id: ticketId,
+        payload_json: payloadJson,
+        payload_hash: computePayloadHash(payloadJson),
+        status: 'DEAD_LETTER',
+        attempt_count: attemptCount,
+        last_error: JSON.stringify({ code: 'PERIOD_SCOPE_MISMATCH' })
+      });
+      return payloadJson;
+    };
+
+    const unchangedPayload = insertPeriodMismatch('op-period-valid', '00000000-0000-4000-8000-000000001201', '2026-09-23', 1);
+    insertPeriodMismatch('op-period-outside', '00000000-0000-4000-8000-000000001202', '2026-08-31', 1);
+    insertPeriodMismatch('op-period-retried', '00000000-0000-4000-8000-000000001203', '2026-09-23', 2);
+
+    expect(recoverPeriodScopeMismatchTickets(db, companyId)).toBe(1);
+    expect(db.prepare('SELECT status, payload_json FROM local_outbox WHERE operation_id = ?').get('op-period-valid'))
+      .toEqual({ status: 'PENDING', payload_json: unchangedPayload });
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-period-outside'))
+      .toEqual({ status: 'DEAD_LETTER' });
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-period-retried'))
+      .toEqual({ status: 'DEAD_LETTER' });
+  });
+
+  it('stores the server-authoritative period ID when a SubmitTicket is acknowledged', async () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    const ticketId = '00000000-0000-4000-8000-000000001301';
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('model-period-ack', ?, 'Model', '[]', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, period_id, party_number, patta_number, qty, status, submitted_at, created_at
+    ) VALUES (?, ?, 'model-period-ack', 'period-old', '1', 1, 1, 'PENDING_SYNC', ?, ?)`)
+      .run(ticketId, companyId, now, now);
+    const payloadJson = canonicalStringify({ operationId: 'op-period-ack', ticketId });
+    insertOutboxOperation(db, {
+      operation_id: 'op-period-ack',
+      company_id: companyId,
+      command_type: 'SubmitTicket',
+      entity_type: 'ticket',
+      entity_id: ticketId,
+      payload_json: payloadJson,
+      payload_hash: computePayloadHash(payloadJson),
+      status: 'PENDING'
+    });
+
+    await dispatchOutbox(db, companyId, {
+      pushOperations: async () => ({ results: [{
+        operationId: 'op-period-ack', status: 'APPLIED', serverRevision: 1, periodId: 'period-current'
+      }] })
+    });
+
+    expect(db.prepare('SELECT period_id, status FROM tickets WHERE company_id = ? AND id = ?')
+      .get(companyId, ticketId)).toEqual({ period_id: 'period-current', status: 'CONFIRMED' });
   });
 });

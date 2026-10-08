@@ -2,6 +2,7 @@ import { Worker, ModelConfig, TicketFormState, ModelPattaBatchConfig, SubmittedT
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { formatDateIso } from '../../utils/formatters';
 import { isDeprecatedPattaSize } from '../../domain/pattaSizeSystem';
+import { normalizeTicketDateForPeriod, TicketPeriodDateRange } from '../../domain/ticketPeriodScope';
 
 export function createInitialPattaBatchConfigs(
   models: ModelConfig[],
@@ -178,7 +179,11 @@ export function sanitizeModels(mList: any[]): ModelConfig[] {
   });
 }
 
-export function sanitizeForms(forms: any, modelsList: ModelConfig[]): Record<string, TicketFormState> {
+export function sanitizeForms(
+  forms: any,
+  modelsList: ModelConfig[],
+  currentPeriod?: TicketPeriodDateRange | null
+): Record<string, TicketFormState> {
   const initial = createInitialTicketForms(modelsList);
   if (!forms) return initial;
   const cleanForms: Record<string, TicketFormState> = {};
@@ -197,7 +202,7 @@ export function sanitizeForms(forms: any, modelsList: ModelConfig[]): Record<str
       cleanParty = '';
     }
     cleanForms[m.id] = {
-      date: f.date || formatDateIso(),
+      date: normalizeTicketDateForPeriod(f.date, currentPeriod, formatDateIso()),
       party: cleanParty,
       color: f.color || m.color || 'Кора',
       size: f.size || m.size || 'XL',

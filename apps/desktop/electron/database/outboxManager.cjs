@@ -15,7 +15,7 @@ const LEGAL_TRANSITIONS = new Map([
   ['SENDING', new Set(['SYNCED', 'PENDING', 'CONFLICT', 'DEAD_LETTER'])],
   ['SYNCED', new Set()], // terminal
   ['CONFLICT', new Set(['PENDING', 'SUPERSEDED'])], // explicit retry or superseded by a newer accepted snapshot
-  ['DEAD_LETTER', new Set(['PENDING'])] // only a validated voided-patta duplicate may be recovered
+  ['DEAD_LETTER', new Set(['PENDING', 'SUPERSEDED'])] // retry only by a validator or supersede after explicit local discard
 ]);
 
 /**
@@ -418,6 +418,45 @@ function recoverVoidedPattaDuplicateTickets(db, companyId) {
   return recovered;
 }
 
+function recoverPeriodScopeMismatchTickets(db, companyId) {
+  const operations = db.prepare(`SELECT * FROM local_outbox
+    WHERE company_id = ? AND command_type = 'SubmitTicket' AND status = 'DEAD_LETTER'
+    ORDER BY causal_sequence, created_at`).all(companyId);
+  const openPeriods = db.prepare(`SELECT id, start_date, end_date FROM periods
+    WHERE company_id = ? AND is_closed = 0 ORDER BY start_date DESC, id DESC`).all(companyId);
+  if (!openPeriods.length) return 0;
+
+  let recovered = 0;
+  for (const operation of operations) {
+    if (Number(operation.attempt_count) !== 1) continue;
+    let error;
+    let payload;
+    try {
+      error = JSON.parse(operation.last_error || operation.error_message || '{}');
+      payload = JSON.parse(operation.payload_json);
+    } catch {
+      continue;
+    }
+    if (error?.code !== 'PERIOD_SCOPE_MISMATCH') continue;
+    const effectiveDate = typeof payload.effectiveDate === 'string'
+      ? payload.effectiveDate
+      : typeof payload.submittedAt === 'string' ? payload.submittedAt.slice(0, 10) : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) continue;
+    const matchingPeriod = openPeriods.find((period) => {
+      const startDate = String(period.start_date || '').slice(0, 10);
+      const endDate = period.end_date ? String(period.end_date).slice(0, 10) : null;
+      return effectiveDate >= startDate && (!endDate || effectiveDate <= endDate);
+    });
+    if (!matchingPeriod || payload.periodId === matchingPeriod.id) continue;
+
+    // Keep the business date immutable. Retry only when it already belongs to
+    // a locally authoritative open period and only once per rejected request.
+    updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_AFTER_PERIOD_SCOPE_RECONCILIATION');
+    recovered++;
+  }
+  return recovered;
+}
+
 /**
  * Recovers stranded SENDING operations back to PENDING on startup/initialization.
  *
@@ -490,5 +529,6 @@ module.exports = {
   getOutboxDiagnostics,
   supersedeBatchSettingsAlreadyApplied,
   recoverVoidedPattaDuplicateTickets,
+  recoverPeriodScopeMismatchTickets,
   recoverStrandedSendingOperations
 };
