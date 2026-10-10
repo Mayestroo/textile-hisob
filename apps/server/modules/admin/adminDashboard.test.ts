@@ -151,12 +151,32 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(query.mock.calls[1][0]).toContain('worker_adjustments');
   });
 
-  it('rejects non-allowlisted company mutations before querying PostgreSQL', async () => {
-    const query = vi.fn();
+  it('rejects an unassigned non-allowlisted company mutation after checking the company-admin grants', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
 
     await expect(serviceFor(query).upsertCompany('99887766', { companyId: 'comp_novda', companyName: 'Novda' }))
       .rejects.toMatchObject({ code: 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED', statusCode: 403 });
-    expect(query).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain('activation_company_admins');
+  });
+
+  it('allows a company-scoped admin to update only its own activation-company row', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('activation_company_admins')) return { rows: [{ company_id: 'comp_novda' }] };
+      if (sql.includes('INSERT INTO activation_companies')) return { rows: [{
+        company_id: 'comp_novda', company_name: 'Novda', allowed_roles: ['admin'], is_active: true
+      }] };
+      return { rows: [] };
+    });
+    const service = serviceFor(query);
+
+    await expect(service.upsertCompany('274466315', {
+      companyId: 'comp_novda', companyName: 'Novda', allowedRoles: ['admin']
+    })).resolves.toMatchObject({ company_id: 'comp_novda' });
+    await expect(service.upsertCompany('274466315', {
+      companyId: 'other_company', companyName: 'Other', allowedRoles: ['admin']
+    })).rejects.toMatchObject({ code: 'ADMIN_COMPANY_SCOPE_REQUIRED', statusCode: 403 });
+    expect(query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO activation_companies'))).toHaveLength(1);
   });
 
   it('reads models, parties, ticket facts and balances from bounded canonical projections', async () => {
@@ -201,7 +221,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
         return { rows: [] };
       }), release: vi.fn()
     };
-    const query = vi.fn();
+    const query = vi.fn().mockResolvedValue({ rows: [] });
     const service = createAdminDashboardService({ pool: { query, connect: vi.fn().mockResolvedValue(client) }, allowedAdminIds: new Set(['1526974123']) });
 
     await expect(service.updateCompanyStrictMode('1526974123', { companyId: 'comp_novda', strictMode: false }))

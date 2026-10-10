@@ -50,6 +50,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   server_operators,
   operator_sessions,
   activation_companies,
+  activation_company_admins,
   activation_requests,
   activation_request_limits,
   activation_events,

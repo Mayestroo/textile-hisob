@@ -87,6 +87,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     await pool.query(`INSERT INTO company_batch_settings (company_id, available_sizes_json, server_revision)
       VALUES ($1, '["XXS","S","M"]'::jsonb, 1)`, [COMPANY_ID]);
     await pool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_activation_company_scope_migration.sql'), 'utf8'));
+    await pool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_company_admin_scope_migration.sql'), 'utf8'));
     await pool.query(`
       INSERT INTO models (id, company_id, name, operations_json, status, server_revision)
       VALUES ('model-1', $1, 'Fixture Model', '[{"name":"Stitch","rate":9}]', 'ACTIVE', 1)
@@ -138,6 +139,18 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     `, [COMPANY_ID, WORKER_ID]);
     fetchImpl.mockClear();
     signerClient.mockClear();
+  });
+
+  it('seeds the requested Telegram admin as comp_novda-scoped without global allowlisting', async () => {
+    const grant = await pool.query(`SELECT telegram_id, company_id, is_active, assignment_source
+      FROM activation_company_admins WHERE telegram_id = $1`, ['274466315']);
+    expect(grant.rows).toEqual([{
+      telegram_id: '274466315',
+      company_id: COMPANY_ID,
+      is_active: true,
+      assignment_source: 'OWNER_BOOTSTRAP'
+    }]);
+    expect(new Set([ADMIN_ID]).has('274466315')).toBe(false);
   });
 
   async function exchangeSession() {

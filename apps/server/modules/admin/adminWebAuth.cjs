@@ -66,7 +66,7 @@ function verifyAdminWebSession(token, sessionSecret, allowedAdminIds, nowSeconds
   }
   if (nowSeconds >= claims.exp) throw adminWebAuthError('ADMIN_SESSION_EXPIRED');
   const telegramId = String(claims.sub);
-  if (!allowedAdminSet(allowedAdminIds).has(telegramId)) {
+  if (allowedAdminIds !== null && !allowedAdminSet(allowedAdminIds).has(telegramId)) {
     throw adminWebAuthError('ADMIN_SESSION_NOT_AUTHORIZED', 403);
   }
   return { telegramId, expiresAt: claims.exp };

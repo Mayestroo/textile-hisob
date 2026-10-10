@@ -29,6 +29,12 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).not.toMatch(/localStorage|sessionStorage/i);
   });
 
+  it('hides global-only views for company-scoped admins and carries server access scope', () => {
+    expect(javascript).toContain("['overview', 'devices', 'activations', 'system'].includes(button.dataset.view)");
+    expect(javascript).toContain('state.access = session.access || state.access');
+    expect(javascript).toContain('if (state.access?.isGlobalAdmin === false');
+  });
+
   it('labels activation policy separately and does not expose bot-managed ticket mode', () => {
     const policyForm = html.match(/<form id="companyForm"[\s\S]*?<\/form>/)?.[0] || '';
     expect(html).toContain('Activation policy');

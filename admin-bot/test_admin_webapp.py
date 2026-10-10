@@ -47,6 +47,10 @@ class AdminWebAppAuthTests(unittest.TestCase):
         self.assertEqual(claims["telegramId"], ADMIN_ID)
         self.assertEqual(claims["user"]["first_name"], "Test Admin")
 
+    def test_validates_company_scoped_user_telegram_signature_before_server_authorization(self):
+        claims = validate_webapp_init_data(signed_init_data(telegram_id="274466315"), BOT_TOKEN, None)
+        self.assertEqual(claims["telegramId"], "274466315")
+
     def test_rejects_modified_init_data_hash(self):
         init_data = signed_init_data().replace("Test+Admin", "Other+Admin")
 
@@ -107,18 +111,24 @@ class AdminWebAppAuthTests(unittest.TestCase):
         claims = verify_admin_web_session(NODE_SESSION_FIXTURE, SESSION_SECRET, {ADMIN_ID}, now=1_800_000_000)
         self.assertEqual(claims, {"telegramId": ADMIN_ID, "expiresAt": 1_800_000_900})
 
-    def test_internal_session_exchange_uses_bot_allowlist(self):
+    def test_internal_session_exchange_uses_authoritative_server_company_scope(self):
+        authorize = lambda method, route, payload: {
+            "success": True,
+            "access": {"isGlobalAdmin": False, "companyIds": ["comp_novda"]},
+        }
         with patch.object(admin_bot, "BOT_TOKEN", BOT_TOKEN), \
-                patch.object(admin_bot, "ADMIN_IDS", {ADMIN_ID}), \
-                patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET):
+                patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET), \
+                patch.object(admin_bot, "api_request", side_effect=authorize) as api_request:
             result = issue_admin_webapp_session(signed_init_data())
 
         self.assertEqual(result["user"]["id"], int(ADMIN_ID))
         self.assertEqual(result["session"]["expiresAt"] - int(time.time()), 900)
+        self.assertEqual(result["access"], {"isGlobalAdmin": False, "companyIds": ["comp_novda"]})
+        api_request.assert_called_once_with("POST", "/internal/admin/webapp/authorize", {"telegramId": ADMIN_ID})
 
         with patch.object(admin_bot, "BOT_TOKEN", BOT_TOKEN), \
-                patch.object(admin_bot, "ADMIN_IDS", {"99887766"}), \
-                patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET):
+                patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET), \
+                patch.object(admin_bot, "api_request", side_effect=RuntimeError("ADMIN_TELEGRAM_ID_NOT_AUTHORIZED")):
             with self.assertRaisesRegex(ValueError, "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED"):
                 issue_admin_webapp_session(signed_init_data())
 
@@ -138,15 +148,16 @@ class AdminWebAppAuthTests(unittest.TestCase):
         }
         signer = admin_bot.Ed25519PrivateKey.generate()
         with patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET), \
-                patch.object(admin_bot, "ADMIN_IDS", {ADMIN_ID}), \
-                patch.object(admin_bot, "LICENSE_PRIVATE_KEY", signer):
+                patch.object(admin_bot, "LICENSE_PRIVATE_KEY", signer), \
+                patch.object(admin_bot, "api_request", return_value={"access": {"isGlobalAdmin": False, "companyIds": ["comp_novda"]}}) as api_request:
             signed = sign_activation_for_admin_session(session["token"], payload)
         self.assertEqual(signed["telegramId"], ADMIN_ID)
         self.assertTrue(signed["signedActivation"]["signature"])
+        api_request.assert_called_once_with("POST", "/internal/admin/webapp/authorize", {"telegramId": ADMIN_ID, "companyId": "comp_novda"})
 
         with patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET), \
-                patch.object(admin_bot, "ADMIN_IDS", set()), \
-                patch.object(admin_bot, "LICENSE_PRIVATE_KEY", signer):
+                patch.object(admin_bot, "LICENSE_PRIVATE_KEY", signer), \
+                patch.object(admin_bot, "api_request", side_effect=RuntimeError("ADMIN_COMPANY_SCOPE_REQUIRED")):
             with self.assertRaisesRegex(ValueError, "ADMIN_SESSION_NOT_AUTHORIZED"):
                 sign_activation_for_admin_session(session["token"], payload)
 
@@ -215,13 +226,20 @@ class AdminWebAppAuthTests(unittest.TestCase):
         self.assertFalse(admin_bot.is_canonical_admin_webapp_url("https://sync.novdatextile.uz/other"))
         self.assertFalse(admin_bot.is_canonical_admin_webapp_url("https://sync.novdatextile.uz/admin-app?debug=1"))
 
-    def test_internal_http_routes_require_service_auth_and_allowlisted_signed_identity(self):
+    def test_internal_http_routes_require_service_auth_and_server_authorized_signed_identity(self):
         signer = admin_bot.Ed25519PrivateKey.generate()
+        def authorize(method, route, payload):
+            if payload.get("telegramId") != ADMIN_ID:
+                raise RuntimeError("ADMIN_TELEGRAM_ID_NOT_AUTHORIZED")
+            if payload.get("companyId") not in (None, "comp_novda"):
+                raise RuntimeError("ADMIN_COMPANY_SCOPE_REQUIRED")
+            return {"access": {"isGlobalAdmin": False, "companyIds": ["comp_novda"]}}
         with patch.object(admin_bot, "BOT_TOKEN", BOT_TOKEN), \
                 patch.object(admin_bot, "ADMIN_API_TOKEN", "internal-service-token"), \
                 patch.object(admin_bot, "ADMIN_IDS", {ADMIN_ID}), \
                 patch.object(admin_bot, "ADMIN_WEBAPP_SESSION_SECRET", SESSION_SECRET), \
-                patch.object(admin_bot, "LICENSE_PRIVATE_KEY", signer):
+                patch.object(admin_bot, "LICENSE_PRIVATE_KEY", signer), \
+                patch.object(admin_bot, "api_request", side_effect=authorize):
             server = ThreadingHTTPServer(("127.0.0.1", 0), admin_bot.HealthHandler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()

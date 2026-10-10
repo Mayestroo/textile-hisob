@@ -7,6 +7,7 @@
     sessionToken: '',
     expiresAt: 0,
     user: null,
+    access: null,
     currentView: 'overview',
     companies: [],
     activations: [],
@@ -237,6 +238,10 @@
       policySelect.appendChild(option);
     }
     if ([...policySelect.options].some((item) => item.value === currentPolicyValue)) policySelect.value = currentPolicyValue;
+    else if (!state.access?.isGlobalAdmin && state.access?.companyIds?.length === 1) {
+      policySelect.value = state.access.companyIds[0];
+      policySelect.dispatchEvent(new Event('change'));
+    }
 
       const companySelect = byId('activationCompanySelect');
     const currentValue = companySelect.value;
@@ -247,6 +252,7 @@
       companySelect.appendChild(option);
     }
       if ([...companySelect.options].some((item) => item.value === currentValue)) companySelect.value = currentValue;
+      else if (!state.access?.isGlobalAdmin && state.access?.companyIds?.length === 1) companySelect.value = state.access.companyIds[0];
 
       const balanceSelect = byId('balanceCompanySelect');
       if (balanceSelect) {
@@ -258,6 +264,7 @@
           balanceSelect.appendChild(option);
         }
         if ([...balanceSelect.options].some((item) => item.value === selectedBalance)) balanceSelect.value = selectedBalance;
+        else if (!state.access?.isGlobalAdmin && state.access?.companyIds?.length === 1) balanceSelect.value = state.access.companyIds[0];
       }
   }
 
@@ -550,6 +557,7 @@
 
   function showView(view) {
     if (!Object.hasOwn(loaders, view)) return;
+    if (state.access?.isGlobalAdmin === false && ['overview', 'devices', 'activations', 'system'].includes(view)) return;
     state.currentView = view;
     for (const section of document.querySelectorAll('[data-section]')) {
       const visible = section.dataset.section === view;
@@ -587,17 +595,25 @@
       state.sessionToken = result.session.token;
       state.expiresAt = result.session.expiresAt;
       state.user = result.user;
+      state.access = result.access;
       const session = await request(`${API}/session`);
       if (session.session.telegramId !== state.user.id) throw new Error('ADMIN_SESSION_INVALID');
+      state.access = session.access || state.access;
+      if (!state.access) throw new Error('ADMIN_SESSION_INVALID');
+      for (const button of document.querySelectorAll('.nav-button[data-view]')) {
+        button.hidden = !state.access.isGlobalAdmin && ['overview', 'devices', 'activations', 'system'].includes(button.dataset.view);
+        button.style.display = button.hidden ? 'none' : '';
+      }
       byId('authGate').hidden = true;
       byId('adminApp').hidden = false;
       setText('adminBadge', state.user.firstName || state.user.username || 'Admin');
-      showView('overview');
+      showView(state.access.isGlobalAdmin ? 'overview' : 'companies');
       if (telegram.BackButton) telegram.BackButton.hide();
     } catch (error) {
       state.sessionToken = '';
       state.expiresAt = 0;
       state.user = null;
+      state.access = null;
       showAuthError(error.code === 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED'
         ? 'Ushbu Telegram akkaunti admin allowlistida yo‘q.'
         : 'Autentifikatsiya yakunlanmadi.  API va Telegram ruxsatini tekshiring.', true);

@@ -60,6 +60,7 @@ describe(' Admin WebApp routes', () => {
     fs.writeFileSync(path.join(tempDir, 'admin.js'), 'window.test = true;');
     registerAdminDashboardRoutes(app, {
       dashboard,
+      pool: options.pool || { query: async () => ({ rows: [] }) },
       sessionSecret: SECRET,
       allowedAdminIds: new Set([ADMIN_ID]),
       adminApiToken: 'internal-admin-service-token',
@@ -108,7 +109,8 @@ describe(' Admin WebApp routes', () => {
     expect(response.json()).toEqual({
       success: true,
       session: { token: sessionToken, expiresAt: NOW + 900 },
-      user: { id: ADMIN_ID, firstName: 'Admin', lastName: '', username: '' }
+      user: { id: ADMIN_ID, firstName: 'Admin', lastName: '', username: '' },
+      access: { isGlobalAdmin: true, companyIds: null }
     });
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://novda-admin-bot:8080/internal/admin/webapp/session',
@@ -133,7 +135,7 @@ describe(' Admin WebApp routes', () => {
     });
 
     expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe('ADMIN_SESSION_NOT_AUTHORIZED');
+    expect(response.json().error.code).toBe('ADMIN_TELEGRAM_ID_NOT_AUTHORIZED');
   });
 
   it('applies verified identity to reads and ignores caller-supplied admin IDs on writes', async () => {
@@ -208,6 +210,67 @@ describe(' Admin WebApp routes', () => {
     expect(dashboard.updateCompanyStrictMode).toHaveBeenCalledWith(ADMIN_ID, {
       strictMode: false, companyId: 'comp_novda', sessionToken
     });
+  });
+
+  it('limits a company-scoped admin to its granted company and blocks global dashboard data', async () => {
+    const dashboard = createDashboard();
+    dashboard.listCompanies.mockResolvedValue([
+      { companyId: 'comp_novda', companyName: 'Novda' },
+      { companyId: 'other_company', companyName: 'Other' }
+    ]);
+    const pool = {
+      query: vi.fn(async (_sql: string, params: unknown[]) => ({
+        rows: params[0] === '274466315' ? [{ company_id: 'comp_novda' }] : []
+      }))
+    };
+    const { app: server } = startApp({ dashboard, pool });
+    await server.ready();
+    const auth = { authorization: `Bearer ${createSession('274466315')}` };
+
+    const companies = await server.inject({ method: 'GET', url: '/api/admin/webapp/companies', headers: auth });
+    expect(companies.statusCode).toBe(200);
+    expect(companies.json().companies).toEqual([{ companyId: 'comp_novda', companyName: 'Novda' }]);
+
+    const workers = await server.inject({ method: 'GET', url: '/api/admin/webapp/workers', headers: auth });
+    expect(workers.statusCode).toBe(200);
+    expect(dashboard.listWorkers).toHaveBeenCalledWith({ companyId: 'comp_novda' });
+
+    const crossCompany = await server.inject({
+      method: 'GET', url: '/api/admin/webapp/workers?companyId=other_company', headers: auth
+    });
+    expect(crossCompany.statusCode).toBe(403);
+    expect(crossCompany.json().error.code).toBe('ADMIN_COMPANY_SCOPE_REQUIRED');
+
+    const overview = await server.inject({ method: 'GET', url: '/api/admin/webapp/overview', headers: auth });
+    expect(overview.statusCode).toBe(403);
+    expect(overview.json().error.code).toBe('ADMIN_GLOBAL_SCOPE_REQUIRED');
+    expect(dashboard.overview).not.toHaveBeenCalled();
+  });
+
+  it('authorizes the internal bot webapp exchange from database company grants', async () => {
+    const pool = {
+      query: vi.fn(async (_sql: string, params: unknown[]) => ({
+        rows: params[0] === '274466315' ? [{ company_id: 'comp_novda' }] : []
+      }))
+    };
+    const { app: server } = startApp({ pool });
+    await server.ready();
+
+    const allowed = await server.inject({
+      method: 'POST', url: '/internal/admin/webapp/authorize',
+      headers: { 'x-novda-admin-token': 'internal-admin-service-token' },
+      payload: { telegramId: '274466315', companyId: 'comp_novda' }
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json().access).toEqual({ isGlobalAdmin: false, companyIds: ['comp_novda'] });
+
+    const denied = await server.inject({
+      method: 'POST', url: '/internal/admin/webapp/authorize',
+      headers: { 'x-novda-admin-token': 'internal-admin-service-token' },
+      payload: { telegramId: '274466315', companyId: 'other_company' }
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.code).toBe('ADMIN_COMPANY_SCOPE_REQUIRED');
   });
 
   it('serves the static app and assets with no-store security headers', async () => {

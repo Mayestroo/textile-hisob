@@ -11,6 +11,7 @@ const {
   revokeActivationRequest
 } = require('../activation/activationRequests.cjs');
 const { verifySignedActivation } = require('../activation/licenseActivation.cjs');
+const { assertCompanyAccess, resolveAdminAccess } = require('./adminAccess.cjs');
 
 const COMPANY_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -61,6 +62,18 @@ function createAdminDashboardService(options = {}) {
       throw activationError('ADMIN_TELEGRAM_ID_NOT_AUTHORIZED', 403);
     }
     return telegramId;
+  }
+
+  async function actorForCompany(value, companyId) {
+    const telegramId = String(value || '').trim();
+    if (!/^\d{1,24}$/.test(telegramId)) throw activationError('ADMIN_TELEGRAM_ID_NOT_AUTHORIZED', 403);
+    const access = await resolveAdminAccess(pool, telegramId, allowedAdminIds);
+    assertCompanyAccess(access, companyId);
+    return telegramId;
+  }
+
+  function actorAllowlist(telegramId) {
+    return new Set([...allowedAdminIds, telegramId]);
   }
 
   async function overview() {
@@ -456,8 +469,8 @@ function createAdminDashboardService(options = {}) {
   }
 
   async function updateCompanyStrictMode(telegramId, input = {}) {
-    const actor = actorId(telegramId);
     const companyId = validateCompanyId(input.companyId);
+    const actor = await actorForCompany(telegramId, companyId);
     if (typeof input.strictMode !== 'boolean') throw activationError('INVALID_STRICT_MODE', 400);
     const client = await pool.connect();
     try {
@@ -549,18 +562,19 @@ function createAdminDashboardService(options = {}) {
   }
 
   async function upsertCompany(telegramId, input = {}) {
-    const actor = actorId(telegramId);
+    const companyId = validateCompanyId(input.companyId);
+    const actor = await actorForCompany(telegramId, companyId);
     return upsertActivationCompany(pool, {
-      companyId: input.companyId,
+      companyId,
       companyName: input.companyName,
       allowedRoles: input.allowedRoles,
       isActive: input.isActive
-    }, actor, allowedAdminIds);
+    }, actor, actorAllowlist(actor));
   }
 
   async function signPayload(telegramId, sessionToken, payload) {
     if (typeof signerClient !== 'function') throw activationError('ACTIVATION_SIGNER_UNAVAILABLE', 503);
-    const result = await signerClient({ sessionToken, payload });
+    const result = await signerClient({ sessionToken, payload, companyId: payload?.companyId });
     const signedActivation = result?.signedActivation || result;
     if (result?.telegramId != null && String(result.telegramId) !== telegramId) {
       throw activationError('ACTIVATION_SIGNER_IDENTITY_MISMATCH', 503);
@@ -572,9 +586,9 @@ function createAdminDashboardService(options = {}) {
   }
 
   async function approveActivation(telegramId, input = {}) {
-    const actor = actorId(telegramId);
     const requestId = validateRequestId(input.requestId);
     const companyId = validateCompanyId(input.companyId);
+    const actor = await actorForCompany(telegramId, companyId);
     const role = String(input.role || '').trim().toLowerCase();
     const detail = await getAdminActivationRequest(pool, requestId);
     if (detail.status !== 'PENDING') throw activationError('ACTIVATION_REQUEST_NOT_PENDING', 409);
@@ -599,7 +613,7 @@ function createAdminDashboardService(options = {}) {
       companyId,
       role,
       signedActivation
-    }, { allowedAdminIds, publicKey });
+    }, { allowedAdminIds: actorAllowlist(actor), publicKey });
   }
 
   async function rejectActivation(telegramId, input = {}) {
@@ -611,10 +625,10 @@ function createAdminDashboardService(options = {}) {
   }
 
   async function revokeActivation(telegramId, input = {}) {
-    const actor = actorId(telegramId);
     const requestId = validateRequestId(input.requestId);
     const detail = await getAdminActivationRequest(pool, requestId);
     if (detail.status !== 'APPROVED' || !detail.activation?.payload) throw activationError('ACTIVATION_NOT_REVOCABLE', 409);
+    const actor = await actorForCompany(telegramId, detail.activation.payload.companyId);
     const payload = { ...detail.activation.payload };
     const currentIssuedAt = Date.parse(payload.issuedAt);
     if (!Number.isFinite(currentIssuedAt)) throw activationError('ACTIVATION_PAYLOAD_INVALID', 409);
@@ -624,7 +638,7 @@ function createAdminDashboardService(options = {}) {
     return revokeActivationRequest(pool, requestId, {
       adminTelegramId: actor,
       signedActivation
-    }, { allowedAdminIds, publicKey });
+    }, { allowedAdminIds: actorAllowlist(actor), publicKey });
   }
 
   return {

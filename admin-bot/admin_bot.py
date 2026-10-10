@@ -121,7 +121,7 @@ def validate_webapp_init_data(init_data, bot_token, allowed_ids, now=None):
             raise _auth_error("WEBAPP_AUTH_INVALID")
         if current_time - auth_date > ADMIN_WEBAPP_AUTH_MAX_AGE_SECONDS:
             raise _auth_error("WEBAPP_AUTH_EXPIRED")
-        if telegram_id not in _normalized_admin_ids(allowed_ids):
+        if allowed_ids is not None and telegram_id not in _normalized_admin_ids(allowed_ids):
             raise _auth_error("ADMIN_TELEGRAM_ID_NOT_AUTHORIZED")
 
         safe_user = {key: user[key] for key in ("id", "first_name", "last_name", "username", "language_code") if key in user}
@@ -183,7 +183,7 @@ def verify_admin_web_session(token, session_secret, allowed_ids, now=None):
             raise _auth_error("ADMIN_SESSION_INVALID")
         if current_time >= expires_at:
             raise _auth_error("ADMIN_SESSION_EXPIRED")
-        if telegram_id not in _normalized_admin_ids(allowed_ids):
+        if allowed_ids is not None and telegram_id not in _normalized_admin_ids(allowed_ids):
             raise _auth_error("ADMIN_SESSION_NOT_AUTHORIZED")
         return {"telegramId": telegram_id, "expiresAt": expires_at}
     except ValueError as error:
@@ -570,7 +570,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"success": False, "error": {"code": "INTERNAL_ROUTE_NOT_FOUND"}})
         except ValueError as error:
             code = str(error) if str(error).isupper() and len(str(error)) <= 80 else "ADMIN_WEBAPP_REQUEST_REJECTED"
-            if code in {"ADMIN_TELEGRAM_ID_NOT_AUTHORIZED", "ADMIN_SESSION_NOT_AUTHORIZED"}:
+            if code in {"ADMIN_TELEGRAM_ID_NOT_AUTHORIZED", "ADMIN_SESSION_NOT_AUTHORIZED", "ADMIN_COMPANY_SCOPE_REQUIRED"}:
                 status = 403
             elif code == "INVALID_REQUEST_BODY":
                 status = 400
@@ -599,13 +599,38 @@ def run_health_server():
 
 
 def issue_admin_webapp_session(init_data):
-    claims = validate_webapp_init_data(init_data, BOT_TOKEN, ADMIN_IDS)
+    claims = validate_webapp_init_data(init_data, BOT_TOKEN, None)
+    try:
+        access = api_request(
+            "POST",
+            "/internal/admin/webapp/authorize",
+            {"telegramId": claims["telegramId"]},
+        ).get("access")
+    except RuntimeError as error:
+        if str(error) == "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED":
+            raise ValueError(str(error)) from None
+        raise
+    if not isinstance(access, dict):
+        raise ValueError("ADMIN_TELEGRAM_ID_NOT_AUTHORIZED")
     session = create_admin_web_session(claims["telegramId"], ADMIN_WEBAPP_SESSION_SECRET)
-    return {"session": session, "user": claims["user"]}
+    return {"session": session, "user": claims["user"], "access": access}
 
 
 def sign_activation_for_admin_session(session_token, payload):
-    claims = verify_admin_web_session(session_token, ADMIN_WEBAPP_SESSION_SECRET, ADMIN_IDS)
+    claims = verify_admin_web_session(session_token, ADMIN_WEBAPP_SESSION_SECRET, None)
+    company_id = str((payload or {}).get("companyId", "")).strip()
+    try:
+        authorization = api_request(
+            "POST",
+            "/internal/admin/webapp/authorize",
+            {"telegramId": claims["telegramId"], "companyId": company_id},
+        )
+    except RuntimeError as error:
+        if str(error) in {"ADMIN_TELEGRAM_ID_NOT_AUTHORIZED", "ADMIN_COMPANY_SCOPE_REQUIRED"}:
+            raise ValueError("ADMIN_SESSION_NOT_AUTHORIZED") from None
+        raise
+    if not isinstance(authorization.get("access"), dict):
+        raise ValueError("ADMIN_TELEGRAM_ID_NOT_AUTHORIZED")
     signed = create_activation(payload)
     return {"telegramId": claims["telegramId"], "signedActivation": signed}
 
