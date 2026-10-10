@@ -371,7 +371,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
       companyId: COMPANY_ID, companyName: 'Unauthorized', allowedRoles: ['admin']
     }, createSession('99887766').token);
     expect(forbidden.statusCode).toBe(403);
-    expect(forbidden.json().error.code).toBe('ADMIN_SESSION_NOT_AUTHORIZED');
+    expect(forbidden.json().error.code).toBe('ADMIN_TELEGRAM_ID_NOT_AUTHORIZED');
     const after = await pool.query('SELECT COUNT(*)::INT AS count FROM activation_companies');
     expect(after.rows[0].count).toBe(before.rows[0].count);
   });
