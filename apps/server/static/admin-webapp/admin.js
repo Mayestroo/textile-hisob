@@ -25,6 +25,8 @@
     workerSubmitting: false,
     balanceSubmitting: false,
     balanceWorkerSearch: '',
+    currentCpWorkers: [],
+    cpWorkerSearchQuery: '',
     viewLoaders: new Map()
   };
 
@@ -638,52 +640,69 @@
     list.replaceChildren();
     try {
       const res = await request(withQuery(`${API}/workers`, { companyId, limit: 100 }));
-      const workers = res.workers || [];
-      setText('cpWorkerCount', `${workers.length} ta`);
-      byId('cpWorkerEmpty').hidden = workers.length > 0;
-      for (const w of workers) {
-        const card = node('article', 'worker-touch-card');
-        const top = node('div', 'worker-touch-card-top');
-        const titleWrap = node('div');
-        titleWrap.appendChild(node('div', 'worker-touch-title', w.name));
-        titleWrap.appendChild(node('span', 'mono count-label', `#${w.workerId}${w.role ? ` · ${w.role}` : ''}`));
-        top.appendChild(titleWrap);
-        top.appendChild(statusBadge(w.status));
-        card.appendChild(top);
-
-        const stats = node('div', 'worker-touch-stats');
-        stats.appendChild(node('span', '', `Staj: ${money(w.staj)}`));
-        stats.appendChild(node('span', 'mono', w.binding ? (w.binding.username ? `@${w.binding.username}` : w.binding.telegramId) : 'Bog‘lanmagan'));
-        card.appendChild(stats);
-
-        const actions = node('div', 'worker-touch-actions');
-        const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
-        adjBtn.type = 'button';
-        adjBtn.dataset.quickAdj = String(w.workerId);
-        adjBtn.dataset.companyId = companyId;
-        adjBtn.dataset.workerName = w.name;
-        actions.appendChild(adjBtn);
-
-        const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
-        editBtn.type = 'button';
-        editBtn.dataset.editWorker = String(w.workerId);
-        editBtn.dataset.companyId = companyId;
-        actions.appendChild(editBtn);
-
-        if (w.binding) {
-          const unbindBtn = node('button', 'button button-danger button-sm', '🔗 Yechish');
-          unbindBtn.type = 'button';
-          unbindBtn.dataset.unbindWorker = String(w.workerId);
-          unbindBtn.dataset.companyId = companyId;
-          unbindBtn.dataset.telegramId = w.binding.telegramId;
-          unbindBtn.dataset.workerName = w.name;
-          actions.appendChild(unbindBtn);
-        }
-        card.appendChild(actions);
-        list.appendChild(card);
-      }
+      state.currentCpWorkers = res.workers || [];
+      renderCpWorkerCards();
     } catch (err) {
       toast(`Ishchilar yuklanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+    }
+  }
+
+  function renderCpWorkerCards() {
+    const list = byId('cpWorkerCardList');
+    if (!list) return;
+    list.replaceChildren();
+    let workers = state.currentCpWorkers || [];
+    const query = String(state.cpWorkerSearchQuery || '').trim().toLowerCase();
+    if (query) {
+      workers = workers.filter((w) =>
+        (w.name && w.name.toLowerCase().includes(query)) ||
+        String(w.workerId).includes(query) ||
+        (w.role && w.role.toLowerCase().includes(query))
+      );
+    }
+    setText('cpWorkerCount', `${workers.length} ta`);
+    byId('cpWorkerEmpty').hidden = workers.length > 0;
+    const companyId = state.selectedCompanyId;
+    for (const w of workers) {
+      const card = node('article', 'worker-touch-card');
+      const top = node('div', 'worker-touch-card-top');
+      const titleWrap = node('div');
+      titleWrap.appendChild(node('div', 'worker-touch-title', w.name));
+      titleWrap.appendChild(node('span', 'mono count-label', `#${w.workerId}${w.role ? ` · ${w.role}` : ''}`));
+      top.appendChild(titleWrap);
+      top.appendChild(statusBadge(w.status));
+      card.appendChild(top);
+
+      const stats = node('div', 'worker-touch-stats');
+      stats.appendChild(node('span', '', `Staj: ${money(w.staj)}`));
+      stats.appendChild(node('span', 'mono', w.binding ? (w.binding.username ? `@${w.binding.username}` : w.binding.telegramId) : 'Bog‘lanmagan'));
+      card.appendChild(stats);
+
+      const actions = node('div', 'worker-touch-actions');
+      const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
+      adjBtn.type = 'button';
+      adjBtn.dataset.quickAdj = String(w.workerId);
+      adjBtn.dataset.companyId = companyId;
+      adjBtn.dataset.workerName = w.name;
+      actions.appendChild(adjBtn);
+
+      const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
+      editBtn.type = 'button';
+      editBtn.dataset.editWorker = String(w.workerId);
+      editBtn.dataset.companyId = companyId;
+      actions.appendChild(editBtn);
+
+      if (w.binding) {
+        const unbindBtn = node('button', 'button button-danger button-sm', '🔗 Yechish');
+        unbindBtn.type = 'button';
+        unbindBtn.dataset.unbindWorker = String(w.workerId);
+        unbindBtn.dataset.companyId = companyId;
+        unbindBtn.dataset.telegramId = w.binding.telegramId;
+        unbindBtn.dataset.workerName = w.name;
+        actions.appendChild(unbindBtn);
+      }
+      card.appendChild(actions);
+      list.appendChild(card);
     }
   }
 
@@ -1787,9 +1806,61 @@
     }
   }
 
+  function applyRoleNavigation() {
+    const isGlobal = Boolean(state.access?.isGlobalAdmin);
+    const factoryViews = ['workers', 'bindings', 'models', 'parties', 'tickets', 'balances'];
+    const platformViews = ['companies', 'activations', 'system'];
+
+    for (const button of document.querySelectorAll('.nav-button[data-view]')) {
+      const v = button.dataset.view;
+      if (isGlobal) {
+        // System admin manages platform directory; factory operations are strictly scoped inside Company Profile
+        button.hidden = factoryViews.includes(v);
+      } else {
+        // Factory director oversees their factory; platform administration views are hidden
+        button.hidden = platformViews.includes(v) || (!state.access.isGlobalAdmin && button.dataset.view === 'system');
+      }
+    }
+
+    // Quick-grid items in #more section
+    for (const card of document.querySelectorAll('.quick-grid [data-go]')) {
+      const go = card.dataset.go;
+      if (isGlobal) {
+        card.hidden = factoryViews.includes(go);
+      } else {
+        card.hidden = platformViews.includes(go);
+      }
+    }
+
+    const moreCpNote = byId('moreCompanyNote');
+    if (moreCpNote) moreCpNote.hidden = !isGlobal;
+
+    const globalWorkerNotice = byId('globalWorkerNotice');
+    if (globalWorkerNotice) globalWorkerNotice.hidden = !isGlobal;
+
+    byId('companyAdminManagement').hidden = !state.access.isGlobalAdmin;
+    document.querySelector('[data-go="system"]')?.toggleAttribute('hidden', !state.access.isGlobalAdmin);
+  }
+
   function showView(view) {
     if (view !== 'company-profile' && !Object.hasOwn(loaders, view)) return;
     if (state.access?.isGlobalAdmin === false && view === 'system') return;
+
+    const isGlobal = state.access?.isGlobalAdmin === true;
+    const factoryViews = ['workers', 'bindings', 'models', 'parties', 'tickets', 'balances'];
+
+    // System admin manages factory workforce/batches inside Company Profile
+    if (isGlobal && factoryViews.includes(view)) {
+      if (state.selectedCompanyId) {
+        void openCompanyProfile(state.selectedCompanyId).then(() => {
+          void switchCpTab(view === 'balances' ? 'workers' : (view === 'tickets' ? 'overview' : view));
+        });
+        return;
+      }
+      view = 'companies';
+      toast('Ishchilar va zavod amallari korxona profili ichida ochiladi. Kerakli korxonani tanlang.');
+    }
+
     state.previousView = state.currentView;
     state.currentView = view;
     for (const section of document.querySelectorAll('[data-section]')) {
@@ -1797,10 +1868,9 @@
       section.hidden = !visible;
       section.classList.toggle('is-visible', visible);
     }
-    const isGlobal = state.access?.isGlobalAdmin === true;
     const primaryMobileViews = isGlobal
-      ? ['companies', 'activations', 'overview', 'more']
-      : ['overview', 'workers', 'parties', 'devices', 'more'];
+      ? ['companies', 'activations', 'devices', 'system', 'more']
+      : ['overview', 'workers', 'parties', 'balances', 'more'];
     for (const button of document.querySelectorAll('.nav-button')) {
       const v = button.dataset.view;
       const isPrimary = primaryMobileViews.includes(v);
@@ -1873,11 +1943,7 @@
       if (session.session.telegramId !== state.user.id) throw new Error('ADMIN_SESSION_INVALID');
       state.access = session.access || state.access;
       if (!state.access) throw new Error('ADMIN_SESSION_INVALID');
-      for (const button of document.querySelectorAll('.nav-button[data-view]')) {
-        button.hidden = !state.access.isGlobalAdmin && button.dataset.view === 'system';
-      }
-      byId('companyAdminManagement').hidden = !state.access.isGlobalAdmin;
-      document.querySelector('[data-go="system"]')?.toggleAttribute('hidden', !state.access.isGlobalAdmin);
+      applyRoleNavigation();
       if (!state.access.isGlobalAdmin && state.access.companyIds?.length === 1) {
         const companyId = state.access.companyIds[0];
         const workerCompany = byId('workerFilterForm').elements.companyId;
@@ -2050,6 +2116,11 @@
         openQuickAdjustment({ companyId: state.access?.companyIds?.[0] });
         return;
       }
+      const cpQuickAdj = event.target.closest('#cpQuickAdjBtn');
+      if (cpQuickAdj) {
+        openQuickAdjustment({ companyId: state.selectedCompanyId });
+        return;
+      }
       const quickAdjBtn = event.target.closest('[data-quick-adj]');
       if (quickAdjBtn) {
         const { quickAdj, companyId, workerName } = quickAdjBtn.dataset;
@@ -2182,6 +2253,10 @@
       chip.classList.add('is-active');
       state.companyFilter = chip.dataset.companyFilter;
       renderCompanyCards();
+    });
+    byId('cpWorkerSearchInput')?.addEventListener('input', (event) => {
+      state.cpWorkerSearchQuery = event.target.value;
+      renderCpWorkerCards();
     });
     byId('closeQuickAdjDialog')?.addEventListener('click', () => byId('quickAdjustmentDialog').close());
     byId('cancelQuickAdj')?.addEventListener('click', () => byId('quickAdjustmentDialog').close());

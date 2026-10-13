@@ -585,6 +585,10 @@
                 </div>
                 <span id="cpWorkerCount" class="count-label">0 ta</span>
               </div>
+              <div class="cp-sub-toolbar">
+                <input type="search" id="cpWorkerSearchInput" placeholder="Ishchi ismi yoki ID bo‘yicha qidirish…" />
+                <button id="cpQuickAdjBtn" class="button button-primary button-sm" type="button">💵 + Tezkor Avans</button>
+              </div>
               <div id="cpWorkerCardList" class="worker-card-feed"></div>
               <p id="cpWorkerEmpty" class="empty-state" hidden>Bu korxonada hali ishchilar yo‘q.</p>
             </article>
@@ -693,6 +697,10 @@
               <h1 id="workersTitle">Ishchilar va hisob-kitob</h1>
               <p class="view-subtitle">Ishchi bog‘lanishi, joriy davr va ish haqi faktlaridan tuziladi.</p>
             </div>
+          </div>
+          <div id="globalWorkerNotice" class="global-worker-notice" hidden>
+            <span>🏢 Ishchilar har bir korxonaning o‘z profilida boshqariladi.</span>
+            <button class="button button-secondary button-sm" data-go="companies" type="button">Korxonalarga o‘tish →</button>
           </div>
           <article class="surface-card filter-card">
             <form id="workerFilterForm" class="filter-row">
@@ -1139,6 +1147,14 @@
             <button class="quick-card quick-cyan" data-go="balances" type="button"><span>💳</span><strong>Avans va jarima</strong><small>Hisob-kitob faktlari</small></button>
             <button class="quick-card quick-slate" data-go="system" type="button"><span>⚙️</span><strong>Tizim holati</strong><small>Server va baza</small></button>
             <button class="quick-card quick-violet" data-go="admin" type="button"><span>🛡️</span><strong>Admin sessiyasi</strong><small>Hisob va sessiya</small></button>
+          </div>
+          <div id="moreCompanyNote" class="more-helper-card" hidden>
+            <div class="helper-icon">🏢</div>
+            <div>
+              <strong>Korxona boshqaruvi</strong>
+              <p>Ishchilar, partiyalar, modellar va balanslar har bir korxonaning profili ichida alohida boshqariladi.</p>
+              <button class="button button-secondary button-sm" data-go="companies" type="button">Korxonalar ro‘yxati →</button>
+            </div>
           </div>
         </section>
 
