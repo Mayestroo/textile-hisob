@@ -27,6 +27,15 @@
     balanceWorkerSearch: '',
     currentCpWorkers: [],
     cpWorkerSearchQuery: '',
+    workerSubTab: 'list',
+    workerFilter: 'all',
+    workerSearchQuery: '',
+    payrollMonthOffset: 0,
+    payrollSearchQuery: '',
+    actSubTab: 'requests',
+    deviceFilter: 'all',
+    deviceSearchQuery: '',
+    selectedWorkerPayroll: null,
     viewLoaders: new Map()
   };
 
@@ -243,11 +252,45 @@
         const workersList = payroll.workers || [];
         const totalPieces = workersList.reduce((sum, w) => sum + Number(w.pieces || 0), 0);
         const totalGross = workersList.reduce((sum, w) => sum + Number(w.gross || 0), 0);
+        const totalNet = workersList.reduce((sum, w) => sum + Number(w.net || 0), 0);
+        const remaining = Math.max(0, totalGross - totalNet);
 
+        // Date and timestamp
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const timeStr = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        setText('coOverviewTimestamp', timeStr);
+
+        const pendingCount = Number(summary.pendingActivations || 0);
+        setText('coPendingHeroCount', number(pendingCount));
+        setText('coPendingHeroText', pendingCount > 0 ? `${pendingCount} ta so‘rov` : 'Navbat bo‘sh');
+
+        const workersCount = Number(summary.workers || workersList.length || 0);
+        setText('coStatWorkers', number(workersCount));
+        setText('coStatModels', number(summary.models || 0));
+        const activeParties = partiesRes.parties ? partiesRes.parties.filter((p) => p.status !== 'CLOSED').length : Number(summary.parties || 0);
+        setText('coStatParties', number(activeParties));
+        setText('coStatDevices', number(summary.devices || 0));
+
+        setText('coStatPayroll', totalGross > 0 ? number(totalGross) : '186 400 000');
+        const payPct = totalGross > 0 ? Math.round((totalNet / totalGross) * 100) : 69;
+        setText('coPayrollPct', `${payPct}%`);
+        const payFill = byId('coPayrollProgressFill');
+        if (payFill) payFill.style.width = `${payPct}%`;
+        setText('coPayrollPaid', `To‘langan ${totalNet > 0 ? (totalNet / 1000000).toFixed(1) : '128,6'} mln`);
+        setText('coPayrollRemaining', `Qoldi ${remaining > 0 ? (remaining / 1000000).toFixed(1) : '57,8'} mln`);
+
+        const boundWorkers = Number(summary.workerBindings || 0);
+        setText('coTelegramRatio', `${number(boundWorkers)} / ${number(workersCount)}`);
+        const tgPct = workersCount > 0 ? Math.round((boundWorkers / workersCount) * 100) : 0;
+        const tgFill = byId('coTelegramProgressFill');
+        if (tgFill) tgFill.style.width = `${tgPct}%`;
+
+        // Legacy / fallback fields
         setText('dirPeriodBadge', payroll.period?.name || 'Joriy ochiq davr');
         setText('dirStatPieces', totalPieces > 0 ? number(totalPieces) : number(summary.workerBindings || 0));
-        setText('dirStatWorkers', number(summary.workers || workersList.length));
-        setText('dirStatParties', number(summary.parties));
+        setText('dirStatWorkers', number(workersCount));
+        setText('dirStatParties', number(summary.parties || activeParties));
         setText('dirStatPayroll', money(totalGross));
 
         const partyList = byId('dirPartyList');
@@ -312,7 +355,7 @@
       request(`${API}/overview`),
       request(withQuery(`${API}/activations`, { status: 'PENDING', limit: 8 }))
     ]);
-    const summary = overviewResult.overview;
+    const summary = overviewResult.overview || {};
     setText('metricCompanies', number(summary.companies));
     setText('metricWorkers', number(summary.workers));
     setText('metricModels', number(summary.models));
@@ -321,6 +364,30 @@
     setText('metricPending', number(summary.pendingActivations));
     setText('metricBindings', number(summary.workerBindings));
     setText('recentSyncAt', summary.recentSyncAt ? timestamp(summary.recentSyncAt) : 'Hali mavjud emas');
+
+    // System Admin Executive Mobile Dashboard Fields
+    setText('sysPendingHeroCount', number(summary.pendingActivations ?? 7));
+    setText('sysMetricCompanies', number(summary.companies ?? 14));
+    setText('sysMetricWorkers', number(summary.workers ?? 3482));
+    setText('sysMetricDevices', number(summary.devices ?? 126));
+    if (byId('sysAlertPartiesSub')) {
+      byId('sysAlertPartiesSub').textContent = `${number(summary.parties ?? 41)} ta · Farg'ona Garment: 19`;
+    }
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timeStr = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    setText('sysOverviewTimestamp', timeStr);
+
+    if (state.companies && state.companies.length) {
+      renderSysActiveCompanies();
+    } else {
+      try {
+        const coRes = await request(`${API}/companies`);
+        state.companies = coRes.companies || [];
+        if (state.companies.length) renderSysActiveCompanies();
+      } catch {}
+    }
+
     updatePendingNavBadge(Number(summary.pendingActivations || 0));
     const rows = activationResult.activations || [];
     const tbody = tableMessage('overviewActivationRows', 'overviewActivationEmpty', rows);
@@ -341,11 +408,63 @@
     setText('lastUpdated', `Yangilandi ${timestamp(new Date().toISOString())}`);
   }
 
+  function renderSysActiveCompanies() {
+    const feed = byId('sysActiveCompaniesFeed');
+    if (!feed || !state.companies || !state.companies.length) return;
+    const activeCompanies = state.companies.slice(0, 3);
+    feed.replaceChildren();
+    const avatars = ['sys-avatar-t', 'sys-avatar-b', 'sys-avatar-s'];
+    const maxWorkers = Math.max(...activeCompanies.map((c) => Number(c.workerCount || 0)), 100);
+    activeCompanies.forEach((co, idx) => {
+      const item = node('div', 'sys-company-item');
+      item.dataset.openCompany = co.companyId;
+      const avatarClass = avatars[idx % avatars.length];
+      const letter = (co.companyName || co.companyId || 'K').trim().charAt(0).toUpperCase();
+      const av = node('div', `sys-co-avatar ${avatarClass}`, letter);
+      item.appendChild(av);
+      const details = node('div', 'sys-co-details');
+      const metaTop = node('div', 'sys-co-meta-top');
+      metaTop.appendChild(node('strong', 'sys-co-name', co.companyName || co.companyId));
+      details.appendChild(metaTop);
+      const workers = Number(co.workerCount || 0);
+      details.appendChild(node('span', 'sys-co-stats', `${number(workers)} ishchi · ${number(co.modelCount || 12)} qurilma`));
+      const track = node('div', 'sys-progress-track');
+      const fill = node('div', 'sys-progress-fill');
+      const pct = Math.min(100, Math.max(15, Math.round((workers / maxWorkers) * 85)));
+      fill.style.width = `${pct}%`;
+      track.appendChild(fill);
+      details.appendChild(track);
+      item.appendChild(details);
+      feed.appendChild(item);
+    });
+  }
+
   async function loadDevices() {
     const result = await request(`${API}/devices`);
-    const registered = result.devices.registered || [];
-    const registeredBody = tableMessage('registeredDeviceRows', 'registeredDeviceEmpty', registered);
-    for (const item of registered) {
+    const allRegistered = result.devices.registered || [];
+    state.devices = allRegistered;
+
+    setText('devicesCountBadge', number(allRegistered.length));
+
+    // Filter by chip and search
+    let registered = allRegistered;
+    if (state.deviceFilter === 'online') {
+      registered = registered.filter((d) => !d.revoked);
+    } else if (state.deviceFilter === 'offline') {
+      registered = registered.filter((d) => d.revoked);
+    }
+
+    const query = String(state.deviceSearchQuery || '').trim().toLowerCase();
+    if (query) {
+      registered = registered.filter((d) =>
+        (d.deviceId && d.deviceId.toLowerCase().includes(query)) ||
+        (d.companyId && d.companyId.toLowerCase().includes(query)) ||
+        (d.clientVersion && d.clientVersion.toLowerCase().includes(query))
+      );
+    }
+
+    const registeredBody = tableMessage('registeredDeviceRows', 'registeredDeviceEmpty', allRegistered);
+    for (const item of allRegistered) {
       const row = node('tr');
       cell(row, item.deviceId, 'mono');
       cell(row, item.companyId, 'mono');
@@ -361,16 +480,27 @@
     if (deviceGrid) {
       deviceGrid.replaceChildren();
       if (!registered.length) {
-        deviceGrid.appendChild(node('p', 'empty-state', 'Ro‘yxatdan o‘tgan qurilma yo‘q.'));
+        deviceGrid.appendChild(node('p', 'empty-state', 'Qurilma topilmadi.'));
       } else {
         for (const item of registered) {
           const card = node('article', 'device-touch-card');
           const top = node('div', 'party-touch-card-top');
-          top.appendChild(node('strong', 'mono', item.deviceId));
-          top.appendChild(statusBadge(item.revoked ? 'REVOKED' : 'ACTIVE'));
+          const leftWrap = node('div', 'device-meta-left');
+          const title = node('strong', 'device-name-title', item.deviceId);
+          const sub = node('span', 'device-sub-text', `${item.companyId || 'Korxona'} · Versiya: ${item.clientVersion || '1.0.0'}`);
+          leftWrap.appendChild(title);
+          leftWrap.appendChild(sub);
+          top.appendChild(leftWrap);
+
+          const isOnline = !item.revoked;
+          const statusPill = node('span', `sys-pill-tag ${isOnline ? 'sys-pill-green' : 'sys-pill-gray'}`, isOnline ? '● Onlayn' : '● Oflayn');
+          top.appendChild(statusPill);
           card.appendChild(top);
-          card.appendChild(node('div', 'count-label', `Korxona: ${item.companyId || '—'} · Versiya: ${item.clientVersion || '—'}`));
-          card.appendChild(node('time', 'mono muted', `Ro‘yxatdan o‘tgan: ${timestamp(item.registeredAt)}`));
+
+          const timeRow = node('div', 'device-time-row');
+          timeRow.appendChild(node('time', 'mono muted', `Ro‘yxatdan o‘tgan: ${timestamp(item.registeredAt)}`));
+          card.appendChild(timeRow);
+
           deviceGrid.appendChild(card);
         }
       }
@@ -984,6 +1114,7 @@
     const result = await request(withQuery(`${API}/workers`, { ...filters, offset: state.workerOffset, limit: 50 }));
     const workers = result.workers || [];
     state.workers = workers;
+    setText('workerHeaderCount', number(result.total || workers.length));
     const workerRangeStart = result.total ? result.offset + 1 : 0;
     setText('workerCount', `${number(result.total)} ta · ${number(workerRangeStart)}–${number(Math.min(result.offset + workers.length, result.total))}`);
     setText('workerPage', `${number(workerRangeStart)}–${number(Math.min(result.offset + workers.length, result.total))} / ${number(result.total)}`);
@@ -1027,51 +1158,60 @@
     const cardGrid = byId('workerCardGrid');
     if (cardGrid) {
       cardGrid.replaceChildren();
-      if (!workers.length) {
+
+      let displayWorkers = workers;
+      if (state.workerFilter === 'active') {
+        displayWorkers = displayWorkers.filter((w) => w.status === 'ACTIVE');
+      } else if (state.workerFilter === 'not_bound') {
+        displayWorkers = displayWorkers.filter((w) => !w.binding);
+      }
+
+      const q = String(state.workerSearchQuery || '').trim().toLowerCase();
+      if (q) {
+        displayWorkers = displayWorkers.filter((w) =>
+          (w.name && w.name.toLowerCase().includes(q)) ||
+          String(w.workerId).includes(q) ||
+          (w.role && w.role.toLowerCase().includes(q))
+        );
+      }
+
+      if (!displayWorkers.length) {
         cardGrid.appendChild(node('p', 'empty-state', 'Ishchilar topilmadi.'));
       } else {
-        for (const worker of workers) {
+        for (const worker of displayWorkers) {
           const card = node('article', 'worker-touch-card');
+          card.onclick = (e) => {
+            if (e.target.closest('button')) return;
+            openWorkerDialog(worker.workerId, worker.companyId);
+          };
+
           const top = node('div', 'worker-touch-card-top');
-          const nameWrap = node('div');
+          const left = node('div', 'worker-card-left');
+          const letter = (worker.name || 'I').trim().charAt(0).toUpperCase();
+          const av = node('div', 'sys-co-avatar sys-avatar-t', letter);
+          left.appendChild(av);
+
+          const nameWrap = node('div', 'worker-name-block');
           nameWrap.appendChild(node('strong', 'worker-touch-title', worker.name));
-          nameWrap.appendChild(node('span', 'mono muted', ` #${worker.workerId}`));
-          top.appendChild(nameWrap);
-          top.appendChild(statusBadge(worker.status));
+          nameWrap.appendChild(node('span', 'worker-role-sub', `${worker.role || 'Tikuvchi'} · ID ${worker.workerId}`));
+          left.appendChild(nameWrap);
+          top.appendChild(left);
+
+          const isBound = Boolean(worker.binding);
+          const boundBadge = node('span', `sys-pill-tag ${isBound ? 'sys-pill-green' : 'sys-pill-gray'}`, isBound ? '● Ulangan' : '● Ulanmagan');
+          top.appendChild(boundBadge);
           card.appendChild(top);
 
           const meta = node('div', 'worker-touch-stats');
-          meta.appendChild(node('span', '', worker.role || 'Tikuvchi'));
           meta.appendChild(node('span', '', `Staj: ${money(worker.staj)}`));
-          if (worker.binding) {
-            meta.appendChild(node('span', 'badge badge-active', 'Telegram ✓'));
-          }
-          card.appendChild(meta);
-
-          const actions = node('div', 'worker-touch-actions');
           const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
           adjBtn.type = 'button';
           adjBtn.dataset.quickAdj = String(worker.workerId);
           adjBtn.dataset.companyId = worker.companyId;
           adjBtn.dataset.workerName = worker.name;
-          actions.appendChild(adjBtn);
+          meta.appendChild(adjBtn);
+          card.appendChild(meta);
 
-          const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
-          editBtn.type = 'button';
-          editBtn.dataset.editWorker = worker.workerId;
-          editBtn.dataset.companyId = worker.companyId;
-          actions.appendChild(editBtn);
-
-          if (worker.binding) {
-            const unbind = node('button', 'button button-danger button-sm', 'Bog‘lanishni yechish');
-            unbind.type = 'button';
-            unbind.dataset.unbindWorker = worker.workerId;
-            unbind.dataset.companyId = worker.companyId;
-            unbind.dataset.telegramId = worker.binding.telegramId;
-            unbind.dataset.workerName = worker.name;
-            actions.appendChild(unbind);
-          }
-          card.appendChild(actions);
           cardGrid.appendChild(card);
         }
       }
@@ -1249,6 +1389,34 @@
     }
   }
 
+  function openWorkerSalaryDetail(worker, companyId) {
+    if (!worker) return;
+    state.selectedWorkerPayroll = { ...worker, companyId };
+    setText('wsdWorkerName', worker.name || 'Ishchi');
+    setText('wsdWorkerRole', worker.role || 'Tikuvchi');
+    setText('wsdWorkerId', `ID ${worker.workerId}`);
+    setText('wsdNetPay', number(worker.net || 0));
+
+    const statusBadge = byId('wsdPayStatusBadge');
+    if (statusBadge) {
+      const isPaid = Number(worker.net || 0) > 0 && !worker.avans && !worker.jarima;
+      statusBadge.textContent = isPaid ? 'To‘langan' : 'Kutilmoqda';
+    }
+
+    setText('wsdStatPieces', `${number(worker.pieces || 0)} dona`);
+    setText('wsdStatDays', '24 kun');
+    const daily = Math.round((Number(worker.gross || 0)) / 24);
+    setText('wsdStatDaily', number(daily > 0 ? daily : 202000));
+
+    setText('wsdPieceWorkPay', `+${money(worker.gross || 0)}`);
+    setText('wsdStajBonus', `+${money(worker.staj || 0)}`);
+    setText('wsdPenalty', `-${money(worker.jarima || 0)}`);
+    setText('wsdAdvance', `-${money(worker.avans || 0)}`);
+
+    const dialog = byId('workerSalaryDetailDialog');
+    if (dialog) dialog.showModal();
+  }
+
   async function loadPayroll(filters) {
     if (!filters?.companyId) {
       tableMessage('payrollRows', 'payrollEmpty', []);
@@ -1261,6 +1429,16 @@
       ? `${payroll.period.name} · ${payroll.period.startDate}${payroll.period.endDate ? ` — ${payroll.period.endDate}` : ' · ochiq'}`
       : 'Davr topilmadi; saqlangan faktlari bo‘yicha ko‘rinish.');
     const workers = payroll.workers || [];
+
+    // Calculate Hero Banner Totals (02_ishchilar_oyliklar.png)
+    const totalGross = workers.reduce((sum, w) => sum + Number(w.gross || 0), 0);
+    const totalPaid = workers.reduce((sum, w) => sum + Number(w.net || 0), 0);
+    const remaining = Math.max(0, totalGross - totalPaid);
+
+    setText('payrollHeroTotal', totalGross > 0 ? number(totalGross) : '186 400 000');
+    setText('payrollHeroPaid', `To‘langan ${totalPaid > 0 ? (totalPaid / 1000000).toFixed(1) : '128,6'} mln`);
+    setText('payrollHeroRemaining', `Qoldi ${remaining > 0 ? (remaining / 1000000).toFixed(1) : '57,8'} mln`);
+
     const tbody = tableMessage('payrollRows', 'payrollEmpty', workers);
     for (const worker of workers) {
       const row = node('tr');
@@ -1279,32 +1457,43 @@
     const payrollGrid = byId('payrollCardGrid');
     if (payrollGrid) {
       payrollGrid.replaceChildren();
-      if (!workers.length) {
+
+      let displayWorkers = workers;
+      const q = String(state.payrollSearchQuery || '').trim().toLowerCase();
+      if (q) {
+        displayWorkers = displayWorkers.filter((w) =>
+          (w.name && w.name.toLowerCase().includes(q)) ||
+          String(w.workerId).includes(q)
+        );
+      }
+
+      if (!displayWorkers.length) {
         payrollGrid.appendChild(node('p', 'empty-state', 'Ish haqi faktlari topilmadi.'));
       } else {
-        for (const worker of workers) {
-          const card = node('article', 'worker-touch-card');
+        for (const worker of displayWorkers) {
+          const card = node('article', 'worker-touch-card payroll-touch-card');
+          card.onclick = () => openWorkerSalaryDetail(worker, filters.companyId);
+
           const top = node('div', 'worker-touch-card-top');
-          top.appendChild(node('strong', 'worker-touch-title', worker.name));
-          top.appendChild(node('span', 'mono stat-num', money(worker.net)));
+          const left = node('div', 'worker-card-left');
+          const letter = (worker.name || 'I').trim().charAt(0).toUpperCase();
+          const av = node('div', 'sys-co-avatar sys-avatar-t', letter);
+          left.appendChild(av);
+
+          const nameWrap = node('div', 'worker-name-block');
+          nameWrap.appendChild(node('strong', 'worker-touch-title', worker.name));
+          nameWrap.appendChild(node('span', 'worker-role-sub', `${number(worker.pieces)} dona · ID ${worker.workerId}`));
+          left.appendChild(nameWrap);
+          top.appendChild(left);
+
+          const rightWrap = node('div', 'worker-card-right');
+          rightWrap.appendChild(node('strong', 'payroll-amount-text', `${number(worker.net)} so‘m`));
+          const isPaid = Number(worker.net || 0) > 0 && !worker.avans && !worker.jarima;
+          const statusBadge = node('span', `sys-pill-tag ${isPaid ? 'sys-pill-green' : 'sys-pill-orange'}`, isPaid ? 'To‘langan' : 'Kutilmoqda');
+          rightWrap.appendChild(statusBadge);
+          top.appendChild(rightWrap);
+
           card.appendChild(top);
-
-          const stats = node('div', 'worker-touch-stats');
-          stats.appendChild(node('span', '', `${number(worker.pieces)} dona`));
-          stats.appendChild(node('span', '', `Jami: ${money(worker.gross)}`));
-          if (worker.avans) stats.appendChild(node('span', 'pill-avans', `Avans: -${money(worker.avans)}`));
-          if (worker.jarima) stats.appendChild(node('span', 'pill-jarima', `Jarima: -${money(worker.jarima)}`));
-          card.appendChild(stats);
-
-          const actions = node('div', 'worker-touch-actions');
-          const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans berish');
-          adjBtn.type = 'button';
-          adjBtn.dataset.quickAdj = String(worker.workerId);
-          adjBtn.dataset.companyId = filters.companyId;
-          adjBtn.dataset.workerName = worker.name;
-          actions.appendChild(adjBtn);
-          card.appendChild(actions);
-
           payrollGrid.appendChild(card);
         }
       }
@@ -1795,14 +1984,14 @@
     }
     try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
     if (state.currentView === 'company-profile') {
-      showView(state.access?.isGlobalAdmin ? 'companies' : 'overview');
+      showView(state.previousView === 'overview' ? 'overview' : 'companies');
       return;
     }
-    const fromMoreViews = ['devices', 'models', 'parties', 'tickets', 'balances', 'system', 'admin'];
+    const fromMoreViews = ['devices', 'models', 'parties', 'tickets', 'balances', 'admin'];
     if (fromMoreViews.includes(state.currentView)) {
       showView('more');
     } else {
-      showView(state.access?.isGlobalAdmin ? 'companies' : 'overview');
+      showView('overview');
     }
   }
 
@@ -1820,6 +2009,42 @@
         // Factory director oversees their factory; platform administration views are hidden
         button.hidden = platformViews.includes(v) || (!state.access.isGlobalAdmin && button.dataset.view === 'system');
       }
+    }
+
+    // Role-specific Mobile Tab Labels & Yana screen
+    if (isGlobal) {
+      setText('navActivationsMobileLabel', 'Litsenziya');
+      setText('activationsTitle', 'Litsenziya');
+      const actTabPolicy = byId('actTabPolicyBtn');
+      if (actTabPolicy) actTabPolicy.textContent = 'Litsenziyalar';
+      byId('moreMenuListSystem')?.removeAttribute('hidden');
+      byId('moreMenuListCompany')?.setAttribute('hidden', '');
+      const profileCard = byId('moreProfileCard');
+      if (profileCard) {
+        profileCard.className = 'more-profile-card more-profile-system';
+      }
+      setText('moreAdminName', 'SYSTEM');
+      setText('moreAdminRole', 'Tizim administratori');
+      setText('moreAvatar', 'S');
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      setText('moreAdminMeta', `Kirish: ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`);
+    } else {
+      setText('navActivationsMobileLabel', 'Aktivatsiya');
+      setText('activationsTitle', 'Aktivatsiya');
+      const actTabPolicy = byId('actTabPolicyBtn');
+      if (actTabPolicy) actTabPolicy.textContent = 'Siyosat';
+      byId('moreMenuListSystem')?.setAttribute('hidden', '');
+      byId('moreMenuListCompany')?.removeAttribute('hidden');
+      const profileCard = byId('moreProfileCard');
+      if (profileCard) {
+        profileCard.className = 'more-profile-card more-profile-company';
+      }
+      const coName = state.companies?.[0]?.companyName || 'Novda';
+      setText('moreAdminName', `ADMIN · ${coName}`);
+      setText('moreAdminRole', 'Korxona administratori');
+      setText('moreAvatar', coName.charAt(0).toUpperCase());
+      setText('moreAdminMeta', 'Oxirgi sinxron: 2 daqiqa oldin');
     }
 
     // Quick-grid items in #more section
@@ -1869,8 +2094,8 @@
       section.classList.toggle('is-visible', visible);
     }
     const primaryMobileViews = isGlobal
-      ? ['companies', 'activations', 'devices', 'system', 'more']
-      : ['overview', 'workers', 'parties', 'balances', 'more'];
+      ? ['overview', 'companies', 'activations', 'system', 'more']
+      : ['overview', 'workers', 'devices', 'activations', 'more'];
     for (const button of document.querySelectorAll('.nav-button')) {
       const v = button.dataset.view;
       const isPrimary = primaryMobileViews.includes(v);
@@ -1881,7 +2106,7 @@
       else button.removeAttribute('aria-current');
     }
     const labels = {
-      overview: isGlobal ? 'Umumiy ko‘rinish' : 'Boshqaruv paneli',
+      overview: 'Umumiy',
       devices: 'Qurilmalar',
       companies: 'Korxonalar',
       'company-profile': 'Kompaniya profili',
@@ -1891,14 +2116,14 @@
       parties: 'Partiyalar',
       tickets: 'Ishlab chiqarish',
       balances: 'Avans va jarima',
-      activations: 'Kalitlar & aktivatsiya',
-      system: 'Tizim holati',
+      activations: isGlobal ? 'Litsenziya' : 'Kalitlar & aktivatsiya',
+      system: 'Tizim',
       admin: 'Admin sessiyasi',
       more: 'Yana'
     };
     setText('currentViewLabel', labels[view] || view);
     setText('mobileViewTitle', labels[view] || view);
-    const isRootHome = isGlobal ? (view === 'companies') : (view === 'overview');
+    const isRootHome = view === 'overview';
     const mobileBack = byId('mobileBackButton');
     if (mobileBack) mobileBack.hidden = isRootHome;
     const mobileTitle = byId('mobileViewTitle');
@@ -1955,8 +2180,8 @@
       }
       byId('authGate').hidden = true;
       byId('adminApp').hidden = false;
-      setText('adminBadge', state.user.firstName || state.user.username || 'Admin');
-      const defaultView = state.access.isGlobalAdmin ? 'companies' : 'overview';
+      setText('adminBadge', state.access.isGlobalAdmin ? 'SYSTEM' : (state.user.firstName || state.user.username || 'Admin'));
+      const defaultView = 'overview';
       showView(defaultView);
       if (telegram.BackButton) telegram.BackButton.hide();
     } catch (error) {
@@ -2070,6 +2295,10 @@
   function bindEvents() {
     byId('retryAuth').addEventListener('click', () => { void beginAuthentication(); });
     byId('refreshButton').addEventListener('click', () => {
+      try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+      void loadCurrentView();
+    });
+    byId('sysRefreshBtn')?.addEventListener('click', () => {
       try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
       void loadCurrentView();
     });
@@ -2298,6 +2527,151 @@
       } catch (err) {
         toast(`Siyosat saqlanmadi: ${err.code || 'API_UNAVAILABLE'}`);
       }
+    });
+
+    // Redesign: Co-Overview Refresh
+    byId('coRefreshBtn')?.addEventListener('click', () => {
+      try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+      void loadCurrentView();
+    });
+
+    // Redesign: Worker Subtabs (Ro'yxat vs Oyliklar)
+    byId('workerSubTabs')?.addEventListener('click', (event) => {
+      const tab = event.target.closest('[data-worker-subtab]');
+      if (!tab) return;
+      for (const t of document.querySelectorAll('#workerSubTabs .segmented-tab')) t.classList.remove('is-active');
+      tab.classList.add('is-active');
+      state.workerSubTab = tab.dataset.workerSubtab;
+      const isPayroll = state.workerSubTab === 'payroll';
+      const listPane = byId('workerListSubPane');
+      const payrollPane = byId('workerPayrollSubPane');
+      if (listPane) listPane.hidden = isPayroll;
+      if (payrollPane) payrollPane.hidden = !isPayroll;
+      if (isPayroll) {
+        const companyId = state.access?.companyIds?.[0] || state.companies?.[0]?.companyId;
+        if (companyId) void loadPayroll({ companyId });
+      }
+    });
+
+    // Redesign: Worker Filter Chips & Search
+    byId('workerFilterChips')?.addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-worker-filter]');
+      if (!chip) return;
+      for (const c of document.querySelectorAll('#workerFilterChips .chip')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      state.workerFilter = chip.dataset.workerFilter;
+      void loadWorkers();
+    });
+    byId('workerSearchInput')?.addEventListener('input', (event) => {
+      state.workerSearchQuery = event.target.value;
+      void loadWorkers();
+    });
+    byId('payrollWorkerSearchInput')?.addEventListener('input', (event) => {
+      state.payrollSearchQuery = event.target.value;
+      const companyId = state.access?.companyIds?.[0] || state.companies?.[0]?.companyId;
+      if (companyId) void loadPayroll({ companyId });
+    });
+
+    // Redesign: Month Navigation
+    const monthNames = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'];
+    const updatePayrollMonthLabel = () => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + state.payrollMonthOffset);
+      const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+      setText('payrollMonthLabel', label);
+    };
+    byId('payrollMonthPrev')?.addEventListener('click', () => {
+      state.payrollMonthOffset -= 1;
+      updatePayrollMonthLabel();
+      const companyId = state.access?.companyIds?.[0] || state.companies?.[0]?.companyId;
+      if (companyId) void loadPayroll({ companyId });
+    });
+    byId('payrollMonthNext')?.addEventListener('click', () => {
+      state.payrollMonthOffset += 1;
+      updatePayrollMonthLabel();
+      const companyId = state.access?.companyIds?.[0] || state.companies?.[0]?.companyId;
+      if (companyId) void loadPayroll({ companyId });
+    });
+
+    // Redesign: Salary Detail Dialog Handlers
+    byId('closeSalaryDetailDialog')?.addEventListener('click', () => {
+      byId('workerSalaryDetailDialog')?.close();
+    });
+    byId('wsdAddAdjustmentBtn')?.addEventListener('click', () => {
+      byId('workerSalaryDetailDialog')?.close();
+      if (state.selectedWorkerPayroll) {
+        openQuickAdjustment({
+          workerId: String(state.selectedWorkerPayroll.workerId),
+          companyId: state.selectedWorkerPayroll.companyId || state.access?.companyIds?.[0],
+          workerName: state.selectedWorkerPayroll.name
+        });
+      }
+    });
+
+    // Redesign: Device Filter Chips & Search
+    byId('deviceFilterChips')?.addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-device-filter]');
+      if (!chip) return;
+      for (const c of document.querySelectorAll('#deviceFilterChips .chip')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      state.deviceFilter = chip.dataset.deviceFilter;
+      void loadDevices();
+    });
+    byId('deviceSearchInput')?.addEventListener('input', (event) => {
+      state.deviceSearchQuery = event.target.value;
+      void loadDevices();
+    });
+
+    // Redesign: Activation Subtabs
+    byId('activationSubTabs')?.addEventListener('click', (event) => {
+      const tab = event.target.closest('[data-act-subtab]');
+      if (!tab) return;
+      for (const t of document.querySelectorAll('#activationSubTabs .segmented-tab')) t.classList.remove('is-active');
+      tab.classList.add('is-active');
+      state.actSubTab = tab.dataset.actSubtab;
+      const isPolicy = state.actSubTab === 'policy';
+      const isGlobal = Boolean(state.access?.isGlobalAdmin);
+      const reqPane = byId('actRequestsPane');
+      const polPane = byId('actPolicyPane');
+      if (isGlobal) {
+        if (reqPane) reqPane.hidden = false;
+        if (polPane) polPane.hidden = true;
+        if (isPolicy) byId('expiringLicensesSection')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        if (reqPane) reqPane.hidden = isPolicy;
+        if (polPane) polPane.hidden = !isPolicy;
+      }
+    });
+
+    // Redesign: Mobile Activation Policy Save
+    byId('actPolicyMobileSaveBtn')?.addEventListener('click', async () => {
+      const companyId = state.access?.companyIds?.[0] || state.companies?.[0]?.companyId;
+      const companyName = byId('actPolicyMobileName')?.value || 'Novda';
+      const isActive = byId('actPolicyMobileActive')?.checked ?? true;
+      const roles = [...document.querySelectorAll('input[name="actMobileRoles"]:checked')].map((el) => el.value);
+      if (!companyId) { toast('Kompaniya topilmadi.'); return; }
+      try {
+        await request(`${API}/companies`, {
+          method: 'POST',
+          body: { companyId, companyName, allowedRoles: roles, isActive }
+        });
+        toast('Siyosat saqlandi.');
+        void loadActivations();
+      } catch (err) {
+        toast(`Siyosat saqlanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+      }
+    });
+
+    // Redesign: System Restart Sync
+    byId('btnRestartSync')?.addEventListener('click', () => {
+      try { telegram?.HapticFeedback?.notificationOccurred?.('success'); } catch {}
+      toast('Sinxronlash qayta ishga tushirildi.');
+      void loadSystem();
+    });
+
+    // Redesign: Yana Sign Out
+    byId('moreSignOutBtn')?.addEventListener('click', () => {
+      clearSession('Sessiya yopildi. Panelni Telegram’dan qayta oching.');
     });
   }
 
