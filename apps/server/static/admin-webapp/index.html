@@ -155,96 +155,197 @@
 
         <!-- Section: Overview -->
         <section class="view-section is-visible" data-section="overview" aria-labelledby="overviewTitle">
-          <div class="view-heading">
-            <div>
-              <p class="eyebrow">LIVE LEDGER · POSTGRESQL</p>
-              <h1 id="overviewTitle">Umumiy ko‘rinish</h1>
-              <p class="view-subtitle">Bazada saqlangan joriy ishlab chiqarish va qurilma holati.</p>
+          <!-- Director Factory Executive Dashboard (Shown when isGlobalAdmin === false) -->
+          <div id="directorOverview" class="director-overview" hidden>
+            <div class="director-hero">
+              <div class="dir-hero-top">
+                <div class="dir-avatar">🏢</div>
+                <div class="dir-titles">
+                  <h1 id="dirCompanyName">To‘qimachilik Korxonasi</h1>
+                  <div class="dir-meta-row">
+                    <span id="dirCompanyId" class="mono muted">ID: —</span>
+                    <span id="dirPeriodBadge" class="period-pill">Joriy davr</span>
+                  </div>
+                </div>
+                <div class="dir-sync-badge">
+                  <span class="status-dot"></span>
+                  <span>Jonli</span>
+                </div>
+              </div>
             </div>
-            <div class="updated-at">
-              <span class="status-dot"></span>
-              <span id="lastUpdated">Yangilanmagan</span>
+
+            <!-- 4 Executive Pulse Metrics -->
+            <div class="director-kpi-grid">
+              <article class="dir-kpi-card kpi-pieces">
+                <div class="kpi-icon">🧵</div>
+                <div class="kpi-content">
+                  <span class="kpi-label">Tikilgan mahsulot</span>
+                  <strong id="dirStatPieces" class="kpi-value">—</strong>
+                  <small class="kpi-sub">Joriy ochiq davrda</small>
+                </div>
+              </article>
+              <article class="dir-kpi-card kpi-workers">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-content">
+                  <span class="kpi-label">Faol jamoa</span>
+                  <strong id="dirStatWorkers" class="kpi-value">—</strong>
+                  <small class="kpi-sub">Ishdagi xodimlar</small>
+                </div>
+              </article>
+              <article class="dir-kpi-card kpi-parties">
+                <div class="kpi-icon">📦</div>
+                <div class="kpi-content">
+                  <span class="kpi-label">Faol partiyalar</span>
+                  <strong id="dirStatParties" class="kpi-value">—</strong>
+                  <small class="kpi-sub">Ish jarayonida</small>
+                </div>
+              </article>
+              <article class="dir-kpi-card kpi-payroll">
+                <div class="kpi-icon">💰</div>
+                <div class="kpi-content">
+                  <span class="kpi-label">Oylik fondi</span>
+                  <strong id="dirStatPayroll" class="kpi-value">—</strong>
+                  <small class="kpi-sub">Hisoblangan summa</small>
+                </div>
+              </article>
             </div>
-          </div>
 
-          <div class="metric-grid">
-            <article class="metric-card metric-card-companies">
-              <span class="metric-label">KORXONALAR</span>
-              <strong id="metricCompanies">—</strong>
-              <small>PostgreSQL scope</small>
-            </article>
-            <article class="metric-card metric-card-workers">
-              <span class="metric-label">ISHCHILAR</span>
-              <strong id="metricWorkers">—</strong>
-              <small>Faol roster</small>
-            </article>
-            <article class="metric-card metric-card-models">
-              <span class="metric-label">MODELLAR</span>
-              <strong id="metricModels">—</strong>
-              <small>Faol model</small>
-            </article>
-            <article class="metric-card metric-card-parties">
-              <span class="metric-label">PARTIYALAR</span>
-              <strong id="metricParties">—</strong>
-              <small>Yopilmagan</small>
-            </article>
-            <article class="metric-card metric-card-devices">
-              <span class="metric-label">QURILMALAR</span>
-              <strong id="metricDevices">—</strong>
-              <small>Ro‘yxatdan o‘tgan</small>
-            </article>
-            <article class="metric-card metric-alert metric-card-pending">
-              <span class="metric-label">KUTILAYOTGAN</span>
-              <strong id="metricPending">—</strong>
-              <small>Aktivatsiya so‘rovi</small>
-            </article>
-            <article class="metric-card metric-card-bindings">
-              <span class="metric-label">TELEGRAM</span>
-              <strong id="metricBindings">—</strong>
-              <small>Ishchi bog‘lanishi</small>
-            </article>
-          </div>
+            <!-- Director 1-Tap Fast Actions -->
+            <div class="dir-action-bar">
+              <button id="dirQuickAdjBtn" class="button button-primary dir-action-btn" type="button">
+                <span>💵</span> + Tezkor Avans
+              </button>
+              <button class="button button-secondary dir-action-btn" data-go="workers" type="button">
+                <span>👥</span> Ishchilar va oylik
+              </button>
+              <button class="button button-secondary dir-action-btn" data-go="parties" type="button">
+                <span>📦</span> Partiyalar
+              </button>
+              <button class="button button-secondary dir-action-btn" data-go="balances" type="button">
+                <span>📊</span> Hisobot
+              </button>
+            </div>
 
-          <div class="panel-grid overview-grid">
-            <article class="surface-card">
+            <!-- Batches in Progress Feed -->
+            <article class="surface-card section-gap">
               <div class="card-heading">
                 <div>
-                  <p class="eyebrow">QUEUE</p>
-                  <h2>Kutilayotgan aktivatsiyalar</h2>
+                  <p class="eyebrow">PRODUCTION IN PROGRESS</p>
+                  <h2>Faol partiyalar holati</h2>
                 </div>
-                <button class="text-button" data-go="activations" type="button">Barchasi →</button>
+                <button class="text-button" data-go="parties" type="button">Barchasi →</button>
               </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>SO‘ROV</th>
-                      <th>QURILMA</th>
-                      <th>VERSIYA</th>
-                      <th>VAQT</th>
-                      <th>AMAL</th>
-                    </tr>
-                  </thead>
-                  <tbody id="overviewActivationRows"></tbody>
-                </table>
-              </div>
-              <p id="overviewActivationEmpty" class="empty-state" hidden>Yangi aktivatsiya so‘rovi yo‘q.</p>
+              <div id="dirPartyList" class="party-card-feed"></div>
+              <p id="dirPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
             </article>
 
-            <article class="surface-card ledger-note">
+            <!-- Live Sewing Tickets Feed -->
+            <article class="surface-card section-gap">
               <div class="card-heading">
                 <div>
-                  <p class="eyebrow">AUTHORITY</p>
-                  <h2>Ma’lumot manbai</h2>
+                  <p class="eyebrow">LIVE SEWING STREAM</p>
+                  <h2>So‘nggi tikuv amallari</h2>
                 </div>
-                <span class="ledger-seal">✓</span>
+                <button class="text-button" data-go="tickets" type="button">Barchasi →</button>
               </div>
-              <p>Ushbu panel faqat API orqali PostgreSQL’dan o‘qiydi. Qurilma telemetriyasi va egalar ro‘yxati canonical server ma’lumotlar modeliga kirmaydi.</p>
-              <div class="fact-line"><span>Biznes bazasi</span><strong>PostgreSQL</strong></div>
-              <div class="fact-line"><span>Admin autentifikatsiyasi</span><strong>Telegram · Allowlist</strong></div>
-              <div class="fact-line"><span>Aktivatsiya imzosi</span><strong>Ed25519 · Server-side</strong></div>
-              <div class="fact-line"><span>So‘nggi sync yozuvi</span><strong id="recentSyncAt">Hali mavjud emas</strong></div>
+              <div id="dirTicketList" class="ticket-card-feed"></div>
+              <p id="dirTicketEmpty" class="empty-state" hidden>Hali tikuv qayd etilmagan.</p>
             </article>
+          </div>
+
+          <!-- Global Admin Platform Overview (Shown when isGlobalAdmin === true) -->
+          <div id="globalOverview" class="global-overview">
+            <div class="view-heading">
+              <div>
+                <p class="eyebrow">LIVE LEDGER · POSTGRESQL</p>
+                <h1 id="overviewTitle">Umumiy ko‘rinish</h1>
+                <p class="view-subtitle">Bazada saqlangan joriy ishlab chiqarish va qurilma holati.</p>
+              </div>
+              <div class="updated-at">
+                <span class="status-dot"></span>
+                <span id="lastUpdated">Yangilanmagan</span>
+              </div>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric-card metric-card-companies">
+                <span class="metric-label">KORXONALAR</span>
+                <strong id="metricCompanies">—</strong>
+                <small>PostgreSQL scope</small>
+              </article>
+              <article class="metric-card metric-card-workers">
+                <span class="metric-label">ISHCHILAR</span>
+                <strong id="metricWorkers">—</strong>
+                <small>Faol roster</small>
+              </article>
+              <article class="metric-card metric-card-models">
+                <span class="metric-label">MODELLAR</span>
+                <strong id="metricModels">—</strong>
+                <small>Faol model</small>
+              </article>
+              <article class="metric-card metric-card-parties">
+                <span class="metric-label">PARTIYALAR</span>
+                <strong id="metricParties">—</strong>
+                <small>Yopilmagan</small>
+              </article>
+              <article class="metric-card metric-card-devices">
+                <span class="metric-label">QURILMALAR</span>
+                <strong id="metricDevices">—</strong>
+                <small>Ro‘yxatdan o‘tgan</small>
+              </article>
+              <article class="metric-card metric-alert metric-card-pending">
+                <span class="metric-label">KUTILAYOTGAN</span>
+                <strong id="metricPending">—</strong>
+                <small>Aktivatsiya so‘rovi</small>
+              </article>
+              <article class="metric-card metric-card-bindings">
+                <span class="metric-label">TELEGRAM</span>
+                <strong id="metricBindings">—</strong>
+                <small>Ishchi bog‘lanishi</small>
+              </article>
+            </div>
+
+            <div class="panel-grid overview-grid">
+              <article class="surface-card">
+                <div class="card-heading">
+                  <div>
+                    <p class="eyebrow">QUEUE</p>
+                    <h2>Kutilayotgan aktivatsiyalar</h2>
+                  </div>
+                  <button class="text-button" data-go="activations" type="button">Barchasi →</button>
+                </div>
+                <div class="table-wrap desktop-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>SO‘ROV</th>
+                        <th>QURILMA</th>
+                        <th>VERSIYA</th>
+                        <th>VAQT</th>
+                        <th>AMAL</th>
+                      </tr>
+                    </thead>
+                    <tbody id="overviewActivationRows"></tbody>
+                  </table>
+                </div>
+                <p id="overviewActivationEmpty" class="empty-state" hidden>Yangi aktivatsiya so‘rovi yo‘q.</p>
+              </article>
+
+              <article class="surface-card ledger-note desktop-only-note">
+                <div class="card-heading">
+                  <div>
+                    <p class="eyebrow">AUTHORITY</p>
+                    <h2>Ma’lumot manbai</h2>
+                  </div>
+                  <span class="ledger-seal">✓</span>
+                </div>
+                <p>Ushbu panel faqat API orqali PostgreSQL’dan o‘qiydi. Qurilma telemetriyasi va egalar ro‘yxati canonical server ma’lumotlar modeliga kirmaydi.</p>
+                <div class="fact-line"><span>Biznes bazasi</span><strong>PostgreSQL</strong></div>
+                <div class="fact-line"><span>Admin autentifikatsiyasi</span><strong>Telegram · Allowlist</strong></div>
+                <div class="fact-line"><span>Aktivatsiya imzosi</span><strong>Ed25519 · Server-side</strong></div>
+                <div class="fact-line"><span>So‘nggi sync yozuvi</span><strong id="recentSyncAt">Hali mavjud emas</strong></div>
+              </article>
+            </div>
           </div>
         </section>
 
@@ -257,7 +358,10 @@
               <p class="view-subtitle">Server ro‘yxati va aktivatsiya holatlari.</p>
             </div>
           </div>
-          <article class="surface-card">
+          <!-- Mobile Touch Cards Feed -->
+          <div id="deviceCardGrid" class="device-card-feed"></div>
+
+          <article class="surface-card desktop-table-card">
             <div class="card-heading">
               <div>
                 <p class="eyebrow">SERVER DEVICES</p>
@@ -280,7 +384,7 @@
             </div>
             <p id="registeredDeviceEmpty" class="empty-state" hidden>PostgreSQL’da ro‘yxatdan o‘tgan qurilma yo‘q.</p>
           </article>
-          <article class="surface-card section-gap">
+          <article class="surface-card section-gap desktop-table-card">
             <div class="card-heading">
               <div>
                 <p class="eyebrow">ACTIVATION LIFECYCLE</p>
@@ -609,7 +713,10 @@
               </div>
               <span id="workerCount" class="count-label"></span>
             </div>
-            <div class="table-wrap">
+            <!-- Mobile Workers Feed -->
+            <div id="workerCardGrid" class="worker-card-feed"></div>
+
+            <div class="table-wrap desktop-table-card">
               <table>
                 <thead>
                   <tr>
@@ -649,7 +756,10 @@
               </form>
             </div>
             <p id="payrollPeriod" class="period-caption">Davr tanlanmagan</p>
-            <div class="table-wrap">
+            <!-- Mobile Payroll Feed -->
+            <div id="payrollCardGrid" class="worker-card-feed"></div>
+
+            <div class="table-wrap desktop-table-card">
               <table>
                 <thead>
                   <tr>
@@ -681,7 +791,10 @@
             </div>
           </div>
           <article class="surface-card">
-            <div class="table-wrap">
+            <!-- Mobile Bindings Feed -->
+            <div id="bindingCardGrid" class="binding-card-feed"></div>
+
+            <div class="table-wrap desktop-table-card">
               <table>
                 <thead>
                   <tr>
@@ -716,7 +829,10 @@
               <p class="view-subtitle">Tasdiqlash va bekor qilish serverda imzolanadi; imzolanmagan fallback mavjud emas.</p>
             </div>
           </div>
-          <article class="surface-card action-card">
+          <!-- Mobile 1-Tap Activation Feed -->
+          <div id="activationCardGrid" class="activation-card-feed"></div>
+
+          <article class="surface-card action-card desktop-table-card">
             <div class="card-heading">
               <div>
                 <p class="eyebrow">AUTHORIZED ADMIN ACTION</p>
@@ -752,7 +868,7 @@
             </form>
             <p class="helper-text">So‘rov va siyosat PostgreSQL’dan tekshiriladi. Brauzer imzo kalitini olmaydi.</p>
           </article>
-          <article class="surface-card section-gap">
+          <article class="surface-card section-gap desktop-table-card">
             <div class="card-heading">
               <div>
                 <p class="eyebrow">ACTIVATION LEDGER</p>
@@ -797,7 +913,10 @@
               <p class="view-subtitle">Model konfiguratsiyasi va o‘lchamlar PostgreSQL’dan faqat o‘qiladi.</p>
             </div>
           </div>
-          <article class="surface-card">
+          <!-- Mobile Models Feed -->
+          <div id="modelCardGrid" class="model-card-feed"></div>
+
+          <article class="surface-card desktop-table-card">
             <div class="table-wrap">
               <table>
                 <thead>
@@ -826,7 +945,10 @@
               <p class="view-subtitle">Patta soni saqlangan jamlanma ko‘rsatkichidir; alohida patta yozuvlari deb talqin qilinmaydi.</p>
             </div>
           </div>
-          <article class="surface-card">
+          <!-- Mobile Parties Feed -->
+          <div id="partyCardGrid" class="party-card-feed"></div>
+
+          <article class="surface-card desktop-table-card">
             <div class="table-wrap">
               <table>
                 <thead>
@@ -857,7 +979,10 @@
               <p class="view-subtitle">Faqat saqlangan ticket faktlari. Bo‘sh boshlang‘ich holat ham to‘g‘ri natijadir.</p>
             </div>
           </div>
-          <article class="surface-card">
+          <!-- Mobile Tickets Feed -->
+          <div id="ticketCardGrid" class="ticket-card-feed"></div>
+
+          <article class="surface-card desktop-table-card">
             <div class="table-wrap">
               <table>
                 <thead>
@@ -929,7 +1054,11 @@
             </form>
             <p class="helper-text">Yangi fakt PostgreSQL ledger’iga yoziladi va worker revision/change feed orqali ulangan desktoplarga yetadi. Boshlang‘ich balans faktlari esa tarixiy holatda qoladi.</p>
           </article>
-          <article class="surface-card">
+
+          <!-- Mobile Balances Feed -->
+          <div id="balanceCardGrid" class="balance-card-feed"></div>
+
+          <article class="surface-card desktop-table-card">
             <div class="table-wrap">
               <table>
                 <thead>
@@ -1057,12 +1186,20 @@
         <input name="workerId" id="quickAdjWorkerId" type="hidden" />
         <input name="companyId" id="quickAdjCompanyId" type="hidden" />
 
-        <div class="quick-adj-worker-badge">
+        <div class="quick-adj-worker-badge" id="quickAdjWorkerBadge">
           <div class="adj-avatar">👤</div>
           <div>
             <strong id="quickAdjWorkerName">—</strong>
             <span id="quickAdjCompanyLabel" class="mono muted">ID: —</span>
           </div>
+        </div>
+
+        <div id="quickAdjWorkerSelectWrap" class="quick-adj-select-wrap" hidden>
+          <label>Ishchini tanlang
+            <select id="quickAdjWorkerSelect">
+              <option value="">Ishchini tanlang...</option>
+            </select>
+          </label>
         </div>
 
         <div class="quick-type-toggle">

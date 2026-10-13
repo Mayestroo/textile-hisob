@@ -216,6 +216,96 @@
   }
 
   async function loadOverview() {
+    const isGlobal = state.access?.isGlobalAdmin !== false;
+    const dirContainer = byId('directorOverview');
+    const globalContainer = byId('globalOverview');
+
+    if (!isGlobal && dirContainer && globalContainer) {
+      dirContainer.hidden = false;
+      globalContainer.hidden = true;
+      const companyId = state.access?.companyIds?.[0] || '';
+      const company = (state.companies || []).find((c) => c.companyId === companyId) || { companyId, companyName: 'Novda Textile' };
+      setText('dirCompanyName', company.companyName || company.companyId || 'To‘qimachilik Korxonasi');
+      setText('dirCompanyId', `ID: ${company.companyId || '—'}`);
+
+      try {
+        const [overviewRes, payrollRes, partiesRes, ticketsRes] = await Promise.all([
+          request(`${API}/overview`),
+          request(`${API}/payroll`),
+          request(`${API}/parties`),
+          request(withQuery(`${API}/tickets`, { limit: 6 }))
+        ]);
+
+        const summary = overviewRes.overview || {};
+        const payroll = payrollRes.payroll || {};
+        const workersList = payroll.workers || [];
+        const totalPieces = workersList.reduce((sum, w) => sum + Number(w.pieces || 0), 0);
+        const totalGross = workersList.reduce((sum, w) => sum + Number(w.gross || 0), 0);
+
+        setText('dirPeriodBadge', payroll.period?.name || 'Joriy ochiq davr');
+        setText('dirStatPieces', totalPieces > 0 ? number(totalPieces) : number(summary.workerBindings || 0));
+        setText('dirStatWorkers', number(summary.workers || workersList.length));
+        setText('dirStatParties', number(summary.parties));
+        setText('dirStatPayroll', money(totalGross));
+
+        const partyList = byId('dirPartyList');
+        if (partyList) {
+          partyList.replaceChildren();
+          const parties = (partiesRes.parties || []).filter((p) => p.status !== 'CLOSED').slice(0, 5);
+          byId('dirPartyEmpty').hidden = parties.length > 0;
+          for (const party of parties) {
+            const card = node('article', 'party-touch-card');
+            const top = node('div', 'party-touch-card-top');
+            const title = node('strong', 'party-touch-title', `№ ${party.partyNumber} · ${party.modelName || party.modelId || 'Model'}`);
+            top.appendChild(title);
+            top.appendChild(statusBadge(party.status));
+            card.appendChild(top);
+
+            const total = Number(party.pattaCount || 0);
+            const sewn = Number(party.ishSoni || 0);
+            const pct = total > 0 ? Math.min(100, Math.round((sewn / total) * 100)) : 0;
+
+            const statsLine = node('div', 'worker-touch-stats');
+            statsLine.appendChild(node('span', '', `${number(sewn)} / ${number(total)} dona`));
+            statsLine.appendChild(node('span', 'mono', `${pct}% bajarildi`));
+            card.appendChild(statsLine);
+
+            const bar = node('div', 'batch-progress-bar');
+            const fill = node('div', 'batch-progress-fill');
+            fill.style.width = `${pct}%`;
+            bar.appendChild(fill);
+            card.appendChild(bar);
+
+            partyList.appendChild(card);
+          }
+        }
+
+        const ticketList = byId('dirTicketList');
+        if (ticketList) {
+          ticketList.replaceChildren();
+          const tickets = ticketsRes.tickets || [];
+          byId('dirTicketEmpty').hidden = tickets.length > 0;
+          for (const t of tickets) {
+            const card = node('article', 'ticket-touch-card');
+            const top = node('div', 'worker-touch-card-top');
+            top.appendChild(node('strong', '', t.workerName ? `${t.workerName} (#${t.workerId})` : `#${t.workerId || '—'}`));
+            top.appendChild(statusBadge(t.status));
+            card.appendChild(top);
+
+            const sub = node('div', 'count-label', `${t.modelName || t.modelId || '—'} · ${t.operation || 'Amal'} · ${number(t.quantity)} dona`);
+            card.appendChild(sub);
+            card.appendChild(node('time', 'mono muted', timestamp(t.effectiveAt)));
+            ticketList.appendChild(card);
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    } else if (dirContainer && globalContainer) {
+      dirContainer.hidden = true;
+      globalContainer.hidden = false;
+    }
+
     const [overviewResult, activationResult] = await Promise.all([
       request(`${API}/overview`),
       request(withQuery(`${API}/activations`, { status: 'PENDING', limit: 8 }))
@@ -264,6 +354,26 @@
       cell(row, timestamp(item.registeredAt));
       registeredBody.appendChild(row);
     }
+
+    const deviceGrid = byId('deviceCardGrid');
+    if (deviceGrid) {
+      deviceGrid.replaceChildren();
+      if (!registered.length) {
+        deviceGrid.appendChild(node('p', 'empty-state', 'Ro‘yxatdan o‘tgan qurilma yo‘q.'));
+      } else {
+        for (const item of registered) {
+          const card = node('article', 'device-touch-card');
+          const top = node('div', 'party-touch-card-top');
+          top.appendChild(node('strong', 'mono', item.deviceId));
+          top.appendChild(statusBadge(item.revoked ? 'REVOKED' : 'ACTIVE'));
+          card.appendChild(top);
+          card.appendChild(node('div', 'count-label', `Korxona: ${item.companyId || '—'} · Versiya: ${item.clientVersion || '—'}`));
+          card.appendChild(node('time', 'mono muted', `Ro‘yxatdan o‘tgan: ${timestamp(item.registeredAt)}`));
+          deviceGrid.appendChild(card);
+        }
+      }
+    }
+
     const activationRows = result.devices.activationRequests || [];
     const activationBody = tableMessage('deviceActivationRows', 'deviceActivationEmpty', activationRows);
     for (const item of activationRows) {
@@ -675,20 +785,54 @@
     }
   }
 
-  async function openQuickAdjustment({ workerId, companyId, workerName }) {
+  async function openQuickAdjustment(params = {}) {
+    const { workerId, companyId, workerName } = params;
     const dialog = byId('quickAdjustmentDialog');
     if (!dialog) return;
-    byId('quickAdjWorkerId').value = workerId;
-    byId('quickAdjCompanyId').value = companyId;
-    setText('quickAdjWorkerName', workerName || `#${workerId}`);
-    setText('quickAdjCompanyLabel', `Kompaniya: ${companyId}`);
+
+    const cid = companyId || state.selectedCompanyId || state.access?.companyIds?.[0] || '';
+    byId('quickAdjCompanyId').value = cid;
+    setText('quickAdjCompanyLabel', `Kompaniya: ${cid}`);
     byId('quickAdjAmount').value = '';
     byId('quickAdjDescription').value = '';
+
+    const badge = byId('quickAdjWorkerBadge');
+    const selectWrap = byId('quickAdjWorkerSelectWrap');
+    const workerSelect = byId('quickAdjWorkerSelect');
+
+    if (workerId) {
+      byId('quickAdjWorkerId').value = workerId;
+      setText('quickAdjWorkerName', workerName || `#${workerId}`);
+      if (badge) badge.hidden = false;
+      if (selectWrap) selectWrap.hidden = true;
+    } else {
+      byId('quickAdjWorkerId').value = '';
+      if (badge) badge.hidden = true;
+      if (selectWrap) selectWrap.hidden = false;
+      if (workerSelect) {
+        workerSelect.replaceChildren(node('option', '', 'Ishchilar yuklanmoqda…'));
+        try {
+          const res = await request(withQuery(`${API}/workers`, { companyId: cid, limit: 100 }));
+          const activeWorkers = (res.workers || []).filter((w) => w.status === 'ACTIVE');
+          workerSelect.replaceChildren(node('option', '', activeWorkers.length ? 'Ishchini tanlang' : 'Faol ishchi topilmadi'));
+          for (const w of activeWorkers) {
+            const opt = node('option', '', `${w.name} (#${w.workerId})`);
+            opt.value = w.workerId;
+            workerSelect.appendChild(opt);
+          }
+          workerSelect.onchange = () => {
+            byId('quickAdjWorkerId').value = workerSelect.value;
+          };
+        } catch {
+          workerSelect.replaceChildren(node('option', '', 'Ishchilarni yuklab bo‘lmadi'));
+        }
+      }
+    }
 
     const periodSelect = byId('quickAdjPeriodSelect');
     periodSelect.replaceChildren(node('option', '', 'Ochiq davr yuklanmoqda…'));
     try {
-      const res = await request(`${API}/companies/${encodeURIComponent(companyId)}/periods`);
+      const res = await request(`${API}/companies/${encodeURIComponent(cid)}/periods`);
       const periods = (res.periods || []).filter((p) => !p.isClosed);
       periodSelect.replaceChildren();
       if (!periods.length) {
@@ -712,7 +856,7 @@
     event.preventDefault();
     const form = byId('quickAdjustmentForm');
     const data = new FormData(form);
-    const workerId = Number(data.get('workerId'));
+    const workerId = Number(data.get('workerId') || byId('quickAdjWorkerSelect')?.value);
     const companyId = String(data.get('companyId') || '').trim();
     const type = String(data.get('type') || 'AVANS').toUpperCase();
     const periodId = String(data.get('periodId') || '').trim();
@@ -746,6 +890,8 @@
         await switchCpTab('workers');
       } else if (state.currentView === 'workers') {
         await loadWorkers(state.workerFilters);
+      } else if (state.currentView === 'overview') {
+        await loadOverview();
       }
     } catch (error) {
       toast(`Saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`);
@@ -858,6 +1004,59 @@
       row.appendChild(actionCell);
       tbody.appendChild(row);
     }
+
+    const cardGrid = byId('workerCardGrid');
+    if (cardGrid) {
+      cardGrid.replaceChildren();
+      if (!workers.length) {
+        cardGrid.appendChild(node('p', 'empty-state', 'Ishchilar topilmadi.'));
+      } else {
+        for (const worker of workers) {
+          const card = node('article', 'worker-touch-card');
+          const top = node('div', 'worker-touch-card-top');
+          const nameWrap = node('div');
+          nameWrap.appendChild(node('strong', 'worker-touch-title', worker.name));
+          nameWrap.appendChild(node('span', 'mono muted', ` #${worker.workerId}`));
+          top.appendChild(nameWrap);
+          top.appendChild(statusBadge(worker.status));
+          card.appendChild(top);
+
+          const meta = node('div', 'worker-touch-stats');
+          meta.appendChild(node('span', '', worker.role || 'Tikuvchi'));
+          meta.appendChild(node('span', '', `Staj: ${money(worker.staj)}`));
+          if (worker.binding) {
+            meta.appendChild(node('span', 'badge badge-active', 'Telegram ✓'));
+          }
+          card.appendChild(meta);
+
+          const actions = node('div', 'worker-touch-actions');
+          const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
+          adjBtn.type = 'button';
+          adjBtn.dataset.quickAdj = String(worker.workerId);
+          adjBtn.dataset.companyId = worker.companyId;
+          adjBtn.dataset.workerName = worker.name;
+          actions.appendChild(adjBtn);
+
+          const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
+          editBtn.type = 'button';
+          editBtn.dataset.editWorker = worker.workerId;
+          editBtn.dataset.companyId = worker.companyId;
+          actions.appendChild(editBtn);
+
+          if (worker.binding) {
+            const unbind = node('button', 'button button-danger button-sm', 'Bog‘lanishni yechish');
+            unbind.type = 'button';
+            unbind.dataset.unbindWorker = worker.workerId;
+            unbind.dataset.companyId = worker.companyId;
+            unbind.dataset.telegramId = worker.binding.telegramId;
+            unbind.dataset.workerName = worker.name;
+            actions.appendChild(unbind);
+          }
+          card.appendChild(actions);
+          cardGrid.appendChild(card);
+        }
+      }
+    }
   }
 
   async function loadBindings() {
@@ -881,6 +1080,37 @@
       unbind.dataset.telegramId = worker.binding.telegramId;
       unbind.dataset.workerName = worker.name;
       actions.appendChild(unbind); row.appendChild(actions); body.appendChild(row);
+    }
+
+    const bindingGrid = byId('bindingCardGrid');
+    if (bindingGrid) {
+      bindingGrid.replaceChildren();
+      if (!workers.length) {
+        bindingGrid.appendChild(node('p', 'empty-state', 'Telegram bog‘lanishi mavjud emas.'));
+      } else {
+        for (const worker of workers) {
+          const card = node('article', 'worker-touch-card');
+          const top = node('div', 'worker-touch-card-top');
+          top.appendChild(node('strong', '', `${worker.name} (#${worker.workerId})`));
+          top.appendChild(statusBadge('BOUND'));
+          card.appendChild(top);
+
+          card.appendChild(node('div', 'count-label', `Telegram ID: ${worker.binding.telegramId}${worker.binding.username ? ` (@${worker.binding.username})` : ''} · Korxona: ${worker.companyId}`));
+          card.appendChild(node('time', 'mono muted', `Bog‘langan: ${timestamp(worker.binding.linkedAt)}`));
+
+          const actions = node('div', 'worker-touch-actions');
+          const unbind = node('button', 'button button-danger button-sm', 'Bog‘lanishni yechish');
+          unbind.type = 'button';
+          unbind.dataset.unbindWorker = worker.workerId;
+          unbind.dataset.companyId = worker.companyId;
+          unbind.dataset.telegramId = worker.binding.telegramId;
+          unbind.dataset.workerName = worker.name;
+          actions.appendChild(unbind);
+          card.appendChild(actions);
+
+          bindingGrid.appendChild(card);
+        }
+      }
     }
   }
 
@@ -1010,7 +1240,7 @@
     const payroll = result.payroll;
     setText('payrollPeriod', payroll.period
       ? `${payroll.period.name} · ${payroll.period.startDate}${payroll.period.endDate ? ` — ${payroll.period.endDate}` : ' · ochiq'}`
-      : 'Davr topilmadi; saqlangan  faktlari bo‘yicha ko‘rinish.');
+      : 'Davr topilmadi; saqlangan faktlari bo‘yicha ko‘rinish.');
     const workers = payroll.workers || [];
     const tbody = tableMessage('payrollRows', 'payrollEmpty', workers);
     for (const worker of workers) {
@@ -1026,6 +1256,40 @@
       tbody.appendChild(row);
     }
     if (workers.length === 0) byId('payrollEmpty').textContent = 'PostgreSQL’da davr yoki ish haqi faktlari yo‘q.';
+
+    const payrollGrid = byId('payrollCardGrid');
+    if (payrollGrid) {
+      payrollGrid.replaceChildren();
+      if (!workers.length) {
+        payrollGrid.appendChild(node('p', 'empty-state', 'Ish haqi faktlari topilmadi.'));
+      } else {
+        for (const worker of workers) {
+          const card = node('article', 'worker-touch-card');
+          const top = node('div', 'worker-touch-card-top');
+          top.appendChild(node('strong', 'worker-touch-title', worker.name));
+          top.appendChild(node('span', 'mono stat-num', money(worker.net)));
+          card.appendChild(top);
+
+          const stats = node('div', 'worker-touch-stats');
+          stats.appendChild(node('span', '', `${number(worker.pieces)} dona`));
+          stats.appendChild(node('span', '', `Jami: ${money(worker.gross)}`));
+          if (worker.avans) stats.appendChild(node('span', 'pill-avans', `Avans: -${money(worker.avans)}`));
+          if (worker.jarima) stats.appendChild(node('span', 'pill-jarima', `Jarima: -${money(worker.jarima)}`));
+          card.appendChild(stats);
+
+          const actions = node('div', 'worker-touch-actions');
+          const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans berish');
+          adjBtn.type = 'button';
+          adjBtn.dataset.quickAdj = String(worker.workerId);
+          adjBtn.dataset.companyId = filters.companyId;
+          adjBtn.dataset.workerName = worker.name;
+          actions.appendChild(adjBtn);
+          card.appendChild(actions);
+
+          payrollGrid.appendChild(card);
+        }
+      }
+    }
   }
 
   function syncActivationControls() {
@@ -1105,6 +1369,64 @@
       row.appendChild(actionCell);
       tbody.appendChild(row);
     }
+
+    const actGrid = byId('activationCardGrid');
+    if (actGrid) {
+      actGrid.replaceChildren();
+      if (!state.activations.length) {
+        actGrid.appendChild(node('p', 'empty-state', 'Aktivatsiya so‘rovlari mavjud emas.'));
+      } else {
+        for (const item of state.activations) {
+          const card = node('article', `activation-touch-card ${item.status === 'PENDING' ? 'is-pending-card' : ''}`);
+          const top = node('div', 'party-touch-card-top');
+          const idWrap = node('div');
+          idWrap.appendChild(node('strong', 'mono', item.machineId));
+          idWrap.appendChild(node('span', 'mono muted', ` (${String(item.requestId).slice(0, 8)})`));
+          top.appendChild(idWrap);
+          top.appendChild(statusBadge(item.status));
+          card.appendChild(top);
+
+          const meta = node('div', 'worker-touch-stats');
+          meta.appendChild(node('span', '', item.companyName || item.companyId || 'Korxona belgilanmagan'));
+          meta.appendChild(node('span', '', `Rol: ${item.role || 'Admin'}`));
+          if (item.signedActivation) {
+            meta.appendChild(node('span', 'badge badge-active', 'Ed25519 ✓'));
+          }
+          card.appendChild(meta);
+          card.appendChild(node('time', 'mono muted', `So‘rov vaqti: ${timestamp(item.requestedAt)}`));
+
+          if (item.status === 'PENDING') {
+            const actions = node('div', 'worker-touch-actions');
+            const approveBtn = node('button', 'button button-primary button-sm', '✅ Tasdiqlash');
+            approveBtn.type = 'button';
+            approveBtn.onclick = async () => {
+              byId('activationRequestSelect').value = item.requestId;
+              syncActivationControls();
+              if (item.companyId) {
+                byId('activationCompanySelect').value = item.companyId;
+              }
+              await submitActivationAction('approve');
+            };
+            actions.appendChild(approveBtn);
+
+            const rejectBtn = node('button', 'button button-danger button-sm', '❌ Rad etish');
+            rejectBtn.type = 'button';
+            rejectBtn.onclick = async () => {
+              byId('activationRequestSelect').value = item.requestId;
+              syncActivationControls();
+              const reason = window.prompt('Rad etish sababini kiriting:');
+              if (!reason) return;
+              byId('activationForm').elements.reason.value = reason;
+              await submitActivationAction('reject');
+            };
+            actions.appendChild(rejectBtn);
+
+            card.appendChild(actions);
+          }
+          actGrid.appendChild(card);
+        }
+      }
+    }
   }
 
   async function showActivationEvents(requestId) {
@@ -1140,6 +1462,22 @@
       cell(row, (item.operations || []).map((operation) => `${operation.name || '—'}: ${operation.rate ?? '—'}`).join(', ') || '—');
       cell(row, (item.availableSizes || []).join(', ') || '—'); cell(row, item.serverRevision ?? '—'); body.appendChild(row);
     }
+    const grid = byId('modelCardGrid');
+    if (grid) {
+      grid.replaceChildren();
+      if (!rows.length) grid.appendChild(node('p', 'empty-state', 'Model yozuvlari topilmadi.'));
+      else {
+        for (const item of rows) {
+          const card = node('article', 'model-touch-card');
+          const top = node('div', 'party-touch-card-top');
+          top.appendChild(node('strong', 'party-touch-title', item.name));
+          top.appendChild(node('span', 'mono count-label', `#${item.modelId}`));
+          card.appendChild(top);
+          card.appendChild(node('div', 'count-label', `Amallar: ${(item.operations || []).length} ta · O‘lchamlar: ${(item.availableSizes || []).join(', ') || '—'}`));
+          grid.appendChild(card);
+        }
+      }
+    }
   }
 
   async function loadParties() {
@@ -1151,6 +1489,37 @@
       cell(row, item.companyId, 'mono'); cell(row, `${item.modelName || '—'} · ${item.modelId || ''}`);
       const status = node('td'); status.appendChild(statusBadge(item.status)); row.appendChild(status);
       cell(row, number(item.pattaCount)); cell(row, number(item.ishSoni)); cell(row, timestamp(item.updatedAt)); body.appendChild(row);
+    }
+    const grid = byId('partyCardGrid');
+    if (grid) {
+      grid.replaceChildren();
+      if (!rows.length) grid.appendChild(node('p', 'empty-state', 'Partiya yozuvlari topilmadi.'));
+      else {
+        for (const item of rows) {
+          const card = node('article', 'party-touch-card');
+          const top = node('div', 'party-touch-card-top');
+          top.appendChild(node('strong', 'party-touch-title', `№ ${item.partyNumber} · ${item.modelName || item.modelId || '—'}`));
+          top.appendChild(statusBadge(item.status));
+          card.appendChild(top);
+
+          const total = Number(item.pattaCount || 0);
+          const sewn = Number(item.ishSoni || 0);
+          const pct = total > 0 ? Math.min(100, Math.round((sewn / total) * 100)) : 0;
+
+          const stats = node('div', 'worker-touch-stats');
+          stats.appendChild(node('span', '', `${number(sewn)} / ${number(total)} dona`));
+          stats.appendChild(node('span', 'mono', `${pct}% bajarildi`));
+          card.appendChild(stats);
+
+          const bar = node('div', 'batch-progress-bar');
+          const fill = node('div', 'batch-progress-fill');
+          fill.style.width = `${pct}%`;
+          bar.appendChild(fill);
+          card.appendChild(bar);
+
+          grid.appendChild(card);
+        }
+      }
     }
   }
 
@@ -1165,6 +1534,23 @@
       cell(row, item.modelName || item.modelId); cell(row, item.operation || '—'); cell(row, number(item.quantity));
       const status = node('td'); status.appendChild(statusBadge(item.status)); row.appendChild(status);
       cell(row, timestamp(item.effectiveAt)); body.appendChild(row);
+    }
+    const grid = byId('ticketCardGrid');
+    if (grid) {
+      grid.replaceChildren();
+      if (!rows.length) grid.appendChild(node('p', 'empty-state', 'Hali ticket qayd etilmagan.'));
+      else {
+        for (const item of rows) {
+          const card = node('article', 'ticket-touch-card');
+          const top = node('div', 'worker-touch-card-top');
+          top.appendChild(node('strong', '', item.workerName ? `${item.workerName} (#${item.workerId})` : `#${item.workerId || '—'}`));
+          top.appendChild(statusBadge(item.status));
+          card.appendChild(top);
+          card.appendChild(node('div', 'count-label', `${item.modelName || item.modelId || '—'} · ${item.operation || 'Amal'} · ${number(item.quantity)} dona`));
+          card.appendChild(node('time', 'mono muted', timestamp(item.effectiveAt)));
+          grid.appendChild(card);
+        }
+      }
     }
   }
 
@@ -1200,6 +1586,37 @@
     }
     if (rows.length === 0) byId('balanceEmpty').textContent = 'Tanlangan davrda avans yoki jarima fakti yo‘q.';
     await loadBalanceWorkers();
+
+    const grid = byId('balanceCardGrid');
+    if (grid) {
+      grid.replaceChildren();
+      if (!rows.length) grid.appendChild(node('p', 'empty-state', 'Balans faktlari topilmadi.'));
+      else {
+        for (const item of rows) {
+          const card = node('article', 'worker-touch-card');
+          const top = node('div', 'worker-touch-card-top');
+          top.appendChild(node('strong', 'worker-touch-title', `${item.workerName} (#${item.workerId})`));
+          top.appendChild(node('span', item.type === 'AVANS' ? 'pill-avans' : 'pill-jarima', item.type === 'AVANS' ? '💵 Avans' : '⚠️ Jarima'));
+          card.appendChild(top);
+
+          const stats = node('div', 'worker-touch-stats');
+          stats.appendChild(node('strong', 'stat-num', money(item.total)));
+          stats.appendChild(node('span', '', `${number(item.factCount)} ta yozuv`));
+          card.appendChild(stats);
+
+          const actions = node('div', 'worker-touch-actions');
+          const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans berish');
+          adjBtn.type = 'button';
+          adjBtn.dataset.quickAdj = String(item.workerId);
+          adjBtn.dataset.companyId = companyId;
+          adjBtn.dataset.workerName = item.workerName;
+          actions.appendChild(adjBtn);
+          card.appendChild(actions);
+
+          grid.appendChild(card);
+        }
+      }
+    }
   }
 
   async function loadBalanceWorkers(search = state.balanceWorkerSearch) {
@@ -1626,6 +2043,11 @@
       if (switchCpBtn) {
         try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
         switchCpTab(switchCpBtn.dataset.switchCpTab);
+        return;
+      }
+      const dirQuickAdj = event.target.closest('#dirQuickAdjBtn');
+      if (dirQuickAdj) {
+        openQuickAdjustment({ companyId: state.access?.companyIds?.[0] });
         return;
       }
       const quickAdjBtn = event.target.closest('[data-quick-adj]');
