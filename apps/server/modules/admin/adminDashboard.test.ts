@@ -265,14 +265,20 @@ describe(' admin dashboard PostgreSQL projections', () => {
       .mockResolvedValueOnce({ rows: [{ company_id: 'comp_novda', id: 'm1', name: 'Model', operations_json: [{ name: 'Sew', rate: 2 }], available_sizes_json: ['S'], server_revision: 8 }] })
       .mockResolvedValueOnce({ rows: [{ id: 'party-1', company_id: 'comp_novda', party_number: '2', model_id: 'm1', model_name: 'Model', status: 'ACTIVE', patta_count: 12, ish_soni: '4', server_revision: 3 }] })
       .mockResolvedValueOnce({ rows: [{ id: 'ticket-1', company_id: 'comp_novda', model_id: 'm1', model_name: 'Model', party_record_id: 'party-1', party_number: '2', patta_number: 1, qty: '8', entry_qty: '8', status: 'CONFIRMED', submitted_at: '2026-09-24T00:00:00.000Z', worker_id: 200, worker_name: 'Worker', op_name: 'Sew' }] })
-      .mockResolvedValueOnce({ rows: [{ worker_id: 200, name: 'Worker', type: 'AVANS', total: '2020000', fact_count: '4', opening_fact_count: '4' }] });
+      .mockResolvedValueOnce({ rows: [{ id: 'period-current', name: 'October 2026', start_date: '2026-10-01', end_date: null, is_closed: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ worker_id: 200, name: 'Worker', type: 'AVANS', total: '2020000', fact_count: '4', opening_fact_count: '0' }] });
     const service = serviceFor(query);
 
     await expect(service.listModels({ companyId: 'comp_novda' })).resolves.toMatchObject({ models: [{ modelId: 'm1', serverRevision: 8 }] });
     await expect(service.listParties({ companyId: 'comp_novda' })).resolves.toMatchObject({ parties: [{ partyNumber: '2', pattaCount: 12 }] });
     await expect(service.listTickets({ companyId: 'comp_novda' })).resolves.toMatchObject({ tickets: [{ ticketId: 'ticket-1', workerId: 200 }] });
-    await expect(service.getBalances({ companyId: 'comp_novda' })).resolves.toMatchObject({ facts: [{ total: 2020000, factCount: 4, openingFactCount: 4 }] });
+    await expect(service.getBalances({ companyId: 'comp_novda', periodId: 'period-current' })).resolves.toMatchObject({
+      period: { periodId: 'period-current', name: 'October 2026', isClosed: false },
+      facts: [{ total: 2020000, factCount: 4, openingFactCount: 0 }]
+    });
     expect(query.mock.calls.slice(0, 3).every((call) => call[0].includes('LIMIT'))).toBe(true);
+    expect(query.mock.calls[4][0]).toContain('a.period_id = $2');
+    expect(query.mock.calls[4][1]).toEqual(['comp_novda', 'period-current', '2026-10-01', null]);
   });
 
   it('returns only safe operational health fields and fails when PostgreSQL is unavailable', async () => {

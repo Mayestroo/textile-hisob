@@ -771,12 +771,20 @@
       byId('balanceWorkerSelect').disabled = true;
       byId('balancePeriodSelect').replaceChildren(node('option', '', 'Davr mavjud emas'));
       byId('balancePeriodSelect').disabled = true;
+      byId('balanceViewPeriodSelect').replaceChildren(node('option', '', 'Ochiq davr mavjud emas'));
+      byId('balanceViewPeriodSelect').disabled = true;
+      setText('balancePeriodCaption', 'Davr tanlanmagan');
       return;
     }
     if (select && select.value !== companyId) {
       select.value = companyId;
     }
-    const result = await request(withQuery(`${API}/balances`, { companyId }));
+    await loadBalancePeriods();
+    const periodId = byId('balanceViewPeriodSelect').value;
+    const result = await request(withQuery(`${API}/balances`, { companyId, periodId }));
+    setText('balancePeriodCaption', result.period
+      ? `${result.period.name} · ${result.period.startDate}${result.period.endDate ? ` — ${result.period.endDate}` : ' · ochiq'}${result.period.isClosed ? ' · yopilgan' : ''}`
+      : 'Ochiq davr topilmadi. Yangi davr ochilgach avans va jarimalar shu yerda ko‘rinadi.');
     const rows = result.facts || [];
     const body = tableMessage('balanceRows', 'balanceEmpty', rows, 'Balans faktlari topilmadi.');
     for (const item of rows) {
@@ -784,7 +792,8 @@
       cell(row, item.type === 'AVANS' ? 'Avans' : 'Jarima'); cell(row, money(item.total));
       cell(row, number(item.factCount)); cell(row, number(item.openingFactCount)); body.appendChild(row);
     }
-    await Promise.all([loadBalanceWorkers(), loadBalancePeriods()]);
+    if (rows.length === 0) byId('balanceEmpty').textContent = 'Tanlangan davrda avans yoki jarima fakti yo‘q.';
+    await loadBalanceWorkers();
   }
 
   async function loadBalanceWorkers(search = state.balanceWorkerSearch) {
@@ -811,20 +820,35 @@
 
   async function loadBalancePeriods() {
     const companyId = byId('balanceCompanySelect').value;
-    const select = byId('balancePeriodSelect');
+    const editSelect = byId('balancePeriodSelect');
+    const viewSelect = byId('balanceViewPeriodSelect');
     if (!companyId) return;
-    select.disabled = true;
+    editSelect.disabled = true;
+    viewSelect.disabled = true;
     const result = await request(`${API}/companies/${encodeURIComponent(companyId)}/periods`);
-    const periods = (result.periods || []).filter((period) => !period.isClosed);
-    const previousValue = select.value;
-    select.replaceChildren(node('option', '', periods.length ? 'Ochiq davrni tanlang' : 'Ochiq davr mavjud emas'));
+    const periods = result.periods || [];
+    const openPeriods = periods.filter((period) => !period.isClosed);
+    const previousViewValue = viewSelect.value;
+    viewSelect.replaceChildren(node('option', '', 'Joriy ochiq davr'));
     for (const period of periods) {
+      const option = node('option', '', `${period.name} · ${period.startDate}${period.endDate ? ` — ${period.endDate}` : ''}${period.isClosed ? ' · yopilgan' : ''}`);
+      option.value = period.periodId;
+      viewSelect.appendChild(option);
+    }
+    if (previousViewValue && [...viewSelect.options].some((option) => option.value === previousViewValue)) viewSelect.value = previousViewValue;
+    else viewSelect.value = openPeriods[0]?.periodId || '';
+    viewSelect.disabled = periods.length === 0;
+
+    const previousEditValue = editSelect.value;
+    editSelect.replaceChildren(node('option', '', openPeriods.length ? 'Ochiq davrni tanlang' : 'Ochiq davr mavjud emas'));
+    for (const period of openPeriods) {
       const option = node('option', '', `${period.name} · ${period.startDate}`);
       option.value = period.periodId;
-      select.appendChild(option);
+      editSelect.appendChild(option);
     }
-    if ([...select.options].some((option) => option.value === previousValue)) select.value = previousValue;
-    select.disabled = periods.length === 0;
+    if (previousEditValue && [...editSelect.options].some((option) => option.value === previousEditValue)) editSelect.value = previousEditValue;
+    else editSelect.value = openPeriods[0]?.periodId || '';
+    editSelect.disabled = openPeriods.length === 0;
   }
 
   async function submitBalanceAdjustment(event) {
@@ -866,6 +890,7 @@
       saved = true;
       form.elements.amountDelta.value = '';
       form.elements.description.value = '';
+      byId('balanceViewPeriodSelect').value = periodId;
       toast(`${type === 'AVANS' ? 'Avans' : 'Jarima'} saqlandi; ulangan desktopga sync qilinadi.`);
     } catch (error) {
       toast(`Yozuv saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`);
@@ -1232,7 +1257,12 @@
     byId('balanceCompanySelect').addEventListener('change', () => {
       state.balanceWorkerSearch = '';
       byId('balanceWorkerSearch').value = '';
+      byId('balanceViewPeriodSelect').value = '';
+      byId('balancePeriodSelect').value = '';
       void loadBalances().catch((error) => toast(`Avans/jarima ma’lumotlari olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
+    });
+    byId('balanceViewPeriodSelect').addEventListener('change', () => {
+      void loadBalances().catch((error) => toast(`Davr balansi olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
     });
     byId('balanceWorkerSearchForm').addEventListener('submit', (event) => {
       event.preventDefault();

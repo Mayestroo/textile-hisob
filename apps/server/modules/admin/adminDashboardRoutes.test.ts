@@ -189,13 +189,14 @@ describe(' Admin WebApp routes', () => {
       server.inject({ method: 'GET', url: '/api/admin/webapp/models', headers: auth }),
       server.inject({ method: 'GET', url: '/api/admin/webapp/parties?companyId=comp_novda', headers: auth }),
       server.inject({ method: 'GET', url: '/api/admin/webapp/tickets', headers: auth }),
-      server.inject({ method: 'GET', url: '/api/admin/webapp/balances?companyId=comp_novda', headers: auth }),
+      server.inject({ method: 'GET', url: '/api/admin/webapp/balances?companyId=comp_novda&periodId=period-october', headers: auth }),
       server.inject({ method: 'GET', url: '/api/admin/webapp/system', headers: auth })
     ]);
     expect(denied.statusCode).toBe(401);
     expect(dashboard.listParties).toHaveBeenCalledTimes(1);
     expect([models, parties, tickets, balances, system].map((response) => response.statusCode)).toEqual([200, 200, 200, 200, 200]);
     expect(dashboard.getSystemHealth).toHaveBeenCalledOnce();
+    expect(dashboard.getBalances).toHaveBeenCalledWith({ companyId: 'comp_novda', periodId: 'period-october' });
   });
 
   it('requires an authenticated admin for company strict-mode changes and takes company scope from the route', async () => {

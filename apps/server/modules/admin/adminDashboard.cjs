@@ -538,14 +538,43 @@ function createAdminDashboardService(options = {}) {
 
   async function getBalances(filters = {}) {
     const companyId = validateCompanyId(filters.companyId);
+    const requestedPeriodId = filters.periodId === undefined || filters.periodId === null || filters.periodId === ''
+      ? null
+      : String(filters.periodId).trim();
+    if (requestedPeriodId && (requestedPeriodId.length > 128 || /[\u0000-\u001f\u007f]/.test(requestedPeriodId))) {
+      throw activationError('INVALID_PERIOD_ID', 400);
+    }
+    const periodResult = await pool.query(`
+      SELECT id, name, start_date, end_date, is_closed
+      FROM periods
+      WHERE company_id = $1
+        AND (($2::VARCHAR IS NOT NULL AND id = $2) OR ($2::VARCHAR IS NULL AND is_closed = 0))
+      ORDER BY start_date DESC, id DESC LIMIT 1
+    `, [companyId, requestedPeriodId]);
+    const period = periodResult.rows[0] || null;
+    if (requestedPeriodId && !period) throw activationError('PERIOD_NOT_FOUND', 404);
+    if (!period) return { companyId, period: null, facts: [] };
+
+    const startDate = period.start_date ? String(period.start_date).slice(0, 10) : null;
+    const endDate = period.end_date ? String(period.end_date).slice(0, 10) : null;
     const result = await pool.query(`
       SELECT a.worker_id, w.name, a.type, SUM(a.amount)::TEXT AS total,
              COUNT(*)::TEXT AS fact_count,
              COUNT(*) FILTER (WHERE a.provenance LIKE 'LEGACY_OPENING_BALANCE%')::TEXT AS opening_fact_count
       FROM worker_adjustments a JOIN workers w ON w.company_id = a.company_id AND w.id = a.worker_id
-      WHERE a.company_id = $1 GROUP BY a.worker_id, w.name, a.type ORDER BY a.worker_id, a.type
-    `, [companyId]);
-    return { companyId, facts: result.rows.map((row) => ({
+      WHERE a.company_id = $1
+        AND (a.period_id = $2 OR (a.period_id IS NULL
+          AND ($3::DATE IS NULL OR a.created_at::DATE >= $3::DATE)
+          AND ($4::DATE IS NULL OR a.created_at::DATE <= $4::DATE)))
+      GROUP BY a.worker_id, w.name, a.type ORDER BY a.worker_id, a.type
+    `, [companyId, period.id, startDate, endDate]);
+    return { companyId, period: {
+      periodId: period.id,
+      name: period.name,
+      startDate,
+      endDate,
+      isClosed: Boolean(period.is_closed)
+    }, facts: result.rows.map((row) => ({
       workerId: Number(row.worker_id), workerName: row.name, type: row.type,
       total: normalizeNumeric(row.total), factCount: parseCount(row.fact_count),
       openingFactCount: parseCount(row.opening_fact_count)
