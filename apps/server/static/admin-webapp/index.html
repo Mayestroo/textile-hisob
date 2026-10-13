@@ -143,6 +143,16 @@
 
         <div id="globalNotice" class="global-notice" role="status" aria-live="polite" hidden></div>
 
+        <!-- Urgent Floating Banner -->
+        <div id="urgentActivationBanner" class="urgent-banner" hidden>
+          <div class="urgent-banner-icon">⚡</div>
+          <div class="urgent-banner-content">
+            <strong id="urgentBannerTitle">Kutilayotgan aktivatsiya</strong>
+            <span id="urgentBannerSubtitle">Tasdiqlashni kutayotgan qurilmalar mavjud</span>
+          </div>
+          <button class="button button-primary button-sm" data-go="activations" type="button">Ko‘rish →</button>
+        </div>
+
         <!-- Section: Overview -->
         <section class="view-section is-visible" data-section="overview" aria-labelledby="overviewTitle">
           <div class="view-heading">
@@ -299,13 +309,31 @@
         <section class="view-section" data-section="companies" aria-labelledby="companiesTitle" hidden>
           <div class="view-heading">
             <div>
-              <p class="eyebrow">COMPANY REGISTRY</p>
+              <p class="eyebrow">COMPANY DIRECTORY</p>
               <h1 id="companiesTitle">Korxonalar</h1>
-              <p class="view-subtitle">Nom va aktivatsiya siyosati PostgreSQL’da saqlanadi. Nomi yo‘q scope ID bilan ko‘rsatiladi.</p>
+              <p class="view-subtitle">Platformadagi barcha to‘qimachilik korxonalari va ularning faoliyat holati.</p>
             </div>
           </div>
-          <article class="surface-card">
-            <div class="table-wrap">
+
+          <!-- Mobile-first Search & Filter Bar -->
+          <div class="company-directory-controls">
+            <div class="search-input-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="search" id="companySearchInput" placeholder="Korxona nomi yoki ID bo‘yicha qidirish…" autocomplete="off" />
+            </div>
+            <div class="filter-chips" id="companyFilterChips">
+              <button type="button" class="chip is-active" data-company-filter="all">Barchasi</button>
+              <button type="button" class="chip" data-company-filter="active">Faol</button>
+              <button type="button" class="chip" data-company-filter="unconfigured">Aktivatsiyasiz</button>
+            </div>
+          </div>
+
+          <!-- Touch Cards Feed (Mobile-First) -->
+          <div id="companyCardGrid" class="company-card-grid"></div>
+
+          <!-- Legacy / Desktop Table Wrap (Hidden on mobile cards, visible for desktop/tests) -->
+          <article class="surface-card desktop-table-card" id="companyTableCard">
+            <div class="table-wrap desktop-table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -327,6 +355,7 @@
             </div>
             <p id="companyEmpty" class="empty-state" hidden>PostgreSQL’da korxona topilmadi.</p>
           </article>
+
           <article class="surface-card section-gap activation-policy">
             <div class="card-heading">
               <div>
@@ -372,6 +401,184 @@
             <div id="companyAdminRows" class="access-list"></div>
             <p id="companyAdminEmpty" class="empty-state" hidden>Hozircha kompaniya admini biriktirilmagan.</p>
           </article>
+        </section>
+
+        <!-- Section: Company Profile Drill-Down (Dedicated Command Center for a Selected Company) -->
+        <section class="view-section" data-section="company-profile" id="companyProfileSection" aria-labelledby="cpCompanyName" hidden>
+          <div class="company-profile-hero">
+            <div class="profile-hero-top">
+              <div class="profile-avatar" id="cpAvatar">🏢</div>
+              <div class="profile-titles">
+                <h1 id="cpCompanyName">Kompaniya Profili</h1>
+                <p id="cpCompanyId" class="mono muted">ID: —</p>
+              </div>
+              <span id="cpStatusBadge" class="badge badge-active">Faol</span>
+            </div>
+            <div class="profile-quick-stats">
+              <div class="quick-stat-box">
+                <span class="stat-num" id="cpStatWorkers">0</span>
+                <span class="stat-lbl">Ishchilar</span>
+              </div>
+              <div class="quick-stat-box">
+                <span class="stat-num" id="cpStatModels">0</span>
+                <span class="stat-lbl">Modellar</span>
+              </div>
+              <div class="quick-stat-box">
+                <span class="stat-num" id="cpStatParties">0</span>
+                <span class="stat-lbl">Partiyalar</span>
+              </div>
+              <div class="quick-stat-box">
+                <span class="stat-num" id="cpStatDevices">0</span>
+                <span class="stat-lbl">Qurilmalar</span>
+              </div>
+            </div>
+            <div class="profile-tabs-scroll">
+              <div class="profile-tabs" id="cpTabs">
+                <button class="profile-tab is-active" data-cp-tab="overview" type="button">Umumiy</button>
+                <button class="profile-tab" data-cp-tab="workers" type="button">Ishchilar & Oylik</button>
+                <button class="profile-tab" data-cp-tab="parties" type="button">Partiyalar</button>
+                <button class="profile-tab" data-cp-tab="models" type="button">Modellar</button>
+                <button class="profile-tab" data-cp-tab="devices" type="button">Qurilmalar</button>
+                <button class="profile-tab" data-cp-tab="admins" type="button">Adminlar</button>
+                <button class="profile-tab" data-cp-tab="policy" type="button">Siyosat</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-pane: Overview -->
+          <div class="cp-pane is-visible" id="pane-cp-overview">
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">LIVE PULSE</p>
+                  <h2>Korxona tafsilotlari</h2>
+                </div>
+                <div class="updated-at">
+                  <span class="status-dot"></span>
+                  <span id="cpLastSync">Sinxronlangan</span>
+                </div>
+              </div>
+              <div class="fact-line"><span>Biznes ID</span><strong id="cpFactId" class="mono">—</strong></div>
+              <div class="fact-line"><span>Aktivatsiya</span><strong id="cpFactActivation">—</strong></div>
+              <div class="fact-line"><span>Ruxsat etilgan rollar</span><strong id="cpFactRoles">—</strong></div>
+              <div class="fact-line"><span>Patta validatsiyasi</span><strong id="cpFactTicketVal">—</strong></div>
+              <div class="fact-line"><span>Mavjud o‘lchamlar</span><strong id="cpFactSizes">—</strong></div>
+              <div class="fact-line"><span>Server reviziyasi</span><strong id="cpFactRevision" class="mono">—</strong></div>
+            </article>
+            <div class="cp-quick-actions">
+              <button class="button button-primary" type="button" data-switch-cp-tab="workers">👥 Ishchilar va oylikni ko‘rish</button>
+              <button class="button button-secondary" type="button" data-switch-cp-tab="parties">📦 Partiyalarni ko‘rish</button>
+            </div>
+          </div>
+
+          <!-- Sub-pane: Workers -->
+          <div class="cp-pane" id="pane-cp-workers" hidden>
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">WORKERS & PAYROLL</p>
+                  <h2>Ishchilar tarkibi va oylik</h2>
+                </div>
+                <span id="cpWorkerCount" class="count-label">0 ta</span>
+              </div>
+              <div id="cpWorkerCardList" class="worker-card-feed"></div>
+              <p id="cpWorkerEmpty" class="empty-state" hidden>Bu korxonada hali ishchilar yo‘q.</p>
+            </article>
+          </div>
+
+          <!-- Sub-pane: Parties -->
+          <div class="cp-pane" id="pane-cp-parties" hidden>
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">PRODUCTION BATCHES</p>
+                  <h2>Faol partiyalar</h2>
+                </div>
+                <span id="cpPartyCount" class="count-label">0 ta</span>
+              </div>
+              <div id="cpPartyCardList" class="party-card-feed"></div>
+              <p id="cpPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
+            </article>
+          </div>
+
+          <!-- Sub-pane: Models -->
+          <div class="cp-pane" id="pane-cp-models" hidden>
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">GARMENT MODELS</p>
+                  <h2>Modellar va amallar</h2>
+                </div>
+                <span id="cpModelCount" class="count-label">0 ta</span>
+              </div>
+              <div id="cpModelCardList" class="model-card-feed"></div>
+              <p id="cpModelEmpty" class="empty-state" hidden>Modellar topilmadi.</p>
+            </article>
+          </div>
+
+          <!-- Sub-pane: Devices -->
+          <div class="cp-pane" id="pane-cp-devices" hidden>
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">REGISTERED CLIENTS</p>
+                  <h2>Qurilmalar</h2>
+                </div>
+                <span id="cpDeviceCount" class="count-label">0 ta</span>
+              </div>
+              <div id="cpDeviceCardList" class="device-card-feed"></div>
+              <p id="cpDeviceEmpty" class="empty-state" hidden>Qurilmalar topilmadi.</p>
+            </article>
+          </div>
+
+          <!-- Sub-pane: Admins -->
+          <div class="cp-pane" id="pane-cp-admins" hidden>
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">COMPANY DIRECTORS</p>
+                  <h2>Biriktirilgan adminlar</h2>
+                </div>
+              </div>
+              <form id="cpAdminAssignForm" class="filter-row">
+                <input type="hidden" name="companyId" id="cpAdminCompanyHidden" />
+                <label>Telegram ID
+                  <input name="telegramId" id="cpAdminTelegramInput" inputmode="numeric" maxlength="24" placeholder="Telegram ID raqami" required />
+                </label>
+                <button class="button button-primary" type="submit">Admin biriktirish</button>
+              </form>
+              <div id="cpAdminRows" class="access-list"></div>
+              <p id="cpAdminEmpty" class="empty-state" hidden>Kompaniya admini biriktirilmagan.</p>
+            </article>
+          </div>
+
+          <!-- Sub-pane: Policy -->
+          <div class="cp-pane" id="pane-cp-policy" hidden>
+            <article class="surface-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">POLICY CONFIGURATION</p>
+                  <h2>Aktivatsiya siyosati</h2>
+                </div>
+              </div>
+              <form id="cpPolicyForm" class="form-grid">
+                <input type="hidden" name="companyId" id="cpPolicyCompanyHidden" />
+                <label>Ko‘rinadigan nom
+                  <input name="companyName" id="cpPolicyNameInput" maxlength="160" required />
+                </label>
+                <fieldset class="role-fieldset">
+                  <legend>Ruxsat etilgan rollar</legend>
+                  <label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked /> Admin</label>
+                  <label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked /> Type</label>
+                  <label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked /> Print</label>
+                </fieldset>
+                <label class="check-label policy-check">
+                  <input type="checkbox" name="isActive" id="cpPolicyActiveInput" checked /> Siyosat faol
+                </label>
+                <button class="button button-primary" type="submit">Siyosatni saqlash</button>
+              </form>
+            </article>
+          </div>
         </section>
 
         <!-- Section: Workers -->
@@ -833,6 +1040,68 @@
           <label>Izoh<input name="description" maxlength="500" /></label>
         </div>
         <div class="button-row dialog-actions"><button id="workerStatusButton" class="button button-secondary" type="button">Status</button><button class="button button-primary" type="submit">Saqlash</button></div>
+      </form>
+    </dialog>
+
+    <!-- Quick Advance / Penalty Bottom Sheet -->
+    <dialog id="quickAdjustmentDialog" class="worker-dialog bottom-sheet">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <form id="quickAdjustmentForm" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">TEZKOR HISOB-FAKTI</p>
+            <h2 id="quickAdjWorkerTitle">Avans yoki Jarima</h2>
+          </div>
+          <button id="closeQuickAdjDialog" class="icon-button" type="button" aria-label="Yopish">×</button>
+        </div>
+        <input name="workerId" id="quickAdjWorkerId" type="hidden" />
+        <input name="companyId" id="quickAdjCompanyId" type="hidden" />
+
+        <div class="quick-adj-worker-badge">
+          <div class="adj-avatar">👤</div>
+          <div>
+            <strong id="quickAdjWorkerName">—</strong>
+            <span id="quickAdjCompanyLabel" class="mono muted">ID: —</span>
+          </div>
+        </div>
+
+        <div class="quick-type-toggle">
+          <label class="toggle-option">
+            <input type="radio" name="type" value="AVANS" checked />
+            <span class="toggle-pill pill-avans">💵 Avans</span>
+          </label>
+          <label class="toggle-option">
+            <input type="radio" name="type" value="JARIMA" />
+            <span class="toggle-pill pill-jarima">⚠️ Jarima</span>
+          </label>
+        </div>
+
+        <label>Ochiq davr
+          <select name="periodId" id="quickAdjPeriodSelect" required>
+            <option value="">Davr yuklanmoqda...</option>
+          </select>
+        </label>
+
+        <label>Miqdor (so‘m)
+          <input name="amountDelta" id="quickAdjAmount" type="number" min="0.01" step="0.01" placeholder="Masalan: 200000" required />
+        </label>
+
+        <div class="quick-amount-chips">
+          <button type="button" class="amount-chip" data-amount="50000">50 ming</button>
+          <button type="button" class="amount-chip" data-amount="100000">100 ming</button>
+          <button type="button" class="amount-chip" data-amount="200000">200 ming</button>
+          <button type="button" class="amount-chip" data-amount="500000">500 ming</button>
+          <button type="button" class="amount-chip" data-amount="1000000">1 mln</button>
+        </div>
+
+        <label>Izoh
+          <input name="description" id="quickAdjDescription" maxlength="500" placeholder="Sabab yoki qisqa izoh" required />
+        </label>
+
+        <div class="button-row dialog-actions">
+          <button id="cancelQuickAdj" class="button button-secondary" type="button">Bekor qilish</button>
+          <button id="submitQuickAdj" class="button button-primary" type="submit">Saqlash va sync qilish</button>
+        </div>
       </form>
     </dialog>
 
