@@ -46,6 +46,17 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(css).toContain('#workerRows tr');
   });
 
+  it('writes period-scoped Avans and Jarima facts through the company-scoped worker command', () => {
+    expect(html).toContain('id="balanceAdjustmentForm"');
+    expect(html).toContain('id="balanceWorkerSearchForm"');
+    expect(html).toContain('id="balancePeriodSelect"');
+    expect(html).toContain('Saqlash va sync qilish');
+    expect(javascript).toContain("/companies/${encodeURIComponent(companyId)}/workers/${encodeURIComponent(workerId)}");
+    expect(javascript).toContain('adjustment: { adjustmentId: crypto.randomUUID(), type, periodId, amountDelta, description }');
+    expect(javascript).toContain("loadBalancePeriods()");
+    expect(javascript).toContain('loadBalanceWorkers');
+  });
+
   it('labels activation policy separately and does not expose bot-managed ticket mode', () => {
     const policyForm = html.match(/<form id="companyForm"[\s\S]*?<\/form>/)?.[0] || '';
     expect(html).toContain('Activation policy');
@@ -82,7 +93,7 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain('boundOnly: true');
     expect(html).toContain('Hali ticket qayd etilmagan');
     expect(html).toContain('PATTA JAMLANMASI');
-    expect(html).toContain('tarixiy tranzaksiya sifatida ko‘rsatilmaydi');
+    expect(html).toContain('Yangi avans yoki jarima shu bo‘limdan kiritilib');
     expect(html).toContain('activation policy');
   });
 

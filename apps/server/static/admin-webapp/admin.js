@@ -18,6 +18,8 @@
     bindingOffset: 0,
     activationSubmitting: false,
     workerSubmitting: false,
+    balanceSubmitting: false,
+    balanceWorkerSearch: '',
     viewLoaders: new Map()
   };
 
@@ -763,7 +765,14 @@
   async function loadBalances() {
     const select = byId('balanceCompanySelect');
     const companyId = select?.value || state.companies.find((item) => item.businessScopeExists)?.companyId;
-    if (!companyId) { tableMessage('balanceRows', 'balanceEmpty', [], 'Mavjud biznes scope topilmadi.'); return; }
+    if (!companyId) {
+      tableMessage('balanceRows', 'balanceEmpty', [], 'Mavjud biznes scope topilmadi.');
+      byId('balanceWorkerSelect').replaceChildren(node('option', '', 'Avval kompaniyani tanlang'));
+      byId('balanceWorkerSelect').disabled = true;
+      byId('balancePeriodSelect').replaceChildren(node('option', '', 'Davr mavjud emas'));
+      byId('balancePeriodSelect').disabled = true;
+      return;
+    }
     if (select && select.value !== companyId) {
       select.value = companyId;
     }
@@ -774,6 +783,99 @@
       const row = node('tr'); cell(row, `#${item.workerId}`); cell(row, item.workerName);
       cell(row, item.type === 'AVANS' ? 'Avans' : 'Jarima'); cell(row, money(item.total));
       cell(row, number(item.factCount)); cell(row, number(item.openingFactCount)); body.appendChild(row);
+    }
+    await Promise.all([loadBalanceWorkers(), loadBalancePeriods()]);
+  }
+
+  async function loadBalanceWorkers(search = state.balanceWorkerSearch) {
+    const companyId = byId('balanceCompanySelect').value;
+    const select = byId('balanceWorkerSelect');
+    state.balanceWorkerSearch = String(search || '').trim().slice(0, 100);
+    if (!companyId) return;
+    select.disabled = true;
+    const result = await request(withQuery(`${API}/workers`, {
+      companyId, search: state.balanceWorkerSearch, limit: 100, offset: 0
+    }));
+    const workers = (result.workers || []).filter((worker) => worker.status === 'ACTIVE');
+    const previousValue = select.value;
+    select.replaceChildren(node('option', '', workers.length ? 'Ishchini tanlang' : 'Faol ishchi topilmadi'));
+    for (const worker of workers) {
+      const option = node('option', '', `#${worker.workerId} · ${worker.name}`);
+      option.value = String(worker.workerId);
+      option.dataset.serverRevision = String(worker.serverRevision ?? 0);
+      select.appendChild(option);
+    }
+    if ([...select.options].some((option) => option.value === previousValue)) select.value = previousValue;
+    select.disabled = workers.length === 0;
+  }
+
+  async function loadBalancePeriods() {
+    const companyId = byId('balanceCompanySelect').value;
+    const select = byId('balancePeriodSelect');
+    if (!companyId) return;
+    select.disabled = true;
+    const result = await request(`${API}/companies/${encodeURIComponent(companyId)}/periods`);
+    const periods = (result.periods || []).filter((period) => !period.isClosed);
+    const previousValue = select.value;
+    select.replaceChildren(node('option', '', periods.length ? 'Ochiq davrni tanlang' : 'Ochiq davr mavjud emas'));
+    for (const period of periods) {
+      const option = node('option', '', `${period.name} · ${period.startDate}`);
+      option.value = period.periodId;
+      select.appendChild(option);
+    }
+    if ([...select.options].some((option) => option.value === previousValue)) select.value = previousValue;
+    select.disabled = periods.length === 0;
+  }
+
+  async function submitBalanceAdjustment(event) {
+    event.preventDefault();
+    if (state.balanceSubmitting) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const companyId = byId('balanceCompanySelect').value;
+    const workerSelect = byId('balanceWorkerSelect');
+    const selectedWorker = workerSelect.selectedOptions[0];
+    const workerId = String(data.get('workerId') || '').trim();
+    const periodId = String(data.get('periodId') || '').trim();
+    const type = String(data.get('type') || '').trim().toUpperCase();
+    const amountDelta = Number(data.get('amountDelta'));
+    const description = String(data.get('description') || '').trim();
+    const baseRevision = Number(selectedWorker?.dataset.serverRevision);
+    if (!companyId || !workerId || !periodId || !['AVANS', 'JARIMA'].includes(type)
+        || !Number.isFinite(amountDelta) || amountDelta <= 0 || !description
+        || !Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+      toast('Kompaniya, ishchi, ochiq davr, musbat miqdor va izohni tekshiring.');
+      return;
+    }
+    if (!window.confirm(`${type === 'AVANS' ? 'Avans' : 'Jarima'} · ${money(amountDelta)} · #${workerId} · tanlangan ochiq davrga yozilsinmi?`)) return;
+
+    const submitButton = byId('submitBalanceAdjustment');
+    submitButton.disabled = true;
+    state.balanceSubmitting = true;
+    let saved = false;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyId)}/workers/${encodeURIComponent(workerId)}`, {
+        method: 'PUT',
+        body: {
+          baseRevision,
+          operationId: crypto.randomUUID(),
+          commandId: crypto.randomUUID(),
+          adjustment: { adjustmentId: crypto.randomUUID(), type, periodId, amountDelta, description }
+        }
+      });
+      saved = true;
+      form.elements.amountDelta.value = '';
+      form.elements.description.value = '';
+      toast(`${type === 'AVANS' ? 'Avans' : 'Jarima'} saqlandi; ulangan desktopga sync qilinadi.`);
+    } catch (error) {
+      toast(`Yozuv saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`);
+    } finally {
+      state.balanceSubmitting = false;
+      submitButton.disabled = false;
+    }
+    if (saved) {
+      try { await loadBalances(); }
+      catch (error) { toast(`Yozuv saqlandi, jadval yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
     }
   }
 
@@ -1127,7 +1229,17 @@
     byId('bindingNext').addEventListener('click', () => { state.bindingOffset += 50; void loadBindings(); });
     byId('payrollForm').addEventListener('submit', (event) => { void submitPayroll(event); });
     byId('activationStatusFilter').addEventListener('change', () => { void loadActivations(); });
-    byId('balanceCompanySelect').addEventListener('change', () => { void loadBalances(); });
+    byId('balanceCompanySelect').addEventListener('change', () => {
+      state.balanceWorkerSearch = '';
+      byId('balanceWorkerSearch').value = '';
+      void loadBalances().catch((error) => toast(`Avans/jarima ma’lumotlari olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
+    });
+    byId('balanceWorkerSearchForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const search = String(new FormData(event.currentTarget).get('search') || '');
+      void loadBalanceWorkers(search).catch((error) => toast(`Ishchilar olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
+    });
+    byId('balanceAdjustmentForm').addEventListener('submit', (event) => { void submitBalanceAdjustment(event); });
     byId('approveActivation').addEventListener('click', () => { void submitActivationAction('approve'); });
     byId('rejectActivation').addEventListener('click', () => { void submitActivationAction('reject'); });
     byId('revokeActivation').addEventListener('click', () => { void submitActivationAction('revoke'); });

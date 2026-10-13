@@ -678,7 +678,7 @@
             <div>
               <p class="eyebrow">CANONICAL ADJUSTMENT FACTS</p>
               <h1 id="balancesTitle">Avans va jarima</h1>
-              <p class="view-subtitle">Boshlang‘ich balans faktlari tarixiy tranzaksiya sifatida ko‘rsatilmaydi. Bu ko‘rinish faqat o‘qish uchun.</p>
+              <p class="view-subtitle">Tarixiy balans faktlari o‘zgarmaydi. Yangi avans yoki jarima shu bo‘limdan kiritilib, ulangan desktoplarga sync qilinadi.</p>
             </div>
           </div>
           <article class="surface-card filter-card">
@@ -687,6 +687,36 @@
                 <option value="">Mavjud scope tanlang</option>
               </select>
             </label>
+          </article>
+          <article class="surface-card section-gap balance-adjustment-card">
+            <div class="card-heading">
+              <div><p class="eyebrow">NEW LEDGER FACT</p><h2>Avans yoki jarima kiritish</h2></div>
+            </div>
+            <form id="balanceWorkerSearchForm" class="filter-row balance-worker-search">
+              <label>Ishchini qidirish
+                <input name="search" id="balanceWorkerSearch" maxlength="100" placeholder="ID, ism yoki Telegram ID" />
+              </label>
+              <button class="button button-secondary" type="submit">Ishchini topish</button>
+            </form>
+            <form id="balanceAdjustmentForm" class="form-grid balance-adjustment-form">
+              <label>Ishchi
+                <select name="workerId" id="balanceWorkerSelect" required><option value="">Avval ishchini qidiring</option></select>
+              </label>
+              <label>Ochiq davr
+                <select name="periodId" id="balancePeriodSelect" required><option value="">Davrni tanlang</option></select>
+              </label>
+              <label>Tur
+                <select name="type" required><option value="AVANS">Avans</option><option value="JARIMA">Jarima</option></select>
+              </label>
+              <label>Miqdor · so‘m
+                <input name="amountDelta" type="number" min="0.01" step="0.01" required />
+              </label>
+              <label class="balance-description">Izoh
+                <input name="description" maxlength="500" placeholder="Sabab yoki qisqa izoh" required />
+              </label>
+              <button id="submitBalanceAdjustment" class="button button-primary" type="submit">Saqlash va sync qilish</button>
+            </form>
+            <p class="helper-text">Yangi fakt PostgreSQL ledger’iga yoziladi va worker revision/change feed orqali ulangan desktoplarga yetadi. Boshlang‘ich balans faktlari esa tarixiy holatda qoladi.</p>
           </article>
           <article class="surface-card">
             <div class="table-wrap">
