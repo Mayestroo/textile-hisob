@@ -84,6 +84,9 @@
     notice.textContent = message;
     notice.className = `global-notice notice-${kind}`;
     notice.hidden = !message;
+    if (message && kind === 'error') {
+      try { telegram?.HapticFeedback?.notificationOccurred?.('error'); } catch {}
+    }
   }
 
   let toastTimer = 0;
@@ -94,6 +97,7 @@
     element.hidden = false;
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => { element.hidden = true; }, 3800);
+    try { telegram?.HapticFeedback?.notificationOccurred?.('success'); } catch {}
   }
 
   function showAuthError(message, retry = true) {
@@ -160,20 +164,37 @@
     return suffix ? `${route}?${suffix}` : route;
   }
 
+  function updatePendingNavBadge(count) {
+    const badge = byId('navPendingBadge');
+    if (badge) badge.hidden = !count || count <= 0;
+  }
+
   function tableMessage(tbodyId, emptyId, rows, emptyMessage) {
     const tbody = byId(tbodyId);
     const empty = byId(emptyId);
     tbody.replaceChildren();
     empty.hidden = rows.length > 0;
     if (emptyMessage) empty.textContent = emptyMessage;
+    const applyLabels = () => {
+      const table = tbody.closest('table');
+      if (!table) return;
+      const labels = [...table.querySelectorAll('thead th')].map((header) => header.textContent.trim());
+      for (const row of tbody.rows) {
+        [...row.cells].forEach((item, index) => {
+          if (!item.dataset.label && labels[index]) {
+            item.dataset.label = labels[index];
+          }
+        });
+      }
+    };
     if (!tbody._mobileLabelsObserver) {
       tbody._mobileLabelsObserver = new MutationObserver(() => {
-        const labels = [...tbody.closest('table').querySelectorAll('thead th')].map((header) => header.textContent.trim());
-        for (const row of tbody.rows) {
-          [...row.cells].forEach((item, index) => { item.dataset.label = labels[index] || ''; });
-        }
+        applyLabels();
       });
       tbody._mobileLabelsObserver.observe(tbody, { childList: true });
+    }
+    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+      window.requestAnimationFrame(applyLabels);
     }
     return tbody;
   }
@@ -192,6 +213,7 @@
     setText('metricPending', number(summary.pendingActivations));
     setText('metricBindings', number(summary.workerBindings));
     setText('recentSyncAt', summary.recentSyncAt ? timestamp(summary.recentSyncAt) : 'Hali mavjud emas');
+    updatePendingNavBadge(Number(summary.pendingActivations || 0));
     const rows = activationResult.activations || [];
     const tbody = tableMessage('overviewActivationRows', 'overviewActivationEmpty', rows);
     for (const item of rows) {
@@ -651,6 +673,7 @@
     }
     refreshCompanySelectors();
     syncActivationControls();
+    updatePendingNavBadge(pendingRequests.length);
 
     const tbody = tableMessage('activationRows', 'activationEmpty', state.activations);
     for (const item of state.activations) {
@@ -789,6 +812,21 @@
     }
   }
 
+  function handleNavigateBack() {
+    const dialog = byId('workerDialog');
+    if (dialog && dialog.open) {
+      dialog.close();
+      return;
+    }
+    try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+    const fromMoreViews = ['companies', 'devices', 'models', 'parties', 'tickets', 'balances', 'system', 'admin'];
+    if (fromMoreViews.includes(state.currentView)) {
+      showView('more');
+    } else {
+      showView('overview');
+    }
+  }
+
   function showView(view) {
     if (!Object.hasOwn(loaders, view)) return;
     if (state.access?.isGlobalAdmin === false && view === 'system') return;
@@ -812,6 +850,19 @@
       admin: 'Admin sessiyasi', more: 'Yana'
     };
     setText('currentViewLabel', labels[view]);
+    setText('mobileViewTitle', labels[view]);
+    const isOverview = view === 'overview';
+    const mobileBack = byId('mobileBackButton');
+    if (mobileBack) mobileBack.hidden = isOverview;
+    const mobileTitle = byId('mobileViewTitle');
+    if (mobileTitle) mobileTitle.hidden = isOverview;
+    if (telegram?.BackButton) {
+      if (isOverview) telegram.BackButton.hide();
+      else telegram.BackButton.show();
+    }
+    if (typeof window !== 'undefined' && window.scrollTo) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     void loadCurrentView();
   }
 
@@ -826,6 +877,14 @@
     try {
       telegram.ready();
       telegram.expand();
+      try {
+        telegram.enableClosingConfirmation?.();
+        telegram.setHeaderColor?.('#171526');
+        telegram.setBackgroundColor?.('#171526');
+        if (telegram.BackButton) {
+          telegram.BackButton.onClick(() => { handleNavigateBack(); });
+        }
+      } catch {}
       const result = await request(`${API}/session`, {
         method: 'POST', auth: false, body: { initData: telegram.initData }
       });
@@ -966,14 +1025,24 @@
 
   function bindEvents() {
     byId('retryAuth').addEventListener('click', () => { void beginAuthentication(); });
-    byId('refreshButton').addEventListener('click', () => { void loadCurrentView(); });
+    byId('refreshButton').addEventListener('click', () => {
+      try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+      void loadCurrentView();
+    });
+    byId('mobileBackButton')?.addEventListener('click', () => { handleNavigateBack(); });
     byId('mainNav').addEventListener('click', (event) => {
       const button = event.target.closest('[data-view]');
-      if (button) showView(button.dataset.view);
+      if (button) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        showView(button.dataset.view);
+      }
     });
     document.addEventListener('click', (event) => {
       const target = event.target.closest('[data-go]');
-      if (target) showView(target.dataset.go);
+      if (target) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        showView(target.dataset.go);
+      }
       const selectActBtn = event.target.closest('[data-select-activation]');
       if (selectActBtn) {
         const reqId = selectActBtn.dataset.selectActivation;

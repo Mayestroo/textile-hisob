@@ -85,6 +85,7 @@
           <button class="nav-button" data-view="activations" type="button">
             <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg></span>
             <span>Kalitlar & aktivatsiya</span>
+            <span id="navPendingBadge" class="nav-badge-dot" hidden title="Kutilayotgan aktivatsiyalar"></span>
           </button>
           <button class="nav-button mobile-more-button" data-view="more" type="button">
             <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg></span>
@@ -112,9 +113,16 @@
       <!-- Main Content Panel -->
       <main class="main-panel">
         <header class="topbar">
-          <div class="mobile-brand">
-            <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
-            <strong>NOVDA ADMIN</strong>
+          <div class="mobile-nav-header">
+            <button id="mobileBackButton" class="mobile-back-button" type="button" aria-label="Orqaga qaytish" hidden>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              <span>Orqaga</span>
+            </button>
+            <div class="mobile-brand">
+              <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
+              <strong>NOVDA ADMIN</strong>
+            </div>
+            <span id="mobileViewTitle" class="mobile-view-title" hidden>Umumiy</span>
           </div>
           <div class="breadcrumb">
             <span class="breadcrumb-badge">CONTROL ROOM</span>
@@ -773,6 +781,7 @@
     </div>
 
     <dialog id="workerDialog" class="worker-dialog">
+      <div class="sheet-handle" aria-hidden="true"></div>
       <form id="workerEditForm" method="dialog">
         <div class="dialog-heading"><div><p class="eyebrow">WORKER PROFILE</p><h2>Ishchini tahrirlash</h2></div><button id="closeWorkerDialog" class="icon-button" type="button" aria-label="Yopish">×</button></div>
         <input name="workerId" type="hidden" />

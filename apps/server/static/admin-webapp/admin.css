@@ -1612,34 +1612,360 @@ body { background: #171526; }
 .mobile-more-button { display: none; }
 
 @media (max-width: 820px) {
-  .app-shell { display: block; min-height: 100vh; padding: 8px 8px calc(94px + env(safe-area-inset-bottom)); }
-  .main-panel { min-height: calc(100vh - 16px); margin: 0; padding: 0 16px 22px; border-radius: 24px; }
-  .sidebar { inset: auto 12px calc(10px + env(safe-area-inset-bottom)); display: block; width: auto; height: auto; padding: 7px 8px; border: 1px solid #4a425e; border-radius: 22px; background: rgba(35, 31, 51, .96); box-shadow: 0 12px 34px rgba(7, 6, 15, .46); }
-  .main-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; overflow: visible; padding: 0; }
-  .main-nav .nav-button { display: none; }
-  .main-nav .nav-button[data-view="overview"], .main-nav .nav-button[data-view="workers"], .main-nav .nav-button[data-view="bindings"], .main-nav .nav-button[data-view="activations"], .main-nav .nav-button[data-view="more"] { display: flex; min-width: 0; min-height: 52px; flex-direction: column; justify-content: center; gap: 3px; padding: 4px 2px; border-radius: 14px; font-size: 9px; }
-  .main-nav .nav-button.is-active { color: #eadcff; background: #493d63; border-color: #75618e; }
-  .main-nav .nav-button.is-active .nav-glyph { color: #eadcff; }
-  .main-nav .nav-glyph { height: 19px; }
-  .main-panel { padding-right: 14px; padding-left: 14px; }
-  .topbar { margin: 0 -14px; padding: 0 14px; }
-  .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .quick-card { min-height: 122px; padding: 14px; }
-  .metric-card { border-radius: 16px; }
+  .app-shell {
+    display: block;
+    min-height: 100vh;
+    padding: 8px 8px calc(92px + env(safe-area-inset-bottom));
+  }
+  .main-panel {
+    min-height: calc(100vh - 16px);
+    margin: 0;
+    padding: 0 16px 24px;
+    border-radius: 24px;
+  }
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    height: 56px;
+    margin: 0 -16px 14px;
+    padding: 0 16px;
+    background: rgba(244, 239, 255, 0.94);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid #e3d9f1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .mobile-nav-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .mobile-back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 11px;
+    color: var(--primary);
+    background: #eee5ff;
+    border: 1px solid #d4c2f7;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-back-button:active {
+    transform: scale(0.96);
+    background: #e2d4fa;
+  }
+  .mobile-view-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sidebar {
+    position: fixed;
+    z-index: 30;
+    inset: auto 12px calc(10px + env(safe-area-inset-bottom));
+    display: block;
+    width: auto;
+    height: auto;
+    padding: 6px;
+    border: 1px solid #4a425e;
+    border-radius: 22px;
+    background: rgba(33, 29, 48, 0.96);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 16px 36px rgba(7, 6, 15, 0.45);
+  }
+  .main-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    overflow: visible;
+    padding: 0;
+    margin: 0;
+  }
+  .main-nav .nav-button {
+    display: none;
+  }
+  .main-nav .nav-button[data-view="overview"],
+  .main-nav .nav-button[data-view="workers"],
+  .main-nav .nav-button[data-view="bindings"],
+  .main-nav .nav-button[data-view="activations"],
+  .main-nav .nav-button[data-view="more"] {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 52px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 2px;
+    border-radius: 14px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #c5bdd2;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .main-nav .nav-button:active {
+    transform: scale(0.95);
+  }
+  .main-nav .nav-button.is-active {
+    color: #f2e9ff;
+    background: #3e3359;
+    border-color: #6d5b88;
+    box-shadow: 0 2px 8px rgba(118, 84, 216, 0.2);
+  }
+  .main-nav .nav-button.is-active .nav-glyph {
+    color: #f2e9ff;
+    transform: scale(1.05);
+  }
+  .main-nav .nav-glyph {
+    height: 19px;
+    display: grid;
+    place-items: center;
+  }
+  .nav-badge-dot {
+    position: absolute;
+    top: 5px;
+    right: 14px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f59e0b;
+    box-shadow: 0 0 8px #f59e0b;
+    animation: pulseBadge 2s infinite ease-in-out;
+  }
+  @keyframes pulseBadge {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.8; }
+  }
+  .quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .quick-card {
+    min-height: 122px;
+    padding: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .quick-card:active {
+    transform: scale(0.97);
+  }
+  .metric-card {
+    border-radius: 16px;
+  }
+  .worker-dialog {
+    width: min(520px, calc(100vw - 20px));
+    max-height: 88vh;
+    border-radius: 22px;
+  }
+  .sheet-handle {
+    width: 44px;
+    height: 5px;
+    margin: 10px auto 2px;
+    background: #cfc1e0;
+    border-radius: 3px;
+  }
 }
 
 @media (max-width: 560px) {
-  .app-shell { padding-right: 6px; padding-left: 6px; }
-  .main-panel { padding-right: 12px; padding-left: 12px; }
-  .topbar { margin-right: -12px; margin-left: -12px; padding-right: 12px; padding-left: 12px; }
-  .quick-grid { gap: 8px; }
-  .quick-card { min-height: 116px; padding: 12px; border-radius: 15px; }
-  .worker-dialog form { padding: 18px; }
-  #workerRows thead, #bindingRows thead, #activationRows thead { display: none; }
-  #workerRows tr, #bindingRows tr, #activationRows tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 10px; margin: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255, 255, 255, .7); }
-  #workerRows td, #bindingRows td, #activationRows td { display: grid; gap: 2px; padding: 5px 2px; overflow-wrap: anywhere; border: 0; background: transparent; font-size: 11px; }
-  #workerRows td::before, #bindingRows td::before, #activationRows td::before { content: attr(data-label); color: var(--text-muted); font-size: 9px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
-  #workerRows td:last-child, #bindingRows td:last-child, #activationRows td:last-child { grid-column: 1 / -1; }
-  #workerRows .actions-cell { flex-direction: row; }
-  #workerRows .small-action, #bindingRows .small-action { min-height: 34px; padding: 4px 8px; white-space: normal; }
+  .app-shell {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+  .main-panel {
+    padding-right: 12px;
+    padding-left: 12px;
+    border-radius: 20px;
+  }
+  .topbar {
+    margin-right: -12px;
+    margin-left: -12px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+  .quick-grid {
+    gap: 8px;
+  }
+  .quick-card {
+    min-height: 116px;
+    padding: 12px;
+    border-radius: 15px;
+  }
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .metric-card-pending {
+    grid-column: 1 / -1;
+    order: -1;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    border: 1px solid #fed7aa;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.12);
+  }
+  .metric-card-pending strong {
+    color: #c2410c;
+  }
+  .worker-dialog {
+    width: 100%;
+    max-width: 100vw;
+    margin: auto 0 0 0;
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+  }
+  .worker-dialog form {
+    padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+  /* Prevent iOS zoom on input focus and ensure touch-friendly sizes */
+  input, select, textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+    border-radius: var(--radius-sm);
+  }
+  .button {
+    min-height: 44px;
+    font-size: 13px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .activation-form .button-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .activation-form .button-row .button {
+    width: 100%;
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .pager .button {
+    flex: 1;
+    min-height: 40px;
+    justify-content: center;
+  }
+  .pager .count-label {
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+  }
+  /* Responsive Mobile Cards for all Tables */
+  .table-wrap table thead,
+  #workerRows thead,
+  #bindingRows thead,
+  #activationRows thead {
+    display: none !important;
+  }
+  .table-wrap {
+    overflow-x: visible;
+    border: none;
+    background: transparent;
+  }
+  .table-wrap table {
+    display: block;
+    width: 100%;
+  }
+  .table-wrap tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  .table-wrap tbody tr,
+  #workerRows tr,
+  #bindingRows tr,
+  #activationRows tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    margin: 0 0 10px;
+    padding: 14px 12px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 2px 8px rgba(35, 22, 60, 0.04);
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .table-wrap tbody td,
+  #workerRows td,
+  #bindingRows td,
+  #activationRows td {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 3px 0;
+    overflow-wrap: anywhere;
+    border: 0;
+    background: transparent;
+    font-size: 12px;
+  }
+  .table-wrap tbody td::before,
+  #workerRows td::before,
+  #bindingRows td::before,
+  #activationRows td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 9.5px;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .table-wrap tbody td:first-child,
+  #workerRows td:first-child,
+  #bindingRows td:first-child,
+  #activationRows td:first-child {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+  .table-wrap tbody td:last-child,
+  .table-wrap tbody td.actions-cell,
+  #workerRows td:last-child,
+  #bindingRows td:last-child,
+  #activationRows td:last-child {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+  }
+  .actions-cell,
+  #workerRows .actions-cell {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .actions-cell .small-action,
+  #workerRows .small-action,
+  #bindingRows .small-action,
+  #activationRows .small-action {
+    flex: 1;
+    min-height: 38px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 10px;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+  }
 }
