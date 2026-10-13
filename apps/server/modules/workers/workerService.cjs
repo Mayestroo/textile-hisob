@@ -299,11 +299,12 @@ async function getWorkerProfile(pool, input) {
       [params.companyId]
     );
     const period = periodResult.rows[0] || null;
+    const effectiveRateSql = 'COALESCE(NULLIF(e.rate_snapshot, 0), rates.rate, 0)';
     const breakdownResult = await client.query(
       `SELECT m.id AS model_id, m.name AS model_name, e.op_name AS operation_name,
-              COALESCE(e.rate_snapshot, rates.rate, 0)::TEXT AS rate,
+              ${effectiveRateSql}::TEXT AS rate,
               SUM(e.qty)::TEXT AS qty,
-              SUM(e.qty * COALESCE(e.rate_snapshot, rates.rate, 0))::TEXT AS amount
+              SUM(e.qty * ${effectiveRateSql})::TEXT AS amount
        FROM ticket_entries e
        JOIN tickets t ON t.company_id = e.company_id AND t.id = e.ticket_id
        JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id

@@ -1,8 +1,43 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { claimWorkerBinding, getWorkerForEnrollment, unbindWorkerTelegramBinding } = require('./workerService.cjs');
+const { claimWorkerBinding, getWorkerForEnrollment, getWorkerProfile, unbindWorkerTelegramBinding } = require('./workerService.cjs');
 
 describe('worker binding credential enforcement', () => {
+  it('falls back from a zero ticket rate snapshot to the current model rate for the profile and work breakdown', async () => {
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('FROM worker_telegram_bindings b')) {
+          return { rows: [{ worker_id: 180, company_id: 'comp_novda', worker_name: 'Worker 180', status: 'ACTIVE', staj: 0 }] };
+        }
+        if (sql.includes('SELECT start_date, end_date, is_closed FROM periods')) {
+          return { rows: [{ start_date: '2026-10-05', end_date: null, is_closed: false }] };
+        }
+        if (sql.includes('FROM ticket_entries e')) {
+          expect(sql.match(/NULLIF\(e\.rate_snapshot, 0\)/g)).toHaveLength(2);
+          return { rows: [{
+            model_id: 'body-long', model_name: 'BODY-LONG', operation_name: 'POYCHA RASHMA',
+            rate: '400', qty: '208', amount: '83200'
+          }] };
+        }
+        if (sql.includes('FROM worker_adjustments')) return { rows: [] };
+        return { rows: [] };
+      }),
+      release: vi.fn()
+    };
+    const pool = { connect: vi.fn(async () => client) };
+
+    await expect(getWorkerProfile(pool, {
+      companyId: 'comp_novda', workerId: 180, telegramId: '8363499557'
+    })).resolves.toMatchObject({
+      gross: 83200,
+      pieces: 208,
+      models_breakdown: {
+        'body-long': { operations: [{ rate: 400, qty: 208, amount: 83200 }] }
+      }
+    });
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
   it('reports the server-wide PIN-disabled enrollment policy', async () => {
     const pool = {
       query: vi.fn(async () => ({ rows: [{
