@@ -1926,8 +1926,8 @@
       telegram.expand();
       try {
         telegram.enableClosingConfirmation?.();
-        telegram.setHeaderColor?.('#171526');
-        telegram.setBackgroundColor?.('#171526');
+        telegram.setHeaderColor?.('#0b132b');
+        telegram.setBackgroundColor?.('#0b132b');
         if (telegram.BackButton) {
           telegram.BackButton.onClick(() => { handleNavigateBack(); });
         }
