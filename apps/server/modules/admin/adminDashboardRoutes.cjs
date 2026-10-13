@@ -280,20 +280,46 @@ function registerAdminDashboardRoutes(app, options = {}) {
       access: { isGlobalAdmin: request.adminAccess.isGlobalAdmin, companyIds: request.adminAccess.companyIds }
     })));
   app.get('/api/admin/webapp/overview', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { overview: await dashboard.overview() }; }));
+    invoke(request, reply, async () => ({ overview: await dashboard.overview(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
   app.get('/api/admin/webapp/companies', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => {
       const companies = await dashboard.listCompanies();
       return { companies: request.adminAccess.isGlobalAdmin ? companies : companies.filter((company) => request.adminAccess.companyIds.includes(company.companyId)) };
     }));
   app.get('/api/admin/webapp/devices', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { devices: await dashboard.listDevices() }; }));
+    invoke(request, reply, async () => ({ devices: await dashboard.listDevices(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
   app.get('/api/admin/webapp/workers', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ ...await dashboard.listWorkers(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
+  app.get('/api/admin/webapp/companies/:companyId/periods', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => ({
+      periods: await dashboard.listPeriods(request.adminSession.telegramId, scopedCompany(request, request.params.companyId))
+    })));
+  app.put('/api/admin/webapp/companies/:companyId/workers/:workerId', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => ({ worker: await dashboard.updateWorker(request.adminSession.telegramId, {
+      ...(request.body || {}), companyId: scopedCompany(request, request.params.companyId), workerId: request.params.workerId
+    }) })));
+  app.put('/api/admin/webapp/companies/:companyId/workers/:workerId/status', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => ({ worker: await dashboard.setWorkerStatus(request.adminSession.telegramId, {
+      ...(request.body || {}), companyId: scopedCompany(request, request.params.companyId), workerId: request.params.workerId
+    }) })));
+  app.post('/api/admin/webapp/companies/:companyId/workers/:workerId/unbind', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => ({ binding: await dashboard.unbindWorkerTelegram(request.adminSession.telegramId, {
+      companyId: scopedCompany(request, request.params.companyId), workerId: request.params.workerId,
+      telegramId: request.body?.telegramId
+    }) })));
+  app.get('/api/admin/webapp/companies/:companyId/admins', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => { globalOnly(request); return { admins: await dashboard.listCompanyAdmins(request.adminSession.telegramId, request.params.companyId) }; }));
+  app.put('/api/admin/webapp/companies/:companyId/admins/:telegramId', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => { globalOnly(request); return { grant: await dashboard.setCompanyAdmin(request.adminSession.telegramId, {
+      companyId: request.params.companyId, telegramId: request.params.telegramId, isActive: request.body?.isActive
+    }) }; }));
   app.get('/api/admin/webapp/payroll', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ payroll: await dashboard.getPayroll(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
   app.get('/api/admin/webapp/activations', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { activations: await dashboard.listActivations(request.query || {}) }; }));
+    invoke(request, reply, async () => ({ activations: await dashboard.listActivations({
+      ...scopeCompanyFilters(request.adminAccess, request.query || {}),
+      includeUnassignedPending: !request.adminAccess.isGlobalAdmin
+    }) })));
   app.get('/api/admin/webapp/models', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => dashboard.listModels(scopeCompanyFilters(request.adminAccess, request.query || {}))));
   app.get('/api/admin/webapp/parties', { preHandler: adminSessionGuard }, async (request, reply) =>
@@ -305,7 +331,7 @@ function registerAdminDashboardRoutes(app, options = {}) {
   app.get('/api/admin/webapp/system', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => { globalOnly(request); return { system: await dashboard.getSystemHealth() }; }));
   app.get('/api/admin/webapp/activations/:requestId/events', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { events: await dashboard.getActivationEvents(request.params.requestId) }; }));
+    invoke(request, reply, async () => ({ events: await dashboard.getActivationEvents(request.params.requestId, request.adminAccess) })));
 
   app.post('/api/admin/webapp/companies', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => {
@@ -323,9 +349,9 @@ function registerAdminDashboardRoutes(app, options = {}) {
       ...(request.body || {}), requestId: request.params.requestId, sessionToken: request.adminSessionToken
     }) })));
   app.post('/api/admin/webapp/activations/:requestId/reject', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { activation: await dashboard.rejectActivation(request.adminSession.telegramId, {
+    invoke(request, reply, async () => ({ activation: await dashboard.rejectActivation(request.adminSession.telegramId, {
       ...(request.body || {}), requestId: request.params.requestId
-    }) }; }));
+    }) })));
   app.post('/api/admin/webapp/activations/:requestId/revoke', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ activation: await dashboard.revokeActivation(request.adminSession.telegramId, {
       ...(request.body || {}), requestId: request.params.requestId, sessionToken: request.adminSessionToken

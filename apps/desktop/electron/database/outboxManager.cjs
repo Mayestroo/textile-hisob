@@ -428,7 +428,8 @@ function recoverPeriodScopeMismatchTickets(db, companyId) {
 
   let recovered = 0;
   for (const operation of operations) {
-    if (Number(operation.attempt_count) !== 1) continue;
+    const attemptCount = Number(operation.attempt_count);
+    if (!Number.isSafeInteger(attemptCount) || attemptCount < 1 || attemptCount > 2) continue;
     let error;
     let payload;
     try {
@@ -450,7 +451,7 @@ function recoverPeriodScopeMismatchTickets(db, companyId) {
     if (!matchingPeriod || payload.periodId === matchingPeriod.id) continue;
 
     // Keep the business date immutable. Retry only when it already belongs to
-    // a locally authoritative open period and only once per rejected request.
+    // a locally authoritative open period, with at most two scope repairs.
     updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_AFTER_PERIOD_SCOPE_RECONCILIATION');
     recovered++;
   }

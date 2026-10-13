@@ -216,46 +216,6 @@ async function unbindWorkerTelegramBinding(pool, input, globalAdminIds = new Set
   return withTransaction(pool, async (client) => {
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`novda:worker-binding:${companyId}:${workerId}`]);
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`novda:worker-telegram:${telegramId}`]);
-    const currentResult = await client.query(`
-      SELECT binding.telegram_id, binding.company_id, binding.worker_id, worker.name AS worker_name
-      FROM worker_telegram_bindings binding
-      JOIN workers worker ON worker.company_id = binding.company_id AND worker.id = binding.worker_id
-      WHERE binding.company_id = $1 AND binding.worker_id = $2 FOR UPDATE OF binding
-    `, [companyId, workerId]);
-    const current = currentResult.rows[0];
-    if (!current) throw workerError('WORKER_BINDING_NOT_FOUND', 404);
-    if (String(current.telegram_id) !== telegramId) throw workerError('WORKER_BINDING_MISMATCH', 409);
-
-    await client.query(`DELETE FROM worker_telegram_bindings
-      WHERE company_id = $1 AND worker_id = $2 AND telegram_id = $3`, [companyId, workerId, telegramId]);
-    await client.query(`INSERT INTO worker_telegram_binding_events (
-      company_id, worker_id, telegram_id, actor_telegram_id, event_type
-    ) VALUES ($1, $2, $3, $4, 'UNBOUND')`, [companyId, workerId, telegramId, adminTelegramId]);
-    return { companyId, workerId, telegramId, workerName: current.worker_name, unboundBy: adminTelegramId };
-  });
-}
-
-async function unbindWorkerTelegramBinding(pool, input, globalAdminIds = new Set()) {
-  const companyId = String(input?.companyId || '').trim();
-  const workerId = Number(input?.workerId);
-  const telegramId = String(input?.telegramId || '').trim();
-  const adminTelegramId = String(input?.adminTelegramId || '').trim();
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(companyId)) throw workerError('INVALID_COMPANY_ID', 400);
-  if (!Number.isSafeInteger(workerId) || workerId <= 0) throw workerError('INVALID_WORKER_ID', 400);
-  if (!/^\d{1,24}$/.test(telegramId) || !/^\d{1,24}$/.test(adminTelegramId)) {
-    throw workerError('INVALID_TELEGRAM_ID', 400);
-  }
-
-  const access = await resolveAdminAccess(pool, adminTelegramId, globalAdminIds);
-  try {
-    assertCompanyAccess(access, companyId);
-  } catch (error) {
-    throw workerError(error.code || 'ADMIN_COMPANY_SCOPE_REQUIRED', 403);
-  }
-
-  return withTransaction(pool, async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`novda:worker-binding:${companyId}:${workerId}`]);
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`novda:worker-telegram:${telegramId}`]);
     const existingResult = await client.query(`
       SELECT binding.telegram_id, binding.company_id, binding.worker_id, worker.name AS worker_name
       FROM worker_telegram_bindings binding

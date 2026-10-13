@@ -6,6 +6,7 @@ import { canonicalStringify, computePayloadHash } from './modules/sync/canonical
 
 const { processSingleOperation } = require('./modules/sync/handlers/operations.cjs');
 const { getPeriodArchive } = require('./modules/sync/workbookOperations.cjs');
+const { createAdminDashboardService } = require('./modules/admin/adminDashboard.cjs');
 const { buildFastifyServer } = require('./app.cjs');
 const { verifyFreshPostgres16TestEnvironment } = require('../../scripts/verify/verify-pg16-test-env.cjs');
 
@@ -171,6 +172,36 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(await apply('DeactivateWorker', 'worker', '71', {
       commandId: 'cmd_worker_deactivate', operationId: 'op_worker_deactivate', companyId, workerId: 71
     }, 3)).toMatchObject({ status: 'APPLIED', serverRevision: 4 });
+    expect(await apply('ActivateWorker', 'worker', '71', {
+      commandId: 'cmd_worker_activate', operationId: 'op_worker_activate', companyId, workerId: 71
+    }, 4)).toMatchObject({ status: 'APPLIED', serverRevision: 5 });
+    const reactivatedWorker = await pool!.query('SELECT status, server_revision FROM workers WHERE company_id = $1 AND id = 71', [companyId]);
+    expect(reactivatedWorker.rows[0]).toMatchObject({ status: 'ACTIVE', server_revision: 5 });
+
+    await pool!.query(`INSERT INTO activation_companies (company_id, company_name, updated_by_telegram_id)
+      VALUES ($1, 'Workbook test company', '1526974123')`, [companyId]);
+    await pool!.query(`INSERT INTO activation_company_admins (
+      company_id, telegram_id, assigned_by_telegram_id, assignment_source
+    ) VALUES ($1, '274466315', '1526974123', 'TELEGRAM_ADMIN')`, [companyId]);
+    const adminDashboard = createAdminDashboardService({ pool: pool!, allowedAdminIds: new Set(['1526974123']) });
+    const adminEdit = await adminDashboard.updateWorker('274466315', {
+      companyId, workerId: 71, baseRevision: 5, name: 'Ali Admin', staj: 6, role: 'Tikuvchi',
+      operationId: '00000000-0000-4000-8000-000000000711',
+      commandId: '00000000-0000-4000-8000-000000000712',
+      adjustment: {
+        adjustmentId: '00000000-0000-4000-8000-000000000713',
+        type: 'JARIMA', periodId: period.periodId, amountDelta: 15, description: 'WebApp audit check'
+      }
+    });
+    expect(adminEdit).toMatchObject({ status: 'APPLIED', serverRevision: 6 });
+    const adminEditedWorker = await pool!.query('SELECT name, staj, role, server_revision FROM workers WHERE company_id = $1 AND id = 71', [companyId]);
+    expect(adminEditedWorker.rows[0]).toMatchObject({ name: 'Ali Admin', staj: '6', role: 'Tikuvchi', server_revision: 6 });
+    const adminAdjustment = await pool!.query(`SELECT type, amount, period_id, provenance
+      FROM worker_adjustments WHERE company_id = $1 AND id = '00000000-0000-4000-8000-000000000713'`, [companyId]);
+    expect(adminAdjustment.rows[0]).toMatchObject({ type: 'JARIMA', amount: '15', period_id: period.periodId, provenance: 'ADMIN_WEBAPP' });
+    const adminChange = await pool!.query(`SELECT payload_json FROM change_log
+      WHERE company_id = $1 AND operation_id = '00000000-0000-4000-8000-000000000711'`, [companyId]);
+    expect(adminChange.rows[0].payload_json).toMatchObject({ adminTelegramId: '274466315', source: 'ADMIN_WEBAPP' });
 
     const party = {
       commandId: 'cmd_party', operationId: 'op_party', companyId,

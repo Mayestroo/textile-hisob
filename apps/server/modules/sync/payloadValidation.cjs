@@ -27,6 +27,7 @@ const COMMANDS = Object.freeze({
   DeactivateModel: { entityType: 'model', entityId: 'modelId' },
   UpsertWorker: { entityType: 'worker', entityId: 'workerId' },
   DeactivateWorker: { entityType: 'worker', entityId: 'workerId' },
+  ActivateWorker: { entityType: 'worker', entityId: 'workerId' },
   CreatePeriod: { entityType: 'period', entityId: 'periodId' },
   UpdatePeriod: { entityType: 'period', entityId: 'periodId' },
   ClosePeriod: { entityType: 'period', entityId: 'periodId' },
@@ -879,6 +880,12 @@ function validateModelCommand(payload, context, commandType) {
 
 function validateWorkerCommand(payload, context, commandType) {
   rejectAuthorityFields(payload, AUTHORITY_FIELDS.filter((field) => field !== 'role'));
+  if (commandType === 'ActivateWorker') {
+    const allowedFields = new Set(['commandId', 'operationId', 'companyId', 'workerId', 'baseRevision']);
+    if (Object.keys(payload).some((field) => !allowedFields.has(field))) {
+      throw createValidationError('INVALID_WORKER_ACTIVATION', 'Worker activation contains unsupported fields');
+    }
+  }
   if (hasOwn(payload, 'status') && payload.status !== 'ACTIVE') {
     throw createValidationError('FORBIDDEN_AUTHORITY_FIELD', 'Worker status is set only by a deactivate command', { field: 'status' });
   }
@@ -1149,6 +1156,7 @@ function validateCommandPayload(commandType, payload, context = {}) {
       return validateModelCommand(payload, context, commandType);
     case 'UpsertWorker':
     case 'DeactivateWorker':
+    case 'ActivateWorker':
       return validateWorkerCommand(payload, context, commandType);
     case 'CreatePeriod':
     case 'UpdatePeriod':

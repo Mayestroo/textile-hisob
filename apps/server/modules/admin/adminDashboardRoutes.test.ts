@@ -24,6 +24,11 @@ function createDashboard() {
     listCompanies: vi.fn().mockResolvedValue([]),
     listDevices: vi.fn().mockResolvedValue({ registered: [], activationRequests: [] }),
     listWorkers: vi.fn().mockResolvedValue({ workers: [], limit: 100, offset: 0 }),
+    listPeriods: vi.fn().mockResolvedValue([]),
+    listCompanyAdmins: vi.fn().mockResolvedValue([]),
+    setCompanyAdmin: vi.fn().mockResolvedValue({ companyId: 'comp_novda', telegramId: '274466315', isActive: true }),
+    updateWorker: vi.fn().mockResolvedValue({ serverRevision: 2 }),
+    setWorkerStatus: vi.fn().mockResolvedValue({ serverRevision: 2 }),
     getPayroll: vi.fn().mockResolvedValue({ period: null, workers: [] }),
     listActivations: vi.fn().mockResolvedValue([]),
     getActivationEvents: vi.fn().mockResolvedValue([]),
@@ -213,7 +218,7 @@ describe(' Admin WebApp routes', () => {
     });
   });
 
-  it('limits a company-scoped admin to its granted company and blocks global dashboard data', async () => {
+  it('limits a company-scoped admin to its granted company across dashboard and device reads', async () => {
     const dashboard = createDashboard();
     dashboard.listCompanies.mockResolvedValue([
       { companyId: 'comp_novda', companyName: 'Novda' },
@@ -243,9 +248,20 @@ describe(' Admin WebApp routes', () => {
     expect(crossCompany.json().error.code).toBe('ADMIN_COMPANY_SCOPE_REQUIRED');
 
     const overview = await server.inject({ method: 'GET', url: '/api/admin/webapp/overview', headers: auth });
-    expect(overview.statusCode).toBe(403);
-    expect(overview.json().error.code).toBe('ADMIN_GLOBAL_SCOPE_REQUIRED');
-    expect(dashboard.overview).not.toHaveBeenCalled();
+    expect(overview.statusCode).toBe(200);
+    expect(dashboard.overview).toHaveBeenCalledWith({ companyId: 'comp_novda' });
+
+    const devices = await server.inject({ method: 'GET', url: '/api/admin/webapp/devices', headers: auth });
+    expect(devices.statusCode).toBe(200);
+    expect(dashboard.listDevices).toHaveBeenCalledWith({ companyId: 'comp_novda' });
+
+    const activations = await server.inject({ method: 'GET', url: '/api/admin/webapp/activations', headers: auth });
+    expect(activations.statusCode).toBe(200);
+    expect(dashboard.listActivations).toHaveBeenCalledWith({ companyId: 'comp_novda', includeUnassignedPending: true });
+
+    const globalSystem = await server.inject({ method: 'GET', url: '/api/admin/webapp/system', headers: auth });
+    expect(globalSystem.statusCode).toBe(403);
+    expect(globalSystem.json().error.code).toBe('ADMIN_GLOBAL_SCOPE_REQUIRED');
   });
 
   it('authorizes the internal bot webapp exchange from database company grants', async () => {
@@ -292,6 +308,32 @@ describe(' Admin WebApp routes', () => {
       adminTelegramId: '274466315', companyId: 'comp_novda', workerId: 180, telegramId: '8363499557'
     });
     expect(response.json().binding).toMatchObject({ companyId: 'comp_novda', workerId: 180 });
+  });
+
+  it('routes scoped worker edits and binding unbinds through the authenticated company scope', async () => {
+    const dashboard = createDashboard();
+    const pool = { query: vi.fn(async (_sql: string, params: unknown[]) => ({
+      rows: params[0] === '274466315' ? [{ company_id: 'comp_novda' }] : []
+    })) };
+    const { app: server } = startApp({ dashboard, pool });
+    await server.ready();
+    const headers = { authorization: `Bearer ${createSession('274466315')}` };
+
+    const edit = await server.inject({
+      method: 'PUT', url: '/api/admin/webapp/companies/comp_novda/workers/180', headers,
+      payload: { companyId: 'other_company', workerId: 900, name: 'Ali', baseRevision: 1 }
+    });
+    const unbind = await server.inject({
+      method: 'POST', url: '/api/admin/webapp/companies/comp_novda/workers/180/unbind', headers,
+      payload: { companyId: 'other_company', workerId: 900, telegramId: '8363499557' }
+    });
+
+    expect(edit.statusCode).toBe(200);
+    expect(dashboard.updateWorker).toHaveBeenCalledWith('274466315', expect.objectContaining({ companyId: 'comp_novda', workerId: '180' }));
+    expect(unbind.statusCode).toBe(200);
+    expect(dashboard.unbindWorkerTelegram).toHaveBeenCalledWith('274466315', expect.objectContaining({
+      companyId: 'comp_novda', workerId: '180', telegramId: '8363499557'
+    }));
   });
 
   it('serves the static app and assets with no-store security headers', async () => {

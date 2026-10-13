@@ -18,8 +18,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from cryptography.hazmat.primitives import serialization
@@ -30,7 +28,6 @@ from license_payload import canonical_activation_payload
 
 PINNED_PUBLIC_KEY_FINGERPRINT = "ce8ddbad7b368f8d0896e3f2d8d5c78545be0cb1c14755d3350a24f5a4bfdf68"
 ADMIN_WEBAPP_CANONICAL_URL = "https://sync.novdatextile.uz/admin-app"
-ACTIVATION_ROLES = {"admin", "type", "print"}
 BOT_TOKEN = ""
 ADMIN_API_TOKEN = ""
 ADMIN_IDS = set()
@@ -252,10 +249,6 @@ def create_activation(payload, private_key=None):
     return {"payload": payload, "signature": base64.b64encode(signature).decode("ascii")}
 
 
-def utc_now_iso():
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
 def api_request(method, route, payload=None):
     if not API_BASE_URL or not ADMIN_API_TOKEN:
         raise RuntimeError("ADMIN_API_NOT_CONFIGURED")
@@ -282,222 +275,25 @@ def api_request(method, route, payload=None):
     return result
 
 
-def list_pending_text():
-    result = api_request("GET", "/api/admin/activation/requests")
-    requests = result.get("requests", [])
-    if not requests:
-        return "✅ <b>Kutilayotgan aktivatsiya so'rovlari yo'q.</b>\nBarcha qurilmalar ko'rib chiqilgan."
-    lines = ["📋 <b>KUTILAYOTGAN AKTIVATSIYALAR</b>\n"]
-    for i, item in enumerate(requests, 1):
-        context = item.get("client_context") or {}
-        req_id = html.escape(str(item.get("request_id", "")))
-        machine_id = html.escape(str(item.get("machine_id", "")))
-        app_ver = html.escape(str(context.get("appVersion", "unknown")))
-        req_at = html.escape(str(item.get("requested_at", "")))
-        lines.append(
-            f"\n<b>{i}. So'rov:</b> <code>{req_id}</code>"
-            f"\n   🖥 Qurilma: <code>{machine_id}</code>"
-            f"\n   📦 Versiya: <code>{app_ver}</code>"
-            f"\n   ⏱ Vaqt: {req_at}\n"
-        )
-    lines.append("\n⚡ <b>Tezkor amallar:</b>")
-    lines.append("\n• Tasdiqlash: <code>/approve REQUEST_ID COMPANY_ID admin|type|print</code>")
-    lines.append("\n• Rad etish: <code>/reject REQUEST_ID SABAB</code>")
-    return "".join(lines)
-
-
-def handle_approve(telegram_id, arguments):
-    if len(arguments) != 3:
-        raise ValueError("Foydalanish: /approve REQUEST_ID COMPANY_ID admin|type|print")
-    request_id, company_id, role = arguments
-    role = role.strip().lower()
-    if role not in ACTIVATION_ROLES:
-        raise ValueError("Rol admin, type yoki print bo'lishi kerak.")
-    detail = api_request("GET", f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}")["request"]
-    company = next(
-        (item for item in api_request("GET", "/api/admin/activation/companies").get("companies", [])
-         if item.get("company_id") == company_id),
-        None,
-    )
-    if company is None:
-        raise ValueError("Korxona bazasida topilmadi. Avval /company ID NOMI orqali ro'yxatdan o'tkazing.")
-    if role not in company.get("allowed_roles", []):
-        raise ValueError("Bu rol tanlangan korxona uchun ruxsat etilmagan.")
-    payload = {
-        "activationId": str(uuid.uuid4()),
-        "companyId": company["company_id"],
-        "companyName": company["company_name"],
-        "expiresAt": None,
-        "issuedAt": utc_now_iso(),
-        "machineId": detail["machine_id"],
-        "requireTicketValidation": company["require_ticket_validation"],
-        "role": role,
-        "schema": "novda-license-v1",
-        "status": "active",
-    }
-    signed = create_activation(payload)
-    api_request(
-        "POST",
-        f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}/approve",
-        {"adminTelegramId": str(telegram_id), "companyId": company_id, "role": role, "signedActivation": signed},
-    )
-    return (
-        f"✅ <b>Aktivatsiya tasdiqlandi!</b>\n\n"
-        f"▫️ <b>So'rov ID:</b> <code>{html.escape(request_id)}</code>\n"
-        f"▫️ <b>Korxona:</b> <b>{html.escape(company['company_name'])}</b>\n"
-        f"▫️ <b>Rol:</b> <code>{role}</code>\n"
-        f"▫️ <b>Imzo:</b> <i>Ed25519 muvaffaqiyatli yaratildi</i>"
-    )
-
-
-def handle_reject(telegram_id, arguments):
-    if len(arguments) < 2:
-        raise ValueError("Foydalanish: /reject REQUEST_ID SABAB")
-    request_id = arguments[0]
-    reason = " ".join(arguments[1:]).strip()
-    api_request(
-        "POST",
-        f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}/reject",
-        {"adminTelegramId": str(telegram_id), "reason": reason},
-    )
-    return f"🚫 <b>Aktivatsiya so'rovi rad etildi:</b>\n<code>{html.escape(request_id)}</code>\n▫️ <b>Sabab:</b> {html.escape(reason)}"
-
-
-def handle_revoke(telegram_id, arguments):
-    if len(arguments) != 1:
-        raise ValueError("Foydalanish: /revoke REQUEST_ID")
-    request_id = arguments[0]
-    detail = api_request("GET", f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}")["request"]
-    activation = detail.get("activation")
-    if detail.get("status") != "APPROVED" or not activation:
-        raise ValueError("Faqat faol tasdiqlangan aktivatsiyani bekor qilish mumkin.")
-    payload = dict(activation["payload"])
-    next_issued_at = max(int(time.time() * 1000), int(datetime.fromisoformat(payload["issuedAt"].replace("Z", "+00:00")).timestamp() * 1000) + 1)
-    payload["issuedAt"] = datetime.fromtimestamp(next_issued_at / 1000, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    payload["status"] = "revoked"
-    signed = create_activation(payload)
-    api_request(
-        "POST",
-        f"/api/admin/activation/requests/{urllib.parse.quote(request_id, safe='')}/revoke",
-        {"adminTelegramId": str(telegram_id), "signedActivation": signed},
-    )
-    return f"⚠️ <b>Aktivatsiya bekor qilindi (Revoked):</b>\n<code>{html.escape(request_id)}</code>"
-
-
-def handle_company(telegram_id, arguments):
-    if len(arguments) < 2:
-        raise ValueError("Foydalanish: /company COMPANY_ID KORXONA_NOMI")
-    company_id = arguments[0]
-    company_name = " ".join(arguments[1:]).strip()
-    result = api_request(
-        "POST",
-        "/api/admin/activation/companies",
-        {"adminTelegramId": str(telegram_id), "companyId": company_id, "companyName": company_name},
-    )
-    company = result["company"]
-    return f"🏢 <b>Korxona saqlandi:</b>\n▫️ Nomi: <b>{html.escape(company['company_name'])}</b>\n▫️ ID: <code>{html.escape(company['company_id'])}</code>"
-
-
-def list_companies_text():
-    companies = api_request("GET", "/api/admin/activation/companies").get("companies", [])
-    if not companies:
-        return "🏢 Aktivatsiya uchun korxonalar kiritilmagan. /company ID NOMI buyrug'idan foydalaning."
-    lines = ["🏢 <b>FAOL KORXONALAR RO'YXATI</b>\n"]
-    for i, company in enumerate(companies, 1):
-        roles = ", ".join(company.get("allowed_roles", []))
-        name = html.escape(str(company.get("company_name", "")))
-        cid = html.escape(str(company.get("company_id", "")))
-        lines.append(
-            f"\n{i}. <b>{name}</b> (<code>{cid}</code>)"
-            f"\n   🏷 Rollar: <code>{html.escape(roles)}</code>"
-        )
-    return "".join(lines)
-
-
-def handle_unbind(telegram_id, arguments, access):
-    if len(arguments) != 3:
-        raise ValueError("Foydalanish: /unbind COMPANY_ID WORKER_ID TELEGRAM_ID")
-    company_id, worker_raw, bound_telegram_id = arguments
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", company_id):
-        raise ValueError("Kompaniya ID noto'g'ri.")
-    if not re.fullmatch(r"[1-9][0-9]{0,9}", worker_raw):
-        raise ValueError("Ishchi ID musbat raqam bo'lishi kerak.")
-    if not re.fullmatch(r"\d{1,24}", bound_telegram_id):
-        raise ValueError("Telegram ID raqam bo'lishi kerak.")
-    if not access.get("isGlobalAdmin") and company_id not in access.get("companyIds", []):
-        raise ValueError("Bu kompaniya uchun admin huquqingiz yo'q.")
-
-    result = api_request("POST", "/internal/admin/webapp/unbind-worker", {
-        "adminTelegramId": str(telegram_id),
-        "companyId": company_id,
-        "workerId": int(worker_raw),
-        "telegramId": bound_telegram_id,
-    })
-    binding = result.get("binding") or {}
-    worker_name = binding.get("workerName")
-    worker_label = f" · {html.escape(str(worker_name))}" if worker_name else ""
-    return (
-        "✅ <b>Ishchi Telegram bog'lanishi bekor qilindi.</b>\n"
-        f"▫️ Korxona: <code>{html.escape(company_id)}</code>\n"
-        f"▫️ Ishchi: #{html.escape(str(binding.get('workerId', worker_raw)))}{worker_label}\n"
-        f"▫️ Eski Telegram ID: <code>{html.escape(bound_telegram_id)}</code>\n"
-        "Yangi Telegram akkaunti endi qayta bog'lanishi mumkin."
-    )
-
-
 def handle_admin_command(telegram_id, text, access=None):
     parts = str(text or "").strip().split()
     if not parts:
         return None
     command = parts[0].split("@", 1)[0].lower()
-    arguments = parts[1:]
+    if command not in ("/start", "/help"):
+        return None
     if access is None:
         access = get_admin_access(telegram_id)
     if not isinstance(access, dict):
         return None
     is_global_admin = access.get("isGlobalAdmin") is True
-    if command in ("/start", "/help"):
-        if not is_global_admin:
-            return (
-                "✨ <b>Novda kompaniya admini</b>\n\n"
-                "Сизга фақат бириктирилган компания маълумотлари очиқ.\n"
-                "📊 Бошқарув панелида шу компания ишчилари ва ҳисоб-китобини кўриш мумкин.\n\n"
-                "🔗 Telegram боғланишини бекор қилиш:\n"
-                "<code>/unbind COMPANY_ID WORKER_ID TELEGRAM_ID</code>\n"
-                "Масалан: <code>/unbind comp_novda 180 8363499557</code>"
-            )
-        return (
-            "✨ <b>Novda Admin Console</b>\n\n"
-            "Tizimni quyidagi buyruqlar yoki WebApp orqali boshqaring:\n\n"
-            "📋 <b>Aktivatsiya & Qurilmalar:</b>\n"
-            "• /pending — Kutilayotgan so'rovlar\n"
-            "• /approve <code>ID</code> <code>COMPANY</code> <code>admin|type|print</code> — Tasdiqlash\n"
-            "• /reject <code>ID</code> <code>SABAB</code> — Rad etish\n"
-            "• /revoke <code>ID</code> — Bekor qilish\n\n"
-            "🔗 <b>Ishchi Telegram bog‘lanishi:</b>\n"
-            "• /unbind <code>COMPANY_ID</code> <code>WORKER_ID</code> <code>TELEGRAM_ID</code>\n\n"
-            "🏢 <b>Korxonalar:</b>\n"
-            "• /companies — Faol korxonalar ro'yxati\n"
-            "• /company <code>ID</code> <code>NOMI</code> — Saqlash\n\n"
-            "📱 <i>To'liq boshqaruv panelini ochish uchun pastdagi tugmani bosing:</i>"
-        )
-    if command == "/unbind":
-        return handle_unbind(telegram_id, arguments, access)
-    if not is_global_admin:
-        return "Бу буйруқ глобал админ учун. Ўз компаниянгизга Telegram боғланишини бекор қилиш учун /unbind дан фойдаланинг."
-    if command == "/pending":
-        return list_pending_text()
-    if command == "/companies":
-        return list_companies_text()
-    if command == "/approve":
-        return handle_approve(telegram_id, arguments)
-    if command == "/reject":
-        return handle_reject(telegram_id, arguments)
-    if command == "/revoke":
-        return handle_revoke(telegram_id, arguments)
-    if command == "/company":
-        return handle_company(telegram_id, arguments)
-    return "Noma'lum buyruq. /help buyrug'ini yuboring."
+    scope_text = 'барча компаниялар' if is_global_admin else 'бириктирилган компаниянгиз'
+    return (
+        "✨ <b>Novda Admin WebApp</b>\n\n"
+        "Админ амаллари WebApp панелида бажарилади.\n"
+        f"Рухсат доираси: {scope_text}.\n"
+        "Пастдаги <b>Boshqaruv panelini ochish</b> тугмасини босинг."
+    )
 
 
 def telegram_request(method, payload):
@@ -547,6 +343,8 @@ def process_update(update):
     if not chat_id or not text:
         return
     command = str(text).strip().split(maxsplit=1)[0].split("@", 1)[0].lower()
+    if command not in ("/start", "/help"):
+        return
     try:
         access = get_admin_access(telegram_id)
     except RuntimeError as error:
@@ -558,7 +356,7 @@ def process_update(update):
     try:
         response = handle_admin_command(telegram_id, text, access)
         if response:
-            reply_markup = admin_webapp_keyboard() if command in ("/start", "/help", "/pending") else None
+            reply_markup = admin_webapp_keyboard() if command in ("/start", "/help") else None
             send_message(chat_id, response, reply_markup)
     except ValueError as error:
         send_message(chat_id, html.escape(str(error)))
@@ -589,7 +387,7 @@ def notify_new_pending_requests():
             f"▫️ <b>So'rov ID:</b> <code>{html.escape(str(item.get('request_id')))}</code>\n"
             f"▫️ <b>Qurilma ID:</b> <code>{html.escape(str(item.get('machine_id')))}</code>\n"
             f"▫️ <b>Versiya:</b> <code>{html.escape(str(context.get('appVersion', 'nomaʼlum')))}</code>\n\n"
-            "👉 Ko'rib chiqish: /pending yoki WebApp orqali tasdiqlang."
+            "👉 So‘rovni ko‘rib chiqish uchun Admin WebApp’ni oching."
         )
         delivered = False
         for admin_id in ADMIN_IDS:

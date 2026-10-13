@@ -13,6 +13,8 @@ const {
 const { verifySignedActivation } = require('../activation/licenseActivation.cjs');
 const { assertCompanyAccess, resolveAdminAccess } = require('./adminAccess.cjs');
 const { unbindWorkerTelegramBinding } = require('../workers/workerService.cjs');
+const { processSingleOperation } = require('../sync/handlers/operations.cjs');
+const { canonicalStringify, computePayloadHash } = require('../sync/canonicalPayload.cjs');
 
 const COMPANY_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -77,26 +79,28 @@ function createAdminDashboardService(options = {}) {
     return new Set([...allowedAdminIds, telegramId]);
   }
 
-  async function overview() {
+  async function overview(filters = {}) {
+    const companyId = filters.companyId ? validateCompanyId(filters.companyId) : null;
     const result = await pool.query(`
       WITH companies AS (
-        SELECT company_id FROM activation_companies
-        UNION SELECT company_id FROM workers
-        UNION SELECT company_id FROM models
-        UNION SELECT company_id FROM parties
-        UNION SELECT company_id FROM periods
+        SELECT company_id FROM activation_companies WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+        UNION SELECT company_id FROM workers WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+        UNION SELECT company_id FROM models WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+        UNION SELECT company_id FROM parties WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+        UNION SELECT company_id FROM periods WHERE ($1::VARCHAR IS NULL OR company_id = $1)
       )
       SELECT
         (SELECT COUNT(*) FROM companies)::TEXT AS company_count,
-        (SELECT COUNT(*) FROM workers WHERE status = 'ACTIVE')::TEXT AS worker_count,
-        (SELECT COUNT(*) FROM models WHERE status = 'ACTIVE')::TEXT AS model_count,
-        (SELECT COUNT(*) FROM parties WHERE status != 'CLOSED')::TEXT AS party_count,
-        (SELECT COUNT(*) FROM server_devices WHERE is_revoked = FALSE)::TEXT AS device_count,
-        (SELECT COUNT(*) FROM activation_requests WHERE status = 'PENDING')::TEXT AS pending_activation_count,
-        (SELECT COUNT(*) FROM activation_requests WHERE status = 'APPROVED')::TEXT AS active_activation_count,
-        (SELECT COUNT(*) FROM worker_telegram_bindings)::TEXT AS worker_binding_count,
-        (SELECT MAX(committed_at) FROM change_log) AS recent_sync_at
-    `);
+        (SELECT COUNT(*) FROM workers WHERE status = 'ACTIVE' AND ($1::VARCHAR IS NULL OR company_id = $1))::TEXT AS worker_count,
+        (SELECT COUNT(*) FROM models WHERE status = 'ACTIVE' AND ($1::VARCHAR IS NULL OR company_id = $1))::TEXT AS model_count,
+        (SELECT COUNT(*) FROM parties WHERE status != 'CLOSED' AND ($1::VARCHAR IS NULL OR company_id = $1))::TEXT AS party_count,
+        (SELECT COUNT(*) FROM server_devices WHERE is_revoked = FALSE AND ($1::VARCHAR IS NULL OR company_id = $1))::TEXT AS device_count,
+        (SELECT COUNT(*) FROM activation_requests WHERE status = 'PENDING'
+          AND ($1::VARCHAR IS NULL OR company_id = $1 OR company_id IS NULL))::TEXT AS pending_activation_count,
+        (SELECT COUNT(*) FROM activation_requests WHERE status = 'APPROVED' AND ($1::VARCHAR IS NULL OR company_id = $1))::TEXT AS active_activation_count,
+        (SELECT COUNT(*) FROM worker_telegram_bindings WHERE ($1::VARCHAR IS NULL OR company_id = $1))::TEXT AS worker_binding_count,
+        (SELECT MAX(committed_at) FROM change_log WHERE ($1::VARCHAR IS NULL OR company_id = $1)) AS recent_sync_at
+    `, [companyId]);
     const row = result.rows[0] || {};
     return {
       companies: parseCount(row.company_count),
@@ -154,17 +158,20 @@ function createAdminDashboardService(options = {}) {
     }));
   }
 
-  async function listDevices() {
+  async function listDevices(filters = {}) {
+    const companyId = filters.companyId ? validateCompanyId(filters.companyId) : null;
     const [registeredResult, activationResult] = await Promise.all([
       pool.query(`
         SELECT device_id, company_id, client_version, is_revoked, registered_at
-        FROM server_devices ORDER BY registered_at DESC, device_id LIMIT 500
-      `),
+        FROM server_devices WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+        ORDER BY registered_at DESC, device_id LIMIT 500
+      `, [companyId]),
       pool.query(`
         SELECT request_id, machine_id, status, company_id, company_name, role,
                requested_at, approved_at, rejected_at, revoked_at
-        FROM activation_requests ORDER BY requested_at DESC LIMIT 500
-      `)
+        FROM activation_requests WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+        ORDER BY requested_at DESC LIMIT 500
+      `, [companyId])
     ]);
     return {
       registered: registeredResult.rows.map((row) => ({
@@ -197,6 +204,7 @@ function createAdminDashboardService(options = {}) {
     const boundOnly = filters.boundOnly === true || filters.boundOnly === 'true';
     const result = await pool.query(`
       SELECT w.id AS worker_id, w.company_id, w.name AS worker_name, w.status, w.staj, w.role,
+             w.server_revision, w.updated_at,
              COUNT(*) OVER()::TEXT AS total_count,
              binding.telegram_id, binding.username, binding.linked_at
       FROM workers w
@@ -216,6 +224,8 @@ function createAdminDashboardService(options = {}) {
         status: row.status,
         staj: normalizeNumeric(row.staj),
         role: row.role || null,
+        serverRevision: Number(row.server_revision || 0),
+        updatedAt: row.updated_at,
         binding: row.telegram_id ? {
           telegramId: row.telegram_id,
           username: row.username || '',
@@ -320,7 +330,85 @@ function createAdminDashboardService(options = {}) {
     };
   }
 
+  async function listPeriods(telegramId, companyId) {
+    const scopedCompanyId = validateCompanyId(companyId);
+    await actorForCompany(telegramId, scopedCompanyId);
+    const result = await pool.query(`SELECT id, name, start_date, end_date, is_closed
+      FROM periods WHERE company_id = $1 ORDER BY start_date DESC, id DESC LIMIT 100`, [scopedCompanyId]);
+    return result.rows.map((row) => ({
+      periodId: row.id,
+      name: row.name,
+      startDate: String(row.start_date).slice(0, 10),
+      endDate: row.end_date ? String(row.end_date).slice(0, 10) : null,
+      isClosed: Boolean(row.is_closed)
+    }));
+  }
+
+  async function listCompanyAdmins(telegramId, companyId) {
+    actorId(telegramId);
+    const scopedCompanyId = validateCompanyId(companyId);
+    const result = await pool.query(`SELECT telegram_id, is_active, assigned_by_telegram_id,
+        assignment_source, assigned_at, updated_at
+      FROM activation_company_admins WHERE company_id = $1 ORDER BY is_active DESC, telegram_id`, [scopedCompanyId]);
+    return result.rows.map((row) => ({
+      telegramId: row.telegram_id,
+      isActive: Boolean(row.is_active),
+      assignedByTelegramId: row.assigned_by_telegram_id,
+      source: row.assignment_source,
+      assignedAt: row.assigned_at,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  async function setCompanyAdmin(telegramId, input = {}) {
+    const actor = actorId(telegramId);
+    const companyId = validateCompanyId(input.companyId);
+    const targetTelegramId = String(input.telegramId || '').trim();
+    if (!/^\d{1,24}$/.test(targetTelegramId)) throw activationError('INVALID_ADMIN_TELEGRAM_ID', 400);
+    if (typeof input.isActive !== 'boolean') throw activationError('INVALID_COMPANY_ADMIN_STATUS', 400);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`novda:company-admin:${targetTelegramId}`]);
+      const company = await client.query(`SELECT company_id FROM activation_companies WHERE company_id = $1`, [companyId]);
+      if (!company.rows.length) throw activationError('ACTIVATION_POLICY_NOT_FOUND', 404);
+      if (input.isActive) {
+        const existingGrant = await client.query(`SELECT company_id FROM activation_company_admins
+          WHERE telegram_id = $1 AND is_active = TRUE AND company_id <> $2 LIMIT 1`, [targetTelegramId, companyId]);
+        if (existingGrant.rows.length) throw activationError('COMPANY_ADMIN_ALREADY_ASSIGNED', 409);
+      }
+      const result = input.isActive
+        ? await client.query(`INSERT INTO activation_company_admins (
+          company_id, telegram_id, is_active, assigned_by_telegram_id, assignment_source
+        ) VALUES ($1, $2, TRUE, $3, 'TELEGRAM_ADMIN')
+        ON CONFLICT (company_id, telegram_id) DO UPDATE SET is_active = TRUE,
+          assigned_by_telegram_id = EXCLUDED.assigned_by_telegram_id,
+          assignment_source = EXCLUDED.assignment_source, updated_at = NOW()
+        RETURNING telegram_id, company_id, is_active, assigned_by_telegram_id, assignment_source, assigned_at, updated_at`,
+          [companyId, targetTelegramId, actor])
+        : await client.query(`UPDATE activation_company_admins SET is_active = FALSE,
+          assigned_by_telegram_id = $3, assignment_source = 'TELEGRAM_ADMIN', updated_at = NOW()
+        WHERE company_id = $1 AND telegram_id = $2
+        RETURNING telegram_id, company_id, is_active, assigned_by_telegram_id, assignment_source, assigned_at, updated_at`,
+          [companyId, targetTelegramId, actor]);
+      if (!result.rows.length) throw activationError('COMPANY_ADMIN_GRANT_NOT_FOUND', 404);
+      const row = result.rows[0];
+      await client.query('COMMIT');
+      return {
+        companyId: row.company_id, telegramId: row.telegram_id, isActive: Boolean(row.is_active),
+        assignedByTelegramId: row.assigned_by_telegram_id, source: row.assignment_source,
+        assignedAt: row.assigned_at, updatedAt: row.updated_at
+      };
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async function listActivations(filters = {}) {
+    const companyId = filters.companyId ? validateCompanyId(filters.companyId) : null;
     const status = filters.status === undefined || filters.status === null || filters.status === ''
       ? null
       : String(filters.status).trim().toUpperCase();
@@ -331,9 +419,11 @@ function createAdminDashboardService(options = {}) {
              signed_payload, signature, requested_at, updated_at, approved_at, approved_by_telegram_id,
              rejected_at, rejected_by_telegram_id, rejection_reason, revoked_at, revoked_by_telegram_id
       FROM activation_requests
-      WHERE ($1::VARCHAR IS NULL OR status = $1)
-      ORDER BY requested_at DESC LIMIT $2
-    `, [status, limit]);
+        WHERE ($1::VARCHAR IS NULL OR status = $1)
+          AND (($2::VARCHAR IS NULL OR company_id = $2)
+            OR ($4::BOOLEAN AND status = 'PENDING' AND company_id IS NULL))
+        ORDER BY requested_at DESC LIMIT $3
+    `, [status, companyId, limit, filters.includeUnassignedPending === true]);
     return result.rows.map((row) => ({
       requestId: row.request_id,
       machineId: row.machine_id,
@@ -355,8 +445,14 @@ function createAdminDashboardService(options = {}) {
     }));
   }
 
-  async function getActivationEvents(requestId) {
+  async function getActivationEvents(requestId, access = null) {
     const id = validateRequestId(requestId);
+    const request = await getAdminActivationRequest(pool, id);
+    if (access && access.isGlobalAdmin !== true && request.company_id) assertCompanyAccess(access, request.company_id);
+    else if (access && access.isGlobalAdmin !== true
+      && !(request.status === 'PENDING' && Array.isArray(access.companyIds) && access.companyIds.length > 0)) {
+      throw activationError('ADMIN_COMPANY_SCOPE_REQUIRED', 403);
+    }
     const result = await pool.query(`
       SELECT event_id, event_type, actor_telegram_id, event_metadata, created_at
       FROM activation_events WHERE request_id = $1 ORDER BY event_id
@@ -562,6 +658,101 @@ function createAdminDashboardService(options = {}) {
     }
   }
 
+  async function runWorkerCommand(telegramId, { companyId, workerId, baseRevision, commandType, payload }) {
+    const actor = await actorForCompany(telegramId, companyId);
+    const operationId = String(payload.operationId || '').trim();
+    const commandId = String(payload.commandId || '').trim();
+    if (!UUID_PATTERN.test(operationId) || !UUID_PATTERN.test(commandId)) throw activationError('INVALID_OPERATION_ID', 400);
+    const completePayload = { ...payload, companyId, workerId: Number(workerId), operationId, commandId, baseRevision };
+    const canonicalPayload = canonicalStringify(completePayload);
+    const operation = {
+      operationId,
+      companyId,
+      commandType,
+      entityType: 'worker',
+      entityId: String(workerId),
+      baseRevision,
+      payloadHash: computePayloadHash(canonicalPayload),
+      payload: completePayload
+    };
+    const result = await processSingleOperation(pool, {
+      auth: { companyId, deviceId: `admin-webapp:${actor}`, adminTelegramId: actor }
+    }, operation);
+    if (result.status !== 'APPLIED') {
+      const code = result.error?.code || 'WORKER_ADMIN_MUTATION_FAILED';
+      const statusCode = ['WORKER_NOT_FOUND', 'ACTIVATION_COMPANY_NOT_FOUND'].includes(code)
+        ? 404
+        : ['REVISION_CONFLICT', 'WORKER_INACTIVE', 'WORKER_ALREADY_ACTIVE', 'PERIOD_CLOSED', 'OPEN_PERIOD_REQUIRED'].includes(code) ? 409 : 400;
+      throw activationError(code, statusCode, result.error?.message || code);
+    }
+    return result;
+  }
+
+  async function updateWorker(telegramId, input = {}) {
+    const companyId = validateCompanyId(input.companyId);
+    await actorForCompany(telegramId, companyId);
+    const workerId = Number(input.workerId);
+    if (!Number.isSafeInteger(workerId) || workerId <= 0) throw activationError('INVALID_WORKER_ID', 400);
+    const baseRevision = Number(input.baseRevision);
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) throw activationError('INVALID_BASE_REVISION', 400);
+    const currentResult = await pool.query(`SELECT id, name, staj, role, status FROM workers
+      WHERE company_id = $1 AND id = $2`, [companyId, workerId]);
+    const current = currentResult.rows[0];
+    if (!current) throw activationError('WORKER_NOT_FOUND', 404);
+    if (current.status !== 'ACTIVE') throw activationError('WORKER_INACTIVE', 409);
+
+    const name = String(input.name ?? current.name).trim();
+    const staj = Number(input.staj ?? current.staj ?? 0);
+    const role = input.role === undefined ? current.role : String(input.role || '').trim() || null;
+    if (!name || name.length > 160 || /[\u0000-\u001f\u007f]/.test(name)) throw activationError('INVALID_WORKER_NAME', 400);
+    if (!Number.isFinite(staj) || staj < 0) throw activationError('INVALID_WORKER_STAJ', 400);
+    if (role !== null && role.length > 128) throw activationError('INVALID_WORKER_ROLE', 400);
+
+    const balanceAdjustments = [];
+    if (input.adjustment !== undefined && input.adjustment !== null) {
+      const adjustment = input.adjustment;
+      const type = String(adjustment.type || '').trim().toUpperCase();
+      const amountDelta = Number(adjustment.amountDelta);
+      const description = String(adjustment.description || '').trim();
+      if (!['AVANS', 'JARIMA'].includes(type)) throw activationError('INVALID_WORKER_ADJUSTMENT_TYPE', 400);
+      if (!Number.isFinite(amountDelta) || amountDelta <= 0) throw activationError('INVALID_WORKER_ADJUSTMENT_AMOUNT', 400);
+      if (!description || description.length > 500) throw activationError('INVALID_WORKER_ADJUSTMENT_DESCRIPTION', 400);
+      const periodId = String(adjustment.periodId || '').trim();
+      if (!periodId || periodId.length > 128 || /[\u0000-\u001f\u007f]/.test(periodId)) throw activationError('INVALID_PERIOD_ID', 400);
+      const periodResult = await pool.query(`SELECT id FROM periods
+        WHERE company_id = $1 AND id = $2 AND is_closed = 0`, [companyId, periodId]);
+      if (!periodResult.rows.length) throw activationError('PERIOD_CLOSED', 409);
+      const adjustmentId = String(adjustment.adjustmentId || '').trim();
+      if (!UUID_PATTERN.test(adjustmentId)) throw activationError('INVALID_WORKER_ADJUSTMENT_ID', 400);
+      balanceAdjustments.push({ adjustmentId, type, amountDelta, periodId: periodResult.rows[0].id, description });
+    }
+
+    return runWorkerCommand(telegramId, {
+      companyId, workerId, baseRevision, commandType: 'UpsertWorker',
+      payload: {
+        operationId: input.operationId,
+        commandId: input.commandId,
+        name, staj, role,
+        balanceAdjustments
+      }
+    });
+  }
+
+  async function setWorkerStatus(telegramId, input = {}) {
+    const companyId = validateCompanyId(input.companyId);
+    const workerId = Number(input.workerId);
+    if (!Number.isSafeInteger(workerId) || workerId <= 0) throw activationError('INVALID_WORKER_ID', 400);
+    const baseRevision = Number(input.baseRevision);
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) throw activationError('INVALID_BASE_REVISION', 400);
+    const status = String(input.status || '').trim().toUpperCase();
+    if (!['ACTIVE', 'INACTIVE'].includes(status)) throw activationError('INVALID_WORKER_STATUS', 400);
+    return runWorkerCommand(telegramId, {
+      companyId, workerId, baseRevision,
+      commandType: status === 'ACTIVE' ? 'ActivateWorker' : 'DeactivateWorker',
+      payload: { operationId: input.operationId, commandId: input.commandId }
+    });
+  }
+
   async function upsertCompany(telegramId, input = {}) {
     const companyId = validateCompanyId(input.companyId);
     const actor = await actorForCompany(telegramId, companyId);
@@ -574,21 +765,14 @@ function createAdminDashboardService(options = {}) {
   }
 
   async function unbindWorkerTelegram(telegramId, input = {}) {
+    const companyId = validateCompanyId(input.companyId);
+    const actor = await actorForCompany(telegramId, companyId);
     return unbindWorkerTelegramBinding(pool, {
-      companyId: input.companyId,
+      companyId,
       workerId: input.workerId,
       telegramId: input.telegramId,
-      adminTelegramId: telegramId
-    }, allowedAdminIds);
-  }
-
-  async function unbindWorkerTelegram(telegramId, input = {}) {
-    return unbindWorkerTelegramBinding(pool, {
-      companyId: input.companyId,
-      workerId: input.workerId,
-      telegramId: input.telegramId,
-      adminTelegramId: telegramId
-    }, allowedAdminIds);
+      adminTelegramId: actor
+    }, actorAllowlist(actor));
   }
 
   async function signPayload(telegramId, sessionToken, payload) {
@@ -611,6 +795,7 @@ function createAdminDashboardService(options = {}) {
     const role = String(input.role || '').trim().toLowerCase();
     const detail = await getAdminActivationRequest(pool, requestId);
     if (detail.status !== 'PENDING') throw activationError('ACTIVATION_REQUEST_NOT_PENDING', 409);
+    if (detail.company_id && detail.company_id !== companyId) throw activationError('ADMIN_COMPANY_SCOPE_REQUIRED', 403);
     const companies = await listActivationCompanies(pool);
     const company = companies.find((item) => item.company_id === companyId);
     if (!company || !company.allowed_roles.includes(role)) throw activationError('ACTIVATION_ROLE_NOT_ALLOWED', 403);
@@ -636,18 +821,26 @@ function createAdminDashboardService(options = {}) {
   }
 
   async function rejectActivation(telegramId, input = {}) {
-    const actor = actorId(telegramId);
-    return rejectActivationRequest(pool, validateRequestId(input.requestId), {
+    const requestId = validateRequestId(input.requestId);
+    const activation = await getAdminActivationRequest(pool, requestId);
+    const requestedCompanyId = activation.company_id || input.companyId;
+    const actor = requestedCompanyId
+      ? await actorForCompany(telegramId, validateCompanyId(requestedCompanyId))
+      : actorId(telegramId);
+    return rejectActivationRequest(pool, requestId, {
       adminTelegramId: actor,
       reason: input.reason
-    }, allowedAdminIds);
+    }, actorAllowlist(actor));
   }
 
   async function revokeActivation(telegramId, input = {}) {
     const requestId = validateRequestId(input.requestId);
     const detail = await getAdminActivationRequest(pool, requestId);
+    const activationCompanyId = detail.activation?.payload?.companyId || detail.company_id;
+    const actor = activationCompanyId
+      ? await actorForCompany(telegramId, activationCompanyId)
+      : actorId(telegramId);
     if (detail.status !== 'APPROVED' || !detail.activation?.payload) throw activationError('ACTIVATION_NOT_REVOCABLE', 409);
-    const actor = await actorForCompany(telegramId, detail.activation.payload.companyId);
     const payload = { ...detail.activation.payload };
     const currentIssuedAt = Date.parse(payload.issuedAt);
     if (!Number.isFinite(currentIssuedAt)) throw activationError('ACTIVATION_PAYLOAD_INVALID', 409);
@@ -666,6 +859,11 @@ function createAdminDashboardService(options = {}) {
     listDevices,
     listWorkers,
     getPayroll,
+    listPeriods,
+    updateWorker,
+    setWorkerStatus,
+    listCompanyAdmins,
+    setCompanyAdmin,
     listActivations,
     getActivationEvents,
     listModels,
@@ -675,7 +873,6 @@ function createAdminDashboardService(options = {}) {
     getSystemHealth,
     updateCompanyStrictMode,
     upsertCompany,
-    unbindWorkerTelegram,
     unbindWorkerTelegram,
     approveActivation,
     rejectActivation,

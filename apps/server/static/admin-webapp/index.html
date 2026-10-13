@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#ffffff" />
-    <meta name="novda-admin-webapp-version" content="-20260924" />
+    <meta name="theme-color" content="#171526" />
+    <meta name="novda-admin-webapp-version" content="-20261013" />
     <title>Novda — Admin Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -85,6 +85,10 @@
           <button class="nav-button" data-view="activations" type="button">
             <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg></span>
             <span>Kalitlar & aktivatsiya</span>
+          </button>
+          <button class="nav-button mobile-more-button" data-view="more" type="button">
+            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="5" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg></span>
+            <span>Yana</span>
           </button>
           <button class="nav-button" data-view="system" type="button">
             <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></span>
@@ -344,6 +348,22 @@
             </form>
             <p class="helper-text">Bu amal faqat mavjud biznes scope uchun aktivatsiya siyosatini saqlaydi; yangi biznes korxona yaratmaydi.</p>
           </article>
+          <article id="companyAdminManagement" class="surface-card section-gap global-only" hidden>
+            <div class="card-heading">
+              <div><p class="eyebrow">COMPANY ACCESS</p><h2>Kompaniya adminlari</h2></div>
+            </div>
+            <form id="companyAdminForm" class="filter-row">
+              <label>Kompaniya
+                <select name="companyId" id="companyAdminCompany" required><option value="">Kompaniyani tanlang</option></select>
+              </label>
+              <label>Telegram ID
+                <input name="telegramId" inputmode="numeric" maxlength="24" placeholder="Telegram raqamli ID" required />
+              </label>
+              <button class="button button-primary" type="submit">Admin biriktirish</button>
+            </form>
+            <div id="companyAdminRows" class="access-list"></div>
+            <p id="companyAdminEmpty" class="empty-state" hidden>Hozircha kompaniya admini biriktirilmagan.</p>
+          </article>
         </section>
 
         <!-- Section: Workers -->
@@ -384,6 +404,7 @@
                     <th>HOLAT</th>
                     <th>STAJ</th>
                     <th>TELEGRAM BOG‘LANISHI</th>
+                    <th>AMAL</th>
                   </tr>
                 </thead>
                 <tbody id="workerRows"></tbody>
@@ -456,6 +477,7 @@
                     <th>TELEGRAM ID</th>
                     <th>USERNAME</th>
                     <th>BOG‘LANGAN VAQT</th>
+                    <th>AMAL</th>
                   </tr>
                 </thead>
                 <tbody id="bindingRows"></tbody>
@@ -726,6 +748,22 @@
           </article>
         </section>
 
+        <section class="view-section" data-section="more" aria-labelledby="moreTitle" hidden>
+          <div class="view-heading">
+            <div><p class="eyebrow">QUICK ACCESS</p><h1 id="moreTitle">Yana</h1><p class="view-subtitle">Boshqaruvning qolgan bo‘limlariga tezkor o‘tish.</p></div>
+          </div>
+          <div class="quick-grid">
+            <button class="quick-card quick-violet" data-go="companies" type="button"><span>🏢</span><strong>Korxonalar</strong><small>Scope va aktivatsiya siyosati</small></button>
+            <button class="quick-card quick-blue" data-go="devices" type="button"><span>💻</span><strong>Qurilmalar</strong><small>Ro‘yxat va holat</small></button>
+            <button class="quick-card quick-green" data-go="models" type="button"><span>🧵</span><strong>Modellar</strong><small>Model va narxlar</small></button>
+            <button class="quick-card quick-orange" data-go="parties" type="button"><span>📦</span><strong>Partiyalar</strong><small>Partiya holatlari</small></button>
+            <button class="quick-card quick-pink" data-go="tickets" type="button"><span>🪡</span><strong>Ishlab chiqarish</strong><small>Ticket faktlari · read-only</small></button>
+            <button class="quick-card quick-cyan" data-go="balances" type="button"><span>💳</span><strong>Avans va jarima</strong><small>Hisob-kitob faktlari</small></button>
+            <button class="quick-card quick-slate" data-go="system" type="button"><span>⚙️</span><strong>Tizim holati</strong><small>Server va baza</small></button>
+            <button class="quick-card quick-violet" data-go="admin" type="button"><span>🛡️</span><strong>Admin sessiyasi</strong><small>Hisob va sessiya</small></button>
+          </div>
+        </section>
+
         <!-- Footer -->
         <footer class="page-footer">
           <span>Novda · PostgreSQL authoritative</span>
@@ -733,6 +771,27 @@
         </footer>
       </main>
     </div>
+
+    <dialog id="workerDialog" class="worker-dialog">
+      <form id="workerEditForm" method="dialog">
+        <div class="dialog-heading"><div><p class="eyebrow">WORKER PROFILE</p><h2>Ishchini tahrirlash</h2></div><button id="closeWorkerDialog" class="icon-button" type="button" aria-label="Yopish">×</button></div>
+        <input name="workerId" type="hidden" />
+        <input name="companyId" type="hidden" />
+        <input name="baseRevision" type="hidden" />
+        <label>Ism<input name="name" maxlength="160" required /></label>
+        <label>Lavozim / rol<input name="role" maxlength="128" /></label>
+        <label>Staj summasi<input name="staj" type="number" min="0" step="0.01" required /></label>
+        <p id="workerInactiveNote" class="helper-text" hidden>Nofaol ishchini tahrirlashdan oldin faollashtiring.</p>
+        <div class="adjustment-fields">
+          <p class="eyebrow">YANGI HISOB-FAKTI</p>
+          <label>Amal turi<select name="adjustmentType"><option value="">Kiritilmaydi</option><option value="AVANS">Avans</option><option value="JARIMA">Jarima</option></select></label>
+          <label>Ochiq davr<select name="periodId" id="workerAdjustmentPeriod"><option value="">Davrni tanlang</option></select></label>
+          <label>Miqdor<input name="amountDelta" type="number" min="0.01" step="0.01" /></label>
+          <label>Izoh<input name="description" maxlength="500" /></label>
+        </div>
+        <div class="button-row dialog-actions"><button id="workerStatusButton" class="button button-secondary" type="button">Status</button><button class="button button-primary" type="submit">Saqlash</button></div>
+      </form>
+    </dialog>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

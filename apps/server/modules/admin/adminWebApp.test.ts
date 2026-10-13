@@ -29,10 +29,21 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).not.toMatch(/localStorage|sessionStorage/i);
   });
 
-  it('hides global-only views for company-scoped admins and carries server access scope', () => {
-    expect(javascript).toContain("['overview', 'devices', 'activations', 'system'].includes(button.dataset.view)");
+  it('keeps company-scoped dashboard views available while hiding global system controls', () => {
+    expect(javascript).toContain("button.dataset.view === 'system'");
+    expect(javascript).toContain("view === 'system'");
     expect(javascript).toContain('state.access = session.access || state.access');
     expect(javascript).toContain('if (state.access?.isGlobalAdmin === false');
+  });
+
+  it('provides WebApp worker, activation, company-admin and mobile navigation controls', () => {
+    expect(html).toContain('data-view="more"');
+    expect(html).toContain('id="workerEditForm"');
+    expect(html).toContain('id="companyAdminManagement"');
+    expect(javascript).toContain("/workers/${encodeURIComponent(workerId)}/unbind");
+    expect(javascript).toContain("/admins/${encodeURIComponent(telegramId)}");
+    expect(css).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(css).toContain('#workerRows tr');
   });
 
   it('labels activation policy separately and does not expose bot-managed ticket mode', () => {

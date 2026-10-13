@@ -118,6 +118,40 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(query.mock.calls.join(' ')).not.toContain('request_token_hash');
   });
 
+  it('includes unassigned pending activation requests only for company-scoped activation queues', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{
+      request_id: 'request-a', machine_id: 'device-a', status: 'PENDING', company_id: null,
+      client_context: {}, requested_at: '2026-09-24T00:00:00.000Z'
+    }] });
+
+    const result = await serviceFor(query).listActivations({ companyId: 'comp_novda', includeUnassignedPending: true });
+
+    expect(result).toMatchObject([{ requestId: 'request-a', status: 'PENDING', companyId: null }]);
+    expect(query.mock.calls[0][0]).toContain("status = 'PENDING' AND company_id IS NULL");
+    expect(query.mock.calls[0][1]).toEqual([null, 'comp_novda', 100, true]);
+  });
+
+  it('does not let an admin assign another company’s pending activation request', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{
+      request_id: 'request-a', status: 'PENDING', machine_id: 'device-a', company_id: 'other_company'
+    }] });
+
+    await expect(serviceFor(query).approveActivation('274466315', {
+      requestId: '00000000-0000-4000-8000-000000000001', companyId: 'comp_novda', role: 'admin'
+    })).rejects.toMatchObject({ code: 'ADMIN_COMPANY_SCOPE_REQUIRED', statusCode: 403 });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks company grants before reading a worker for an edit request', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ company_id: 'comp_novda' }] });
+
+    await expect(serviceFor(query).updateWorker('274466315', {
+      companyId: 'other_company', workerId: 180, baseRevision: 0, name: 'Ali'
+    })).rejects.toMatchObject({ code: 'ADMIN_COMPANY_SCOPE_REQUIRED', statusCode: 403 });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain('activation_company_admins');
+  });
+
   it('returns worker data without PIN material and applies bounded filters', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{
       worker_id: 200, company_id: 'comp_novda', worker_name: 'Known Worker', status: 'ACTIVE',
@@ -129,7 +163,8 @@ describe(' admin dashboard PostgreSQL projections', () => {
 
     expect(result.workers[0]).toEqual({
       workerId: 200, companyId: 'comp_novda', name: 'Known Worker', status: 'ACTIVE',
-      staj: 0, role: 'worker', binding: { telegramId: '12345678', username: 'worker', linkedAt: '2026-09-24T00:00:00.000Z' }
+      staj: 0, role: 'worker', serverRevision: 0,
+      binding: { telegramId: '12345678', username: 'worker', linkedAt: '2026-09-24T00:00:00.000Z' }
     });
     expect(query.mock.calls[0][1]).toEqual(['comp_novda', '%Known%', 100, 0, false]);
     expect(query.mock.calls[0][0]).not.toContain('pin_hash');
@@ -177,6 +212,52 @@ describe(' admin dashboard PostgreSQL projections', () => {
       companyId: 'other_company', companyName: 'Other', allowedRoles: ['admin']
     })).rejects.toMatchObject({ code: 'ADMIN_COMPANY_SCOPE_REQUIRED', statusCode: 403 });
     expect(query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO activation_companies'))).toHaveLength(1);
+  });
+
+  it('lets only a global admin create an auditable company-admin grant', async () => {
+    const grant = {
+      company_id: 'comp_novda', telegram_id: '274466315', is_active: true,
+      assigned_by_telegram_id: '1526974123', assignment_source: 'TELEGRAM_ADMIN'
+    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ company_id: 'comp_novda' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [grant] })
+      .mockResolvedValueOnce({ rows: [] });
+    const client = { query, release: vi.fn() };
+    const pool = { query: vi.fn(), connect: vi.fn().mockResolvedValue(client) };
+    const service = serviceFor(query, { pool });
+
+    await expect(service.setCompanyAdmin('1526974123', {
+      companyId: 'comp_novda', telegramId: '274466315', isActive: true
+    })).resolves.toMatchObject({ companyId: 'comp_novda', telegramId: '274466315', isActive: true });
+    await expect(service.setCompanyAdmin('274466315', {
+      companyId: 'comp_novda', telegramId: '99887766', isActive: true
+    })).rejects.toMatchObject({ code: 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED', statusCode: 403 });
+    expect(query.mock.calls[4][0]).toContain('assigned_by_telegram_id');
+    expect(query.mock.calls[4][1]).toEqual(['comp_novda', '274466315', '1526974123']);
+    expect(query.mock.calls.map(([sql]) => sql)).toContain('COMMIT');
+    expect(client.release).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledTimes(6);
+  });
+
+  it('prevents a company admin from receiving active grants to multiple companies', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ company_id: 'other_company' }] })
+      .mockResolvedValueOnce({ rows: [{ company_id: 'other_company' }] });
+    const client = { query, release: vi.fn() };
+    const pool = { query: vi.fn(), connect: vi.fn().mockResolvedValue(client) };
+
+    await expect(serviceFor(query, { pool }).setCompanyAdmin('1526974123', {
+      companyId: 'comp_novda', telegramId: '274466315', isActive: true
+    })).rejects.toMatchObject({ code: 'COMPANY_ADMIN_ALREADY_ASSIGNED', statusCode: 409 });
+    expect(query.mock.calls.map(([sql]) => sql)).toContain('ROLLBACK');
+    expect(query).toHaveBeenCalledTimes(5);
+    expect(client.release).toHaveBeenCalledOnce();
   });
 
   it('reads models, parties, ticket facts and balances from bounded canonical projections', async () => {

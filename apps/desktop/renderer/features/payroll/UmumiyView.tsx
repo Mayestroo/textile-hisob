@@ -7,6 +7,7 @@ import { formatUzbekDate } from '../../utils/formatters';
 
 const VIRTUAL_THRESHOLD = 30;
 const ROW_HEIGHT = 32;
+const COLUMN_HEADER_HEIGHT = 38;
 
 interface WorkerSummaryRowProps {
   w: WorkerPayrollSummary;
@@ -428,6 +429,8 @@ export const UmumiyView: React.FC = () => {
   // Phase 2: virtualization for large worker counts
   const useVirtual = filteredWorkers.length > VIRTUAL_THRESHOLD;
   const tbodyRef = useRef<HTMLDivElement>(null);
+  const grandTotalRowRef = useRef<HTMLTableRowElement>(null);
+  const [isModelSectionPinned, setIsModelSectionPinned] = useState(false);
   const rowVirtualizer = useVirtualizer({
     count: filteredWorkers.length,
     getScrollElement: () => tbodyRef.current,
@@ -440,6 +443,29 @@ export const UmumiyView: React.FC = () => {
   const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
   const paddingBottom = virtualItems.length > 0 ? (rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end) : 0;
   const totalCols = 7;
+  const modelSectionHeaderCellStyle: React.CSSProperties = {
+    position: 'sticky',
+    top: isModelSectionPinned ? 0 : COLUMN_HEADER_HEIGHT,
+    zIndex: isModelSectionPinned ? 26 : 14,
+    backgroundColor: 'var(--bg-surface-subtle)'
+  };
+
+  useEffect(() => {
+    const scrollElement = tbodyRef.current;
+    const grandTotalRow = grandTotalRowRef.current;
+    if (!scrollElement || !grandTotalRow) return;
+
+    const updatePinnedSection = () => {
+      const scrollTop = scrollElement.getBoundingClientRect().top;
+      const modelSectionTop = grandTotalRow.getBoundingClientRect().bottom;
+      const shouldPinModelSection = modelSectionTop <= scrollTop + COLUMN_HEADER_HEIGHT;
+      setIsModelSectionPinned((current) => current === shouldPinModelSection ? current : shouldPinModelSection);
+    };
+
+    scrollElement.addEventListener('scroll', updatePinnedSection, { passive: true });
+    updatePinnedSection();
+    return () => scrollElement.removeEventListener('scroll', updatePinnedSection);
+  }, [filteredWorkers.length, models.length, useVirtual]);
 
   return (
     <div className="excel-grid-container" style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
@@ -560,7 +586,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   width: '54px',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   left: 0,
                   zIndex: 25,
                   backgroundColor: 'var(--bg-surface-subtle)'
@@ -575,7 +601,7 @@ export const UmumiyView: React.FC = () => {
                   textAlign: 'left',
                   paddingLeft: '14px',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   left: '54px',
                   zIndex: 25,
                   backgroundColor: 'var(--bg-surface-subtle)'
@@ -591,7 +617,7 @@ export const UmumiyView: React.FC = () => {
                   paddingRight: '14px',
                   color: 'var(--primary)',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   zIndex: 15,
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
@@ -606,7 +632,7 @@ export const UmumiyView: React.FC = () => {
                   paddingRight: '12px',
                   color: '#7c3aed',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   zIndex: 15,
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
@@ -621,7 +647,7 @@ export const UmumiyView: React.FC = () => {
                   paddingRight: '12px',
                   color: '#d97706',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   zIndex: 15,
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
@@ -636,7 +662,7 @@ export const UmumiyView: React.FC = () => {
                   paddingRight: '12px',
                   color: '#dc2626',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   zIndex: 15,
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
@@ -650,7 +676,7 @@ export const UmumiyView: React.FC = () => {
                   textAlign: 'right',
                   paddingRight: '14px',
                   position: 'sticky',
-                  top: 0,
+                  top: isModelSectionPinned ? 'auto' : 0,
                   zIndex: 15,
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
@@ -714,6 +740,7 @@ export const UmumiyView: React.FC = () => {
 
             {/* Grand Total Row with Soft UI styling */}
             <tr
+              ref={grandTotalRowRef}
               style={{
                 backgroundColor: 'var(--primary-light)',
                 fontWeight: 800,
@@ -757,19 +784,19 @@ export const UmumiyView: React.FC = () => {
 
             {/* Model Breakdown Section */}
             <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', height: '34px', borderTop: '2px solid var(--border-default)' }}>
-              <td colSpan={3} style={{ fontWeight: 700, paddingLeft: '14px', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.4px', position: 'sticky', left: 0, zIndex: 6, backgroundColor: 'var(--bg-surface-subtle)' }}>
+              <td colSpan={3} style={{ ...modelSectionHeaderCellStyle, fontWeight: 700, paddingLeft: '14px', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.4px', left: 0, zIndex: isModelSectionPinned ? 28 : 22 }}>
                 Modellar kesimida jami:
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Model narxi
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Tikilgan ish soni
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Jami summa
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, paddingRight: '14px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '14px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Tavofut
               </td>
             </tr>

@@ -11,10 +11,13 @@
     currentView: 'overview',
     companies: [],
     activations: [],
+    workers: [],
+    companyAdmins: [],
     workerOffset: 0,
     workerFilters: {},
     bindingOffset: 0,
     activationSubmitting: false,
+    workerSubmitting: false,
     viewLoaders: new Map()
   };
 
@@ -133,7 +136,7 @@
     try { result = await response.json(); } catch { result = null; }
     if (response.status === 401 || response.status === 403) {
       const code = result?.error?.code || 'ADMIN_SESSION_REJECTED';
-      if (options.auth !== false && ['ADMIN_SESSION_REQUIRED', 'ADMIN_SESSION_INVALID', 'ADMIN_SESSION_EXPIRED', 'ADMIN_SESSION_NOT_AUTHORIZED'].includes(code)) {
+      if (options.auth !== false && ['ADMIN_SESSION_REQUIRED', 'ADMIN_SESSION_INVALID', 'ADMIN_SESSION_EXPIRED', 'ADMIN_SESSION_NOT_AUTHORIZED', 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED'].includes(code)) {
         clearSession('Admin sessiyasi tugagan yoki ruxsat bekor qilingan.');
       }
       const error = new Error(code);
@@ -163,6 +166,15 @@
     tbody.replaceChildren();
     empty.hidden = rows.length > 0;
     if (emptyMessage) empty.textContent = emptyMessage;
+    if (!tbody._mobileLabelsObserver) {
+      tbody._mobileLabelsObserver = new MutationObserver(() => {
+        const labels = [...tbody.closest('table').querySelectorAll('thead th')].map((header) => header.textContent.trim());
+        for (const row of tbody.rows) {
+          [...row.cells].forEach((item, index) => { item.dataset.label = labels[index] || ''; });
+        }
+      });
+      tbody._mobileLabelsObserver.observe(tbody, { childList: true });
+    }
     return tbody;
   }
 
@@ -266,12 +278,25 @@
         if ([...balanceSelect.options].some((item) => item.value === selectedBalance)) balanceSelect.value = selectedBalance;
         else if (!state.access?.isGlobalAdmin && state.access?.companyIds?.length === 1) balanceSelect.value = state.access.companyIds[0];
       }
+
+    const adminSelect = byId('companyAdminCompany');
+    if (adminSelect) {
+      const selectedAdminCompany = adminSelect.value;
+      adminSelect.replaceChildren(node('option', '', 'Kompaniyani tanlang'));
+      for (const company of choices.filter((item) => item.businessScopeExists)) {
+        const option = node('option', '', `${company.companyName} · ${company.companyId}`);
+        option.value = company.companyId;
+        adminSelect.appendChild(option);
+      }
+      if ([...adminSelect.options].some((item) => item.value === selectedAdminCompany)) adminSelect.value = selectedAdminCompany;
+    }
   }
 
   async function loadCompanies() {
     const result = await request(`${API}/companies`);
     state.companies = result.companies || [];
     refreshCompanySelectors();
+    byId('companyAdminManagement').hidden = !state.access?.isGlobalAdmin;
     const tbody = tableMessage('companyRows', 'companyEmpty', state.companies);
     for (const company of state.companies) {
       const row = node('tr');
@@ -297,12 +322,79 @@
       row.appendChild(actionCell);
       tbody.appendChild(row);
     }
+    if (state.access?.isGlobalAdmin) {
+      const companyId = byId('companyAdminCompany').value || state.companies.find((company) => company.businessScopeExists)?.companyId;
+      if (companyId) {
+        byId('companyAdminCompany').value = companyId;
+        await loadCompanyAdmins(companyId);
+      }
+    }
+  }
+
+  async function loadCompanyAdmins(companyId) {
+    const result = await request(`${API}/companies/${encodeURIComponent(companyId)}/admins`);
+    state.companyAdmins = result.admins || [];
+    const container = byId('companyAdminRows');
+    container.replaceChildren();
+    byId('companyAdminEmpty').hidden = state.companyAdmins.length > 0;
+    for (const admin of state.companyAdmins) {
+      const item = node('div', 'access-item');
+      const identity = node('div');
+      identity.appendChild(node('strong', '', admin.telegramId));
+      identity.appendChild(node('div', 'count-label', `${admin.isActive ? 'Faol' : 'Bekor qilingan'} · ${admin.source || '—'}`));
+      item.appendChild(identity);
+      const action = node('button', admin.isActive ? 'small-action button-danger' : 'small-action button-accent-action', admin.isActive ? 'Bekor qilish' : 'Qayta faollashtirish');
+      action.type = 'button';
+      action.dataset.companyAdminId = admin.telegramId;
+      action.dataset.companyId = companyId;
+      action.dataset.active = String(!admin.isActive);
+      item.appendChild(action);
+      container.appendChild(item);
+    }
+  }
+
+  async function loadOpenPeriods(companyId) {
+    const select = byId('workerAdjustmentPeriod');
+    const result = await request(`${API}/companies/${encodeURIComponent(companyId)}/periods`);
+    const form = byId('workerEditForm');
+    if (!byId('workerDialog').open || form.elements.companyId.value !== companyId) return;
+    const periods = (result.periods || []).filter((period) => !period.isClosed);
+    select.replaceChildren(node('option', '', periods.length ? 'Ochiq davrni tanlang' : 'Ochiq davr mavjud emas'));
+    for (const period of periods) {
+      const option = node('option', '', `${period.name} · ${period.startDate}${period.endDate ? ` — ${period.endDate}` : ''}`);
+      option.value = period.periodId;
+      select.appendChild(option);
+    }
+    select.disabled = periods.length === 0;
+  }
+
+  async function submitCompanyAdmin(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const companyId = String(data.get('companyId') || '').trim();
+    const telegramId = String(data.get('telegramId') || '').trim();
+    if (!companyId || !/^\d{1,24}$/.test(telegramId)) { toast('Kompaniya va to‘g‘ri Telegram ID kiriting.'); return; }
+    let granted = false;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyId)}/admins/${encodeURIComponent(telegramId)}`, {
+        method: 'PUT', body: { isActive: true }
+      });
+      form.elements.telegramId.value = '';
+      granted = true;
+      toast('Kompaniya admini saqlandi.');
+    } catch (error) { toast(`Admin saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    if (granted) {
+      try { await loadCompanyAdmins(companyId); }
+      catch (error) { toast(`Admin saqlandi, ro‘yxat yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    }
   }
 
   async function loadWorkers(filters = state.workerFilters) {
     state.workerFilters = filters;
     const result = await request(withQuery(`${API}/workers`, { ...filters, offset: state.workerOffset, limit: 50 }));
     const workers = result.workers || [];
+    state.workers = workers;
     const workerRangeStart = result.total ? result.offset + 1 : 0;
     setText('workerCount', `${number(result.total)} ta · ${number(workerRangeStart)}–${number(Math.min(result.offset + workers.length, result.total))}`);
     setText('workerPage', `${number(workerRangeStart)}–${number(Math.min(result.offset + workers.length, result.total))} / ${number(result.total)}`);
@@ -317,6 +409,23 @@
       const status = node('td'); status.appendChild(statusBadge(worker.status)); row.appendChild(status);
       cell(row, money(worker.staj));
       cell(row, worker.binding ? `${worker.binding.username ? `@${worker.binding.username} · ` : ''}${worker.binding.telegramId}` : 'Bog‘lanmagan', 'mono');
+      const actionCell = node('td');
+      actionCell.className = 'actions-cell';
+      const edit = node('button', 'small-action button-accent-action', 'Tahrirlash');
+      edit.type = 'button';
+      edit.dataset.editWorker = worker.workerId;
+      edit.dataset.companyId = worker.companyId;
+      actionCell.appendChild(edit);
+      if (worker.binding) {
+        const unbind = node('button', 'small-action button-danger', 'Bog‘lanishni yechish');
+        unbind.type = 'button';
+        unbind.dataset.unbindWorker = worker.workerId;
+        unbind.dataset.companyId = worker.companyId;
+        unbind.dataset.telegramId = worker.binding.telegramId;
+        unbind.dataset.workerName = worker.name;
+        actionCell.appendChild(unbind);
+      }
+      row.appendChild(actionCell);
       tbody.appendChild(row);
     }
   }
@@ -333,7 +442,131 @@
       cell(row, worker.companyId, 'mono');
       const status = node('td'); status.appendChild(statusBadge('BOUND')); row.appendChild(status);
       cell(row, worker.binding.telegramId, 'mono'); cell(row, worker.binding.username ? `@${worker.binding.username}` : '—');
-      cell(row, timestamp(worker.binding.linkedAt)); body.appendChild(row);
+      cell(row, timestamp(worker.binding.linkedAt));
+      const actions = node('td');
+      const unbind = node('button', 'small-action button-danger', 'Bog‘lanishni yechish');
+      unbind.type = 'button';
+      unbind.dataset.unbindWorker = worker.workerId;
+      unbind.dataset.companyId = worker.companyId;
+      unbind.dataset.telegramId = worker.binding.telegramId;
+      unbind.dataset.workerName = worker.name;
+      actions.appendChild(unbind); row.appendChild(actions); body.appendChild(row);
+    }
+  }
+
+  function openWorkerDialog(workerId, companyId) {
+    const worker = state.workers.find((item) => String(item.workerId) === String(workerId) && item.companyId === companyId);
+    if (!worker) { toast('Ishchi ro‘yxati eskirgan. Yangilang.'); return; }
+    const form = byId('workerEditForm');
+    form.elements.workerId.value = worker.workerId;
+    form.elements.companyId.value = worker.companyId;
+    form.elements.baseRevision.value = worker.serverRevision;
+    form.elements.name.value = worker.name || '';
+    form.elements.role.value = worker.role || '';
+    form.elements.staj.value = worker.staj ?? 0;
+    form.elements.adjustmentType.value = '';
+    form.elements.periodId.replaceChildren(node('option', '', 'Davr yuklanmoqda…'));
+    form.elements.periodId.disabled = true;
+    form.elements.amountDelta.value = '';
+    form.elements.description.value = '';
+    const statusButton = byId('workerStatusButton');
+    statusButton.textContent = worker.status === 'ACTIVE' ? 'Ishchini nofaol qilish' : 'Ishchini faollashtirish';
+    statusButton.dataset.status = worker.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    statusButton.disabled = false;
+    byId('workerInactiveNote').hidden = worker.status === 'ACTIVE';
+    form.querySelector('button[type="submit"]').disabled = worker.status !== 'ACTIVE';
+    byId('workerDialog').showModal();
+    void loadOpenPeriods(worker.companyId).catch((error) => {
+      form.elements.periodId.replaceChildren(node('option', '', 'Davrlar olinmadi'));
+      toast(`Ochiq davrlar olinmadi: ${error.code || 'API_UNAVAILABLE'}`);
+    });
+  }
+
+  async function submitWorkerEdit(event) {
+    event.preventDefault();
+    if (state.workerSubmitting) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const adjustmentType = String(data.get('adjustmentType') || '');
+    const amountRaw = String(data.get('amountDelta') || '').trim();
+    const description = String(data.get('description') || '').trim();
+    const periodId = String(data.get('periodId') || '').trim();
+    if (adjustmentType && (!periodId || !amountRaw || !description)) { toast('Avans yoki jarima uchun davr, miqdor va izoh kiriting.'); return; }
+    if (!adjustmentType && (periodId || amountRaw || description)) { toast('Avans/jarima maydonlari bilan amal turini ham tanlang.'); return; }
+    if (adjustmentType && !window.confirm(`${adjustmentType === 'AVANS' ? 'Avans' : 'Jarima'} · ${money(amountRaw)} · ${description} · tanlangan ochiq davrga yozilsinmi?`)) return;
+    const body = {
+      name: String(data.get('name') || '').trim(),
+      role: String(data.get('role') || '').trim() || null,
+      staj: Number(data.get('staj')),
+      baseRevision: Number(data.get('baseRevision')),
+      operationId: crypto.randomUUID(),
+      commandId: crypto.randomUUID()
+    };
+    if (adjustmentType) body.adjustment = { type: adjustmentType, periodId, amountDelta: Number(amountRaw), description, adjustmentId: crypto.randomUUID() };
+    state.workerSubmitting = true;
+    const saveButton = form.querySelector('button[type="submit"]');
+    saveButton.disabled = true;
+    let saveSucceeded = false;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(data.get('companyId'))}/workers/${encodeURIComponent(data.get('workerId'))}`, { method: 'PUT', body });
+      saveSucceeded = true;
+      byId('workerDialog').close();
+      toast(adjustmentType ? 'Ishchi va hisob-fakti saqlandi.' : 'Ishchi ma’lumoti saqlandi.');
+    } catch (error) { toast(`Ishchi saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    finally {
+      state.workerSubmitting = false;
+      if (byId('workerDialog').open) {
+        const worker = state.workers.find((item) => String(item.workerId) === String(data.get('workerId')) && item.companyId === data.get('companyId'));
+        saveButton.disabled = worker?.status !== 'ACTIVE';
+      }
+    }
+    if (saveSucceeded) {
+      try { await loadWorkers(); }
+      catch (error) { toast(`Ishchi saqlandi, ro‘yxat yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    }
+  }
+
+  async function changeWorkerStatus() {
+    const form = byId('workerEditForm');
+    const status = byId('workerStatusButton').dataset.status;
+    const workerId = form.elements.workerId.value;
+    const companyId = form.elements.companyId.value;
+    const worker = state.workers.find((item) => String(item.workerId) === String(workerId) && item.companyId === companyId);
+    if (!worker || !window.confirm(`${worker.name} (#${worker.workerId}) ishchisini ${status === 'ACTIVE' ? 'faollashtirasizmi' : 'nofaol qilasizmi'}?`)) return;
+    const button = byId('workerStatusButton');
+    button.disabled = true;
+    let statusChanged = false;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyId)}/workers/${encodeURIComponent(workerId)}/status`, {
+        method: 'PUT', body: { status, baseRevision: worker.serverRevision, operationId: crypto.randomUUID(), commandId: crypto.randomUUID() }
+      });
+      statusChanged = true;
+      byId('workerDialog').close();
+      toast(status === 'ACTIVE' ? 'Ishchi faollashtirildi.' : 'Ishchi nofaol qilindi.');
+    } catch (error) { toast(`Status o‘zgarmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    finally { button.disabled = false; }
+    if (statusChanged) {
+      try { await loadWorkers(); }
+      catch (error) { toast(`Status o‘zgartirildi, ro‘yxat yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    }
+  }
+
+  async function unbindWorker(button) {
+    const { workerId, companyId, telegramId, workerName } = button.dataset;
+    if (!window.confirm(`${workerName || `#${workerId}`} ishchining Telegram ID ${telegramId} bog‘lanishini bekor qilasizmi?`)) return;
+    button.disabled = true;
+    let unbound = false;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyId)}/workers/${encodeURIComponent(workerId)}/unbind`, {
+        method: 'POST', body: { telegramId }
+      });
+      unbound = true;
+      toast('Telegram bog‘lanishi bekor qilindi. Ishchi qayta bog‘lanishi mumkin.');
+    } catch (error) { toast(`Bog‘lanish bekor qilinmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    finally { button.disabled = false; }
+    if (unbound) {
+      try { await Promise.all([loadWorkers(), loadBindings()]); }
+      catch (error) { toast(`Bog‘lanish bekor qilindi, ro‘yxat yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
     }
   }
 
@@ -538,7 +771,8 @@
     admin: loadAdminView,
     models: loadModels, parties: loadParties, tickets: loadTickets,
     balances: async () => { if (!state.companies.length) await loadCompanies(); await loadBalances(); },
-    system: loadSystem
+    system: loadSystem,
+    more: async () => {}
   };
 
   async function loadCurrentView() {
@@ -557,22 +791,25 @@
 
   function showView(view) {
     if (!Object.hasOwn(loaders, view)) return;
-    if (state.access?.isGlobalAdmin === false && ['overview', 'devices', 'activations', 'system'].includes(view)) return;
+    if (state.access?.isGlobalAdmin === false && view === 'system') return;
     state.currentView = view;
     for (const section of document.querySelectorAll('[data-section]')) {
       const visible = section.dataset.section === view;
       section.hidden = !visible;
       section.classList.toggle('is-visible', visible);
     }
+    const primaryMobileViews = ['overview', 'workers', 'bindings', 'activations'];
     for (const button of document.querySelectorAll('.nav-button')) {
-      button.classList.toggle('is-active', button.dataset.view === view);
-      if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
+      const active = button.dataset.view === view || (button.dataset.view === 'more' && !primaryMobileViews.includes(view));
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     }
     const labels = {
       overview: 'Umumiy ko‘rinish', devices: 'Qurilmalar', companies: 'Korxonalar',
       workers: 'Ishchilar va hisob-kitob', bindings: 'Bog‘lanishlar', models: 'Modellar', parties: 'Partiyalar', tickets: 'Ishlab chiqarish',
-      balances: 'Avans va jarima', activations: 'Kalitlar & aktivatsiya', system: 'Tizim holati', admin: 'Admin sessiyasi'
+      balances: 'Avans va jarima', activations: 'Kalitlar & aktivatsiya', system: 'Tizim holati',
+      admin: 'Admin sessiyasi', more: 'Yana'
     };
     setText('currentViewLabel', labels[view]);
     void loadCurrentView();
@@ -601,13 +838,23 @@
       state.access = session.access || state.access;
       if (!state.access) throw new Error('ADMIN_SESSION_INVALID');
       for (const button of document.querySelectorAll('.nav-button[data-view]')) {
-        button.hidden = !state.access.isGlobalAdmin && ['overview', 'devices', 'activations', 'system'].includes(button.dataset.view);
-        button.style.display = button.hidden ? 'none' : '';
+        button.hidden = !state.access.isGlobalAdmin && button.dataset.view === 'system';
+      }
+      byId('companyAdminManagement').hidden = !state.access.isGlobalAdmin;
+      document.querySelector('[data-go="system"]')?.toggleAttribute('hidden', !state.access.isGlobalAdmin);
+      if (!state.access.isGlobalAdmin && state.access.companyIds?.length === 1) {
+        const companyId = state.access.companyIds[0];
+        const workerCompany = byId('workerFilterForm').elements.companyId;
+        const payrollCompany = byId('payrollForm').elements.companyId;
+        workerCompany.value = companyId;
+        payrollCompany.value = companyId;
+        workerCompany.readOnly = true;
+        payrollCompany.readOnly = true;
       }
       byId('authGate').hidden = true;
       byId('adminApp').hidden = false;
       setText('adminBadge', state.user.firstName || state.user.username || 'Admin');
-      showView(state.access.isGlobalAdmin ? 'overview' : 'companies');
+      showView('overview');
       if (telegram.BackButton) telegram.BackButton.hide();
     } catch (error) {
       state.sessionToken = '';
@@ -689,13 +936,19 @@
     if (!window.confirm(confirmation)) return;
     state.activationSubmitting = true;
     for (const actionButton of [byId('approveActivation'), byId('rejectActivation'), byId('revokeActivation')]) actionButton.disabled = true;
+    let actionSucceeded = false;
     try {
       const body = action === 'approve'
         ? { companyId: String(data.get('companyId')), role: String(data.get('role')) }
-        : action === 'reject' ? { reason: String(data.get('reason')).trim() } : {};
+        : action === 'reject' ? { companyId: String(data.get('companyId') || ''), reason: String(data.get('reason')).trim() } : {};
       await request(`${API}/activations/${encodeURIComponent(selected.requestId)}/${action}`, { method: 'POST', body });
+      selected.status = action === 'approve' ? 'APPROVED' : action === 'reject' ? 'REJECTED' : 'REVOKED';
+      if (action === 'approve') {
+        selected.companyId = String(data.get('companyId'));
+        selected.role = String(data.get('role'));
+      }
+      actionSucceeded = true;
       toast(action === 'approve' ? 'Aktivatsiya imzolandi va PostgreSQL’da tasdiqlandi.' : action === 'reject' ? 'So‘rov PostgreSQL’da rad etildi.' : 'Aktivatsiya imzolanib bekor qilindi.');
-      await Promise.all([loadActivations(), loadOverview()]);
     } catch (error) {
       toast(`Amal bajarilmadi: ${error.code || 'API_UNAVAILABLE'}`);
     } finally {
@@ -704,6 +957,10 @@
       byId('approveActivation').disabled = !current || current.status !== 'PENDING';
       byId('rejectActivation').disabled = !current || current.status !== 'PENDING';
       byId('revokeActivation').disabled = !current || current.status !== 'APPROVED';
+    }
+    if (actionSucceeded) {
+      try { await Promise.all([loadActivations(), loadOverview()]); }
+      catch (error) { toast(`Amal bajarildi, ro‘yxat yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
     }
   }
 
@@ -752,6 +1009,32 @@
       }
       const eventButton = event.target.closest('[data-events-request]');
       if (eventButton) void showActivationEvents(eventButton.dataset.eventsRequest).catch((error) => toast(`Audit olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
+      const editWorkerButton = event.target.closest('[data-edit-worker]');
+      if (editWorkerButton) openWorkerDialog(editWorkerButton.dataset.editWorker, editWorkerButton.dataset.companyId);
+      const unbindButton = event.target.closest('[data-unbind-worker]');
+      if (unbindButton) void unbindWorker(unbindButton);
+      const companyAdminButton = event.target.closest('[data-company-admin-id]');
+      if (companyAdminButton) {
+        const { companyId, companyAdminId, active } = companyAdminButton.dataset;
+        const isActive = active === 'true';
+        const operation = async () => {
+          companyAdminButton.disabled = true;
+          let changed = false;
+          try {
+            await request(`${API}/companies/${encodeURIComponent(companyId)}/admins/${encodeURIComponent(companyAdminId)}`, {
+              method: 'PUT', body: { isActive }
+            });
+            changed = true;
+            toast(isActive ? 'Kompaniya admini faollashtirildi.' : 'Kompaniya admini bekor qilindi.');
+          } catch (error) { toast(`Ruxsat o‘zgarmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+          finally { companyAdminButton.disabled = false; }
+          if (changed) {
+            try { await loadCompanyAdmins(companyId); }
+            catch (error) { toast(`Ruxsat o‘zgartirildi, ro‘yxat yangilanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+          }
+        };
+        if (isActive || window.confirm(`${companyAdminId} admin huquqini bekor qilasizmi?`)) void operation();
+      }
     });
     byId('companyForm').addEventListener('submit', (event) => { void submitCompany(event); });
     byId('companyPolicySelect').addEventListener('change', (event) => {
@@ -760,6 +1043,10 @@
       byId('companyPolicyName').value = company?.companyName || companyId;
       for (const checkbox of document.querySelectorAll('input[name="allowedRoles"]')) checkbox.checked = !company?.activationConfigured || Boolean(company?.allowedRoles?.includes(checkbox.value));
       byId('companyForm').elements.isActive.checked = company?.activationConfigured ? company.activationActive : true;
+    });
+    byId('companyAdminForm').addEventListener('submit', (event) => { void submitCompanyAdmin(event); });
+    byId('companyAdminCompany').addEventListener('change', (event) => {
+      if (event.currentTarget.value) void loadCompanyAdmins(event.currentTarget.value).catch((error) => toast(`Adminlar olinmadi: ${error.code || 'API_UNAVAILABLE'}`));
     });
     byId('activationRequestSelect').addEventListener('change', () => {
       syncActivationControls();
@@ -776,6 +1063,9 @@
     byId('rejectActivation').addEventListener('click', () => { void submitActivationAction('reject'); });
     byId('revokeActivation').addEventListener('click', () => { void submitActivationAction('revoke'); });
     byId('signOutButton').addEventListener('click', () => clearSession('Sessiya yopildi. Panelni Telegram’dan qayta oching.'));
+    byId('workerEditForm').addEventListener('submit', (event) => { void submitWorkerEdit(event); });
+    byId('workerStatusButton').addEventListener('click', () => { void changeWorkerStatus(); });
+    byId('closeWorkerDialog').addEventListener('click', () => byId('workerDialog').close());
   }
 
   bindEvents();

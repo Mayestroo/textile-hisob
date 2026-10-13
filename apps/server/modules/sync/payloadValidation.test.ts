@@ -205,6 +205,14 @@ describe(' payload and authority validation', () => {
     expect(validateCommandPayload('UpsertWorker', worker, context(workbookEnvelope('UpsertWorker', 'worker', '71', worker))))
       .toMatchObject({ workerId: 71, role: 'Bichuvchi', balanceAdjustments: [{ type: 'AVANS', amountDelta: 50 }] });
 
+    const activation = {
+      commandId: 'command-activate-worker', operationId: 'operation-activate-worker', companyId: COMPANY,
+      workerId: 71, baseRevision: 3
+    };
+    expect(validateCommandPayload('ActivateWorker', activation,
+      context(workbookEnvelope('ActivateWorker', 'worker', '71', activation, 3))))
+      .toMatchObject({ workerId: 71, baseRevision: 3 });
+
     const period = {
       commandId: 'command-period', operationId: 'operation-period', companyId: COMPANY,
       periodId: 'period-current', endDate: '2026-09-30',

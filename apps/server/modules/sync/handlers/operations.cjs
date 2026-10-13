@@ -237,7 +237,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
     } else if (commandType === 'ResolveMigrationReconciliationCandidate') {
       mutationResult = await executeResolveCandidate(client, companyId, operationId, validatedPayload, serverCanonical, req);
     } else if ([
-      'UpsertModel', 'DeactivateModel', 'UpsertWorker', 'DeactivateWorker',
+      'UpsertModel', 'DeactivateModel', 'UpsertWorker', 'DeactivateWorker', 'ActivateWorker',
        'CreatePeriod', 'UpdatePeriod', 'ClosePeriod', 'UpdateParty', 'ArchivePartyHistory',
        'UpdateBatchSettings', 'CompletePattaBatch', 'CompletePartySeries', 'DeleteTicket'
     ].includes(commandType)) {
@@ -249,7 +249,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
         validatedPayload,
         serverCanonical,
         envelope,
-        { executeCreateParty, deviceId: req.auth.deviceId }
+        { executeCreateParty, deviceId: req.auth.deviceId, adminTelegramId: req.auth.adminTelegramId || null }
       );
     } else {
       throw createOpError('UNKNOWN_COMMAND', `Unsupported command type: "${commandType}"`);

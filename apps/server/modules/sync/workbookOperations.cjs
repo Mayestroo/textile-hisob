@@ -136,6 +136,7 @@ async function executeUpsertWorker(client, companyId, operationId, payload, cano
     WHERE company_id = $6 AND id = $7
   `, [payload.name, payload.staj, payload.role, revision, now, companyId, workerId]);
 
+  const adjustmentProvenance = options.adminTelegramId ? 'ADMIN_WEBAPP' : 'WORKBOOK_COMMAND';
   for (const adjustment of payload.balanceAdjustments || []) {
     if (adjustment.periodId) {
       const period = await client.query(`SELECT id FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0`, [companyId, adjustment.periodId]);
@@ -143,16 +144,20 @@ async function executeUpsertWorker(client, companyId, operationId, payload, cano
     }
     await client.query(`
       INSERT INTO worker_adjustments (id, company_id, worker_id, type, amount, source_id, provenance, created_at, period_id)
-      VALUES ($1, $2, $3, $4, $5, $6, 'WORKBOOK_COMMAND', $7, $8)
-    `, [adjustment.adjustmentId, companyId, workerId, adjustment.type, adjustment.amountDelta, adjustment.adjustmentId, now, adjustment.periodId || null]);
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [adjustment.adjustmentId, companyId, workerId, adjustment.type, adjustment.amountDelta, adjustment.adjustmentId,
+      adjustmentProvenance, now, adjustment.periodId || null]);
   }
 
+  const changePayload = options.adminTelegramId
+    ? { ...payload, adminTelegramId: options.adminTelegramId, source: 'ADMIN_WEBAPP' }
+    : payload;
   const change = await appendChange(client, companyId, 'worker', String(workerId), revision, operationId,
-    'UPDATE', payload, now);
+    'UPDATE', changePayload, now);
   return { serverRevision: revision, entityId: String(workerId), changeId: change.rows[0].change_id, committedAt: change.rows[0].committed_at };
 }
 
-async function executeDeactivateWorker(client, companyId, operationId, payload, envelope) {
+async function executeDeactivateWorker(client, companyId, operationId, payload, envelope, options = {}) {
   const workerId = Number(payload.workerId);
   const currentResult = await client.query(`SELECT id, status, server_revision FROM workers WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, workerId]);
   const current = currentResult.rows[0];
@@ -162,9 +167,37 @@ async function executeDeactivateWorker(client, companyId, operationId, payload, 
   const now = new Date().toISOString();
   await client.query(`UPDATE workers SET status = 'INACTIVE', server_revision = $1, updated_at = $2 WHERE company_id = $3 AND id = $4`,
     [revision, now, companyId, workerId]);
-  const change = await appendChange(client, companyId, 'worker', String(workerId), revision, operationId, 'UPDATE',
-    { workerId, status: 'INACTIVE', updatedAt: now }, now);
+  const changePayload = {
+    workerId, status: 'INACTIVE', updatedAt: now,
+    ...(options.adminTelegramId ? { adminTelegramId: options.adminTelegramId, source: 'ADMIN_WEBAPP' } : {})
+  };
+  const change = await appendChange(client, companyId, 'worker', String(workerId), revision, operationId, 'UPDATE', changePayload, now);
   return { serverRevision: revision, entityId: String(workerId), changeId: change.rows[0].change_id, committedAt: change.rows[0].committed_at };
+}
+
+async function executeActivateWorker(client, companyId, operationId, payload, envelope, options = {}) {
+  const workerId = Number(payload.workerId);
+  const currentResult = await client.query(`SELECT id, name, staj, role, status, server_revision
+    FROM workers WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, workerId]);
+  const current = currentResult.rows[0];
+  if (!current) throw workbookError('WORKER_NOT_FOUND', `Worker "${workerId}" was not found`);
+  if (current.status === 'ACTIVE') throw workbookError('WORKER_ALREADY_ACTIVE', `Worker "${workerId}" is already active`);
+  const revision = assertBaseRevision({ baseRevision: envelope.baseRevision }, current.server_revision, 'Worker');
+  const now = new Date().toISOString();
+  await client.query(`UPDATE workers SET status = 'ACTIVE', server_revision = $1, updated_at = $2
+    WHERE company_id = $3 AND id = $4`, [revision, now, companyId, workerId]);
+  const changePayload = {
+    id: workerId,
+    workerId,
+    name: current.name,
+    staj: Number(current.staj || 0),
+    role: current.role || null,
+    status: 'ACTIVE',
+    updatedAt: now,
+    ...(options.adminTelegramId ? { adminTelegramId: options.adminTelegramId, source: 'ADMIN_WEBAPP' } : {})
+  };
+  const change = await appendChange(client, companyId, 'worker', String(workerId), revision, operationId, 'UPDATE', changePayload, now);
+  return { serverRevision: revision, entityId: String(workerId), changeId: change.rows[0].change_id, committedAt: now };
 }
 
 async function executeCreatePeriod(client, companyId, operationId, payload, envelope) {
@@ -592,7 +625,8 @@ async function executeWorkbookOperation(client, companyId, operationId, commandT
     case 'UpsertModel': return executeUpsertModel(client, companyId, operationId, payload, canonicalJson, envelope);
     case 'DeactivateModel': return executeDeactivateModel(client, companyId, operationId, payload, envelope);
     case 'UpsertWorker': return executeUpsertWorker(client, companyId, operationId, payload, canonicalJson, envelope, options);
-    case 'DeactivateWorker': return executeDeactivateWorker(client, companyId, operationId, payload, envelope);
+    case 'DeactivateWorker': return executeDeactivateWorker(client, companyId, operationId, payload, envelope, options);
+    case 'ActivateWorker': return executeActivateWorker(client, companyId, operationId, payload, envelope, options);
     case 'CreatePeriod': return executeCreatePeriod(client, companyId, operationId, payload, envelope);
     case 'UpdatePeriod': return executeUpdatePeriod(client, companyId, operationId, payload, envelope);
     case 'ClosePeriod': return executeClosePeriod(client, companyId, operationId, payload, canonicalJson, envelope);

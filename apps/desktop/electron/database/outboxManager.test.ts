@@ -203,12 +203,15 @@ describe('outbox server-acceptance reconciliation', () => {
     };
 
     const unchangedPayload = insertPeriodMismatch('op-period-valid', '00000000-0000-4000-8000-000000001201', '2026-09-23', 1);
-    insertPeriodMismatch('op-period-outside', '00000000-0000-4000-8000-000000001202', '2026-08-31', 1);
-    insertPeriodMismatch('op-period-retried', '00000000-0000-4000-8000-000000001203', '2026-09-23', 2);
+    const retryPayload = insertPeriodMismatch('op-period-valid-retry', '00000000-0000-4000-8000-000000001202', '2026-09-23', 2);
+    insertPeriodMismatch('op-period-outside', '00000000-0000-4000-8000-000000001203', '2026-08-31', 1);
+    insertPeriodMismatch('op-period-retried', '00000000-0000-4000-8000-000000001204', '2026-09-23', 3);
 
-    expect(recoverPeriodScopeMismatchTickets(db, companyId)).toBe(1);
+    expect(recoverPeriodScopeMismatchTickets(db, companyId)).toBe(2);
     expect(db.prepare('SELECT status, payload_json FROM local_outbox WHERE operation_id = ?').get('op-period-valid'))
       .toEqual({ status: 'PENDING', payload_json: unchangedPayload });
+    expect(db.prepare('SELECT status, payload_json FROM local_outbox WHERE operation_id = ?').get('op-period-valid-retry'))
+      .toEqual({ status: 'PENDING', payload_json: retryPayload });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-period-outside'))
       .toEqual({ status: 'DEAD_LETTER' });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-period-retried'))

@@ -133,29 +133,25 @@ class AdminWebAppAuthTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED"):
                 issue_admin_webapp_session(signed_init_data())
 
-    def test_company_admin_can_unbind_only_inside_its_grant(self):
+    def test_company_admin_chat_is_a_webapp_launcher_not_an_operations_console(self):
         calls = []
 
         def api_request(method, route, payload=None):
             calls.append((method, route, payload))
             if route == "/internal/admin/webapp/authorize":
                 return {"access": {"isGlobalAdmin": False, "companyIds": ["comp_novda"]}}
-            if route == "/internal/admin/webapp/unbind-worker":
-                return {"binding": {"companyId": "comp_novda", "workerId": 180, "telegramId": "8363499557", "workerName": "Ali"}}
             raise AssertionError(route)
 
         with patch.object(admin_bot, "ADMIN_IDS", {ADMIN_ID}), patch.object(admin_bot, "api_request", side_effect=api_request):
-            reply = handle_admin_command("274466315", "/unbind comp_novda 180 8363499557")
-            with self.assertRaisesRegex(ValueError, "Bu kompaniya uchun admin huquqingiz yo'q"):
-                handle_admin_command("274466315", "/unbind other_company 180 8363499557")
+            replies = [handle_admin_command("274466315", command) for command in (
+                "/start", "/pending", "/approve request comp_novda admin",
+                "/reject request sabab", "/revoke request", "/company comp_novda Novda",
+                "/unbind comp_novda 180 8363499557",
+            )]
 
-        self.assertIn("Telegram bog'lanishi bekor qilindi", reply)
-        unbind_call = next(call for call in calls if call[1] == "/internal/admin/webapp/unbind-worker")
-        self.assertEqual(unbind_call[2], {
-            "adminTelegramId": "274466315", "companyId": "comp_novda",
-            "workerId": 180, "telegramId": "8363499557"
-        })
-        self.assertEqual(sum(route == "/internal/admin/webapp/unbind-worker" for _, route, _ in calls), 1)
+        self.assertIn("WebApp", replies[0])
+        self.assertTrue(all(reply is None for reply in replies[1:]))
+        self.assertEqual([route for _, route, _ in calls], ["/internal/admin/webapp/authorize"])
 
     def test_signer_requires_current_allowlisted_session(self):
         session = create_admin_web_session(ADMIN_ID, SESSION_SECRET, now=int(time.time()))
