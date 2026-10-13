@@ -178,6 +178,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const reactivatedWorker = await pool!.query('SELECT status, server_revision FROM workers WHERE company_id = $1 AND id = 71', [companyId]);
     expect(reactivatedWorker.rows[0]).toMatchObject({ status: 'ACTIVE', server_revision: 5 });
 
+    await pool!.query(`INSERT INTO company_batch_settings (company_id) VALUES ($1)
+      ON CONFLICT (company_id) DO NOTHING`, [companyId]);
     await pool!.query(`INSERT INTO activation_companies (company_id, company_name, updated_by_telegram_id)
       VALUES ($1, 'Workbook test company', '1526974123')`, [companyId]);
     await pool!.query(`INSERT INTO activation_company_admins (
