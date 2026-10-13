@@ -178,33 +178,6 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const reactivatedWorker = await pool!.query('SELECT status, server_revision FROM workers WHERE company_id = $1 AND id = 71', [companyId]);
     expect(reactivatedWorker.rows[0]).toMatchObject({ status: 'ACTIVE', server_revision: 5 });
 
-    await pool!.query(`INSERT INTO company_batch_settings (company_id) VALUES ($1)
-      ON CONFLICT (company_id) DO NOTHING`, [companyId]);
-    await pool!.query(`INSERT INTO activation_companies (company_id, company_name, updated_by_telegram_id)
-      VALUES ($1, 'Workbook test company', '1526974123')`, [companyId]);
-    await pool!.query(`INSERT INTO activation_company_admins (
-      company_id, telegram_id, assigned_by_telegram_id, assignment_source
-    ) VALUES ($1, '274466315', '1526974123', 'TELEGRAM_ADMIN')`, [companyId]);
-    const adminDashboard = createAdminDashboardService({ pool: pool!, allowedAdminIds: new Set(['1526974123']) });
-    const adminEdit = await adminDashboard.updateWorker('274466315', {
-      companyId, workerId: 71, baseRevision: 5, name: 'Ali Admin', staj: 6, role: 'Tikuvchi',
-      operationId: '00000000-0000-4000-8000-000000000711',
-      commandId: '00000000-0000-4000-8000-000000000712',
-      adjustment: {
-        adjustmentId: '00000000-0000-4000-8000-000000000713',
-        type: 'JARIMA', periodId: period.periodId, amountDelta: 15, description: 'WebApp audit check'
-      }
-    });
-    expect(adminEdit).toMatchObject({ status: 'APPLIED', serverRevision: 6 });
-    const adminEditedWorker = await pool!.query('SELECT name, staj, role, server_revision FROM workers WHERE company_id = $1 AND id = 71', [companyId]);
-    expect(adminEditedWorker.rows[0]).toMatchObject({ name: 'Ali Admin', staj: '6', role: 'Tikuvchi', server_revision: 6 });
-    const adminAdjustment = await pool!.query(`SELECT type, amount, period_id, provenance
-      FROM worker_adjustments WHERE company_id = $1 AND id = '00000000-0000-4000-8000-000000000713'`, [companyId]);
-    expect(adminAdjustment.rows[0]).toMatchObject({ type: 'JARIMA', amount: '15', period_id: period.periodId, provenance: 'ADMIN_WEBAPP' });
-    const adminChange = await pool!.query(`SELECT payload_json FROM change_log
-      WHERE company_id = $1 AND operation_id = '00000000-0000-4000-8000-000000000711'`, [companyId]);
-    expect(adminChange.rows[0].payload_json).toMatchObject({ adminTelegramId: '274466315', source: 'ADMIN_WEBAPP' });
-
     const party = {
       commandId: 'cmd_party', operationId: 'op_party', companyId,
       partyRecordId: 'party_1', partyNumber: '1', modelId: 'model_2', modelName: 'Model 2',
@@ -237,6 +210,31 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     }, 1)).toMatchObject({ status: 'APPLIED', serverRevision: 2 });
     const parties = await pool!.query(`SELECT id, party_number FROM parties WHERE company_id = $1 AND model_id = 'model_2' ORDER BY id`, [companyId]);
     expect(parties.rows.map((row) => row.party_number)).toEqual(['1', '2']);
+
+    await pool!.query(`INSERT INTO activation_companies (company_id, company_name, updated_by_telegram_id)
+      VALUES ($1, 'Workbook test company', '1526974123')`, [companyId]);
+    await pool!.query(`INSERT INTO activation_company_admins (
+      company_id, telegram_id, assigned_by_telegram_id, assignment_source
+    ) VALUES ($1, '274466315', '1526974123', 'TELEGRAM_ADMIN')`, [companyId]);
+    const adminDashboard = createAdminDashboardService({ pool: pool!, allowedAdminIds: new Set(['1526974123']) });
+    const adminEdit = await adminDashboard.updateWorker('274466315', {
+      companyId, workerId: 71, baseRevision: 5, name: 'Ali Admin', staj: 6, role: 'Tikuvchi',
+      operationId: '00000000-0000-4000-8000-000000000711',
+      commandId: '00000000-0000-4000-8000-000000000712',
+      adjustment: {
+        adjustmentId: '00000000-0000-4000-8000-000000000713',
+        type: 'JARIMA', periodId: period.periodId, amountDelta: 15, description: 'WebApp audit check'
+      }
+    });
+    expect(adminEdit).toMatchObject({ status: 'APPLIED', serverRevision: 6 });
+    const adminEditedWorker = await pool!.query('SELECT name, staj, role, server_revision FROM workers WHERE company_id = $1 AND id = 71', [companyId]);
+    expect(adminEditedWorker.rows[0]).toMatchObject({ name: 'Ali Admin', staj: '6', role: 'Tikuvchi', server_revision: 6 });
+    const adminAdjustment = await pool!.query(`SELECT type, amount, period_id, provenance
+      FROM worker_adjustments WHERE company_id = $1 AND id = '00000000-0000-4000-8000-000000000713'`, [companyId]);
+    expect(adminAdjustment.rows[0]).toMatchObject({ type: 'JARIMA', amount: '15', period_id: period.periodId, provenance: 'ADMIN_WEBAPP' });
+    const adminChange = await pool!.query(`SELECT payload_json FROM change_log
+      WHERE company_id = $1 AND operation_id = '00000000-0000-4000-8000-000000000711'`, [companyId]);
+    expect(adminChange.rows[0].payload_json).toMatchObject({ adminTelegramId: '274466315', source: 'ADMIN_WEBAPP' });
   });
 
   it('releases the unique party/patta key after DeleteTicket and still blocks active duplicates', async () => {
@@ -324,6 +322,11 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
         company_id, company_name, allowed_roles, require_ticket_validation, is_active,
         updated_by_telegram_id, updated_by_source
       ) VALUES ($1, 'Free Mode Fixture', ARRAY['admin'], FALSE, TRUE, '1526974123', 'TELEGRAM_ADMIN')
+      ON CONFLICT (company_id) DO UPDATE SET
+        company_name = EXCLUDED.company_name, allowed_roles = EXCLUDED.allowed_roles,
+        require_ticket_validation = FALSE, is_active = TRUE,
+        updated_by_telegram_id = EXCLUDED.updated_by_telegram_id,
+        updated_by_source = EXCLUDED.updated_by_source
     `, [companyId]);
     await pool!.query(`INSERT INTO models (id, company_id, name, operations_json, status)
       VALUES ('free-model', $1, 'Free Model', '[{"name":"Cut","rate":1}]', 'ACTIVE')`, [companyId]);
