@@ -155,28 +155,25 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
   });
 
   it('unbounds the exact worker/Telegram pair through the company-admin bot route and records the actor', async () => {
-    await pool.query(`INSERT INTO worker_telegram_bindings (telegram_id, company_id, worker_id, username)
-      VALUES ('8363499557', $1, $2, 'old-account')`, [COMPANY_ID, WORKER_ID]);
-
     const response = await app.inject({
       method: 'POST',
       url: '/internal/admin/webapp/unbind-worker',
       headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' },
       payload: {
         adminTelegramId: '274466315', companyId: COMPANY_ID,
-        workerId: WORKER_ID, telegramId: '8363499557'
+        workerId: WORKER_ID, telegramId: '987654321'
       }
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.json().binding).toMatchObject({
-      companyId: COMPANY_ID, workerId: WORKER_ID, telegramId: '8363499557', unboundBy: '274466315'
+      companyId: COMPANY_ID, workerId: WORKER_ID, telegramId: '987654321', unboundBy: '274466315'
     });
     expect((await pool.query(`SELECT telegram_id FROM worker_telegram_bindings
       WHERE company_id = $1 AND worker_id = $2`, [COMPANY_ID, WORKER_ID])).rows).toEqual([]);
     expect((await pool.query(`SELECT telegram_id, actor_telegram_id, event_type FROM worker_telegram_binding_events
       WHERE company_id = $1 AND worker_id = $2`, [COMPANY_ID, WORKER_ID])).rows).toEqual([{
-      telegram_id: '8363499557', actor_telegram_id: '274466315', event_type: 'UNBOUND'
+      telegram_id: '987654321', actor_telegram_id: '274466315', event_type: 'UNBOUND'
     }]);
 
     const crossCompany = await app.inject({
