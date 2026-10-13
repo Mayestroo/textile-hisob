@@ -2537,3 +2537,190 @@ body { background: #171526; }
 .main-nav .nav-button.mobile-primary-tab {
   display: flex !important;
 }
+
+/* =============================================================
+   DIRECTOR EXECUTIVE DASHBOARD STYLING
+   ============================================================= */
+.director-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: paneFade 0.25s ease-out;
+}
+.director-hero {
+  padding: 20px 18px 16px;
+  background: linear-gradient(135deg, rgba(118, 84, 216, 0.16) 0%, rgba(84, 111, 203, 0.1) 100%), var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+.dir-hero-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dir-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #7654d8, #546fcb);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  box-shadow: 0 4px 14px rgba(118, 84, 216, 0.35);
+  flex-shrink: 0;
+}
+.dir-titles {
+  flex: 1;
+  min-width: 0;
+}
+.dir-titles h1 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+.dir-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.period-pill {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(118, 84, 216, 0.15);
+  border: 1px solid rgba(118, 84, 216, 0.3);
+  color: #c9baf5;
+  font-size: 11px;
+  font-weight: 700;
+}
+.dir-sync-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(5, 150, 105, 0.15);
+  border: 1px solid rgba(5, 150, 105, 0.3);
+  color: #10b981;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* 4 Executive KPI Grid */
+.director-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.dir-kpi-card {
+  padding: 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.dir-kpi-card:active {
+  transform: scale(0.98);
+}
+.kpi-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.kpi-pieces .kpi-icon { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.kpi-workers .kpi-icon { background: rgba(84, 111, 203, 0.15); color: #546fcb; }
+.kpi-parties .kpi-icon { background: rgba(217, 119, 6, 0.15); color: #d97706; }
+.kpi-payroll .kpi-icon { background: rgba(147, 97, 207, 0.15); color: #9361cf; }
+
+.kpi-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kpi-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+.kpi-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 2px 0 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-sub {
+  font-size: 10px;
+  color: var(--text-subtle);
+}
+
+/* Director Fast Actions Bar */
+.dir-action-bar {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.dir-action-btn {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+}
+
+/* Mobile Card Feeds */
+.ticket-card-feed,
+.binding-card-feed,
+.activation-card-feed,
+.balance-card-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.ticket-touch-card,
+.activation-touch-card {
+  padding: 14px 12px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.activation-touch-card.is-pending-card {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, var(--surface-subtle) 100%);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.15);
+}
+.quick-adj-select-wrap {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 820px) {
+  .desktop-only-note {
+    display: none !important;
+  }
+}
