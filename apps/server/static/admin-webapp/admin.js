@@ -9,6 +9,11 @@
     user: null,
     access: null,
     currentView: 'overview',
+    selectedCompanyId: '',
+    companyFilter: 'all',
+    companySearchQuery: '',
+    currentCpTab: 'overview',
+    previousView: 'overview',
     companies: [],
     activations: [],
     workers: [],
@@ -37,8 +42,9 @@
     return element;
   }
 
-  function cell(row, value, className) {
+  function cell(row, value, className, label) {
     const td = node('td', className, value);
+    if (label) td.dataset.label = label;
     row.appendChild(td);
     return td;
   }
@@ -169,6 +175,14 @@
   function updatePendingNavBadge(count) {
     const badge = byId('navPendingBadge');
     if (badge) badge.hidden = !count || count <= 0;
+    const banner = byId('urgentActivationBanner');
+    if (banner) {
+      banner.hidden = !count || count <= 0;
+      if (count > 0) {
+        setText('urgentBannerTitle', `${number(count)} ta yangi aktivatsiya so‘rovi`);
+        setText('urgentBannerSubtitle', 'Qurilmalarni tasdiqlash yoki ko‘rib chiqish uchun bosing');
+      }
+    }
   }
 
   function tableMessage(tbodyId, emptyId, rows, emptyMessage) {
@@ -320,24 +334,31 @@
     const result = await request(`${API}/companies`);
     state.companies = result.companies || [];
     refreshCompanySelectors();
+    renderCompanyCards();
     byId('companyAdminManagement').hidden = !state.access?.isGlobalAdmin;
     const tbody = tableMessage('companyRows', 'companyEmpty', state.companies);
     for (const company of state.companies) {
       const row = node('tr');
-      cell(row, company.companyId, 'mono');
-      cell(row, company.companyName);
-      cell(row, number(company.workerCount));
-      cell(row, number(company.modelCount));
-      cell(row, number(company.partyCount));
-      cell(row, (company.availableSizes || []).join(', ') || '—');
-      cell(row, company.serverRevision ?? '—');
+      cell(row, company.companyId, 'mono', 'ID');
+      cell(row, company.companyName, '', 'Nomi');
+      cell(row, number(company.workerCount), '', 'Ishchi');
+      cell(row, number(company.modelCount), '', 'Model');
+      cell(row, number(company.partyCount), '', 'Partiya');
+      cell(row, (company.availableSizes || []).join(', ') || '—', '', 'O‘lchamlar');
+      cell(row, company.serverRevision ?? '—', '', 'Reviziya');
       const configured = node('td');
+      configured.dataset.label = 'Aktivatsiya';
       configured.appendChild(statusBadge(!company.activationConfigured ? 'UNCONFIGURED' : company.activationActive ? 'ACTIVE' : 'INACTIVE'));
       row.appendChild(configured);
-      cell(row, company.allowedRoles?.length ? company.allowedRoles.join(', ') : '—');
-      cell(row, company.requireTicketValidation == null ? '—' : company.requireTicketValidation ? 'Talab qilinadi' : 'Ixtiyoriy');
+      cell(row, company.allowedRoles?.length ? company.allowedRoles.join(', ') : '—', '', 'Ruxsatlar');
+      cell(row, company.requireTicketValidation == null ? '—' : company.requireTicketValidation ? 'Talab qilinadi' : 'Ixtiyoriy', '', 'Patta');
       const actionCell = node('td');
+      actionCell.className = 'actions-cell';
       if (company.businessScopeExists) {
+        const viewBtn = node('button', 'small-action button-accent-action', 'Boshqaruv');
+        viewBtn.type = 'button';
+        viewBtn.dataset.openCompany = company.companyId;
+        actionCell.appendChild(viewBtn);
         const editBtn = node('button', 'small-action', 'Siyosat');
         editBtn.type = 'button';
         editBtn.dataset.editCompany = company.companyId;
@@ -352,6 +373,385 @@
         byId('companyAdminCompany').value = companyId;
         await loadCompanyAdmins(companyId);
       }
+    }
+  }
+
+  function renderCompanyCards() {
+    const grid = byId('companyCardGrid');
+    if (!grid) return;
+    grid.replaceChildren();
+
+    let items = state.companies || [];
+    const filter = state.companyFilter || 'all';
+    if (filter === 'active') {
+      items = items.filter((c) => c.activationActive);
+    } else if (filter === 'unconfigured') {
+      items = items.filter((c) => !c.activationConfigured);
+    }
+
+    const query = String(state.companySearchQuery || '').trim().toLowerCase();
+    if (query) {
+      items = items.filter((c) =>
+        (c.companyName && c.companyName.toLowerCase().includes(query)) ||
+        (c.companyId && c.companyId.toLowerCase().includes(query))
+      );
+    }
+
+    if (!items.length) {
+      const empty = node('p', 'empty-state', 'Qidiruv bo‘yicha korxona topilmadi.');
+      grid.appendChild(empty);
+      return;
+    }
+
+    for (const company of items) {
+      const card = node('article', 'company-card touch-card');
+      card.dataset.companyId = company.companyId;
+
+      const header = node('div', 'company-card-header');
+      const badgeIcon = node('div', 'company-badge-icon', (company.companyName || 'K').charAt(0).toUpperCase());
+      const info = node('div', 'company-card-info');
+      const name = node('h3', 'company-name', company.companyName || company.companyId);
+      const idLabel = node('span', 'company-id mono', `ID: ${company.companyId}`);
+      info.appendChild(name);
+      info.appendChild(idLabel);
+      header.appendChild(badgeIcon);
+      header.appendChild(info);
+      header.appendChild(statusBadge(!company.activationConfigured ? 'UNCONFIGURED' : company.activationActive ? 'ACTIVE' : 'INACTIVE'));
+      card.appendChild(header);
+
+      const chips = node('div', 'company-stat-chips');
+      const addChip = (label, val) => {
+        const chip = node('div', 'stat-chip');
+        chip.appendChild(node('span', 'chip-label', label));
+        chip.appendChild(node('strong', 'chip-value', val));
+        chips.appendChild(chip);
+      };
+      addChip('Ishchi', number(company.workerCount));
+      addChip('Model', number(company.modelCount));
+      addChip('Partiya', number(company.partyCount));
+      addChip('Aktivatsiya', company.activationConfigured ? (company.activationActive ? 'Faol' : 'Nofaol') : 'Yo‘q');
+      card.appendChild(chips);
+
+      const footer = node('div', 'company-card-footer');
+      const openBtn = node('button', 'button button-primary company-open-button', 'Boshqaruv paneli ➔');
+      openBtn.type = 'button';
+      openBtn.dataset.openCompany = company.companyId;
+      footer.appendChild(openBtn);
+      card.appendChild(footer);
+
+      grid.appendChild(card);
+    }
+  }
+
+  async function openCompanyProfile(companyId) {
+    if (!companyId) return;
+    state.selectedCompanyId = companyId;
+    state.currentCpTab = 'overview';
+    showView('company-profile');
+  }
+
+  async function loadCompanyProfile(companyId = state.selectedCompanyId) {
+    if (!companyId) return;
+    state.selectedCompanyId = companyId;
+    let company = state.companies.find((c) => c.companyId === companyId);
+    if (!company) {
+      const res = await request(`${API}/companies`);
+      state.companies = res.companies || [];
+      company = state.companies.find((c) => c.companyId === companyId);
+    }
+    if (!company) return;
+
+    setText('cpAvatar', (company.companyName || 'K').charAt(0).toUpperCase());
+    setText('cpCompanyName', company.companyName || company.companyId);
+    setText('cpCompanyId', `ID: ${company.companyId}`);
+    const badge = byId('cpStatusBadge');
+    if (badge) {
+      badge.textContent = company.activationActive ? 'Faol' : 'Nofaol';
+      badge.className = `badge ${company.activationActive ? 'badge-active' : 'badge-inactive'}`;
+    }
+    setText('cpStatWorkers', number(company.workerCount));
+    setText('cpStatModels', number(company.modelCount));
+    setText('cpStatParties', number(company.partyCount));
+    setText('cpStatDevices', '—');
+
+    setText('cpFactId', company.companyId);
+    setText('cpFactActivation', !company.activationConfigured ? 'Sozlanmagan' : company.activationActive ? 'Faol' : 'Nofaol');
+    setText('cpFactRoles', company.allowedRoles?.length ? company.allowedRoles.join(', ') : 'Belgilanmagan');
+    setText('cpFactTicketVal', company.requireTicketValidation == null ? '—' : company.requireTicketValidation ? 'Talab qilinadi' : 'Ixtiyoriy');
+    setText('cpFactSizes', (company.availableSizes || []).join(', ') || '—');
+    setText('cpFactRevision', company.serverRevision ?? '—');
+    setText('cpLastSync', 'Sinxronlangan');
+
+    const policyComp = byId('cpPolicyCompanyHidden');
+    if (policyComp) policyComp.value = company.companyId;
+    const policyName = byId('cpPolicyNameInput');
+    if (policyName) policyName.value = company.companyName || '';
+    const policyActive = byId('cpPolicyActiveInput');
+    if (policyActive) policyActive.checked = Boolean(company.activationActive);
+
+    const adminComp = byId('cpAdminCompanyHidden');
+    if (adminComp) adminComp.value = company.companyId;
+
+    await switchCpTab(state.currentCpTab || 'overview');
+  }
+
+  async function switchCpTab(tabName) {
+    state.currentCpTab = tabName;
+    for (const btn of document.querySelectorAll('#cpTabs .profile-tab')) {
+      btn.classList.toggle('is-active', btn.dataset.cpTab === tabName);
+    }
+    for (const pane of document.querySelectorAll('.cp-pane')) {
+      const isCurrent = pane.id === `pane-cp-${tabName}`;
+      pane.hidden = !isCurrent;
+      pane.classList.toggle('is-visible', isCurrent);
+    }
+
+    const companyId = state.selectedCompanyId;
+    if (!companyId) return;
+
+    if (tabName === 'workers') {
+      await loadCpWorkers(companyId);
+    } else if (tabName === 'parties') {
+      await loadCpParties(companyId);
+    } else if (tabName === 'models') {
+      await loadCpModels(companyId);
+    } else if (tabName === 'devices') {
+      await loadCpDevices(companyId);
+    } else if (tabName === 'admins') {
+      await loadCpAdmins(companyId);
+    }
+  }
+
+  async function loadCpWorkers(companyId) {
+    const list = byId('cpWorkerCardList');
+    if (!list) return;
+    list.replaceChildren();
+    try {
+      const res = await request(withQuery(`${API}/workers`, { companyId, limit: 100 }));
+      const workers = res.workers || [];
+      setText('cpWorkerCount', `${workers.length} ta`);
+      byId('cpWorkerEmpty').hidden = workers.length > 0;
+      for (const w of workers) {
+        const card = node('article', 'worker-touch-card');
+        const top = node('div', 'worker-touch-card-top');
+        const titleWrap = node('div');
+        titleWrap.appendChild(node('div', 'worker-touch-title', w.name));
+        titleWrap.appendChild(node('span', 'mono count-label', `#${w.workerId}${w.role ? ` · ${w.role}` : ''}`));
+        top.appendChild(titleWrap);
+        top.appendChild(statusBadge(w.status));
+        card.appendChild(top);
+
+        const stats = node('div', 'worker-touch-stats');
+        stats.appendChild(node('span', '', `Staj: ${money(w.staj)}`));
+        stats.appendChild(node('span', 'mono', w.binding ? (w.binding.username ? `@${w.binding.username}` : w.binding.telegramId) : 'Bog‘lanmagan'));
+        card.appendChild(stats);
+
+        const actions = node('div', 'worker-touch-actions');
+        const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
+        adjBtn.type = 'button';
+        adjBtn.dataset.quickAdj = String(w.workerId);
+        adjBtn.dataset.companyId = companyId;
+        adjBtn.dataset.workerName = w.name;
+        actions.appendChild(adjBtn);
+
+        const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
+        editBtn.type = 'button';
+        editBtn.dataset.editWorker = String(w.workerId);
+        editBtn.dataset.companyId = companyId;
+        actions.appendChild(editBtn);
+
+        if (w.binding) {
+          const unbindBtn = node('button', 'button button-danger button-sm', '🔗 Yechish');
+          unbindBtn.type = 'button';
+          unbindBtn.dataset.unbindWorker = String(w.workerId);
+          unbindBtn.dataset.companyId = companyId;
+          unbindBtn.dataset.telegramId = w.binding.telegramId;
+          unbindBtn.dataset.workerName = w.name;
+          actions.appendChild(unbindBtn);
+        }
+        card.appendChild(actions);
+        list.appendChild(card);
+      }
+    } catch (err) {
+      toast(`Ishchilar yuklanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+    }
+  }
+
+  async function loadCpParties(companyId) {
+    const list = byId('cpPartyCardList');
+    if (!list) return;
+    list.replaceChildren();
+    try {
+      const res = await request(withQuery(`${API}/parties`, { companyId, limit: 100 }));
+      const parties = res.parties || [];
+      setText('cpPartyCount', `${parties.length} ta`);
+      byId('cpPartyEmpty').hidden = parties.length > 0;
+      for (const p of parties) {
+        const card = node('article', 'party-touch-card');
+        const top = node('div', 'party-touch-card-top');
+        const titleWrap = node('div');
+        titleWrap.appendChild(node('div', 'party-touch-title', `Partiya №${p.partyNumber}`));
+        titleWrap.appendChild(node('span', 'count-label', p.modelName || 'Model belgilanmagan'));
+        top.appendChild(titleWrap);
+        top.appendChild(statusBadge(p.status));
+        card.appendChild(top);
+
+        const ishSoni = Number(p.ishSoni || 0);
+        const pattaCount = Number(p.pattaCount || 0);
+        const percent = ishSoni > 0 ? Math.min(100, Math.round((pattaCount / ishSoni) * 100)) : 0;
+
+        const progressInfo = node('div', 'worker-touch-stats');
+        progressInfo.appendChild(node('span', '', `Ish soni: ${number(ishSoni)}`));
+        progressInfo.appendChild(node('span', '', `Patta: ${number(pattaCount)} (${percent}%)`));
+        card.appendChild(progressInfo);
+
+        const progressWrap = node('div', 'batch-progress-bar');
+        const fill = node('div', 'batch-progress-fill');
+        fill.style.width = `${percent}%`;
+        progressWrap.appendChild(fill);
+        card.appendChild(progressWrap);
+
+        list.appendChild(card);
+      }
+    } catch (err) {
+      toast(`Partiyalar yuklanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+    }
+  }
+
+  async function loadCpModels(companyId) {
+    const list = byId('cpModelCardList');
+    if (!list) return;
+    list.replaceChildren();
+    try {
+      const res = await request(withQuery(`${API}/models`, { companyId, limit: 100 }));
+      const models = res.models || [];
+      setText('cpModelCount', `${models.length} ta`);
+      byId('cpModelEmpty').hidden = models.length > 0;
+      for (const m of models) {
+        const card = node('article', 'model-touch-card');
+        const top = node('div', 'party-touch-card-top');
+        top.appendChild(node('strong', 'party-touch-title', m.name));
+        top.appendChild(node('span', 'mono count-label', `ID: ${m.modelId}`));
+        card.appendChild(top);
+        card.appendChild(node('div', 'count-label', `Amallar soni: ${m.operations?.length || 0} ta`));
+        list.appendChild(card);
+      }
+    } catch (err) {
+      toast(`Modellar yuklanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+    }
+  }
+
+  async function loadCpDevices(companyId) {
+    const list = byId('cpDeviceCardList');
+    if (!list) return;
+    list.replaceChildren();
+    try {
+      const res = await request(withQuery(`${API}/devices`, { companyId }));
+      const registered = res.devices?.registered || [];
+      setText('cpDeviceCount', `${registered.length} ta`);
+      setText('cpStatDevices', number(registered.length));
+      byId('cpDeviceEmpty').hidden = registered.length > 0;
+      for (const d of registered) {
+        const card = node('article', 'device-touch-card');
+        const top = node('div', 'party-touch-card-top');
+        top.appendChild(node('strong', 'mono', d.deviceId));
+        top.appendChild(statusBadge(d.revoked ? 'REVOKED' : 'ACTIVE'));
+        card.appendChild(top);
+        card.appendChild(node('div', 'count-label', `Versiya: ${d.clientVersion || '—'} · Ro‘yxat: ${timestamp(d.registeredAt)}`));
+        list.appendChild(card);
+      }
+    } catch (err) {
+      toast(`Qurilmalar yuklanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+    }
+  }
+
+  async function loadCpAdmins(companyId) {
+    await loadCompanyAdmins(companyId);
+    const mainRows = byId('companyAdminRows');
+    const cpRows = byId('cpAdminRows');
+    if (mainRows && cpRows && mainRows !== cpRows) {
+      cpRows.replaceChildren(...[...mainRows.children].map((c) => c.cloneNode(true)));
+      byId('cpAdminEmpty').hidden = byId('companyAdminEmpty').hidden;
+    }
+  }
+
+  async function openQuickAdjustment({ workerId, companyId, workerName }) {
+    const dialog = byId('quickAdjustmentDialog');
+    if (!dialog) return;
+    byId('quickAdjWorkerId').value = workerId;
+    byId('quickAdjCompanyId').value = companyId;
+    setText('quickAdjWorkerName', workerName || `#${workerId}`);
+    setText('quickAdjCompanyLabel', `Kompaniya: ${companyId}`);
+    byId('quickAdjAmount').value = '';
+    byId('quickAdjDescription').value = '';
+
+    const periodSelect = byId('quickAdjPeriodSelect');
+    periodSelect.replaceChildren(node('option', '', 'Ochiq davr yuklanmoqda…'));
+    try {
+      const res = await request(`${API}/companies/${encodeURIComponent(companyId)}/periods`);
+      const periods = (res.periods || []).filter((p) => !p.isClosed);
+      periodSelect.replaceChildren();
+      if (!periods.length) {
+        periodSelect.appendChild(node('option', '', 'Ochiq davr mavjud emas'));
+      } else {
+        for (const p of periods) {
+          const opt = node('option', '', `${p.name} · ${p.startDate}${p.endDate ? ` — ${p.endDate}` : ''}`);
+          opt.value = p.periodId;
+          periodSelect.appendChild(opt);
+        }
+      }
+    } catch {
+      periodSelect.replaceChildren(node('option', '', 'Davrlarni yuklab bo‘lmadi'));
+    }
+
+    dialog.showModal();
+    try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+  }
+
+  async function submitQuickAdjustment(event) {
+    event.preventDefault();
+    const form = byId('quickAdjustmentForm');
+    const data = new FormData(form);
+    const workerId = Number(data.get('workerId'));
+    const companyId = String(data.get('companyId') || '').trim();
+    const type = String(data.get('type') || 'AVANS').toUpperCase();
+    const periodId = String(data.get('periodId') || '').trim();
+    const amountDelta = Number(data.get('amountDelta') || 0);
+    const description = String(data.get('description') || '').trim();
+
+    if (!companyId || !workerId || !periodId || !amountDelta || amountDelta <= 0 || !description) {
+      toast('Barcha maydonlarni to‘ldiring.');
+      return;
+    }
+
+    const button = byId('submitQuickAdj');
+    button.disabled = true;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyId)}/workers/${encodeURIComponent(workerId)}`, {
+        method: 'POST',
+        body: {
+          adjustment: {
+            adjustmentId: crypto.randomUUID(),
+            type,
+            periodId,
+            amountDelta,
+            description
+          }
+        }
+      });
+      byId('quickAdjustmentDialog').close();
+      toast(`${type === 'AVANS' ? 'Avans' : 'Jarima'} saqlandi va sync qilindi.`);
+      try { telegram?.HapticFeedback?.notificationOccurred?.('success'); } catch {}
+      if (state.currentView === 'company-profile') {
+        await switchCpTab('workers');
+      } else if (state.currentView === 'workers') {
+        await loadWorkers(state.workerFilters);
+      }
+    } catch (error) {
+      toast(`Saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`);
+      try { telegram?.HapticFeedback?.notificationOccurred?.('error'); } catch {}
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -427,15 +827,21 @@
     const tbody = tableMessage('workerRows', 'workerEmpty', workers);
     for (const worker of workers) {
       const row = node('tr');
-      cell(row, `#${worker.workerId}`, 'mono');
-      cell(row, worker.name);
-      cell(row, worker.companyId, 'mono');
-      const status = node('td'); status.appendChild(statusBadge(worker.status)); row.appendChild(status);
-      cell(row, money(worker.staj));
-      cell(row, worker.binding ? `${worker.binding.username ? `@${worker.binding.username} · ` : ''}${worker.binding.telegramId}` : 'Bog‘lanmagan', 'mono');
+      cell(row, `#${worker.workerId}`, 'mono', 'ID');
+      cell(row, worker.name, '', 'Ism');
+      cell(row, worker.companyId, 'mono', 'Korxona');
+      const status = node('td'); status.dataset.label = 'Holat'; status.appendChild(statusBadge(worker.status)); row.appendChild(status);
+      cell(row, money(worker.staj), '', 'Staj');
+      cell(row, worker.binding ? `${worker.binding.username ? `@${worker.binding.username} · ` : ''}${worker.binding.telegramId}` : 'Bog‘lanmagan', 'mono', 'Telegram');
       const actionCell = node('td');
       actionCell.className = 'actions-cell';
-      const edit = node('button', 'small-action button-accent-action', 'Tahrirlash');
+      const adjBtn = node('button', 'small-action button-accent-action', '+ Avans');
+      adjBtn.type = 'button';
+      adjBtn.dataset.quickAdj = String(worker.workerId);
+      adjBtn.dataset.companyId = worker.companyId;
+      adjBtn.dataset.workerName = worker.name;
+      actionCell.appendChild(adjBtn);
+      const edit = node('button', 'small-action', 'Tahrirlash');
       edit.type = 'button';
       edit.dataset.editWorker = worker.workerId;
       edit.dataset.companyId = worker.companyId;
@@ -915,6 +1321,7 @@
     overview: loadOverview,
     devices: loadDevices,
     companies: loadCompanies,
+    'company-profile': () => loadCompanyProfile(state.selectedCompanyId),
     workers: () => loadWorkers(state.workerFilters),
     bindings: loadBindings,
     activations: loadActivations,
@@ -940,51 +1347,77 @@
   }
 
   function handleNavigateBack() {
+    const quickDialog = byId('quickAdjustmentDialog');
+    if (quickDialog && quickDialog.open) {
+      quickDialog.close();
+      return;
+    }
     const dialog = byId('workerDialog');
     if (dialog && dialog.open) {
       dialog.close();
       return;
     }
     try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
-    const fromMoreViews = ['companies', 'devices', 'models', 'parties', 'tickets', 'balances', 'system', 'admin'];
+    if (state.currentView === 'company-profile') {
+      showView(state.access?.isGlobalAdmin ? 'companies' : 'overview');
+      return;
+    }
+    const fromMoreViews = ['devices', 'models', 'parties', 'tickets', 'balances', 'system', 'admin'];
     if (fromMoreViews.includes(state.currentView)) {
       showView('more');
     } else {
-      showView('overview');
+      showView(state.access?.isGlobalAdmin ? 'companies' : 'overview');
     }
   }
 
   function showView(view) {
-    if (!Object.hasOwn(loaders, view)) return;
+    if (view !== 'company-profile' && !Object.hasOwn(loaders, view)) return;
     if (state.access?.isGlobalAdmin === false && view === 'system') return;
+    state.previousView = state.currentView;
     state.currentView = view;
     for (const section of document.querySelectorAll('[data-section]')) {
       const visible = section.dataset.section === view;
       section.hidden = !visible;
       section.classList.toggle('is-visible', visible);
     }
-    const primaryMobileViews = ['overview', 'workers', 'bindings', 'activations'];
+    const isGlobal = state.access?.isGlobalAdmin === true;
+    const primaryMobileViews = isGlobal
+      ? ['companies', 'activations', 'overview', 'more']
+      : ['overview', 'workers', 'parties', 'devices', 'more'];
     for (const button of document.querySelectorAll('.nav-button')) {
-      const active = button.dataset.view === view || (button.dataset.view === 'more' && !primaryMobileViews.includes(view));
+      const v = button.dataset.view;
+      const isPrimary = primaryMobileViews.includes(v);
+      button.classList.toggle('mobile-primary-tab', isPrimary);
+      const active = v === view || (v === 'more' && !primaryMobileViews.includes(view));
       button.classList.toggle('is-active', active);
       if (active) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     }
     const labels = {
-      overview: 'Umumiy ko‘rinish', devices: 'Qurilmalar', companies: 'Korxonalar',
-      workers: 'Ishchilar va hisob-kitob', bindings: 'Bog‘lanishlar', models: 'Modellar', parties: 'Partiyalar', tickets: 'Ishlab chiqarish',
-      balances: 'Avans va jarima', activations: 'Kalitlar & aktivatsiya', system: 'Tizim holati',
-      admin: 'Admin sessiyasi', more: 'Yana'
+      overview: isGlobal ? 'Umumiy ko‘rinish' : 'Boshqaruv paneli',
+      devices: 'Qurilmalar',
+      companies: 'Korxonalar',
+      'company-profile': 'Kompaniya profili',
+      workers: 'Ishchilar va hisob-kitob',
+      bindings: 'Bog‘lanishlar',
+      models: 'Modellar',
+      parties: 'Partiyalar',
+      tickets: 'Ishlab chiqarish',
+      balances: 'Avans va jarima',
+      activations: 'Kalitlar & aktivatsiya',
+      system: 'Tizim holati',
+      admin: 'Admin sessiyasi',
+      more: 'Yana'
     };
-    setText('currentViewLabel', labels[view]);
-    setText('mobileViewTitle', labels[view]);
-    const isOverview = view === 'overview';
+    setText('currentViewLabel', labels[view] || view);
+    setText('mobileViewTitle', labels[view] || view);
+    const isRootHome = isGlobal ? (view === 'companies') : (view === 'overview');
     const mobileBack = byId('mobileBackButton');
-    if (mobileBack) mobileBack.hidden = isOverview;
+    if (mobileBack) mobileBack.hidden = isRootHome;
     const mobileTitle = byId('mobileViewTitle');
-    if (mobileTitle) mobileTitle.hidden = isOverview;
+    if (mobileTitle) mobileTitle.hidden = isRootHome;
     if (telegram?.BackButton) {
-      if (isOverview) telegram.BackButton.hide();
+      if (isRootHome) telegram.BackButton.hide();
       else telegram.BackButton.show();
     }
     if (typeof window !== 'undefined' && window.scrollTo) {
@@ -1040,7 +1473,8 @@
       byId('authGate').hidden = true;
       byId('adminApp').hidden = false;
       setText('adminBadge', state.user.firstName || state.user.username || 'Admin');
-      showView('overview');
+      const defaultView = state.access.isGlobalAdmin ? 'companies' : 'overview';
+      showView(defaultView);
       if (telegram.BackButton) telegram.BackButton.hide();
     } catch (error) {
       state.sessionToken = '';
@@ -1170,6 +1604,42 @@
         try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
         showView(target.dataset.go);
       }
+      const openCompanyBtn = event.target.closest('[data-open-company]');
+      if (openCompanyBtn) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        openCompanyProfile(openCompanyBtn.dataset.openCompany);
+        return;
+      }
+      const companyCard = event.target.closest('.company-card');
+      if (companyCard && !event.target.closest('button')) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        openCompanyProfile(companyCard.dataset.companyId);
+        return;
+      }
+      const cpTabBtn = event.target.closest('[data-cp-tab]');
+      if (cpTabBtn) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        switchCpTab(cpTabBtn.dataset.cpTab);
+        return;
+      }
+      const switchCpBtn = event.target.closest('[data-switch-cp-tab]');
+      if (switchCpBtn) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        switchCpTab(switchCpBtn.dataset.switchCpTab);
+        return;
+      }
+      const quickAdjBtn = event.target.closest('[data-quick-adj]');
+      if (quickAdjBtn) {
+        const { quickAdj, companyId, workerName } = quickAdjBtn.dataset;
+        openQuickAdjustment({ workerId: quickAdj, companyId, workerName });
+        return;
+      }
+      const amountChip = event.target.closest('.amount-chip');
+      if (amountChip) {
+        const amountInput = byId('quickAdjAmount');
+        if (amountInput) amountInput.value = amountChip.dataset.amount;
+        return;
+      }
       const selectActBtn = event.target.closest('[data-select-activation]');
       if (selectActBtn) {
         const reqId = selectActBtn.dataset.selectActivation;
@@ -1277,6 +1747,61 @@
     byId('workerEditForm').addEventListener('submit', (event) => { void submitWorkerEdit(event); });
     byId('workerStatusButton').addEventListener('click', () => { void changeWorkerStatus(); });
     byId('closeWorkerDialog').addEventListener('click', () => byId('workerDialog').close());
+
+    // Company Directory & Profile Events
+    byId('companySearchInput')?.addEventListener('input', (event) => {
+      state.companySearchQuery = event.target.value;
+      renderCompanyCards();
+    });
+    byId('companyFilterChips')?.addEventListener('click', (event) => {
+      const chip = event.target.closest('[data-company-filter]');
+      if (!chip) return;
+      for (const c of document.querySelectorAll('#companyFilterChips .chip')) c.classList.remove('is-active');
+      chip.classList.add('is-active');
+      state.companyFilter = chip.dataset.companyFilter;
+      renderCompanyCards();
+    });
+    byId('closeQuickAdjDialog')?.addEventListener('click', () => byId('quickAdjustmentDialog').close());
+    byId('cancelQuickAdj')?.addEventListener('click', () => byId('quickAdjustmentDialog').close());
+    byId('quickAdjustmentForm')?.addEventListener('submit', (e) => submitQuickAdjustment(e));
+    byId('cpAdminAssignForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const data = new FormData(form);
+      const companyId = state.selectedCompanyId;
+      const telegramId = String(data.get('telegramId') || '').trim();
+      if (!companyId || !/^\d{1,24}$/.test(telegramId)) { toast('To‘g‘ri Telegram ID kiriting.'); return; }
+      try {
+        await request(`${API}/companies/${encodeURIComponent(companyId)}/admins/${encodeURIComponent(telegramId)}`, {
+          method: 'PUT', body: { isActive: true }
+        });
+        byId('cpAdminTelegramInput').value = '';
+        toast('Admin biriktirildi.');
+        await loadCpAdmins(companyId);
+      } catch (err) {
+        toast(`Admin biriktirilmadi: ${err.code || 'API_UNAVAILABLE'}`);
+      }
+    });
+    byId('cpPolicyForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const data = new FormData(form);
+      const companyId = state.selectedCompanyId;
+      const companyName = String(data.get('companyName') || '').trim();
+      const roles = data.getAll('allowedRoles');
+      const isActive = byId('cpPolicyActiveInput').checked;
+      if (!companyId || !companyName) { toast('Nomini kiriting.'); return; }
+      try {
+        await request(`${API}/companies`, {
+          method: 'POST',
+          body: { companyId, companyName, allowedRoles: roles, isActive }
+        });
+        toast('Siyosat saqlandi.');
+        await loadCompanyProfile(companyId);
+      } catch (err) {
+        toast(`Siyosat saqlanmadi: ${err.code || 'API_UNAVAILABLE'}`);
+      }
+    });
   }
 
   bindEvents();
