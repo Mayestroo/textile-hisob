@@ -12,6 +12,7 @@ const {
 } = require('../activation/activationRequests.cjs');
 const { verifySignedActivation } = require('../activation/licenseActivation.cjs');
 const { assertCompanyAccess, resolveAdminAccess } = require('./adminAccess.cjs');
+const { unbindWorkerTelegramBinding } = require('../workers/workerService.cjs');
 
 const COMPANY_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -572,6 +573,24 @@ function createAdminDashboardService(options = {}) {
     }, actor, actorAllowlist(actor));
   }
 
+  async function unbindWorkerTelegram(telegramId, input = {}) {
+    return unbindWorkerTelegramBinding(pool, {
+      companyId: input.companyId,
+      workerId: input.workerId,
+      telegramId: input.telegramId,
+      adminTelegramId: telegramId
+    }, allowedAdminIds);
+  }
+
+  async function unbindWorkerTelegram(telegramId, input = {}) {
+    return unbindWorkerTelegramBinding(pool, {
+      companyId: input.companyId,
+      workerId: input.workerId,
+      telegramId: input.telegramId,
+      adminTelegramId: telegramId
+    }, allowedAdminIds);
+  }
+
   async function signPayload(telegramId, sessionToken, payload) {
     if (typeof signerClient !== 'function') throw activationError('ACTIVATION_SIGNER_UNAVAILABLE', 503);
     const result = await signerClient({ sessionToken, payload, companyId: payload?.companyId });
@@ -656,6 +675,8 @@ function createAdminDashboardService(options = {}) {
     getSystemHealth,
     updateCompanyStrictMode,
     upsertCompany,
+    unbindWorkerTelegram,
+    unbindWorkerTelegram,
     approveActivation,
     rejectActivation,
     revokeActivation

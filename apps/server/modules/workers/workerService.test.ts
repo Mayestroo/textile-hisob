@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { claimWorkerBinding, getWorkerForEnrollment } = require('./workerService.cjs');
+const { claimWorkerBinding, getWorkerForEnrollment, unbindWorkerTelegramBinding } = require('./workerService.cjs');
 
 describe('worker binding credential enforcement', () => {
   it('reports the server-wide PIN-disabled enrollment policy', async () => {
@@ -70,6 +70,52 @@ describe('worker binding credential enforcement', () => {
     }, { pinRequired: false })).resolves.toMatchObject({ worker_id: 190, company_id: 'comp_novda' });
 
     expect(statements.some((sql) => sql.includes('INSERT INTO worker_telegram_bindings'))).toBe(true);
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('unbinds only the requested mapping for a company-scoped admin and writes an audit event', async () => {
+    const client = {
+      query: vi.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('SELECT binding.telegram_id')) {
+          return { rows: [{ telegram_id: '8363499557', company_id: 'comp_novda', worker_id: 180, worker_name: 'Worker 180' }] };
+        }
+        if (sql.includes('DELETE FROM worker_telegram_bindings')) {
+          expect(params).toEqual(['comp_novda', 180, '8363499557']);
+          return { rows: [], rowCount: 1 };
+        }
+        return { rows: [] };
+      }),
+      release: vi.fn()
+    };
+    const pool = {
+      query: vi.fn(async () => ({ rows: [{ company_id: 'comp_novda' }] })),
+      connect: vi.fn(async () => client)
+    };
+
+    await expect(unbindWorkerTelegramBinding(pool, {
+      companyId: 'comp_novda', workerId: 180, telegramId: '8363499557', adminTelegramId: '274466315'
+    })).resolves.toMatchObject({ companyId: 'comp_novda', workerId: 180, telegramId: '8363499557', unboundBy: '274466315' });
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("'UNBOUND'"), ['comp_novda', 180, '8363499557', '274466315']);
+    expect(client.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('refuses to remove a different Telegram account bound to the worker', async () => {
+    const client = {
+      query: vi.fn(async (sql: string) => sql.includes('SELECT binding.telegram_id')
+        ? { rows: [{ telegram_id: '9999999999', company_id: 'comp_novda', worker_id: 180, worker_name: 'Worker 180' }] }
+        : { rows: [] }),
+      release: vi.fn()
+    };
+    const pool = {
+      query: vi.fn(async () => ({ rows: [{ company_id: 'comp_novda' }] })),
+      connect: vi.fn(async () => client)
+    };
+
+    await expect(unbindWorkerTelegramBinding(pool, {
+      companyId: 'comp_novda', workerId: 180, telegramId: '8363499557', adminTelegramId: '274466315'
+    })).rejects.toMatchObject({ code: 'WORKER_BINDING_MISMATCH', statusCode: 409 });
+    expect(client.query).not.toHaveBeenCalledWith(expect.stringContaining('DELETE FROM worker_telegram_bindings'), expect.anything());
     expect(client.release).toHaveBeenCalledOnce();
   });
 });

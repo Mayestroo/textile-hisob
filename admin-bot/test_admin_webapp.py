@@ -14,6 +14,7 @@ from http.server import ThreadingHTTPServer
 import admin_bot
 from admin_bot import (
     create_admin_web_session,
+    handle_admin_command,
     issue_admin_webapp_session,
     sign_activation_for_admin_session,
     validate_webapp_init_data,
@@ -131,6 +132,30 @@ class AdminWebAppAuthTests(unittest.TestCase):
                 patch.object(admin_bot, "api_request", side_effect=RuntimeError("ADMIN_TELEGRAM_ID_NOT_AUTHORIZED")):
             with self.assertRaisesRegex(ValueError, "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED"):
                 issue_admin_webapp_session(signed_init_data())
+
+    def test_company_admin_can_unbind_only_inside_its_grant(self):
+        calls = []
+
+        def api_request(method, route, payload=None):
+            calls.append((method, route, payload))
+            if route == "/internal/admin/webapp/authorize":
+                return {"access": {"isGlobalAdmin": False, "companyIds": ["comp_novda"]}}
+            if route == "/internal/admin/webapp/unbind-worker":
+                return {"binding": {"companyId": "comp_novda", "workerId": 180, "telegramId": "8363499557", "workerName": "Ali"}}
+            raise AssertionError(route)
+
+        with patch.object(admin_bot, "ADMIN_IDS", {ADMIN_ID}), patch.object(admin_bot, "api_request", side_effect=api_request):
+            reply = handle_admin_command("274466315", "/unbind comp_novda 180 8363499557")
+            with self.assertRaisesRegex(ValueError, "Bu kompaniya uchun admin huquqingiz yo'q"):
+                handle_admin_command("274466315", "/unbind other_company 180 8363499557")
+
+        self.assertIn("Telegram bog'lanishi bekor qilindi", reply)
+        unbind_call = next(call for call in calls if call[1] == "/internal/admin/webapp/unbind-worker")
+        self.assertEqual(unbind_call[2], {
+            "adminTelegramId": "274466315", "companyId": "comp_novda",
+            "workerId": 180, "telegramId": "8363499557"
+        })
+        self.assertEqual(sum(route == "/internal/admin/webapp/unbind-worker" for _, route, _ in calls), 1)
 
     def test_signer_requires_current_allowlisted_session(self):
         session = create_admin_web_session(ADMIN_ID, SESSION_SECRET, now=int(time.time()))

@@ -34,6 +34,7 @@ function createDashboard() {
     getSystemHealth: vi.fn().mockResolvedValue({ api: 'available', database: 'available' }),
     updateCompanyStrictMode: vi.fn().mockResolvedValue({ companyId: 'comp_novda', strictMode: false, policyRevision: 2 }),
     upsertCompany: vi.fn().mockResolvedValue({ company_id: 'comp_novda' }),
+    unbindWorkerTelegram: vi.fn().mockResolvedValue({ companyId: 'comp_novda', workerId: 180, telegramId: '8363499557' }),
     approveActivation: vi.fn().mockResolvedValue({ status: 'APPROVED' }),
     rejectActivation: vi.fn().mockResolvedValue({ status: 'REJECTED' }),
     revokeActivation: vi.fn().mockResolvedValue({ status: 'REVOKED' })
@@ -271,6 +272,26 @@ describe(' Admin WebApp routes', () => {
     });
     expect(denied.statusCode).toBe(403);
     expect(denied.json().error.code).toBe('ADMIN_COMPANY_SCOPE_REQUIRED');
+  });
+
+  it('routes service-authenticated worker unbind commands through the authorized admin service', async () => {
+    const dashboard = createDashboard();
+    const { app: server } = startApp({ dashboard });
+    await server.ready();
+
+    const response = await server.inject({
+      method: 'POST', url: '/internal/admin/webapp/unbind-worker',
+      headers: { 'x-novda-admin-token': 'internal-admin-service-token' },
+      payload: {
+        adminTelegramId: '274466315', companyId: 'comp_novda', workerId: 180, telegramId: '8363499557'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(dashboard.unbindWorkerTelegram).toHaveBeenCalledWith('274466315', {
+      adminTelegramId: '274466315', companyId: 'comp_novda', workerId: 180, telegramId: '8363499557'
+    });
+    expect(response.json().binding).toMatchObject({ companyId: 'comp_novda', workerId: 180 });
   });
 
   it('serves the static app and assets with no-store security headers', async () => {

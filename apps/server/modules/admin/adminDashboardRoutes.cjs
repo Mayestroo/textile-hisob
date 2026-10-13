@@ -165,6 +165,17 @@ function registerAdminDashboardRoutes(app, options = {}) {
     }
   });
 
+  app.post('/internal/admin/webapp/unbind-worker', {
+    preHandler: serviceTokenGuard('x-novda-admin-token', adminApiToken)
+  }, async (request, reply) => {
+    try {
+      const binding = await dashboard.unbindWorkerTelegram(request.body?.adminTelegramId, request.body || {});
+      return reply.header('Cache-Control', 'no-store').send({ success: true, binding });
+    } catch (error) {
+      return sendAdminDashboardError(reply, error);
+    }
+  });
+
   async function invoke(request, reply, action) {
     try {
       const result = await action();

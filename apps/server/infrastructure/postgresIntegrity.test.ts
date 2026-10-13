@@ -32,7 +32,8 @@ const exactMigrations = [
   'deploy_patta_series_sequence_migration.sql',
   'deploy_patta_sequence_runtime_grant_migration.sql',
   'deploy_voided_ticket_patta_reuse_migration.sql',
-  'deploy_company_admin_scope_migration.sql'
+  'deploy_company_admin_scope_migration.sql',
+  'deploy_worker_telegram_unbind_migration.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -51,7 +52,8 @@ const exactForeignKeys = [
   ['patta_batch_settings', ['company_id', 'model_id'], 'models', ['company_id', 'id']],
   ['period_archives', ['company_id', 'period_id'], 'periods', ['company_id', 'id']],
   ['activation_companies', ['company_id'], 'company_batch_settings', ['company_id']],
-  ['activation_company_admins', ['company_id'], 'activation_companies', ['company_id']]
+  ['activation_company_admins', ['company_id'], 'activation_companies', ['company_id']],
+  ['worker_telegram_binding_events', ['company_id', 'worker_id'], 'workers', ['company_id', 'id']]
 ].map(([source_table, source_columns, target_table, target_columns]) => ({
   source_table,
   source_columns,
@@ -61,6 +63,8 @@ const exactForeignKeys = [
     ? 'FOREIGN KEY (company_id) REFERENCES company_batch_settings(company_id) ON DELETE RESTRICT'
     : source_table === 'activation_company_admins'
     ? 'FOREIGN KEY (company_id) REFERENCES activation_companies(company_id) ON DELETE RESTRICT'
+    : source_table === 'worker_telegram_binding_events'
+    ? 'FOREIGN KEY (company_id, worker_id) REFERENCES workers(company_id, id) ON DELETE RESTRICT'
     : 'FOREIGN KEY (...)',
   validated: true
 }));
@@ -84,7 +88,8 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
       worker_adjustments_periods: '0',
       batch_settings_models: '0',
       period_archives_periods: '0',
-      activation_company_admins_companies: '0'
+      activation_company_admins_companies: '0',
+      worker_binding_events_workers: '0'
     }],
     partyTrigger: [{
       trigger_name: 'trg_parties_active_uniqueness',
@@ -102,7 +107,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
     baseline: [{ owner_exclusion_rows: '0', owner_excluded_quantity: '0', owner_scope_mismatch_rows: '0' }],
     activationTables: [
       'activation_companies', 'activation_requests', 'activation_request_limits',
-      'activation_events', 'worker_credentials', 'worker_telegram_bindings', 'worker_binding_limits', 'activation_company_admins'
+      'activation_events', 'worker_credentials', 'worker_telegram_bindings', 'worker_binding_limits', 'activation_company_admins', 'worker_telegram_binding_events'
     ].map((table_name) => ({ table_name })),
     businessTables: ['company_batch_settings', 'patta_batch_settings', 'period_archives'].map((table_name) => ({ table_name })),
     businessColumns: [
@@ -154,7 +159,7 @@ describe('PostgreSQL release-integrity evidence', () => {
     expect(report.evidenceType).toBe('postgresql_release_integrity');
     expect(report.migrations.contiguous).toBe(true);
     expect(report.migrations.namesMatch).toBe(true);
-    expect(report.activation).toMatchObject({ requiredTables: 8, presentTables: 8, stajColumnExists: true });
+    expect(report.activation).toMatchObject({ requiredTables: 9, presentTables: 9, stajColumnExists: true });
     expect(report.businessMutations).toMatchObject({ requiredTables: 3, presentTables: 3, requiredColumns: 18, presentColumns: 18 });
     expect(report.foreignKeys.requiredCount).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(report.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
@@ -229,7 +234,7 @@ describe('PostgreSQL release-integrity evidence', () => {
       code: 'POSTGRES_RELEASE_INTEGRITY_FAILED',
       details: {
         problems: expect.arrayContaining([expect.stringContaining('not restrictive')]),
-        report: { foreignKeys: { presentAndRestrictive: 1 } }
+        report: { foreignKeys: { presentAndRestrictive: 2 } }
       }
     });
   });
@@ -464,7 +469,8 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       'deploy_patta_series_sequence_migration.sql',
       'deploy_patta_sequence_runtime_grant_migration.sql',
       'deploy_voided_ticket_patta_reuse_migration.sql',
-      'deploy_company_admin_scope_migration.sql'
+      'deploy_company_admin_scope_migration.sql',
+      'deploy_worker_telegram_unbind_migration.sql'
     ]) {
       await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
     }
@@ -481,7 +487,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
 
   it('verifies a fresh schema after applying all ordered deployment migrations', async () => {
     const freshReport = await verifyPostgresReleaseState(isolatedPool);
-    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
     expect(freshReport.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(freshReport.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(freshReport.baseline.scopePreserved).toBe(true);

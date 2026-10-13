@@ -142,7 +142,8 @@ async function resetServerDatabase() {
     'deploy_patta_series_sequence_migration.sql',
     'deploy_patta_sequence_runtime_grant_migration.sql',
     'deploy_voided_ticket_patta_reuse_migration.sql',
-    'deploy_company_admin_scope_migration.sql'
+    'deploy_company_admin_scope_migration.sql',
+    'deploy_worker_telegram_unbind_migration.sql'
   ];
   for (const filename of migrations) {
     await p.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));

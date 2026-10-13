@@ -21,7 +21,8 @@ const EXPECTED_MIGRATIONS = Object.freeze({
   18: 'deploy_patta_series_sequence_migration.sql',
   19: 'deploy_patta_sequence_runtime_grant_migration.sql',
   20: 'deploy_voided_ticket_patta_reuse_migration.sql',
-  21: 'deploy_company_admin_scope_migration.sql'
+  21: 'deploy_company_admin_scope_migration.sql',
+  22: 'deploy_worker_telegram_unbind_migration.sql'
 });
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([
@@ -40,12 +41,14 @@ const REQUIRED_FOREIGN_KEYS = Object.freeze([
   ['patta_batch_settings', ['company_id', 'model_id'], 'models', ['company_id', 'id']],
   ['period_archives', ['company_id', 'period_id'], 'periods', ['company_id', 'id']],
   ['activation_companies', ['company_id'], 'company_batch_settings', ['company_id']],
-  ['activation_company_admins', ['company_id'], 'activation_companies', ['company_id']]
+  ['activation_company_admins', ['company_id'], 'activation_companies', ['company_id']],
+  ['worker_telegram_binding_events', ['company_id', 'worker_id'], 'workers', ['company_id', 'id']]
 ]);
 
 const RESTRICTIVE_FOREIGN_KEYS = Object.freeze([
   ['activation_companies', ['company_id'], 'company_batch_settings', ['company_id']],
-  ['activation_company_admins', ['company_id'], 'activation_companies', ['company_id']]
+  ['activation_company_admins', ['company_id'], 'activation_companies', ['company_id']],
+  ['worker_telegram_binding_events', ['company_id', 'worker_id'], 'workers', ['company_id', 'id']]
 ]);
 
 const ORPHAN_COUNTS_SQL = `
@@ -64,7 +67,8 @@ SELECT
   (SELECT COUNT(*) FROM worker_adjustments a LEFT JOIN periods p ON p.company_id = a.company_id AND p.id = a.period_id WHERE a.period_id IS NOT NULL AND p.id IS NULL) AS worker_adjustments_periods,
   (SELECT COUNT(*) FROM patta_batch_settings b LEFT JOIN models m ON m.company_id = b.company_id AND m.id = b.model_id WHERE m.id IS NULL) AS batch_settings_models,
   (SELECT COUNT(*) FROM period_archives a LEFT JOIN periods p ON p.company_id = a.company_id AND p.id = a.period_id WHERE p.id IS NULL) AS period_archives_periods,
-  (SELECT COUNT(*) FROM activation_company_admins ca LEFT JOIN activation_companies ac ON ac.company_id = ca.company_id WHERE ac.company_id IS NULL) AS activation_company_admins_companies
+  (SELECT COUNT(*) FROM activation_company_admins ca LEFT JOIN activation_companies ac ON ac.company_id = ca.company_id WHERE ac.company_id IS NULL) AS activation_company_admins_companies,
+  (SELECT COUNT(*) FROM worker_telegram_binding_events e LEFT JOIN workers w ON w.company_id = e.company_id AND w.id = e.worker_id WHERE w.id IS NULL) AS worker_binding_events_workers
 `;
 
 function asCount(value) {
@@ -168,13 +172,13 @@ async function verifyPostgresReleaseState(client) {
       AND table_name IN (
         'activation_companies', 'activation_requests', 'activation_request_limits',
         'activation_events', 'worker_credentials', 'worker_telegram_bindings', 'worker_binding_limits',
-        'activation_company_admins'
+        'activation_company_admins', 'worker_telegram_binding_events'
       )
   `);
   const requiredActivationTables = [
     'activation_companies', 'activation_requests', 'activation_request_limits',
     'activation_events', 'worker_credentials', 'worker_telegram_bindings', 'worker_binding_limits',
-    'activation_company_admins'
+    'activation_company_admins', 'worker_telegram_binding_events'
   ];
   report.activation.requiredTables = requiredActivationTables.length;
   report.activation.presentTables = activationTableRows.length;

@@ -203,6 +203,24 @@ def is_authorized_admin(telegram_id, allowed_ids=None):
     return str(telegram_id or "").strip() in ids
 
 
+def get_admin_access(telegram_id):
+    normalized_id = str(telegram_id or "").strip()
+    if not re.fullmatch(r"\d{1,24}", normalized_id):
+        return None
+    if is_authorized_admin(normalized_id):
+        return {"isGlobalAdmin": True, "companyIds": None}
+    try:
+        return api_request(
+            "POST",
+            "/internal/admin/webapp/authorize",
+            {"telegramId": normalized_id},
+        ).get("access")
+    except RuntimeError as error:
+        if str(error) == "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED":
+            return None
+        raise
+
+
 def load_signer(private_key_pem=None):
     pem = private_key_pem if private_key_pem is not None else read_secret(
         "NOVDA_LICENSE_ED25519_PRIVATE_KEY",
@@ -396,15 +414,58 @@ def list_companies_text():
     return "".join(lines)
 
 
-def handle_admin_command(telegram_id, text):
-    if not is_authorized_admin(telegram_id):
-        return None
+def handle_unbind(telegram_id, arguments, access):
+    if len(arguments) != 3:
+        raise ValueError("Foydalanish: /unbind COMPANY_ID WORKER_ID TELEGRAM_ID")
+    company_id, worker_raw, bound_telegram_id = arguments
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", company_id):
+        raise ValueError("Kompaniya ID noto'g'ri.")
+    if not re.fullmatch(r"[1-9][0-9]{0,9}", worker_raw):
+        raise ValueError("Ishchi ID musbat raqam bo'lishi kerak.")
+    if not re.fullmatch(r"\d{1,24}", bound_telegram_id):
+        raise ValueError("Telegram ID raqam bo'lishi kerak.")
+    if not access.get("isGlobalAdmin") and company_id not in access.get("companyIds", []):
+        raise ValueError("Bu kompaniya uchun admin huquqingiz yo'q.")
+
+    result = api_request("POST", "/internal/admin/webapp/unbind-worker", {
+        "adminTelegramId": str(telegram_id),
+        "companyId": company_id,
+        "workerId": int(worker_raw),
+        "telegramId": bound_telegram_id,
+    })
+    binding = result.get("binding") or {}
+    worker_name = binding.get("workerName")
+    worker_label = f" · {html.escape(str(worker_name))}" if worker_name else ""
+    return (
+        "✅ <b>Ishchi Telegram bog'lanishi bekor qilindi.</b>\n"
+        f"▫️ Korxona: <code>{html.escape(company_id)}</code>\n"
+        f"▫️ Ishchi: #{html.escape(str(binding.get('workerId', worker_raw)))}{worker_label}\n"
+        f"▫️ Eski Telegram ID: <code>{html.escape(bound_telegram_id)}</code>\n"
+        "Yangi Telegram akkaunti endi qayta bog'lanishi mumkin."
+    )
+
+
+def handle_admin_command(telegram_id, text, access=None):
     parts = str(text or "").strip().split()
     if not parts:
         return None
     command = parts[0].split("@", 1)[0].lower()
     arguments = parts[1:]
+    if access is None:
+        access = get_admin_access(telegram_id)
+    if not isinstance(access, dict):
+        return None
+    is_global_admin = access.get("isGlobalAdmin") is True
     if command in ("/start", "/help"):
+        if not is_global_admin:
+            return (
+                "✨ <b>Novda kompaniya admini</b>\n\n"
+                "Сизга фақат бириктирилган компания маълумотлари очиқ.\n"
+                "📊 Бошқарув панелида шу компания ишчилари ва ҳисоб-китобини кўриш мумкин.\n\n"
+                "🔗 Telegram боғланишини бекор қилиш:\n"
+                "<code>/unbind COMPANY_ID WORKER_ID TELEGRAM_ID</code>\n"
+                "Масалан: <code>/unbind comp_novda 180 8363499557</code>"
+            )
         return (
             "✨ <b>Novda Admin Console</b>\n\n"
             "Tizimni quyidagi buyruqlar yoki WebApp orqali boshqaring:\n\n"
@@ -413,11 +474,17 @@ def handle_admin_command(telegram_id, text):
             "• /approve <code>ID</code> <code>COMPANY</code> <code>admin|type|print</code> — Tasdiqlash\n"
             "• /reject <code>ID</code> <code>SABAB</code> — Rad etish\n"
             "• /revoke <code>ID</code> — Bekor qilish\n\n"
+            "🔗 <b>Ishchi Telegram bog‘lanishi:</b>\n"
+            "• /unbind <code>COMPANY_ID</code> <code>WORKER_ID</code> <code>TELEGRAM_ID</code>\n\n"
             "🏢 <b>Korxonalar:</b>\n"
             "• /companies — Faol korxonalar ro'yxati\n"
             "• /company <code>ID</code> <code>NOMI</code> — Saqlash\n\n"
             "📱 <i>To'liq boshqaruv panelini ochish uchun pastdagi tugmani bosing:</i>"
         )
+    if command == "/unbind":
+        return handle_unbind(telegram_id, arguments, access)
+    if not is_global_admin:
+        return "Бу буйруқ глобал админ учун. Ўз компаниянгизга Telegram боғланишини бекор қилиш учун /unbind дан фойдаланинг."
     if command == "/pending":
         return list_pending_text()
     if command == "/companies":
@@ -479,13 +546,18 @@ def process_update(update):
     text = message.get("text")
     if not chat_id or not text:
         return
-    if not is_authorized_admin(telegram_id):
+    command = str(text).strip().split(maxsplit=1)[0].split("@", 1)[0].lower()
+    try:
+        access = get_admin_access(telegram_id)
+    except RuntimeError as error:
+        send_message(chat_id, f"Amal bajarilmadi: <code>{html.escape(str(error))}</code>")
+        return
+    if not isinstance(access, dict):
         send_message(chat_id, "Ruxsat berilmagan.")
         return
     try:
-        response = handle_admin_command(telegram_id, text)
+        response = handle_admin_command(telegram_id, text, access)
         if response:
-            command = str(text).strip().split(maxsplit=1)[0].split("@", 1)[0].lower()
             reply_markup = admin_webapp_keyboard() if command in ("/start", "/help", "/pending") else None
             send_message(chat_id, response, reply_markup)
     except ValueError as error:

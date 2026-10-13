@@ -57,6 +57,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   activation_policy_events,
   worker_credentials,
   worker_telegram_bindings,
+  worker_telegram_binding_events,
   worker_binding_limits,
   company_batch_settings,
   patta_batch_settings,
