@@ -244,6 +244,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     expect(devices.json().devices.activationRequests).toHaveLength(2);
     expect(workers.json().workers[0]).toMatchObject({ workerId: WORKER_ID, binding: { telegramId: '987654321' } });
     expect(JSON.stringify(workers.json())).not.toContain('pin_hash');
+    expect(payroll.statusCode).toBe(200);
     expect(payroll.json().payroll.workers[0]).toMatchObject({ gross: 50, avans: 4, jarima: 3, staj: 1, net: 42, pieces: 10 });
     expect(activations.json().activations).toHaveLength(2);
     expect(JSON.stringify(activations.json())).not.toContain('request_token_hash');

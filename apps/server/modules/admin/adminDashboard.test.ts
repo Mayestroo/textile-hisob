@@ -172,7 +172,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
 
   it('calculates payroll from  ticket and adjustment facts and keeps an empty baseline empty', async () => {
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ id: 'period-1', name: 'Current period', start_date: '2026-09-01', end_date: null, is_closed: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'period-1', name: 'Current period', start_date: new Date('2026-09-01T00:00:00.000Z'), end_date: null, is_closed: 0 }] })
       .mockResolvedValueOnce({ rows: [{
         worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0',
         gross: '0', pieces: '0', avans: '0', jarima: '0'
@@ -189,7 +189,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
 
   it('keeps payroll facts scoped to the selected period and date-matches only unassigned legacy facts', async () => {
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ id: 'period-closed', name: 'September', start_date: '2026-09-01', end_date: '2026-09-30', is_closed: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'period-closed', name: 'September', start_date: new Date('2026-09-01T00:00:00.000Z'), end_date: new Date('2026-09-30T00:00:00.000Z'), is_closed: 1 }] })
       .mockResolvedValueOnce({ rows: [{
         worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0',
         gross: '0', pieces: '0', avans: '0', jarima: '0'
