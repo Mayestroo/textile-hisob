@@ -263,17 +263,38 @@
                 </article>
               </div>
 
-              <!-- Oylik fondi Card -->
+              <!-- 1. Ishchilar sof foyda summasi & Oylik fondi Card -->
               <article class="co-card co-payroll-card" data-go="workers">
                 <div class="co-card-head">
-                  <strong class="co-card-title">Oylik fondi</strong>
+                  <div>
+                    <strong class="co-card-title">Ishchilar sof daromadi</strong>
+                    <span class="count-label" style="display:block; font-size:12px; margin-top:2px;" id="dirPeriodBadge">Joriy ochiq davr</span>
+                  </div>
                   <span id="coPayrollPct" class="co-badge-pill co-badge-green">—</span>
                 </div>
                 <div class="co-payroll-amount-row">
                   <strong id="coStatPayroll" class="co-payroll-amount">—</strong>
-                  <span class="co-currency">so‘m</span>
+                  <span class="co-currency">so‘m (sof)</span>
                 </div>
-                <div class="co-progress-track">
+                <div class="co-breakdown-grid">
+                  <div class="co-breakdown-cell">
+                    <span class="co-breakdown-caption">JAMI HISOBLANGAN</span>
+                    <strong id="coGrossPayroll" class="co-breakdown-num">—</strong>
+                  </div>
+                  <div class="co-breakdown-cell">
+                    <span class="co-breakdown-caption">BERILGAN AVANS</span>
+                    <strong id="coAvansPayroll" class="co-breakdown-num text-amber">—</strong>
+                  </div>
+                  <div class="co-breakdown-cell">
+                    <span class="co-breakdown-caption">JARIMA / CHEGIRMA</span>
+                    <strong id="coDeductionsPayroll" class="co-breakdown-num text-rose">—</strong>
+                  </div>
+                  <div class="co-breakdown-cell">
+                    <span class="co-breakdown-caption">TIKILGAN PATTA</span>
+                    <strong id="coPiecesCount" class="co-breakdown-num mono">— dona</strong>
+                  </div>
+                </div>
+                <div class="co-progress-track" style="margin-top: 10px;">
                   <div id="coPayrollProgressFill" class="co-progress-fill co-fill-emerald" style="width: 0%;"></div>
                 </div>
                 <div class="co-payroll-sub-row">
@@ -282,26 +303,63 @@
                 </div>
               </article>
 
-              <!-- Telegram ulanishi Card -->
-              <article class="co-card co-telegram-card" data-go="bindings">
-                <div class="co-card-head">
-                  <strong class="co-card-title">Telegram ulanishi</strong>
-                  <span id="coTelegramRatio" class="co-badge-pill co-badge-blue">—</span>
-                </div>
-                <div class="co-progress-track">
-                  <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 0%;"></div>
-                </div>
-              </article>
-
-              <!-- So'nggi partiyalar Section -->
+              <!-- 2. Partiyalar Section -->
               <section class="sys-section" style="margin-top: 14px;">
                 <div class="sys-section-header">
-                  <h2 class="sys-section-title">Faol partiyalar</h2>
+                  <div>
+                    <h2 class="sys-section-title">Partiyalar</h2>
+                    <span class="count-label" id="dirPartySummaryLabel">— ta partiya jarayonda</span>
+                  </div>
                   <button class="sys-link-pill-btn" data-go="parties" type="button">Barchasi</button>
                 </div>
                 <div id="dirPartyList" class="party-card-feed"></div>
                 <p id="dirPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
               </section>
+
+              <!-- 3. Model operatsiyalar ratsenkasi summasi Section -->
+              <section class="sys-section" style="margin-top: 14px;">
+                <div class="sys-section-header">
+                  <div>
+                    <h2 class="sys-section-title">Modellar va ratsenkalar</h2>
+                    <span class="count-label" id="dirModelTotalRatesLabel">Jami ratsenka: — so‘m</span>
+                  </div>
+                  <button class="sys-link-pill-btn" data-go="models" type="button">Barchasi</button>
+                </div>
+                <div id="dirModelList" class="model-rates-feed"></div>
+                <p id="dirModelEmpty" class="empty-state" hidden>Modellar kiritilmagan.</p>
+              </section>
+
+              <!-- 4. Workerlar Telegram ma'lumoti (bound / unbound) Card -->
+              <article class="co-card co-telegram-card" data-go="bindings" style="margin-top: 14px;">
+                <div class="co-card-head">
+                  <div>
+                    <strong class="co-card-title">Workerlar Telegram ma’lumoti</strong>
+                    <span class="count-label" style="display:block; font-size:12px; margin-top:2px;">Botga bog‘langan va bog‘lanmaganlar</span>
+                  </div>
+                  <span id="coTelegramRatio" class="co-badge-pill co-badge-blue">—</span>
+                </div>
+                <div class="co-progress-track">
+                  <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 0%;"></div>
+                </div>
+                <div class="co-tg-stats-row">
+                  <div class="co-tg-stat-item tg-bound-item">
+                    <span class="co-tg-stat-dot dot-green"></span>
+                    <span class="co-tg-stat-text">Bog‘langan: <strong id="coBoundWorkersCount">—</strong></span>
+                  </div>
+                  <div class="co-tg-stat-item tg-unbound-item">
+                    <span class="co-tg-stat-dot dot-gray"></span>
+                    <span class="co-tg-stat-text">Bog‘lanmagan: <strong id="coUnboundWorkersCount">—</strong></span>
+                  </div>
+                </div>
+                <!-- Unbound workers quick warning / attention box -->
+                <div id="coUnboundAttentionBox" class="co-unbound-box" hidden>
+                  <div class="co-unbound-header">
+                    <span class="co-unbound-icon">⚡</span>
+                    <span class="co-unbound-title">Bog‘lanmagan ishchilar (bot kodi berish kerak):</span>
+                  </div>
+                  <div id="coUnboundWorkersList" class="co-unbound-chips"></div>
+                </div>
+              </article>
 
               <!-- So'nggi patta cheklari Section -->
               <section class="sys-section" style="margin-top: 14px;">
