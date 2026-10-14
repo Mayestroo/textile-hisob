@@ -352,6 +352,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   transition: all 0.16s ease;
 }
 
+.nav-text-mobile {
+  display: none;
+}
+
 .nav-button:hover {
   color: var(--text-main);
   background: var(--surface-subtle);
@@ -1474,6 +1478,13 @@ input:focus, select:focus {
     color: var(--text-muted);
     font-size: 11px;
     white-space: nowrap;
+  }
+
+  .nav-text-desktop {
+    display: none !important;
+  }
+  .nav-text-mobile {
+    display: inline !important;
   }
 
   .nav-glyph {
