@@ -1,1896 +1,2087 @@
 <!doctype html>
 <html lang="uz">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b132b" />
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
-    <meta name="novda-admin-webapp-version" content="-20261013" />
-    <title>Novda — Admin Console</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/admin-app/admin.css" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="/admin-app/admin.js" defer></script>
-  </head>
-  <body>
-    <!-- Auth Gate Modal Screen -->
-    <div id="authGate" class="auth-gate" role="status" aria-live="polite">
-      <div class="auth-card">
-        <div class="auth-brand-wrapper">
-          <div class="brand-mark" aria-hidden="true">
-            <span>N</span>
-            <i></i>
-          </div>
-          <span class="auth-pulse-dot"></span>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b132b" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <meta name="novda-admin-webapp-version" content="-20261013" />
+  <title>Novda — Admin Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/admin-app/admin.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/admin-app/admin.js" defer></script>
+</head>
+
+<body>
+  <!-- Auth Gate Modal Screen -->
+  <div id="authGate" class="auth-gate" role="status" aria-live="polite">
+    <div class="auth-card">
+      <div class="auth-brand-wrapper">
+        <div class="brand-mark" aria-hidden="true">
+          <span>N</span>
+          <i></i>
         </div>
-        <p class="eyebrow">NOVDA · CONTROL SUITE</p>
-        <h1>Administrator Access</h1>
-        <p id="authMessage" class="muted">Telegram administrator identity tekshirilmoqda…</p>
-        <div id="authError" class="notice notice-error" hidden></div>
-        <button id="retryAuth" class="button button-primary" type="button" hidden>Qayta urinish</button>
+        <span class="auth-pulse-dot"></span>
       </div>
+      <p class="eyebrow">NOVDA BOSHQARUV</p>
+      <h1>Administrator</h1>
+      <p id="authMessage" class="muted">Telegram ma’lumotlari tekshirilmoqda…</p>
+      <div id="authError" class="notice notice-error" hidden></div>
+      <button id="retryAuth" class="button button-primary" type="button" hidden>Qayta urinish</button>
     </div>
+  </div>
 
-    <!-- Main Admin Shell -->
-    <div id="adminApp" class="app-shell" hidden>
-      <!-- Sidebar Navigation -->
-      <aside class="sidebar" aria-label="Asosiy navigatsiya">
-        <div class="sidebar-brand">
-          <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
-          <div class="brand-text">
-            <strong>NOVDA</strong>
-            <span>ADMIN CONSOLE</span>
-          </div>
+  <!-- Main Admin Shell -->
+  <div id="adminApp" class="app-shell" hidden>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" aria-label="Asosiy navigatsiya">
+      <div class="sidebar-brand">
+        <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
+        <div class="brand-text">
+          <strong>NOVDA</strong>
+          <span>BOSHQARUV PANELI</span>
         </div>
+      </div>
 
-        <p class="nav-caption">OPERATIONS & DATA</p>
-        <nav id="mainNav" class="main-nav">
-          <button class="nav-button is-active" data-view="overview" type="button" aria-current="page">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
-            <span>Umumiy</span>
-          </button>
-          <button class="nav-button" data-view="devices" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
-            <span>Qurilmalar</span>
-          </button>
-          <button class="nav-button" data-view="companies" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></span>
-            <span>Korxonalar</span>
-          </button>
-          <button class="nav-button" data-view="workers" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-            <span>Ishchilar</span>
-          </button>
-          <button class="nav-button" data-view="bindings" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-            <span>Bog‘lanishlar</span>
-          </button>
-          <button class="nav-button" data-view="models" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
-            <span>Modellar</span>
-          </button>
-          <button class="nav-button" data-view="parties" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
-            <span>Partiyalar</span>
-          </button>
-          <button class="nav-button" data-view="tickets" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>
-            <span>Ishlab chiqarish</span>
-          </button>
-          <button class="nav-button" data-view="balances" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg></span>
-            <span>Balanslar</span>
-          </button>
-          <button class="nav-button" data-view="activations" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg></span>
-            <span class="nav-text-desktop">Kalitlar & aktivatsiya</span>
-            <span class="nav-text-mobile" id="navActivationsMobileLabel">Litsenziya</span>
-            <span id="navPendingBadge" class="nav-badge-dot" hidden title="Kutilayotgan aktivatsiyalar"></span>
-          </button>
-          <button class="nav-button mobile-more-button" data-view="more" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span>
-            <span>Yana</span>
-          </button>
-          <button class="nav-button" data-view="system" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></span>
-            <span>Tizim</span>
-          </button>
-          <button class="nav-button" data-view="admin" type="button">
-            <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-            <span>Admin sessiyasi</span>
-          </button>
-        </nav>
+      <p class="nav-caption">BO‘LIMLAR</p>
+      <nav id="mainNav" class="main-nav">
+        <button class="nav-button is-active" data-view="overview" type="button" aria-current="page">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="7" height="9" x="3" y="3" rx="1" />
+              <rect width="7" height="5" x="14" y="3" rx="1" />
+              <rect width="7" height="9" x="14" y="12" rx="1" />
+              <rect width="7" height="5" x="3" y="16" rx="1" />
+            </svg></span>
+          <span>Umumiy</span>
+        </button>
+        <button class="nav-button" data-view="companies" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+              <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+              <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+              <path d="M10 6h4" />
+              <path d="M10 10h4" />
+              <path d="M10 14h4" />
+              <path d="M10 18h4" />
+            </svg></span>
+          <span>Korxonalar</span>
+        </button>
+        <button class="nav-button" data-view="workers" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg></span>
+          <span>Ishchilar</span>
+        </button>
+        <button class="nav-button" data-view="parties" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+              <path d="m3.3 7 8.7 5 8.7-5" />
+              <path d="M12 22V12" />
+            </svg></span>
+          <span>Partiyalar</span>
+        </button>
+        <button class="nav-button" data-view="models" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg></span>
+          <span>Modellar</span>
+        </button>
+        <button class="nav-button" data-view="devices" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="14" x="2" y="3" rx="2" />
+              <line x1="8" x2="16" y1="21" y2="21" />
+              <line x1="12" x2="12" y1="17" y2="21" />
+            </svg></span>
+          <span>Qurilmalar</span>
+        </button>
+        <button class="nav-button" data-view="activations" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="7.5" cy="15.5" r="5.5" />
+              <path d="m21 2-9.6 9.6" />
+              <path d="m15.5 7.5 3 3L21 8" />
+            </svg></span>
+          <span class="nav-text-desktop">Kalitlar & aktivatsiya</span>
+          <span class="nav-text-mobile" id="navActivationsMobileLabel">Litsenziya</span>
+          <span id="navPendingBadge" class="nav-badge-dot" hidden title="Kutilayotgan aktivatsiyalar"></span>
+        </button>
+        <button class="nav-button" data-view="system" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+              <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+              <line x1="6" x2="6.01" y1="6" y2="6" />
+              <line x1="6" x2="6.01" y1="18" y2="18" />
+            </svg></span>
+          <span>Tizim</span>
+        </button>
+        <button class="nav-button mobile-more-button" data-view="more" type="button">
+          <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg></span>
+          <span>Yana</span>
+        </button>
+      </nav>
 
-        <div class="sidebar-foot">
-          <span class="status-dot"></span>
-          <div>
-            <strong>PostgreSQL Authority</strong>
-            <span>API v1 · TLS SECURE</span>
-          </div>
+      <div class="sidebar-foot">
+        <span class="status-dot"></span>
+        <div>
+          <strong>Tizim holati</strong>
+          <span>Himoyalangan aloqa</span>
         </div>
-      </aside>
+      </div>
+    </aside>
 
-      <!-- Main Content Panel -->
-      <main class="main-panel">
-        <header class="topbar">
-          <div class="mobile-nav-header">
-            <button id="mobileBackButton" class="mobile-back-button" type="button" aria-label="Orqaga qaytish">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
-            <div class="mobile-brand">
-              <div class="brand-mark brand-mark-small" aria-hidden="true"><span id="mobileBrandInitial">—</span><i></i></div>
-              <strong id="mobileBrandName" class="brand-name-text">—</strong>
-              <span id="topOnlineIndicator" class="online-indicator-dot" title="Tizim onlayn"></span>
+    <!-- Main Content Panel -->
+    <main class="main-panel">
+      <header class="topbar">
+        <div class="mobile-nav-header">
+          <button id="mobileBackButton" class="mobile-back-button" type="button" aria-label="Orqaga qaytish">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <div class="mobile-brand">
+            <div class="brand-mark brand-mark-small" aria-hidden="true"><span id="mobileBrandInitial">—</span><i></i>
             </div>
-            <span id="mobileViewTitle" class="mobile-view-title" hidden>Umumiy</span>
+            <strong id="mobileBrandName" class="brand-name-text">—</strong>
+            <span id="topOnlineIndicator" class="online-indicator-dot" title="Tizim onlayn"></span>
           </div>
-          <div class="breadcrumb">
-            <span id="breadcrumbBadge" class="breadcrumb-badge">BOSHQARUV</span>
-            <b>/</b>
-            <strong id="currentViewLabel">Umumiy ko‘rinish</strong>
-          </div>
-          <div class="topbar-right">
-            <span id="connectionPill" class="connection-pill desktop-only-inline">
-              <i id="connectionDot"></i>
-              <span id="connectionLabel">Ulangan</span>
-            </span>
-            <span id="adminBadge" class="admin-badge">—</span>
-            <button id="refreshButton" class="icon-button desktop-only-inline" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-            </button>
-          </div>
-        </header>
-
-        <div id="globalNotice" class="global-notice" role="status" aria-live="polite" hidden></div>
-
-        <!-- Urgent Floating Banner -->
-        <div id="urgentActivationBanner" class="urgent-banner" hidden>
-          <div class="urgent-banner-icon">⚡</div>
-          <div class="urgent-banner-content">
-            <strong id="urgentBannerTitle">—</strong>
-            <span id="urgentBannerSubtitle">—</span>
-          </div>
-          <button class="button button-primary button-sm" data-go="activations" type="button">Ko‘rish →</button>
+          <span id="mobileViewTitle" class="mobile-view-title" hidden>Umumiy</span>
         </div>
+        <div class="breadcrumb">
+          <span id="breadcrumbBadge" class="breadcrumb-badge">BOSHQARUV</span>
+          <b>/</b>
+          <strong id="currentViewLabel">Umumiy ko‘rinish</strong>
+        </div>
+        <div class="topbar-right">
+          <span id="connectionPill" class="connection-pill desktop-only-inline">
+            <i id="connectionDot"></i>
+            <span id="connectionLabel">Ulangan</span>
+          </span>
+          <span id="adminBadge" class="admin-badge">—</span>
+          <button id="refreshButton" class="icon-button desktop-only-inline" type="button"
+            aria-label="Ma’lumotlarni yangilash" title="Yangilash">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+              <path d="M16 21h5v-5" />
+            </svg>
+          </button>
+        </div>
+      </header>
 
-        <!-- Section: Overview -->
-        <section class="view-section is-visible" data-section="overview" aria-labelledby="overviewTitle">
-          <!-- Director Factory Executive Dashboard (Shown when isGlobalAdmin === false) -->
-          <div id="directorOverview" class="director-overview" hidden>
-            <div class="sys-overview-container co-overview-container">
-              <!-- System Admin Return to Global View Banner -->
-              <div id="coGlobalReturnBanner" class="co-global-return-banner" hidden>
-                <div class="co-return-info">
-                  <span class="co-return-tag">KORXONA BOSHQARUV PANELI</span>
-                  <strong id="coReturnCompanyName">—</strong>
-                </div>
-                <button id="coReturnToGlobalBtn" class="button button-secondary button-sm" type="button">
-                  ← Tizim ko‘rinishiga qaytish
-                </button>
+      <div id="globalNotice" class="global-notice" role="status" aria-live="polite" hidden></div>
+
+      <!-- Urgent Floating Banner -->
+      <div id="urgentActivationBanner" class="urgent-banner" hidden>
+        <div class="urgent-banner-icon">⚡</div>
+        <div class="urgent-banner-content">
+          <strong id="urgentBannerTitle">—</strong>
+          <span id="urgentBannerSubtitle">—</span>
+        </div>
+        <button class="button button-primary button-sm" data-go="activations" type="button">Ko‘rish →</button>
+      </div>
+
+      <!-- Section: Overview -->
+      <section class="view-section is-visible" data-section="overview" aria-labelledby="overviewTitle">
+        <!-- Director Factory Executive Dashboard (Shown when isGlobalAdmin === false) -->
+        <div id="directorOverview" class="director-overview" hidden>
+          <div class="sys-overview-container co-overview-container">
+            <!-- System Admin Return to Global View Banner -->
+            <div id="coGlobalReturnBanner" class="co-global-return-banner" hidden>
+              <div class="co-return-info">
+                <span class="co-return-tag">KORXONA BOSHQARUV PANELI</span>
+                <strong id="coReturnCompanyName">—</strong>
               </div>
+              <button id="coReturnToGlobalBtn" class="button button-secondary button-sm" type="button">
+                ← Tizim ko‘rinishiga qaytish
+              </button>
+            </div>
 
-              <!-- Header Row: Title, Live Timestamp & Refresh Button -->
-              <div class="sys-overview-head">
-                <div class="sys-overview-titles">
-                  <h1 class="sys-page-title" id="dirCompanyName">Umumiy</h1>
-                  <span id="dirCompanyId" class="mono muted" style="font-size: 13px; margin-top: 1px;">ID: —</span>
-                  <span id="coOverviewTimestamp" class="sys-timestamp">—</span>
-                </div>
-                <button id="coRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                    <path d="M3 3v5h5"/>
-                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-                    <path d="M16 21h5v-5"/>
+            <!-- Header Row: Title, Live Timestamp & Refresh Button -->
+            <div class="sys-overview-head">
+              <div class="sys-overview-titles">
+                <h1 class="sys-page-title" id="dirCompanyName">Umumiy</h1>
+                <span id="dirCompanyId" class="mono muted" style="font-size: 13px; margin-top: 1px;">ID: —</span>
+                <span id="coOverviewTimestamp" class="sys-timestamp">—</span>
+              </div>
+              <button id="coRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash"
+                title="Yangilash">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 21h5v-5" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Quick Navigation for Company Sub-modules -->
+            <div class="co-quick-nav-pills">
+              <button type="button" class="co-nav-pill" data-open-cp-sub="workers">👥 Ishchilar & Oylik</button>
+              <button type="button" class="co-nav-pill" data-open-cp-sub="parties">📦 Partiyalar</button>
+              <button type="button" class="co-nav-pill" data-open-cp-sub="models">🏷️ Modellar</button>
+              <button type="button" class="co-nav-pill" data-open-cp-sub="devices">📱 Qurilmalar</button>
+              <button type="button" class="co-nav-pill global-only-inline" data-open-cp-sub="admins">🛡️
+                Adminlar</button>
+              <button type="button" class="co-nav-pill global-only-inline" data-open-cp-sub="policy">⚙️ Siyosat</button>
+            </div>
+
+            <!-- Hero Banner: Pending Activation (Indigo Gradient) -->
+            <article class="co-hero-banner" data-go="activations">
+              <div class="co-hero-content">
+                <span class="co-hero-caption">KUTILAYOTGAN AKTIVATSIYA</span>
+                <strong id="coPendingHeroCount" class="co-hero-num">—</strong>
+              </div>
+              <div id="coPendingHeroBadge" class="co-hero-badge">
+                <span class="co-badge-check">✓</span>
+                <span id="coPendingHeroText">—</span>
+              </div>
+            </article>
+
+            <!-- 4 KPI 2x2 Grid -->
+            <div class="co-kpi-grid">
+              <article class="co-kpi-card" data-go="workers">
+                <div class="co-kpi-icon co-icon-green">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
-                </button>
-              </div>
-
-              <!-- Quick Navigation for Company Sub-modules -->
-              <div class="co-quick-nav-pills">
-                <button type="button" class="co-nav-pill" data-open-cp-sub="workers">👥 Ishchilar & Oylik</button>
-                <button type="button" class="co-nav-pill" data-open-cp-sub="parties">📦 Partiyalar</button>
-                <button type="button" class="co-nav-pill" data-open-cp-sub="models">🏷️ Modellar</button>
-                <button type="button" class="co-nav-pill" data-open-cp-sub="devices">📱 Qurilmalar</button>
-                <button type="button" class="co-nav-pill global-only-inline" data-open-cp-sub="admins">🛡️ Adminlar</button>
-                <button type="button" class="co-nav-pill global-only-inline" data-open-cp-sub="policy">⚙️ Siyosat</button>
-              </div>
-
-              <!-- Hero Banner: Pending Activation (Indigo Gradient) -->
-              <article class="co-hero-banner" data-go="activations">
-                <div class="co-hero-content">
-                  <span class="co-hero-caption">KUTILAYOTGAN AKTIVATSIYA</span>
-                  <strong id="coPendingHeroCount" class="co-hero-num">—</strong>
                 </div>
-                <div id="coPendingHeroBadge" class="co-hero-badge">
-                  <span class="co-badge-check">✓</span>
-                  <span id="coPendingHeroText">—</span>
-                </div>
+                <span class="co-kpi-label">ISHCHILAR</span>
+                <strong id="coStatWorkers" class="co-kpi-val">—</strong>
               </article>
 
-              <!-- 4 KPI 2x2 Grid -->
-              <div class="co-kpi-grid">
-                <article class="co-kpi-card" data-go="workers">
-                  <div class="co-kpi-icon co-icon-green">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
-                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                  </div>
-                  <span class="co-kpi-label">ISHCHILAR</span>
-                  <strong id="coStatWorkers" class="co-kpi-val">—</strong>
-                </article>
-
-                <article class="co-kpi-card" data-go="models">
-                  <div class="co-kpi-icon co-icon-purple">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                      <polyline points="2 17 12 22 22 17"/>
-                      <polyline points="2 12 12 17 22 12"/>
-                    </svg>
-                  </div>
-                  <span class="co-kpi-label">MODELLAR</span>
-                  <strong id="coStatModels" class="co-kpi-val">—</strong>
-                </article>
-
-                <article class="co-kpi-card" data-go="parties">
-                  <div class="co-kpi-icon co-icon-orange">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
-                      <path d="m3.3 7 8.7 5 8.7-5"/>
-                      <path d="M12 22V12"/>
-                    </svg>
-                  </div>
-                  <span class="co-kpi-label">PARTIYALAR</span>
-                  <strong id="coStatParties" class="co-kpi-val">—</strong>
-                  <span class="co-kpi-tag co-tag-amber">yopilmagan</span>
-                </article>
-
-                <article class="co-kpi-card" data-go="devices">
-                  <div class="co-kpi-icon co-icon-blue">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
-                      <path d="M12 18h.01"/>
-                    </svg>
-                  </div>
-                  <span class="co-kpi-label">QURILMALAR</span>
-                  <strong id="coStatDevices" class="co-kpi-val">—</strong>
-                </article>
-              </div>
-
-              <!-- 1. Ishchilar sof foyda summasi & Oylik fondi Card -->
-              <article class="co-card co-payroll-card" data-go="workers">
-                <div class="co-card-head">
-                  <div>
-                    <strong class="co-card-title">Ishchilar sof daromadi</strong>
-                    <span class="count-label" style="display:block; font-size:12px; margin-top:2px;" id="dirPeriodBadge">Joriy ochiq davr</span>
-                  </div>
-                  <span id="coPayrollPct" class="co-badge-pill co-badge-green">—</span>
-                </div>
-                <div class="co-payroll-amount-row">
-                  <strong id="coStatPayroll" class="co-payroll-amount">—</strong>
-                  <span class="co-currency">so‘m (sof)</span>
-                </div>
-                <div class="co-breakdown-grid">
-                  <div class="co-breakdown-cell">
-                    <span class="co-breakdown-caption">JAMI HISOBLANGAN</span>
-                    <strong id="coGrossPayroll" class="co-breakdown-num">—</strong>
-                  </div>
-                  <div class="co-breakdown-cell">
-                    <span class="co-breakdown-caption">BERILGAN AVANS</span>
-                    <strong id="coAvansPayroll" class="co-breakdown-num text-amber">—</strong>
-                  </div>
-                  <div class="co-breakdown-cell">
-                    <span class="co-breakdown-caption">JARIMA / CHEGIRMA</span>
-                    <strong id="coDeductionsPayroll" class="co-breakdown-num text-rose">—</strong>
-                  </div>
-                  <div class="co-breakdown-cell">
-                    <span class="co-breakdown-caption">TIKILGAN PATTA</span>
-                    <strong id="coPiecesCount" class="co-breakdown-num mono">— dona</strong>
-                  </div>
-                </div>
-                <div class="co-progress-track" style="margin-top: 10px;">
-                  <div id="coPayrollProgressFill" class="co-progress-fill co-fill-emerald" style="width: 0%;"></div>
-                </div>
-                <div class="co-payroll-sub-row">
-                  <span id="coPayrollPaid">To‘langan —</span>
-                  <span id="coPayrollRemaining">Qoldi —</span>
-                </div>
-              </article>
-
-              <!-- 2. Partiyalar Section -->
-              <section class="sys-section" style="margin-top: 14px;">
-                <div class="sys-section-header">
-                  <div>
-                    <h2 class="sys-section-title">Partiyalar</h2>
-                    <span class="count-label" id="dirPartySummaryLabel">— ta partiya jarayonda</span>
-                  </div>
-                  <button class="sys-link-pill-btn" data-go="parties" type="button">Barchasi</button>
-                </div>
-                <div id="dirPartyList" class="party-card-feed"></div>
-                <p id="dirPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
-              </section>
-
-              <!-- 3. Model operatsiyalar ratsenkasi summasi Section -->
-              <section class="sys-section" style="margin-top: 14px;">
-                <div class="sys-section-header">
-                  <div>
-                    <h2 class="sys-section-title">Modellar va ratsenkalar</h2>
-                    <span class="count-label" id="dirModelTotalRatesLabel">Jami ratsenka: — so‘m</span>
-                  </div>
-                  <button class="sys-link-pill-btn" data-go="models" type="button">Barchasi</button>
-                </div>
-                <div id="dirModelList" class="model-rates-feed"></div>
-                <p id="dirModelEmpty" class="empty-state" hidden>Modellar kiritilmagan.</p>
-              </section>
-
-              <!-- 4. Workerlar Telegram ma'lumoti (bound / unbound) Card -->
-              <article class="co-card co-telegram-card" data-go="bindings" style="margin-top: 14px;">
-                <div class="co-card-head">
-                  <div>
-                    <strong class="co-card-title">Workerlar Telegram ma’lumoti</strong>
-                    <span class="count-label" style="display:block; font-size:12px; margin-top:2px;">Botga bog‘langan va bog‘lanmaganlar</span>
-                  </div>
-                  <span id="coTelegramRatio" class="co-badge-pill co-badge-blue">—</span>
-                </div>
-                <div class="co-progress-track">
-                  <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 0%;"></div>
-                </div>
-                <div class="co-tg-stats-row">
-                  <div class="co-tg-stat-item tg-bound-item">
-                    <span class="co-tg-stat-dot dot-green"></span>
-                    <span class="co-tg-stat-text">Bog‘langan: <strong id="coBoundWorkersCount">—</strong></span>
-                  </div>
-                  <div class="co-tg-stat-item tg-unbound-item">
-                    <span class="co-tg-stat-dot dot-gray"></span>
-                    <span class="co-tg-stat-text">Bog‘lanmagan: <strong id="coUnboundWorkersCount">—</strong></span>
-                  </div>
-                </div>
-                <!-- Unbound workers quick warning / attention box -->
-                <div id="coUnboundAttentionBox" class="co-unbound-box" hidden>
-                  <div class="co-unbound-header">
-                    <span class="co-unbound-icon">⚡</span>
-                    <span class="co-unbound-title">Bog‘lanmagan ishchilar (bot kodi berish kerak):</span>
-                  </div>
-                  <div id="coUnboundWorkersList" class="co-unbound-chips"></div>
-                </div>
-              </article>
-
-              <!-- So'nggi patta cheklari Section -->
-              <section class="sys-section" style="margin-top: 14px;">
-                <div class="sys-section-header">
-                  <h2 class="sys-section-title">So‘nggi patta cheklari</h2>
-                  <button class="sys-link-pill-btn" data-go="tickets" type="button">Barchasi</button>
-                </div>
-                <div id="dirTicketList" class="ticket-card-feed"></div>
-                <p id="dirTicketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p>
-              </section>
-            </div>
-
-            <!-- Legacy anchors to preserve compatibility -->
-            <div hidden>
-              <span id="dirPeriodBadge"></span>
-              <strong id="dirStatPieces"></strong>
-              <strong id="dirStatWorkers"></strong>
-              <strong id="dirStatParties"></strong>
-              <strong id="dirStatPayroll"></strong>
-              <button id="dirQuickAdjBtn" type="button"></button>
-            </div>
-          </div>
-
-          <!-- Global Admin Platform Overview (Shown when isGlobalAdmin === true) -->
-          <div id="globalOverview" class="global-overview">
-            <!-- Mobile System Admin Executive Dashboard -->
-            <div class="sys-overview-container">
-              <!-- Header Row: Title, Live Timestamp & Refresh Button -->
-              <div class="sys-overview-head">
-                <div class="sys-overview-titles">
-                  <h1 class="sys-page-title" id="overviewTitle">Umumiy</h1>
-                  <span id="sysOverviewTimestamp" class="sys-timestamp">—</span>
-                </div>
-                <button id="sysRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                    <path d="M3 3v5h5"/>
-                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-                    <path d="M16 21h5v-5"/>
+              <article class="co-kpi-card" data-go="models">
+                <div class="co-kpi-icon co-icon-purple">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                    <polyline points="2 17 12 22 22 17" />
+                    <polyline points="2 12 12 17 22 12" />
                   </svg>
-                </button>
-              </div>
-
-              <!-- Hero Banner: Pending Activations -->
-              <article class="sys-hero-banner">
-                <div class="sys-hero-content">
-                  <span class="sys-hero-caption">KUTILAYOTGAN AKTIVATSIYALAR</span>
-                  <strong id="sysPendingHeroCount" class="sys-hero-num">—</strong>
                 </div>
-                <button class="sys-hero-btn" data-go="activations" type="button">
-                  <span id="sysPendingHeroText">Ko‘rib chiqish</span>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </button>
+                <span class="co-kpi-label">MODELLAR</span>
+                <strong id="coStatModels" class="co-kpi-val">—</strong>
               </article>
 
-              <!-- Status Chips Row -->
-              <div class="sys-status-chips">
-                <div class="sys-chip">
-                  <span class="sys-chip-dot" id="sysChipPgDot"></span>
-                  <span>PostgreSQL</span>
+              <article class="co-kpi-card" data-go="parties">
+                <div class="co-kpi-icon co-icon-orange">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                      d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                    <path d="m3.3 7 8.7 5 8.7-5" />
+                    <path d="M12 22V12" />
+                  </svg>
                 </div>
-                <div class="sys-chip">
-                  <span class="sys-chip-dot" id="sysChipBotDot"></span>
-                  <span>Telegram bot</span>
-                </div>
-                <div class="sys-chip">
-                  <span class="sys-chip-dot" id="sysChipApiDot"></span>
-                  <span>API</span>
-                </div>
-                <div class="sys-chip">
-                  <span class="sys-chip-dot" id="sysChipSyncDot"></span>
-                  <span>Sinxron</span>
-                </div>
-              </div>
+                <span class="co-kpi-label">PARTIYALAR</span>
+                <strong id="coStatParties" class="co-kpi-val">—</strong>
+                <span class="co-kpi-tag co-tag-amber">yopilmagan</span>
+              </article>
 
-              <!-- Key Metrics 3-Card Grid -->
-              <div class="sys-metrics-row">
-                <article class="sys-metric-card" data-go="companies">
-                  <div class="sys-metric-icon sys-icon-blue">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
-                      <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
-                      <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
-                      <path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>
-                    </svg>
-                  </div>
-                  <span class="sys-metric-label">KORXONA</span>
-                  <strong id="sysMetricCompanies" class="sys-metric-val">—</strong>
-                  <span id="sysMetricCompaniesGrowth" class="sys-metric-growth">PostgreSQL</span>
-                </article>
-
-                <article class="sys-metric-card" data-go="companies">
-                  <div class="sys-metric-icon sys-icon-green">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
-                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                  </div>
-                  <span class="sys-metric-label">ISHCHI</span>
-                  <strong id="sysMetricWorkers" class="sys-metric-val">—</strong>
-                </article>
-
-                <article class="sys-metric-card" data-go="devices">
-                  <div class="sys-metric-icon sys-icon-cyan">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
-                      <path d="M12 18h.01"/>
-                    </svg>
-                  </div>
-                  <span class="sys-metric-label">QURILMA</span>
-                  <strong id="sysMetricDevices" class="sys-metric-val">—</strong>
-                </article>
-              </div>
-
-              <!-- Diqqat talab qiladi (Attention Required) -->
-              <section class="sys-section">
-                <div class="sys-section-header">
-                  <div class="sys-section-title-wrap">
-                    <h2 class="sys-section-title">Diqqat talab qiladi</h2>
-                    <span id="sysAttentionCountBadge" class="sys-count-badge">0</span>
-                  </div>
+              <article class="co-kpi-card" data-go="devices">
+                <div class="co-kpi-icon co-icon-blue">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+                    <path d="M12 18h.01" />
+                  </svg>
                 </div>
-                <div id="sysAttentionFeed" class="sys-attention-card">
-                  <p class="empty-state">Ma’lumotlar tekshirilmoqda…</p>
-                </div>
-              </section>
-
-              <!-- Faol korxonalar (Active Enterprises) -->
-              <section class="sys-section">
-                <div class="sys-section-header">
-                  <h2 class="sys-section-title">Faol korxonalar</h2>
-                  <button class="sys-link-pill-btn" data-go="companies" type="button">Barchasi</button>
-                </div>
-                <div id="sysActiveCompaniesFeed" class="sys-companies-card">
-                  <p class="empty-state">Korxonalar yuklanmoqda…</p>
-                </div>
-              </section>
+                <span class="co-kpi-label">QURILMALAR</span>
+                <strong id="coStatDevices" class="co-kpi-val">—</strong>
+              </article>
             </div>
 
-            <!-- Detailed Tables & Authority Note (Visible on desktop) -->
-            <div class="desktop-overview-details">
-              <div class="view-heading desktop-only">
+            <!-- 1. Ishchilar sof foyda summasi & Oylik fondi Card -->
+            <article class="co-card co-payroll-card" data-go="workers">
+              <div class="co-card-head">
                 <div>
-                  <p class="eyebrow">LIVE LEDGER · POSTGRESQL</p>
-                  <p class="view-subtitle">Bazada saqlangan joriy ishlab chiqarish va qurilma holati.</p>
+                  <strong class="co-card-title">Ishchilar sof daromadi</strong>
+                  <span class="count-label" style="display:block; font-size:12px; margin-top:2px;"
+                    id="dirPeriodBadge">Joriy ochiq davr</span>
                 </div>
-                <div class="updated-at">
-                  <span class="status-dot"></span>
-                  <span id="lastUpdated">Yangilanmagan</span>
+                <span id="coPayrollPct" class="co-badge-pill co-badge-green">—</span>
+              </div>
+              <div class="co-payroll-amount-row">
+                <strong id="coStatPayroll" class="co-payroll-amount">—</strong>
+                <span class="co-currency">so‘m (sof)</span>
+              </div>
+              <div class="co-breakdown-grid">
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">JAMI HISOBLANGAN</span>
+                  <strong id="coGrossPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">BERILGAN AVANS</span>
+                  <strong id="coAvansPayroll" class="co-breakdown-num text-amber">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">JARIMA / CHEGIRMA</span>
+                  <strong id="coDeductionsPayroll" class="co-breakdown-num text-rose">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">TIKILGAN PATTA</span>
+                  <strong id="coPiecesCount" class="co-breakdown-num mono">— dona</strong>
                 </div>
               </div>
-
-              <div class="metric-grid desktop-only">
-                <article class="metric-card metric-card-companies">
-                  <span class="metric-label">KORXONALAR</span>
-                  <strong id="metricCompanies">—</strong>
-                  <small>PostgreSQL scope</small>
-                </article>
-                <article class="metric-card metric-card-workers">
-                  <span class="metric-label">ISHCHILAR</span>
-                  <strong id="metricWorkers">—</strong>
-                  <small>Faol roster</small>
-                </article>
-                <article class="metric-card metric-card-models">
-                  <span class="metric-label">MODELLAR</span>
-                  <strong id="metricModels">—</strong>
-                  <small>Faol model</small>
-                </article>
-                <article class="metric-card metric-card-parties">
-                  <span class="metric-label">PARTIYALAR</span>
-                  <strong id="metricParties">—</strong>
-                  <small>Yopilmagan</small>
-                </article>
-                <article class="metric-card metric-card-devices">
-                  <span class="metric-label">QURILMALAR</span>
-                  <strong id="metricDevices">—</strong>
-                  <small>Ro‘yxatdan o‘tgan</small>
-                </article>
-                <article class="metric-card metric-alert metric-card-pending">
-                  <span class="metric-label">KUTILAYOTGAN</span>
-                  <strong id="metricPending">—</strong>
-                  <small>Aktivatsiya so‘rovi</small>
-                </article>
-                <article class="metric-card metric-card-bindings">
-                  <span class="metric-label">TELEGRAM</span>
-                  <strong id="metricBindings">—</strong>
-                  <small>Ishchi bog‘lanishi</small>
-                </article>
+              <div class="co-progress-track" style="margin-top: 10px;">
+                <div id="coPayrollProgressFill" class="co-progress-fill co-fill-emerald" style="width: 0%;"></div>
               </div>
-
-              <div class="panel-grid overview-grid desktop-only">
-                <article class="surface-card">
-                  <div class="card-heading">
-                    <div>
-                      <p class="eyebrow">QUEUE</p>
-                      <h2>Kutilayotgan aktivatsiyalar</h2>
-                    </div>
-                    <button class="text-button" data-go="activations" type="button">Barchasi →</button>
-                  </div>
-                  <div class="table-wrap desktop-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>SO‘ROV</th>
-                          <th>QURILMA</th>
-                          <th>VERSIYA</th>
-                          <th>VAQT</th>
-                          <th>AMAL</th>
-                        </tr>
-                      </thead>
-                      <tbody id="overviewActivationRows"></tbody>
-                    </table>
-                  </div>
-                  <p id="overviewActivationEmpty" class="empty-state" hidden>Yangi aktivatsiya so‘rovi yo‘q.</p>
-                </article>
-
-                <article class="surface-card ledger-note desktop-only-note">
-                  <div class="card-heading">
-                    <div>
-                      <p class="eyebrow">AUTHORITY</p>
-                      <h2>Ma’lumot manbai</h2>
-                    </div>
-                    <span class="ledger-seal">✓</span>
-                  </div>
-                  <p>Ushbu panel faqat API orqali PostgreSQL’dan o‘qiydi. Qurilma telemetriyasi va egalar ro‘yxati canonical server ma’lumotlar modeliga kirmaydi.</p>
-                  <div class="fact-line"><span>Biznes bazasi</span><strong>PostgreSQL</strong></div>
-                  <div class="fact-line"><span>Admin autentifikatsiyasi</span><strong>Telegram · Allowlist</strong></div>
-                  <div class="fact-line"><span>Aktivatsiya imzosi</span><strong>Ed25519 · Server-side</strong></div>
-                  <div class="fact-line"><span>So‘nggi sync yozuvi</span><strong id="recentSyncAt">Hali mavjud emas</strong></div>
-                </article>
+              <div class="co-payroll-sub-row">
+                <span id="coPayrollPaid">To‘langan —</span>
+                <span id="coPayrollRemaining">Qoldi —</span>
               </div>
-            </div>
-          </div>
-        </section>
+            </article>
 
-        <!-- Section: Devices -->
-        <section class="view-section" data-section="devices" aria-labelledby="devicesTitle" hidden>
-          <div class="sys-overview-head">
-            <div class="sys-overview-titles">
-              <div class="title-with-badge">
-                <h1 class="sys-page-title" id="devicesTitle">Qurilmalar</h1>
-                <span id="devicesCountBadge" class="sys-count-badge">0</span>
+            <!-- 2. Partiyalar Section -->
+            <section class="sys-section" style="margin-top: 14px;">
+              <div class="sys-section-header">
+                <div>
+                  <h2 class="sys-section-title">Partiyalar</h2>
+                  <span class="count-label" id="dirPartySummaryLabel">— ta partiya jarayonda</span>
+                </div>
+                <button class="sys-link-pill-btn" data-go="parties" type="button">Barchasi</button>
               </div>
-            </div>
+              <div id="dirPartyList" class="party-card-feed"></div>
+              <p id="dirPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
+            </section>
+
+            <!-- 3. Model operatsiyalar ratsenkasi summasi Section -->
+            <section class="sys-section" style="margin-top: 14px;">
+              <div class="sys-section-header">
+                <div>
+                  <h2 class="sys-section-title">Modellar va ratsenkalar</h2>
+                  <span class="count-label" id="dirModelTotalRatesLabel">Jami ratsenka: — so‘m</span>
+                </div>
+                <button class="sys-link-pill-btn" data-go="models" type="button">Barchasi</button>
+              </div>
+              <div id="dirModelList" class="model-rates-feed"></div>
+              <p id="dirModelEmpty" class="empty-state" hidden>Modellar kiritilmagan.</p>
+            </section>
+
+            <!-- 4. Workerlar Telegram ma'lumoti (bound / unbound) Card -->
+            <article class="co-card co-telegram-card" data-go="bindings" style="margin-top: 14px;">
+              <div class="co-card-head">
+                <div>
+                  <strong class="co-card-title">Workerlar Telegram ma’lumoti</strong>
+                  <span class="count-label" style="display:block; font-size:12px; margin-top:2px;">Botga bog‘langan va
+                    bog‘lanmaganlar</span>
+                </div>
+                <span id="coTelegramRatio" class="co-badge-pill co-badge-blue">—</span>
+              </div>
+              <div class="co-progress-track">
+                <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 0%;"></div>
+              </div>
+              <div class="co-tg-stats-row">
+                <div class="co-tg-stat-item tg-bound-item">
+                  <span class="co-tg-stat-dot dot-green"></span>
+                  <span class="co-tg-stat-text">Bog‘langan: <strong id="coBoundWorkersCount">—</strong></span>
+                </div>
+                <div class="co-tg-stat-item tg-unbound-item">
+                  <span class="co-tg-stat-dot dot-gray"></span>
+                  <span class="co-tg-stat-text">Bog‘lanmagan: <strong id="coUnboundWorkersCount">—</strong></span>
+                </div>
+              </div>
+              <!-- Unbound workers quick warning / attention box -->
+              <div id="coUnboundAttentionBox" class="co-unbound-box" hidden>
+                <div class="co-unbound-header">
+                  <span class="co-unbound-icon">⚡</span>
+                  <span class="co-unbound-title">Bog‘lanmagan ishchilar (bot kodi berish kerak):</span>
+                </div>
+                <div id="coUnboundWorkersList" class="co-unbound-chips"></div>
+              </div>
+            </article>
+
+            <!-- So'nggi patta cheklari Section -->
+            <section class="sys-section" style="margin-top: 14px;">
+              <div class="sys-section-header">
+                <h2 class="sys-section-title">So‘nggi patta cheklari</h2>
+                <button class="sys-link-pill-btn" data-go="tickets" type="button">Barchasi</button>
+              </div>
+              <div id="dirTicketList" class="ticket-card-feed"></div>
+              <p id="dirTicketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p>
+            </section>
           </div>
 
-          <!-- Search & Filter Controls -->
-          <div class="company-directory-controls">
-            <div class="search-input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="search" id="deviceSearchInput" placeholder="Nom yoki korxona bo‘yicha qidirish…" autocomplete="off" />
+          <!-- Legacy anchors to preserve compatibility -->
+          <div hidden>
+            <span id="dirPeriodBadge"></span>
+            <strong id="dirStatPieces"></strong>
+            <strong id="dirStatWorkers"></strong>
+            <strong id="dirStatParties"></strong>
+            <strong id="dirStatPayroll"></strong>
+            <button id="dirQuickAdjBtn" type="button"></button>
+          </div>
+        </div>
+
+        <!-- Global Admin Platform Overview (Shown when isGlobalAdmin === true) -->
+        <div id="globalOverview" class="global-overview">
+          <!-- Mobile System Admin Executive Dashboard -->
+          <div class="sys-overview-container">
+            <!-- Header Row: Title, Live Timestamp & Refresh Button -->
+            <div class="sys-overview-head">
+              <div class="sys-overview-titles">
+                <h1 class="sys-page-title" id="overviewTitle">Umumiy</h1>
+                <span id="sysOverviewTimestamp" class="sys-timestamp">—</span>
+              </div>
+              <button id="sysRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash"
+                title="Yangilash">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 21h5v-5" />
+                </svg>
+              </button>
             </div>
-            <div class="filter-chips" id="deviceFilterChips">
-              <button type="button" class="chip is-active" data-device-filter="all">Barchasi</button>
-              <button type="button" class="chip" data-device-filter="online">Onlayn</button>
-              <button type="button" class="chip" data-device-filter="offline">Oflayn</button>
+
+            <!-- Hero Banner: Pending Activations -->
+            <article class="sys-hero-banner">
+              <div class="sys-hero-content">
+                <span class="sys-hero-caption">KUTILAYOTGAN AKTIVATSIYALAR</span>
+                <strong id="sysPendingHeroCount" class="sys-hero-num">—</strong>
+              </div>
+              <button class="sys-hero-btn" data-go="activations" type="button">
+                <span id="sysPendingHeroText">Ko‘rib chiqish</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </button>
+            </article>
+
+            <!-- Status Chips Row -->
+            <div class="sys-status-chips">
+              <div class="sys-chip">
+                <span class="sys-chip-dot" id="sysChipPgDot"></span>
+                <span>Baza</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-dot" id="sysChipBotDot"></span>
+                <span>Telegram bot</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-dot" id="sysChipApiDot"></span>
+                <span>API</span>
+              </div>
+              <div class="sys-chip">
+                <span class="sys-chip-dot" id="sysChipSyncDot"></span>
+                <span>Sinxron</span>
+              </div>
             </div>
+
+            <!-- Key Metrics 3-Card Grid -->
+            <div class="sys-metrics-row">
+              <article class="sys-metric-card" data-go="companies">
+                <div class="sys-metric-icon sys-icon-blue">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+                    <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                    <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+                    <path d="M10 6h4" />
+                    <path d="M10 10h4" />
+                    <path d="M10 14h4" />
+                    <path d="M10 18h4" />
+                  </svg>
+                </div>
+                <span class="sys-metric-label">KORXONA</span>
+                <strong id="sysMetricCompanies" class="sys-metric-val">—</strong>
+                <span id="sysMetricCompaniesGrowth" class="sys-metric-growth">Faol</span>
+              </article>
+
+              <article class="sys-metric-card" data-go="companies">
+                <div class="sys-metric-icon sys-icon-green">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </div>
+                <span class="sys-metric-label">ISHCHI</span>
+                <strong id="sysMetricWorkers" class="sys-metric-val">—</strong>
+              </article>
+
+              <article class="sys-metric-card" data-go="devices">
+                <div class="sys-metric-icon sys-icon-cyan">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+                    <path d="M12 18h.01" />
+                  </svg>
+                </div>
+                <span class="sys-metric-label">QURILMA</span>
+                <strong id="sysMetricDevices" class="sys-metric-val">—</strong>
+              </article>
+            </div>
+
+            <!-- Diqqat talab qiladi (Attention Required) -->
+            <section class="sys-section">
+              <div class="sys-section-header">
+                <div class="sys-section-title-wrap">
+                  <h2 class="sys-section-title">Diqqat talab qiladi</h2>
+                  <span id="sysAttentionCountBadge" class="sys-count-badge">0</span>
+                </div>
+              </div>
+              <div id="sysAttentionFeed" class="sys-attention-card">
+                <p class="empty-state">Ma’lumotlar tekshirilmoqda…</p>
+              </div>
+            </section>
+
+            <!-- Faol korxonalar (Active Enterprises) -->
+            <section class="sys-section">
+              <div class="sys-section-header">
+                <h2 class="sys-section-title">Faol korxonalar</h2>
+                <button class="sys-link-pill-btn" data-go="companies" type="button">Barchasi</button>
+              </div>
+              <div id="sysActiveCompaniesFeed" class="sys-companies-card">
+                <p class="empty-state">Korxonalar yuklanmoqda…</p>
+              </div>
+            </section>
           </div>
 
-          <!-- Mobile Touch Cards Feed -->
-          <div id="deviceCardGrid" class="device-card-feed"></div>
+          <!-- Detailed Tables & Authority Note (Visible on desktop) -->
+          <div class="desktop-overview-details">
+            <div class="view-heading desktop-only">
+              <div>
+                <p class="eyebrow">ASOSIY STATISTIKA</p>
+                <p class="view-subtitle">Joriy ishlab chiqarish va tizim ko‘rsatkichlari.</p>
+              </div>
+              <div class="updated-at">
+                <span class="status-dot"></span>
+                <span id="lastUpdated">Yangilanmagan</span>
+              </div>
+            </div>
 
-          <article class="surface-card desktop-table-card">
+            <div class="metric-grid desktop-only">
+              <article class="metric-card metric-card-companies">
+                <span class="metric-label">KORXONALAR</span>
+                <strong id="metricCompanies">—</strong>
+                <small>Faol korxonalar</small>
+              </article>
+              <article class="metric-card metric-card-workers">
+                <span class="metric-label">ISHCHILAR</span>
+                <strong id="metricWorkers">—</strong>
+                <small>Faol roster</small>
+              </article>
+              <article class="metric-card metric-card-models">
+                <span class="metric-label">MODELLAR</span>
+                <strong id="metricModels">—</strong>
+                <small>Faol model</small>
+              </article>
+              <article class="metric-card metric-card-parties">
+                <span class="metric-label">PARTIYALAR</span>
+                <strong id="metricParties">—</strong>
+                <small>Yopilmagan</small>
+              </article>
+              <article class="metric-card metric-card-devices">
+                <span class="metric-label">QURILMALAR</span>
+                <strong id="metricDevices">—</strong>
+                <small>Ro‘yxatdan o‘tgan</small>
+              </article>
+              <article class="metric-card metric-alert metric-card-pending">
+                <span class="metric-label">KUTILAYOTGAN</span>
+                <strong id="metricPending">—</strong>
+                <small>Aktivatsiya so‘rovi</small>
+              </article>
+              <article class="metric-card metric-card-bindings">
+                <span class="metric-label">TELEGRAM</span>
+                <strong id="metricBindings">—</strong>
+                <small>Ishchi bog‘lanishi</small>
+              </article>
+            </div>
+
+            <div class="panel-grid overview-grid desktop-only">
+              <article class="surface-card">
+                <div class="card-heading">
+                  <div>
+                    <h2>Kutilayotgan aktivatsiyalar</h2>
+                  </div>
+                  <button class="text-button" data-go="activations" type="button">Barchasi →</button>
+                </div>
+                <div class="table-wrap desktop-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>SO‘ROV</th>
+                        <th>QURILMA</th>
+                        <th>VERSIYA</th>
+                        <th>VAQT</th>
+                        <th>AMAL</th>
+                      </tr>
+                    </thead>
+                    <tbody id="overviewActivationRows"></tbody>
+                  </table>
+                </div>
+                <p id="overviewActivationEmpty" class="empty-state" hidden>Yangi aktivatsiya so‘rovi yo‘q.</p>
+              </article>
+
+              <article class="surface-card ledger-note desktop-only-note">
+                <div class="card-heading">
+                  <div>
+                    <h2>Tizim holati</h2>
+                  </div>
+                </div>
+                <div class="fact-line"><span>Tizim</span><strong>Faol</strong></div>
+                <div class="fact-line"><span>Xavfsizlik</span><strong>Himoyalangan</strong></div>
+                <div class="fact-line"><span>Oxirgi sinxronlash</span><strong id="recentSyncAt">Hali mavjud
+                    emas</strong></div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Devices -->
+      <section class="view-section" data-section="devices" aria-labelledby="devicesTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <div class="title-with-badge">
+              <h1 class="sys-page-title" id="devicesTitle">Qurilmalar</h1>
+              <span id="devicesCountBadge" class="sys-count-badge">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div class="company-directory-controls">
+          <div class="search-input-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input type="search" id="deviceSearchInput" placeholder="Nom yoki korxona bo‘yicha qidirish…"
+              autocomplete="off" />
+          </div>
+          <div class="filter-chips" id="deviceFilterChips">
+            <button type="button" class="chip is-active" data-device-filter="all">Barchasi</button>
+            <button type="button" class="chip" data-device-filter="online">Onlayn</button>
+            <button type="button" class="chip" data-device-filter="offline">Oflayn</button>
+          </div>
+        </div>
+
+        <!-- Mobile Touch Cards Feed -->
+        <div id="deviceCardGrid" class="device-card-feed"></div>
+
+        <article class="surface-card desktop-table-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">QURILMALAR RO‘YXATI</p>
+              <h2>Ro‘yxatdan o‘tgan qurilmalar</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>QURILMA ID</th>
+                  <th>KORXONA</th>
+                  <th>VERSIYA</th>
+                  <th>HOLAT</th>
+                  <th>RO‘YXAT VAQTI</th>
+                </tr>
+              </thead>
+              <tbody id="registeredDeviceRows"></tbody>
+            </table>
+          </div>
+          <p id="registeredDeviceEmpty" class="empty-state" hidden>Ro‘yxatdan o‘tgan qurilma topilmadi.</p>
+        </article>
+        <article class="surface-card section-gap desktop-table-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">LITSENZIYA SO‘ROVLARI</p>
+              <h2>Aktivatsiya so‘rovlari</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>QURILMA</th>
+                  <th>HOLAT</th>
+                  <th>KORXONA</th>
+                  <th>ROL</th>
+                  <th>SO‘ROV VAQTI</th>
+                </tr>
+              </thead>
+              <tbody id="deviceActivationRows"></tbody>
+            </table>
+          </div>
+          <p id="deviceActivationEmpty" class="empty-state" hidden>Aktivatsiya yozuvlari yo‘q.</p>
+        </article>
+      </section>
+
+      <!-- Section: Companies -->
+      <section class="view-section" data-section="companies" aria-labelledby="companiesTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <div class="title-with-badge">
+              <h1 class="sys-page-title" id="companiesTitle">Korxonalar</h1>
+              <span id="companyCountBadge" class="sys-count-badge">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile-first Search & Filter Bar -->
+        <div class="company-directory-controls">
+          <div class="search-input-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input type="search" id="companySearchInput" placeholder="Korxona nomi yoki ID bo‘yicha qidirish…"
+              autocomplete="off" />
+          </div>
+          <div class="filter-chips" id="companyFilterChips">
+            <button type="button" class="chip is-active" data-company-filter="all">Barchasi</button>
+            <button type="button" class="chip" data-company-filter="active">Faol</button>
+            <button type="button" class="chip" data-company-filter="unconfigured">Aktivatsiyasiz</button>
+          </div>
+        </div>
+
+        <!-- Touch Cards Feed (Mobile-First) -->
+        <div id="companyCardGrid" class="company-card-grid"></div>
+
+        <!-- Legacy / Desktop Table Wrap (Hidden on mobile cards, visible for desktop/tests) -->
+        <article class="surface-card desktop-table-card" id="companyTableCard">
+          <div class="table-wrap desktop-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>NOMI</th>
+                  <th>ISHCHI</th>
+                  <th>MODEL</th>
+                  <th>PARTIYA</th>
+                  <th>O‘LCHAMLAR</th>
+                  <th>REVIZIYA</th>
+                  <th>AKTIVATSIYA</th>
+                  <th>RUXSATLAR</th>
+                  <th>PATTA VALIDATSIYASI</th>
+                  <th>AMAL</th>
+                </tr>
+              </thead>
+              <tbody id="companyRows"></tbody>
+            </table>
+          </div>
+          <p id="companyEmpty" class="empty-state" hidden>Korxona topilmadi.</p>
+        </article>
+
+        <article class="surface-card section-gap activation-policy">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">AKTIVATSIYA SOZLAMALARI</p>
+              <h2>Activation policy</h2>
+            </div>
+          </div>
+          <form id="companyForm" class="form-grid">
+            <label>Mavjud biznes scope
+              <select name="companyId" id="companyPolicySelect" required>
+                <option value="">Mavjud korxonani tanlang</option>
+              </select>
+            </label>
+            <label>Aktivatsiyada ko‘rinadigan nom
+              <input name="companyName" id="companyPolicyName" maxlength="160" autocomplete="organization" required />
+            </label>
+            <fieldset class="role-fieldset">
+              <legend>Ruxsat etilgan rollar</legend>
+              <label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked />
+                Admin</label>
+              <label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked /> Type</label>
+              <label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked />
+                Print</label>
+            </fieldset>
+            <label class="check-label policy-check">
+              <input type="checkbox" name="isActive" checked /> Aktivatsiya siyosati faol
+            </label>
+            <button class="button button-primary" type="submit">Save activation policy</button>
+          </form>
+          <p class="helper-text">Tanlangan korxona uchun aktivatsiya siyosatini sozlaydi.</p>
+        </article>
+        <article id="companyAdminManagement" class="surface-card section-gap global-only" hidden>
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">ADMINLARNI BOSHQARISH</p>
+              <h2>Kompaniya adminlari</h2>
+            </div>
+          </div>
+          <form id="companyAdminForm" class="filter-row">
+            <label>Kompaniya
+              <select name="companyId" id="companyAdminCompany" required>
+                <option value="">Kompaniyani tanlang</option>
+              </select>
+            </label>
+            <label>Telegram ID
+              <input name="telegramId" inputmode="numeric" maxlength="24" placeholder="Telegram raqamli ID" required />
+            </label>
+            <button class="button button-primary" type="submit">Admin biriktirish</button>
+          </form>
+          <div id="companyAdminRows" class="access-list"></div>
+          <p id="companyAdminEmpty" class="empty-state" hidden>Hozircha kompaniya admini biriktirilmagan.</p>
+        </article>
+      </section>
+
+      <!-- Section: Company Profile Drill-Down (Dedicated Command Center for a Selected Company) -->
+      <section class="view-section" data-section="company-profile" id="companyProfileSection"
+        aria-labelledby="cpCompanyName" hidden>
+        <div class="company-profile-hero">
+          <div class="profile-hero-top">
+            <div class="profile-avatar" id="cpAvatar">🏢</div>
+            <div class="profile-titles">
+              <h1 id="cpCompanyName">Kompaniya Profili</h1>
+              <p id="cpCompanyId" class="mono muted">ID: —</p>
+            </div>
+            <span id="cpStatusBadge" class="badge badge-active">—</span>
+          </div>
+          <div class="profile-quick-stats">
+            <div class="quick-stat-box">
+              <span class="stat-num" id="cpStatWorkers">—</span>
+              <span class="stat-lbl">Ishchilar</span>
+            </div>
+            <div class="quick-stat-box">
+              <span class="stat-num" id="cpStatModels">—</span>
+              <span class="stat-lbl">Modellar</span>
+            </div>
+            <div class="quick-stat-box">
+              <span class="stat-num" id="cpStatParties">—</span>
+              <span class="stat-lbl">Partiyalar</span>
+            </div>
+            <div class="quick-stat-box">
+              <span class="stat-num" id="cpStatDevices">—</span>
+              <span class="stat-lbl">Qurilmalar</span>
+            </div>
+          </div>
+          <div class="profile-tabs-scroll">
+            <div class="profile-tabs" id="cpTabs">
+              <button class="profile-tab is-active" data-cp-tab="overview" type="button">Umumiy</button>
+              <button class="profile-tab" data-cp-tab="workers" type="button">Ishchilar & Oylik</button>
+              <button class="profile-tab" data-cp-tab="parties" type="button">Partiyalar</button>
+              <button class="profile-tab" data-cp-tab="models" type="button">Modellar</button>
+              <button class="profile-tab" data-cp-tab="devices" type="button">Qurilmalar</button>
+              <button class="profile-tab" data-cp-tab="admins" type="button">Adminlar</button>
+              <button class="profile-tab" data-cp-tab="policy" type="button">Siyosat</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-pane: Overview -->
+        <div class="cp-pane is-visible" id="pane-cp-overview">
+          <article class="surface-card">
             <div class="card-heading">
               <div>
-                <p class="eyebrow">SERVER DEVICES</p>
-                <h2>Ro‘yxatdan o‘tgan qurilmalar</h2>
+                <p class="eyebrow">UMUMIY MA’LUMOT</p>
+                <h2>Korxona tafsilotlari</h2>
+              </div>
+              <div class="updated-at">
+                <span class="status-dot"></span>
+                <span id="cpLastSync">—</span>
               </div>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>QURILMA ID</th>
-                    <th>KORXONA</th>
-                    <th>VERSIYA</th>
-                    <th>HOLAT</th>
-                    <th>RO‘YXAT VAQTI</th>
-                  </tr>
-                </thead>
-                <tbody id="registeredDeviceRows"></tbody>
-              </table>
-            </div>
-            <p id="registeredDeviceEmpty" class="empty-state" hidden>PostgreSQL’da ro‘yxatdan o‘tgan qurilma yo‘q.</p>
+            <div class="fact-line"><span>Korxona ID</span><strong id="cpFactId" class="mono">—</strong></div>
+            <div class="fact-line"><span>Aktivatsiya holati</span><strong id="cpFactActivation">—</strong></div>
+            <div class="fact-line"><span>Ruxsat etilgan rollar</span><strong id="cpFactRoles">—</strong></div>
+            <div class="fact-line"><span>Patta tekshiruvi</span><strong id="cpFactTicketVal">—</strong></div>
+            <div class="fact-line"><span>Mavjud o‘lchamlar</span><strong id="cpFactSizes">—</strong></div>
+            <div class="fact-line"><span>Tizim versiyasi</span><strong id="cpFactRevision" class="mono">—</strong></div>
           </article>
-          <article class="surface-card section-gap desktop-table-card">
+          <div class="cp-quick-actions">
+            <button class="button button-primary" type="button" data-switch-cp-tab="workers">👥 Ishchilar va oylikni
+              ko‘rish</button>
+            <button class="button button-secondary" type="button" data-switch-cp-tab="parties">📦 Partiyalarni
+              ko‘rish</button>
+          </div>
+        </div>
+
+        <!-- Sub-pane: Workers -->
+        <div class="cp-pane" id="pane-cp-workers" hidden>
+          <article class="surface-card">
             <div class="card-heading">
               <div>
-                <p class="eyebrow">ACTIVATION LIFECYCLE</p>
-                <h2>Aktivatsiya so‘rovlari</h2>
+                <p class="eyebrow">ISHCHILAR</p>
+                <h2>Ishchilar tarkibi va oylik</h2>
               </div>
+              <span id="cpWorkerCount" class="count-label">0 ta</span>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>QURILMA</th>
-                    <th>HOLAT</th>
-                    <th>KORXONA</th>
-                    <th>ROL</th>
-                    <th>SO‘ROV VAQTI</th>
-                  </tr>
-                </thead>
-                <tbody id="deviceActivationRows"></tbody>
-              </table>
+            <div class="cp-sub-toolbar">
+              <input type="search" id="cpWorkerSearchInput" placeholder="Ishchi ismi yoki ID bo‘yicha qidirish…" />
+              <button id="cpQuickAdjBtn" class="button button-primary button-sm" type="button">💵 + Tezkor
+                Avans</button>
             </div>
-            <p id="deviceActivationEmpty" class="empty-state" hidden>Aktivatsiya yozuvlari yo‘q.</p>
+            <div id="cpWorkerCardList" class="worker-card-feed"></div>
+            <p id="cpWorkerEmpty" class="empty-state" hidden>Bu korxonada hali ishchilar yo‘q.</p>
           </article>
-        </section>
+        </div>
 
-        <!-- Section: Companies -->
-        <section class="view-section" data-section="companies" aria-labelledby="companiesTitle" hidden>
-          <div class="sys-overview-head">
-            <div class="sys-overview-titles">
-              <div class="title-with-badge">
-                <h1 class="sys-page-title" id="companiesTitle">Korxonalar</h1>
-                <span id="companyCountBadge" class="sys-count-badge">0</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Mobile-first Search & Filter Bar -->
-          <div class="company-directory-controls">
-            <div class="search-input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="search" id="companySearchInput" placeholder="Korxona nomi yoki ID bo‘yicha qidirish…" autocomplete="off" />
-            </div>
-            <div class="filter-chips" id="companyFilterChips">
-              <button type="button" class="chip is-active" data-company-filter="all">Barchasi</button>
-              <button type="button" class="chip" data-company-filter="active">Faol</button>
-              <button type="button" class="chip" data-company-filter="unconfigured">Aktivatsiyasiz</button>
-            </div>
-          </div>
-
-          <!-- Touch Cards Feed (Mobile-First) -->
-          <div id="companyCardGrid" class="company-card-grid"></div>
-
-          <!-- Legacy / Desktop Table Wrap (Hidden on mobile cards, visible for desktop/tests) -->
-          <article class="surface-card desktop-table-card" id="companyTableCard">
-            <div class="table-wrap desktop-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>NOMI</th>
-                    <th>ISHCHI</th>
-                    <th>MODEL</th>
-                    <th>PARTIYA</th>
-                    <th>O‘LCHAMLAR</th>
-                    <th>REVIZIYA</th>
-                    <th>AKTIVATSIYA</th>
-                    <th>RUXSATLAR</th>
-                    <th>PATTA VALIDATSIYASI</th>
-                    <th>AMAL</th>
-                  </tr>
-                </thead>
-                <tbody id="companyRows"></tbody>
-              </table>
-            </div>
-            <p id="companyEmpty" class="empty-state" hidden>PostgreSQL’da korxona topilmadi.</p>
-          </article>
-
-          <article class="surface-card section-gap activation-policy">
+        <!-- Sub-pane: Parties -->
+        <div class="cp-pane" id="pane-cp-parties" hidden>
+          <article class="surface-card">
             <div class="card-heading">
               <div>
-                <p class="eyebrow">ALLOWLISTED ACTION</p>
-                <h2>Activation policy</h2>
+                <p class="eyebrow">PARTIYALAR</p>
+                <h2>Faol partiyalar</h2>
+              </div>
+              <span id="cpPartyCount" class="count-label">0 ta</span>
+            </div>
+            <div id="cpPartyCardList" class="party-card-feed"></div>
+            <p id="cpPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
+          </article>
+        </div>
+
+        <!-- Sub-pane: Models -->
+        <div class="cp-pane" id="pane-cp-models" hidden>
+          <article class="surface-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">MODELLAR</p>
+                <h2>Modellar va amallar</h2>
+              </div>
+              <span id="cpModelCount" class="count-label">0 ta</span>
+            </div>
+            <div id="cpModelCardList" class="model-card-feed"></div>
+            <p id="cpModelEmpty" class="empty-state" hidden>Modellar topilmadi.</p>
+          </article>
+        </div>
+
+        <!-- Sub-pane: Devices -->
+        <div class="cp-pane" id="pane-cp-devices" hidden>
+          <article class="surface-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">QURILMALAR</p>
+                <h2>Qurilmalar</h2>
+              </div>
+              <span id="cpDeviceCount" class="count-label">0 ta</span>
+            </div>
+            <div id="cpDeviceCardList" class="device-card-feed"></div>
+            <p id="cpDeviceEmpty" class="empty-state" hidden>Qurilmalar topilmadi.</p>
+          </article>
+        </div>
+
+        <!-- Sub-pane: Admins -->
+        <div class="cp-pane" id="pane-cp-admins" hidden>
+          <article class="surface-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">ADMINLAR</p>
+                <h2>Biriktirilgan adminlar</h2>
               </div>
             </div>
-            <form id="companyForm" class="form-grid">
-              <label>Mavjud biznes scope
-                <select name="companyId" id="companyPolicySelect" required>
-                  <option value="">Mavjud korxonani tanlang</option>
-                </select>
-              </label>
-              <label>Aktivatsiyada ko‘rinadigan nom
-                <input name="companyName" id="companyPolicyName" maxlength="160" autocomplete="organization" required />
-              </label>
-              <fieldset class="role-fieldset">
-                <legend>Ruxsat etilgan rollar</legend>
-                <label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked /> Admin</label>
-                <label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked /> Type</label>
-                <label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked /> Print</label>
-              </fieldset>
-              <label class="check-label policy-check">
-                <input type="checkbox" name="isActive" checked /> Aktivatsiya siyosati faol
-              </label>
-              <button class="button button-primary" type="submit">Save activation policy</button>
-            </form>
-            <p class="helper-text">Bu amal faqat mavjud biznes scope uchun aktivatsiya siyosatini saqlaydi; yangi biznes korxona yaratmaydi.</p>
-          </article>
-          <article id="companyAdminManagement" class="surface-card section-gap global-only" hidden>
-            <div class="card-heading">
-              <div><p class="eyebrow">COMPANY ACCESS</p><h2>Kompaniya adminlari</h2></div>
-            </div>
-            <form id="companyAdminForm" class="filter-row">
-              <label>Kompaniya
-                <select name="companyId" id="companyAdminCompany" required><option value="">Kompaniyani tanlang</option></select>
-              </label>
+            <form id="cpAdminAssignForm" class="filter-row">
+              <input type="hidden" name="companyId" id="cpAdminCompanyHidden" />
               <label>Telegram ID
-                <input name="telegramId" inputmode="numeric" maxlength="24" placeholder="Telegram raqamli ID" required />
+                <input name="telegramId" id="cpAdminTelegramInput" inputmode="numeric" maxlength="24"
+                  placeholder="Telegram ID raqami" required />
               </label>
               <button class="button button-primary" type="submit">Admin biriktirish</button>
             </form>
-            <div id="companyAdminRows" class="access-list"></div>
-            <p id="companyAdminEmpty" class="empty-state" hidden>Hozircha kompaniya admini biriktirilmagan.</p>
+            <div id="cpAdminRows" class="access-list"></div>
+            <p id="cpAdminEmpty" class="empty-state" hidden>Kompaniya admini biriktirilmagan.</p>
           </article>
-        </section>
+        </div>
 
-        <!-- Section: Company Profile Drill-Down (Dedicated Command Center for a Selected Company) -->
-        <section class="view-section" data-section="company-profile" id="companyProfileSection" aria-labelledby="cpCompanyName" hidden>
-          <div class="company-profile-hero">
-            <div class="profile-hero-top">
-              <div class="profile-avatar" id="cpAvatar">🏢</div>
-              <div class="profile-titles">
-                <h1 id="cpCompanyName">Kompaniya Profili</h1>
-                <p id="cpCompanyId" class="mono muted">ID: —</p>
-              </div>
-              <span id="cpStatusBadge" class="badge badge-active">—</span>
-            </div>
-            <div class="profile-quick-stats">
-              <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatWorkers">—</span>
-                <span class="stat-lbl">Ishchilar</span>
-              </div>
-              <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatModels">—</span>
-                <span class="stat-lbl">Modellar</span>
-              </div>
-              <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatParties">—</span>
-                <span class="stat-lbl">Partiyalar</span>
-              </div>
-              <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatDevices">—</span>
-                <span class="stat-lbl">Qurilmalar</span>
-              </div>
-            </div>
-            <div class="profile-tabs-scroll">
-              <div class="profile-tabs" id="cpTabs">
-                <button class="profile-tab is-active" data-cp-tab="overview" type="button">Umumiy</button>
-                <button class="profile-tab" data-cp-tab="workers" type="button">Ishchilar & Oylik</button>
-                <button class="profile-tab" data-cp-tab="parties" type="button">Partiyalar</button>
-                <button class="profile-tab" data-cp-tab="models" type="button">Modellar</button>
-                <button class="profile-tab" data-cp-tab="devices" type="button">Qurilmalar</button>
-                <button class="profile-tab" data-cp-tab="admins" type="button">Adminlar</button>
-                <button class="profile-tab" data-cp-tab="policy" type="button">Siyosat</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Sub-pane: Overview -->
-          <div class="cp-pane is-visible" id="pane-cp-overview">
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">LIVE PULSE</p>
-                  <h2>Korxona tafsilotlari</h2>
-                </div>
-                <div class="updated-at">
-                  <span class="status-dot"></span>
-                  <span id="cpLastSync">—</span>
-                </div>
-              </div>
-              <div class="fact-line"><span>Biznes ID</span><strong id="cpFactId" class="mono">—</strong></div>
-              <div class="fact-line"><span>Aktivatsiya</span><strong id="cpFactActivation">—</strong></div>
-              <div class="fact-line"><span>Ruxsat etilgan rollar</span><strong id="cpFactRoles">—</strong></div>
-              <div class="fact-line"><span>Patta validatsiyasi</span><strong id="cpFactTicketVal">—</strong></div>
-              <div class="fact-line"><span>Mavjud o‘lchamlar</span><strong id="cpFactSizes">—</strong></div>
-              <div class="fact-line"><span>Server reviziyasi</span><strong id="cpFactRevision" class="mono">—</strong></div>
-            </article>
-            <div class="cp-quick-actions">
-              <button class="button button-primary" type="button" data-switch-cp-tab="workers">👥 Ishchilar va oylikni ko‘rish</button>
-              <button class="button button-secondary" type="button" data-switch-cp-tab="parties">📦 Partiyalarni ko‘rish</button>
-            </div>
-          </div>
-
-          <!-- Sub-pane: Workers -->
-          <div class="cp-pane" id="pane-cp-workers" hidden>
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">WORKERS & PAYROLL</p>
-                  <h2>Ishchilar tarkibi va oylik</h2>
-                </div>
-                <span id="cpWorkerCount" class="count-label">0 ta</span>
-              </div>
-              <div class="cp-sub-toolbar">
-                <input type="search" id="cpWorkerSearchInput" placeholder="Ishchi ismi yoki ID bo‘yicha qidirish…" />
-                <button id="cpQuickAdjBtn" class="button button-primary button-sm" type="button">💵 + Tezkor Avans</button>
-              </div>
-              <div id="cpWorkerCardList" class="worker-card-feed"></div>
-              <p id="cpWorkerEmpty" class="empty-state" hidden>Bu korxonada hali ishchilar yo‘q.</p>
-            </article>
-          </div>
-
-          <!-- Sub-pane: Parties -->
-          <div class="cp-pane" id="pane-cp-parties" hidden>
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">PRODUCTION BATCHES</p>
-                  <h2>Faol partiyalar</h2>
-                </div>
-                <span id="cpPartyCount" class="count-label">0 ta</span>
-              </div>
-              <div id="cpPartyCardList" class="party-card-feed"></div>
-              <p id="cpPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
-            </article>
-          </div>
-
-          <!-- Sub-pane: Models -->
-          <div class="cp-pane" id="pane-cp-models" hidden>
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">GARMENT MODELS</p>
-                  <h2>Modellar va amallar</h2>
-                </div>
-                <span id="cpModelCount" class="count-label">0 ta</span>
-              </div>
-              <div id="cpModelCardList" class="model-card-feed"></div>
-              <p id="cpModelEmpty" class="empty-state" hidden>Modellar topilmadi.</p>
-            </article>
-          </div>
-
-          <!-- Sub-pane: Devices -->
-          <div class="cp-pane" id="pane-cp-devices" hidden>
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">REGISTERED CLIENTS</p>
-                  <h2>Qurilmalar</h2>
-                </div>
-                <span id="cpDeviceCount" class="count-label">0 ta</span>
-              </div>
-              <div id="cpDeviceCardList" class="device-card-feed"></div>
-              <p id="cpDeviceEmpty" class="empty-state" hidden>Qurilmalar topilmadi.</p>
-            </article>
-          </div>
-
-          <!-- Sub-pane: Admins -->
-          <div class="cp-pane" id="pane-cp-admins" hidden>
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">COMPANY DIRECTORS</p>
-                  <h2>Biriktirilgan adminlar</h2>
-                </div>
-              </div>
-              <form id="cpAdminAssignForm" class="filter-row">
-                <input type="hidden" name="companyId" id="cpAdminCompanyHidden" />
-                <label>Telegram ID
-                  <input name="telegramId" id="cpAdminTelegramInput" inputmode="numeric" maxlength="24" placeholder="Telegram ID raqami" required />
-                </label>
-                <button class="button button-primary" type="submit">Admin biriktirish</button>
-              </form>
-              <div id="cpAdminRows" class="access-list"></div>
-              <p id="cpAdminEmpty" class="empty-state" hidden>Kompaniya admini biriktirilmagan.</p>
-            </article>
-          </div>
-
-          <!-- Sub-pane: Policy -->
-          <div class="cp-pane" id="pane-cp-policy" hidden>
-            <article class="surface-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">POLICY CONFIGURATION</p>
-                  <h2>Aktivatsiya siyosati</h2>
-                </div>
-              </div>
-              <form id="cpPolicyForm" class="form-grid">
-                <input type="hidden" name="companyId" id="cpPolicyCompanyHidden" />
-                <label>Ko‘rinadigan nom
-                  <input name="companyName" id="cpPolicyNameInput" maxlength="160" required />
-                </label>
-                <fieldset class="role-fieldset">
-                  <legend>Ruxsat etilgan rollar</legend>
-                  <label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked /> Admin</label>
-                  <label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked /> Type</label>
-                  <label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked /> Print</label>
-                </fieldset>
-                <label class="check-label policy-check">
-                  <input type="checkbox" name="isActive" id="cpPolicyActiveInput" checked /> Siyosat faol
-                </label>
-                <button class="button button-primary" type="submit">Siyosatni saqlash</button>
-              </form>
-            </article>
-          </div>
-        </section>
-
-        <!-- Section: Workers -->
-        <section class="view-section" data-section="workers" aria-labelledby="workersTitle" hidden>
-          <div class="sys-overview-head">
-            <div class="sys-overview-titles">
-              <div class="title-with-badge">
-                <h1 class="sys-page-title" id="workersTitle">Ishchilar</h1>
-                <span id="workerHeaderCount" class="sys-count-badge">0</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Segmented Subtabs: Ro'yxat vs Oyliklar -->
-          <div class="segmented-control" id="workerSubTabs">
-            <button type="button" class="segmented-tab is-active" data-worker-subtab="list">Ro‘yxat</button>
-            <button type="button" class="segmented-tab" data-worker-subtab="payroll">Oyliklar</button>
-          </div>
-
-          <div id="globalWorkerNotice" class="global-worker-notice" hidden>
-            <span>🏢 Ishchilar har bir korxonaning o‘z profilida boshqariladi.</span>
-            <button class="button button-secondary button-sm" data-go="companies" type="button">Korxonalarga o‘tish →</button>
-          </div>
-
-          <!-- Pane: Ro'yxat -->
-          <div id="workerListSubPane" class="worker-subpane">
-            <div class="company-directory-controls">
-              <div class="search-input-wrap">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                <input type="search" id="workerSearchInput" placeholder="Ism yoki ID bo‘yicha qidirish…" autocomplete="off" />
-              </div>
-              <div class="filter-chips" id="workerFilterChips">
-                <button type="button" class="chip is-active" data-worker-filter="all">Barchasi</button>
-                <button type="button" class="chip" data-worker-filter="active">Faol</button>
-                <button type="button" class="chip" data-worker-filter="not_bound">Telegram yo‘q</button>
-              </div>
-            </div>
-
-            <!-- Mobile Workers Feed -->
-            <div id="workerCardGrid" class="worker-card-feed"></div>
-
-            <article class="surface-card filter-card desktop-table-card">
-              <form id="workerFilterForm" class="filter-row">
-                <label>Korxona ID
-                  <input name="companyId" maxlength="64" placeholder="Barchasi" autocomplete="off" />
-                </label>
-                <label>Ishchi qidirish
-                  <input name="search" maxlength="100" placeholder="ID, ism yoki Telegram ID" />
-                </label>
-                <button class="button button-primary" type="submit">Ko‘rsatish</button>
-              </form>
-            </article>
-
-            <article class="surface-card section-gap desktop-table-card">
-              <span id="workerCount" class="count-label" hidden></span>
-              <div class="table-wrap desktop-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>ISM</th>
-                      <th>KORXONA</th>
-                      <th>HOLAT</th>
-                      <th>STAJ</th>
-                      <th>TELEGRAM BOG‘LANISHI</th>
-                      <th>AMAL</th>
-                    </tr>
-                  </thead>
-                  <tbody id="workerRows"></tbody>
-                </table>
-              </div>
-              <p id="workerEmpty" class="empty-state" hidden>Tanlangan filtrda ishchi topilmadi.</p>
-              <div class="button-row pager">
-                <button id="workerPrevious" class="button button-secondary" type="button">Oldingi</button>
-                <span id="workerPage" class="count-label"></span>
-                <button id="workerNext" class="button button-secondary" type="button">Keyingi</button>
-              </div>
-            </article>
-          </div>
-
-          <!-- Pane: Oyliklar -->
-          <div id="workerPayrollSubPane" class="worker-subpane" hidden>
-            <!-- Month Selector -->
-            <div class="month-selector-bar">
-              <button id="payrollMonthPrev" class="month-nav-btn" type="button" aria-label="Oldingi oy">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-              </button>
-              <strong id="payrollMonthLabel" class="month-label-text">—</strong>
-              <button id="payrollMonthNext" class="month-nav-btn" type="button" aria-label="Keyingi oy">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-              </button>
-            </div>
-
-            <!-- Oylik Fondi Hero Banner (Indigo Gradient) -->
-            <article class="co-hero-banner payroll-hero-banner">
-              <div class="co-hero-content">
-                <span class="co-hero-caption">OYLIK FONDI</span>
-                <div class="payroll-hero-amount-row">
-                  <strong id="payrollHeroTotal" class="co-hero-num">—</strong>
-                  <span class="co-currency-light">so‘m</span>
-                </div>
-              </div>
-              <div class="payroll-hero-chips">
-                <span id="payrollHeroPaid" class="payroll-chip-pill">To‘langan —</span>
-                <span id="payrollHeroRemaining" class="payroll-chip-pill">Qoldi —</span>
-              </div>
-            </article>
-
-            <!-- Search Worker in Payroll -->
-            <div class="company-directory-controls">
-              <div class="search-input-wrap">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                <input type="search" id="payrollWorkerSearchInput" placeholder="Ism yoki ID bo‘yicha qidirish…" autocomplete="off" />
-              </div>
-            </div>
-
-            <!-- Mobile Payroll Cards Feed -->
-            <div id="payrollCardGrid" class="worker-card-feed"></div>
-
-            <article class="surface-card section-gap desktop-table-card">
-              <div class="card-heading">
-                <div>
-                  <p class="eyebrow">PAYROLL PROJECTION</p>
-                  <h2>Davr bo‘yicha hisob</h2>
-                </div>
-                <form id="payrollForm" class="inline-filter">
-                  <label>Korxona ID
-                    <input name="companyId" maxlength="64" required />
-                  </label>
-                  <label>Davr ID
-                    <input name="periodId" maxlength="128" placeholder="Joriy ochiq davr" />
-                  </label>
-                  <button class="button button-secondary" type="submit">Hisoblash</button>
-                </form>
-              </div>
-              <p id="payrollPeriod" class="period-caption">Davr tanlanmagan</p>
-              <div class="table-wrap desktop-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>ISHCHI</th>
-                      <th>JAMI</th>
-                      <th>AVANS</th>
-                      <th>JARIMA</th>
-                      <th>STAJ</th>
-                      <th>SOF</th>
-                      <th>SONI</th>
-                    </tr>
-                  </thead>
-                  <tbody id="payrollRows"></tbody>
-                </table>
-              </div>
-              <p id="payrollEmpty" class="empty-state" hidden>PostgreSQL’da davr yoki ish haqi faktlari yo‘q.</p>
-              <p class="formula-note">Sof = Jami − Avans − Jarima − Staj · Har bir qiymat yozuvlaridan hisoblanadi.</p>
-            </article>
-          </div>
-        </section>
-
-        <!-- Section: Bindings -->
-        <section class="view-section" data-section="bindings" aria-labelledby="bindingsTitle" hidden>
-          <div class="view-heading">
-            <div>
-              <p class="eyebrow">TELEGRAM IDENTITY LINKS</p>
-              <h1 id="bindingsTitle">Ishchi bog‘lanishlari</h1>
-              <p class="view-subtitle">Mavjud server bog‘lanishlari ko‘rsatiladi. Bu sahifada bog‘lanish yasash yoki boshqa shaxs nomidan amal bajarish mumkin emas.</p>
-            </div>
-          </div>
+        <!-- Sub-pane: Policy -->
+        <div class="cp-pane" id="pane-cp-policy" hidden>
           <article class="surface-card">
-            <!-- Mobile Bindings Feed -->
-            <div id="bindingCardGrid" class="binding-card-feed"></div>
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">SIYOSAT</p>
+                <h2>Aktivatsiya siyosati</h2>
+              </div>
+            </div>
+            <form id="cpPolicyForm" class="form-grid">
+              <input type="hidden" name="companyId" id="cpPolicyCompanyHidden" />
+              <label>Ko‘rinadigan nom
+                <input name="companyName" id="cpPolicyNameInput" maxlength="160" required />
+              </label>
+              <fieldset class="role-fieldset">
+                <legend>Ruxsat etilgan rollar</legend>
+                <label class="check-label"><input type="checkbox" name="allowedRoles" value="admin" checked />
+                  Admin</label>
+                <label class="check-label"><input type="checkbox" name="allowedRoles" value="type" checked />
+                  Type</label>
+                <label class="check-label"><input type="checkbox" name="allowedRoles" value="print" checked />
+                  Print</label>
+              </fieldset>
+              <label class="check-label policy-check">
+                <input type="checkbox" name="isActive" id="cpPolicyActiveInput" checked /> Siyosat faol
+              </label>
+              <button class="button button-primary" type="submit">Siyosatni saqlash</button>
+            </form>
+          </article>
+        </div>
+      </section>
 
+      <!-- Section: Workers -->
+      <section class="view-section" data-section="workers" aria-labelledby="workersTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <div class="title-with-badge">
+              <h1 class="sys-page-title" id="workersTitle">Ishchilar</h1>
+              <span id="workerHeaderCount" class="sys-count-badge">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Segmented Subtabs: Ro'yxat vs Oyliklar -->
+        <div class="segmented-control" id="workerSubTabs">
+          <button type="button" class="segmented-tab is-active" data-worker-subtab="list">Ro‘yxat</button>
+          <button type="button" class="segmented-tab" data-worker-subtab="payroll">Oyliklar</button>
+        </div>
+
+        <div id="globalWorkerNotice" class="global-worker-notice" hidden>
+          <span>🏢 Ishchilar har bir korxonaning o‘z profilida boshqariladi.</span>
+          <button class="button button-secondary button-sm" data-go="companies" type="button">Korxonalarga o‘tish
+            →</button>
+        </div>
+
+        <!-- Pane: Ro'yxat -->
+        <div id="workerListSubPane" class="worker-subpane">
+          <div class="company-directory-controls">
+            <div class="search-input-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input type="search" id="workerSearchInput" placeholder="Ism yoki ID bo‘yicha qidirish…"
+                autocomplete="off" />
+            </div>
+            <div class="filter-chips" id="workerFilterChips">
+              <button type="button" class="chip is-active" data-worker-filter="all">Barchasi</button>
+              <button type="button" class="chip" data-worker-filter="active">Faol</button>
+              <button type="button" class="chip" data-worker-filter="not_bound">Telegram yo‘q</button>
+            </div>
+          </div>
+
+          <!-- Mobile Workers Feed -->
+          <div id="workerCardGrid" class="worker-card-feed"></div>
+
+          <article class="surface-card filter-card desktop-table-card">
+            <form id="workerFilterForm" class="filter-row">
+              <label>Korxona ID
+                <input name="companyId" maxlength="64" placeholder="Barchasi" autocomplete="off" />
+              </label>
+              <label>Ishchi qidirish
+                <input name="search" maxlength="100" placeholder="ID, ism yoki Telegram ID" />
+              </label>
+              <button class="button button-primary" type="submit">Ko‘rsatish</button>
+            </form>
+          </article>
+
+          <article class="surface-card section-gap desktop-table-card">
+            <span id="workerCount" class="count-label" hidden></span>
             <div class="table-wrap desktop-table-card">
               <table>
                 <thead>
                   <tr>
-                    <th>ISHCHI ID</th>
+                    <th>ID</th>
                     <th>ISM</th>
                     <th>KORXONA</th>
                     <th>HOLAT</th>
-                    <th>TELEGRAM ID</th>
-                    <th>USERNAME</th>
-                    <th>BOG‘LANGAN VAQT</th>
+                    <th>STAJ</th>
+                    <th>TELEGRAM BOG‘LANISHI</th>
                     <th>AMAL</th>
                   </tr>
                 </thead>
-                <tbody id="bindingRows"></tbody>
+                <tbody id="workerRows"></tbody>
               </table>
             </div>
-            <p id="bindingEmpty" class="empty-state" hidden>Telegram bog‘lanishi mavjud emas.</p>
+            <p id="workerEmpty" class="empty-state" hidden>Tanlangan filtrda ishchi topilmadi.</p>
             <div class="button-row pager">
-              <button id="bindingPrevious" class="button button-secondary" type="button">Oldingi</button>
-              <span id="bindingPage" class="count-label"></span>
-              <button id="bindingNext" class="button button-secondary" type="button">Keyingi</button>
+              <button id="workerPrevious" class="button button-secondary" type="button">Oldingi</button>
+              <span id="workerPage" class="count-label"></span>
+              <button id="workerNext" class="button button-secondary" type="button">Keyingi</button>
             </div>
           </article>
-        </section>
+        </div>
 
-        <!-- Section: Activations -->
-        <section class="view-section" data-section="activations" aria-labelledby="activationsTitle" hidden>
-          <div class="sys-overview-head">
-            <div class="sys-overview-titles">
-              <h1 class="sys-page-title" id="activationsTitle">Litsenziya</h1>
-            </div>
+        <!-- Pane: Oyliklar -->
+        <div id="workerPayrollSubPane" class="worker-subpane" hidden>
+          <!-- Month Selector -->
+          <div class="month-selector-bar">
+            <button id="payrollMonthPrev" class="month-nav-btn" type="button" aria-label="Oldingi oy">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </button>
+            <strong id="payrollMonthLabel" class="month-label-text">—</strong>
+            <button id="payrollMonthNext" class="month-nav-btn" type="button" aria-label="Keyingi oy">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
           </div>
 
-          <!-- Segmented Subtabs: So'rovlar vs Litsenziyalar / Siyosat -->
-          <div class="segmented-control" id="activationSubTabs">
-            <button type="button" class="segmented-tab is-active" data-act-subtab="requests" id="actTabRequestsBtn">So‘rovlar · <span id="actSubTabCount">0</span></button>
-            <button type="button" class="segmented-tab" data-act-subtab="policy" id="actTabPolicyBtn">Litsenziyalar</button>
-          </div>
-
-          <!-- Subpane: Requests -->
-          <div id="actRequestsPane" class="act-subpane">
-            <!-- Mobile 1-Tap Activation Feed -->
-            <div id="activationCardGrid" class="activation-card-feed"></div>
-
-            <!-- Expiring Licenses Section for System Admin (04_litsenziya.png) -->
-            <div id="expiringLicensesSection" class="sys-section section-gap">
-              <div class="sys-section-header">
-                <div class="sys-section-title-wrap">
-                  <h2 class="sys-section-title">Muddati tugayotgan</h2>
-                  <span id="expiringCountBadge" class="sys-count-badge">0</span>
-                </div>
-              </div>
-              <div id="expiringLicensesFeed" class="sys-attention-card">
-                <p class="empty-state" id="expiringLicensesEmpty">Muddati tugayotgan litsenziyalar yo‘q.</p>
+          <!-- Oylik Fondi Hero Banner (Indigo Gradient) -->
+          <article class="co-hero-banner payroll-hero-banner">
+            <div class="co-hero-content">
+              <span class="co-hero-caption">OYLIK FONDI</span>
+              <div class="payroll-hero-amount-row">
+                <strong id="payrollHeroTotal" class="co-hero-num">—</strong>
+                <span class="co-currency-light">so‘m</span>
               </div>
             </div>
-          </div>
-
-          <!-- Subpane: Policy (for Company Admin, 05_aktivatsiya_siyosat.png) -->
-          <div id="actPolicyPane" class="act-subpane" hidden>
-            <article class="surface-card policy-card-box">
-              <form id="actPolicyMobileForm" class="form-grid">
-                <div class="policy-toggle-row">
-                  <strong class="policy-toggle-label">Siyosat faol</strong>
-                  <label class="switch-toggle">
-                    <input type="checkbox" id="actPolicyMobileActive" checked />
-                    <span class="switch-slider"></span>
-                  </label>
-                </div>
-                <label>Ko‘rinadigan nom
-                  <input type="text" id="actPolicyMobileName" placeholder="Korxona nomi" maxlength="160" required />
-                </label>
-                <fieldset class="role-fieldset">
-                  <legend>Ruxsat etilgan rollar</legend>
-                  <label class="check-chip-label"><input type="checkbox" name="actMobileRoles" value="admin" checked /> ✓ Admin</label>
-                  <label class="check-chip-label"><input type="checkbox" name="actMobileRoles" value="type" checked /> ✓ Type</label>
-                  <label class="check-chip-label"><input type="checkbox" name="actMobileRoles" value="print" checked /> ✓ Print</label>
-                </fieldset>
-                <button id="actPolicyMobileSaveBtn" class="button button-primary button-full" type="button">Saqlash</button>
-              </form>
-            </article>
-          </div>
-
-          <article class="surface-card action-card desktop-table-card">
-            <div class="card-heading">
-              <div>
-                <p class="eyebrow">AUTHORIZED ADMIN ACTION</p>
-                <h2>Aktivatsiya so‘rovini boshqarish</h2>
-              </div>
+            <div class="payroll-hero-chips">
+              <span id="payrollHeroPaid" class="payroll-chip-pill">To‘langan —</span>
+              <span id="payrollHeroRemaining" class="payroll-chip-pill">Qoldi —</span>
             </div>
-            <form id="activationForm" class="form-grid activation-form">
-              <label>So‘rov
-                <select name="requestId" id="activationRequestSelect" required>
-                  <option value="">So‘rovni tanlang</option>
-                </select>
-              </label>
-              <label>Kompaniya
-                <select name="companyId" id="activationCompanySelect">
-                  <option value="">Kompaniyani tanlang</option>
-                </select>
-              </label>
-              <label>Rol
-                <select name="role">
-                  <option value="admin">Admin</option>
-                  <option value="type">Type</option>
-                  <option value="print">Print</option>
-                </select>
-              </label>
-              <label>Rad etish sababi
-                <input name="reason" maxlength="500" placeholder="Sabab ko‘rsating" />
-              </label>
-              <div class="button-row">
-                <button id="approveActivation" class="button button-primary" type="button">Tasdiqlash · Ed25519</button>
-                <button id="rejectActivation" class="button button-danger" type="button">Rad etish</button>
-                <button id="revokeActivation" class="button button-secondary" type="button">Bekor qilish</button>
-              </div>
-            </form>
-            <p class="helper-text">So‘rov va siyosat PostgreSQL’dan tekshiriladi. Brauzer imzo kalitini olmaydi.</p>
           </article>
+
+          <!-- Search Worker in Payroll -->
+          <div class="company-directory-controls">
+            <div class="search-input-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input type="search" id="payrollWorkerSearchInput" placeholder="Ism yoki ID bo‘yicha qidirish…"
+                autocomplete="off" />
+            </div>
+          </div>
+
+          <!-- Mobile Payroll Cards Feed -->
+          <div id="payrollCardGrid" class="worker-card-feed"></div>
+
           <article class="surface-card section-gap desktop-table-card">
             <div class="card-heading">
               <div>
-                <p class="eyebrow">ACTIVATION LEDGER</p>
-                <h2>So‘rovlar va imzolar</h2>
+                <p class="eyebrow">OYLIK HISOB-KITOBI</p>
+                <h2>Davr bo‘yicha hisob</h2>
               </div>
-              <label class="compact-filter">Holat
-                <select id="activationStatusFilter">
-                  <option value="">Barchasi</option>
-                  <option value="PENDING">Kutilmoqda</option>
-                  <option value="APPROVED">Tasdiqlangan</option>
-                  <option value="REJECTED">Rad etilgan</option>
-                  <option value="REVOKED">Bekor qilingan</option>
-                </select>
-              </label>
+              <form id="payrollForm" class="inline-filter">
+                <label>Korxona ID
+                  <input name="companyId" maxlength="64" required />
+                </label>
+                <label>Davr ID
+                  <input name="periodId" maxlength="128" placeholder="Joriy ochiq davr" />
+                </label>
+                <button class="button button-secondary" type="submit">Hisoblash</button>
+              </form>
             </div>
-            <div class="table-wrap">
+            <p id="payrollPeriod" class="period-caption">Davr tanlanmagan</p>
+            <div class="table-wrap desktop-table-card">
               <table>
                 <thead>
                   <tr>
-                    <th>QURILMA</th>
-                    <th>HOLAT</th>
-                    <th>KOMPANIYA</th>
-                    <th>ROL</th>
-                    <th>SO‘ROV</th>
-                    <th>IMZO</th>
-                  </tr>
-                </thead>
-                <tbody id="activationRows"></tbody>
-              </table>
-            </div>
-            <p id="activationEmpty" class="empty-state" hidden>Aktivatsiya so‘rovi topilmadi.</p>
-            <div id="activationEvents" class="event-list" hidden></div>
-          </article>
-        </section>
-
-        <!-- Section: Models -->
-        <section class="view-section" data-section="models" aria-labelledby="modelsTitle" hidden>
-          <div class="view-heading">
-            <div>
-              <p class="eyebrow">CANONICAL DATA</p>
-              <h1 id="modelsTitle">Modellar</h1>
-              <p class="view-subtitle">Model konfiguratsiyasi va o‘lchamlar PostgreSQL’dan faqat o‘qiladi.</p>
-            </div>
-          </div>
-          <!-- Mobile Models Feed -->
-          <div id="modelCardGrid" class="model-card-feed"></div>
-
-          <article class="surface-card desktop-table-card">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>KORXONA</th>
                     <th>ID</th>
-                    <th>NOMI</th>
-                    <th>AMALLAR / NARXLAR</th>
-                    <th>O‘LCHAMLAR</th>
-                    <th>REVIZIYA</th>
+                    <th>ISHCHI</th>
+                    <th>JAMI</th>
+                    <th>AVANS</th>
+                    <th>JARIMA</th>
+                    <th>STAJ</th>
+                    <th>SOF</th>
+                    <th>SONI</th>
                   </tr>
                 </thead>
-                <tbody id="modelRows"></tbody>
+                <tbody id="payrollRows"></tbody>
               </table>
             </div>
-            <p id="modelEmpty" class="empty-state" hidden>Model yozuvlari topilmadi.</p>
+            <p id="payrollEmpty" class="empty-state" hidden>Davr yoki ish haqi ma’lumotlari mavjud emas.</p>
+            <p class="formula-note">Sof = Jami − Avans − Jarima − Staj · Har bir qiymat yozuvlaridan hisoblanadi.</p>
           </article>
-        </section>
+        </div>
+      </section>
 
-        <!-- Section: Parties -->
-        <section class="view-section" data-section="parties" aria-labelledby="partiesTitle" hidden>
-          <div class="view-heading">
-            <div>
-              <p class="eyebrow">PARTY LEDGER</p>
-              <h1 id="partiesTitle">Partiyalar</h1>
-              <p class="view-subtitle">Patta soni saqlangan jamlanma ko‘rsatkichidir; alohida patta yozuvlari deb talqin qilinmaydi.</p>
+      <!-- Section: Activations -->
+      <section class="view-section" data-section="activations" aria-labelledby="activationsTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <h1 class="sys-page-title" id="activationsTitle">Litsenziya</h1>
+          </div>
+        </div>
+
+        <!-- Segmented Subtabs: So'rovlar vs Litsenziyalar / Siyosat -->
+        <div class="segmented-control" id="activationSubTabs">
+          <button type="button" class="segmented-tab is-active" data-act-subtab="requests"
+            id="actTabRequestsBtn">So‘rovlar · <span id="actSubTabCount">0</span></button>
+          <button type="button" class="segmented-tab" data-act-subtab="policy"
+            id="actTabPolicyBtn">Litsenziyalar</button>
+        </div>
+
+        <!-- Subpane: Requests -->
+        <div id="actRequestsPane" class="act-subpane">
+          <!-- Mobile 1-Tap Activation Feed -->
+          <div id="activationCardGrid" class="activation-card-feed"></div>
+
+          <!-- Expiring Licenses Section for System Admin (04_litsenziya.png) -->
+          <div id="expiringLicensesSection" class="sys-section section-gap">
+            <div class="sys-section-header">
+              <div class="sys-section-title-wrap">
+                <h2 class="sys-section-title">Muddati tugayotgan</h2>
+                <span id="expiringCountBadge" class="sys-count-badge">0</span>
+              </div>
+            </div>
+            <div id="expiringLicensesFeed" class="sys-attention-card">
+              <p class="empty-state" id="expiringLicensesEmpty">Muddati tugayotgan litsenziyalar yo‘q.</p>
             </div>
           </div>
-          <!-- Mobile Parties Feed -->
-          <div id="partyCardGrid" class="party-card-feed"></div>
+        </div>
 
-          <article class="surface-card desktop-table-card">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>YOZUV ID</th>
-                    <th>№</th>
-                    <th>KORXONA</th>
-                    <th>MODEL</th>
-                    <th>HOLAT</th>
-                    <th>PATTA JAMLANMASI</th>
-                    <th>ISH SONI</th>
-                    <th>YANGILANGAN</th>
-                  </tr>
-                </thead>
-                <tbody id="partyRows"></tbody>
-              </table>
-            </div>
-            <p id="partyEmpty" class="empty-state" hidden>Partiya yozuvlari topilmadi.</p>
+        <!-- Subpane: Policy (for Company Admin, 05_aktivatsiya_siyosat.png) -->
+        <div id="actPolicyPane" class="act-subpane" hidden>
+          <article class="surface-card policy-card-box">
+            <form id="actPolicyMobileForm" class="form-grid">
+              <div class="policy-toggle-row">
+                <strong class="policy-toggle-label">Siyosat faol</strong>
+                <label class="switch-toggle">
+                  <input type="checkbox" id="actPolicyMobileActive" checked />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              <label>Ko‘rinadigan nom
+                <input type="text" id="actPolicyMobileName" placeholder="Korxona nomi" maxlength="160" required />
+              </label>
+              <fieldset class="role-fieldset">
+                <legend>Ruxsat etilgan rollar</legend>
+                <label class="check-chip-label"><input type="checkbox" name="actMobileRoles" value="admin" checked />
+                  Admin</label>
+                <label class="check-chip-label"><input type="checkbox" name="actMobileRoles" value="type" checked />
+                  Type</label>
+                <label class="check-chip-label"><input type="checkbox" name="actMobileRoles" value="print" checked />
+                  Print</label>
+              </fieldset>
+              <button id="actPolicyMobileSaveBtn" class="button button-primary button-full"
+                type="button">Saqlash</button>
+            </form>
           </article>
+        </div>
+
+        <article class="surface-card action-card desktop-table-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">AMALLAR</p>
+              <h2>Aktivatsiya so‘rovini boshqarish</h2>
+            </div>
+          </div>
+          <form id="activationForm" class="form-grid activation-form">
+            <label>So‘rov
+              <select name="requestId" id="activationRequestSelect" required>
+                <option value="">So‘rovni tanlang</option>
+              </select>
+            </label>
+            <label>Kompaniya
+              <select name="companyId" id="activationCompanySelect">
+                <option value="">Kompaniyani tanlang</option>
+              </select>
+            </label>
+            <label>Rol
+              <select name="role">
+                <option value="admin">Admin</option>
+                <option value="type">Type</option>
+                <option value="print">Print</option>
+              </select>
+            </label>
+            <label>Rad etish sababi
+              <input name="reason" maxlength="500" placeholder="Sabab ko‘rsating" />
+            </label>
+            <div class="button-row">
+              <button id="approveActivation" class="button button-primary" type="button">Tasdiqlash</button>
+              <button id="rejectActivation" class="button button-danger" type="button">Rad etish</button>
+              <button id="revokeActivation" class="button button-secondary" type="button">Bekor qilish</button>
+            </div>
+          </form>
+          <p class="helper-text">Aktivatsiya so‘rovi xavfsizlik siyosati asosida tasdiqlanadi.</p>
+        </article>
+        <article class="surface-card section-gap desktop-table-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">SO‘ROVLAR RO‘YXATI</p>
+              <h2>So‘rovlar tarixi</h2>
+            </div>
+            <label class="compact-filter">Holat
+              <select id="activationStatusFilter">
+                <option value="">Barchasi</option>
+                <option value="PENDING">Kutilmoqda</option>
+                <option value="APPROVED">Tasdiqlangan</option>
+                <option value="REJECTED">Rad etilgan</option>
+                <option value="REVOKED">Bekor qilingan</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>QURILMA</th>
+                  <th>HOLAT</th>
+                  <th>KOMPANIYA</th>
+                  <th>ROL</th>
+                  <th>SO‘ROV</th>
+                  <th>IMZO</th>
+                </tr>
+              </thead>
+              <tbody id="activationRows"></tbody>
+            </table>
+          </div>
+          <p id="activationEmpty" class="empty-state" hidden>Aktivatsiya so‘rovi topilmadi.</p>
+          <div id="activationEvents" class="event-list" hidden></div>
+        </article>
+      </section>
+
+      <!-- Section: Models -->
+      <section class="view-section" data-section="models" aria-labelledby="modelsTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <div class="title-with-badge">
+              <h1 class="sys-page-title" id="modelsTitle">Modellar</h1>
+              <span id="modelsCountBadge" class="sys-count-badge">0</span>
+            </div>
+          </div>
+        </div>
+        <!-- Search Control -->
+        <div class="company-directory-controls">
+          <div class="search-input-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input type="search" id="modelSearchInput" placeholder="Model nomi yoki ID bo‘yicha qidirish…"
+              autocomplete="off" />
+          </div>
+        </div>
+        <!-- Mobile Models Feed -->
+        <div id="modelCardGrid" class="model-card-feed"></div>
+
+        <article class="surface-card desktop-table-card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>KORXONA</th>
+                  <th>ID</th>
+                  <th>NOMI</th>
+                  <th>AMALLAR / NARXLAR</th>
+                  <th>O‘LCHAMLAR</th>
+                  <th>REVIZIYA</th>
+                </tr>
+              </thead>
+              <tbody id="modelRows"></tbody>
+            </table>
+          </div>
+          <p id="modelEmpty" class="empty-state" hidden>Model yozuvlari topilmadi.</p>
+        </article>
+      </section>
+
+      <!-- Section: Parties -->
+      <section class="view-section" data-section="parties" aria-labelledby="partiesTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <div class="title-with-badge">
+              <h1 class="sys-page-title" id="partiesTitle">Partiyalar</h1>
+              <span id="partiesCountBadge" class="sys-count-badge">0</span>
+            </div>
+          </div>
+        </div>
+        <!-- Search & Filter Controls -->
+        <div class="company-directory-controls">
+          <div class="search-input-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input type="search" id="partySearchInput" placeholder="Partiya raqami yoki model bo‘yicha qidirish…"
+              autocomplete="off" />
+          </div>
+          <div class="filter-chips" id="partyFilterChips">
+            <button type="button" class="chip is-active" data-party-filter="all">Barchasi</button>
+            <button type="button" class="chip" data-party-filter="active">Faol</button>
+            <button type="button" class="chip" data-party-filter="closed">Yopilgan</button>
+          </div>
+        </div>
+        <!-- Mobile Parties Feed -->
+        <div id="partyCardGrid" class="party-card-feed"></div>
+
+        <article class="surface-card desktop-table-card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>YOZUV ID</th>
+                  <th>№</th>
+                  <th>KORXONA</th>
+                  <th>MODEL</th>
+                  <th>HOLAT</th>
+                  <th>PATTA JAMLANMASI</th>
+                  <th>ISH SONI</th>
+                  <th>YANGILANGAN</th>
+                </tr>
+              </thead>
+              <tbody id="partyRows"></tbody>
+            </table>
+          </div>
+          <p id="partyEmpty" class="empty-state" hidden>Partiya yozuvlari topilmadi.</p>
+        </article>
+      </section>
+
+      <!-- Section: System -->
+      <section class="view-section" data-section="system" aria-labelledby="systemTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <h1 class="sys-page-title" id="systemTitle">Tizim</h1>
+          </div>
+        </div>
+
+        <!-- Mobile System Health Screen (05_tizim.png) -->
+        <div class="sys-health-container">
+          <!-- Status List Card -->
+          <article class="surface-card sys-status-list-card">
+            <div class="sys-status-item">
+              <div class="sys-status-left">
+                <span class="sys-chip-dot" id="sysPgDot"></span>
+                <strong>PostgreSQL</strong>
+              </div>
+              <span class="sys-status-badge-pill" id="sysPgLatencyBadge">—</span>
+            </div>
+            <div class="sys-status-item">
+              <div class="sys-status-left">
+                <span class="sys-chip-dot" id="sysBotDot"></span>
+                <strong>Telegram bot</strong>
+              </div>
+              <span class="sys-status-badge-pill" id="sysBotStatusBadge">—</span>
+            </div>
+            <div class="sys-status-item">
+              <div class="sys-status-left">
+                <span class="sys-chip-dot" id="sysApiDot"></span>
+                <strong>API</strong>
+              </div>
+              <span class="sys-status-badge-pill" id="sysApiLatencyBadge">—</span>
+            </div>
+            <div class="sys-status-item">
+              <div class="sys-status-left">
+                <span class="sys-chip-dot" id="sysSyncDot"></span>
+                <strong>Sinxronlash</strong>
+              </div>
+              <span class="sys-status-badge-pill" id="sysSyncDelayBadge">—</span>
+            </div>
+          </article>
+
+          <!-- Restart Sync Button -->
+          <button id="btnRestartSync" class="sys-soft-blue-btn" type="button">
+            <span>Sinxronlashni qayta ishga tushirish</span>
+          </button>
+
+          <!-- Resources Section -->
+          <div class="sys-section section-gap">
+            <div class="sys-section-header">
+              <h2 class="sys-section-title">Resurslar</h2>
+            </div>
+            <article class="surface-card sys-resources-card">
+              <div class="sys-resource-row">
+                <div class="sys-resource-label-row">
+                  <strong>CPU</strong>
+                  <span id="cpuUsageVal">—</span>
+                </div>
+                <div class="co-progress-track">
+                  <div class="co-progress-fill co-fill-blue" id="cpuProgressFill" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="sys-resource-row">
+                <div class="sys-resource-label-row">
+                  <strong>RAM</strong>
+                  <span id="ramUsageVal">—</span>
+                </div>
+                <div class="co-progress-track">
+                  <div class="co-progress-fill co-fill-purple" id="ramProgressFill" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="sys-resource-row">
+                <div class="sys-resource-label-row">
+                  <strong>Disk</strong>
+                  <span id="diskUsageVal">—</span>
+                </div>
+                <div class="co-progress-track">
+                  <div class="co-progress-fill co-fill-orange" id="diskProgressFill" style="width: 0%;"></div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <!-- Oxirgi hodisalar (Recent Events) -->
+          <div class="sys-section section-gap">
+            <div class="sys-section-header">
+              <h2 class="sys-section-title">Oxirgi hodisalar</h2>
+              <button class="sys-link-pill-btn" id="btnAllSysEvents" type="button">Barchasi</button>
+            </div>
+            <div class="sys-events-card" id="sysRecentEventsFeed">
+              <p class="empty-state" id="sysRecentEventsEmpty">Oxirgi xatolik yoki hodisalar qayd etilmagan.</p>
+            </div>
+          </div>
+        </div>
+
+        <article class="surface-card desktop-table-card">
+          <dl class="session-facts">
+            <div>
+              <dt>API</dt>
+              <dd id="systemApi">—</dd>
+            </div>
+            <div>
+              <dt>Ma’lumotlar bazasi</dt>
+              <dd id="systemDatabase">—</dd>
+            </div>
+            <div>
+              <dt>Migratsiya</dt>
+              <dd id="systemMigration">—</dd>
+            </div>
+            <div>
+              <dt>Server versiyasi</dt>
+              <dd id="systemRevision">—</dd>
+            </div>
+            <div>
+              <dt>Tekshirilgan vaqt</dt>
+              <dd id="systemChecked">—</dd>
+            </div>
+            <div>
+              <dt>Bot / Zaxira</dt>
+              <dd id="systemExternal">Avtomatik</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="view-section" data-section="more" aria-labelledby="moreTitle" hidden>
+        <div class="sys-overview-head">
+          <div class="sys-overview-titles">
+            <h1 class="sys-page-title" id="moreTitle">Yana</h1>
+          </div>
+        </div>
+
+        <!-- Mobile Redesigned Yana Container -->
+        <div class="more-screen-container">
+          <!-- Profile Card -->
+          <article id="moreProfileCard" class="more-profile-card more-profile-system">
+            <div class="more-profile-main">
+              <div id="moreAvatar" class="more-avatar">—</div>
+              <div class="more-profile-meta">
+                <strong id="moreAdminName">—</strong>
+                <span id="moreAdminRole" class="more-admin-role">—</span>
+                <span id="moreAdminMeta" class="more-admin-meta">—</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Menu List Card: System Admin -->
+          <div id="moreMenuListSystem" class="more-menu-card">
+            <button class="more-menu-item" data-go="devices" type="button">
+              <div class="more-menu-icon more-icon-blue">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+                  <path d="M12 18h.01" />
+                </svg>
+              </div>
+              <span class="more-menu-label">Qurilmalar</span>
+              <span class="more-menu-chevron">›</span>
+            </button>
+            <button class="more-menu-item" data-go="system" type="button">
+              <div class="more-menu-icon more-icon-amber">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 14 14" />
+                </svg>
+              </div>
+              <span class="more-menu-label">Tizim holati</span>
+              <span class="more-menu-chevron">›</span>
+            </button>
+          </div>
+
+          <!-- Menu List Card: Company Admin -->
+          <div id="moreMenuListCompany" class="more-menu-card" hidden>
+            <button class="more-menu-item" data-go="models" type="button">
+              <div class="more-menu-icon more-icon-purple">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                  <polyline points="2 17 12 22 22 17" />
+                  <polyline points="2 12 12 17 22 12" />
+                </svg>
+              </div>
+              <span class="more-menu-label">Modellar</span>
+              <span class="more-menu-chevron">›</span>
+            </button>
+            <button class="more-menu-item" data-go="parties" type="button">
+              <div class="more-menu-icon more-icon-orange">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path
+                    d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                  <path d="m3.3 7 8.7 5 8.7-5" />
+                  <path d="M12 22V12" />
+                </svg>
+              </div>
+              <span class="more-menu-label">Partiyalar</span>
+              <span class="more-menu-chevron">›</span>
+            </button>
+            <button class="more-menu-item" data-go="devices" type="button">
+              <div class="more-menu-icon more-icon-blue">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+                  <path d="M12 18h.01" />
+                </svg>
+              </div>
+              <span class="more-menu-label">Qurilmalar</span>
+              <span class="more-menu-chevron">›</span>
+            </button>
+            <button class="more-menu-item" data-go="activations" type="button">
+              <div class="more-menu-icon more-icon-cyan">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="7.5" cy="15.5" r="5.5" />
+                  <path d="m21 2-9.6 9.6" />
+                  <path d="m15.5 7.5 3 3L21 8" />
+                </svg>
+              </div>
+              <span class="more-menu-label">Aktivatsiya siyosati</span>
+              <span class="more-menu-chevron">›</span>
+            </button>
+          </div>
+
+          <!-- Danger Logout Card -->
+          <button id="moreSignOutBtn" class="more-signout-card" type="button">
+            <div class="more-signout-content">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" x2="9" y1="12" y2="12" />
+              </svg>
+              <strong class="more-signout-label">Chiqish</strong>
+            </div>
+            <span class="more-menu-chevron more-chevron-red">›</span>
+          </button>
+        </div>
+
+        <!-- Desktop Fallback Grid -->
+        <div class="quick-grid desktop-only-grid">
+          <button class="quick-card quick-violet" data-go="companies"
+            type="button"><span>🏢</span><strong>Korxonalar</strong><small>Scope va aktivatsiya
+              siyosati</small></button>
+          <button class="quick-card quick-blue" data-go="devices"
+            type="button"><span>💻</span><strong>Qurilmalar</strong><small>Ro‘yxat va holat</small></button>
+          <button class="quick-card quick-green" data-go="models"
+            type="button"><span>🧵</span><strong>Modellar</strong><small>Model va narxlar</small></button>
+          <button class="quick-card quick-orange" data-go="parties"
+            type="button"><span>📦</span><strong>Partiyalar</strong><small>Partiya holatlari</small></button>
+          <button class="quick-card quick-slate" data-go="system" type="button"><span>⚙️</span><strong>Tizim
+              holati</strong><small>Server va baza</small></button>
+        </div>
+        <div id="moreCompanyNote" class="more-helper-card" hidden>
+          <div class="helper-icon">🏢</div>
+          <div>
+            <strong>Korxona boshqaruvi</strong>
+            <p>Ishchilar, partiyalar, modellar va balanslar har bir korxonaning profili ichida alohida boshqariladi.</p>
+            <button class="button button-secondary button-sm" data-go="companies" type="button">Korxonalar ro‘yxati
+              →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Retired Legacy Views Vault (Preserved for authority and test contract compatibility) -->
+      <div hidden aria-hidden="true" style="display:none !important;" id="retiredLegacyViewsVault">
+        <p class="eyebrow">UNSUPPORTED CONTROLS RETIRED</p>
+        <button data-view="bindings" type="button"></button>
+        <button data-view="tickets" type="button"></button>
+        <button data-view="balances" type="button"></button>
+        <button data-view="admin" type="button"></button>
+
+        <!-- Section: Bindings -->
+        <section class="view-section" data-section="bindings" aria-labelledby="bindingsTitle" hidden>
+          <div class="view-heading">
+            <h1 id="bindingsTitle">Ishchi bog‘lanishlari</h1>
+          </div>
+          <div id="bindingCardGrid" class="binding-card-feed"></div>
+          <div class="table-wrap desktop-table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>ISHCHI ID</th>
+                  <th>ISM</th>
+                  <th>KORXONA</th>
+                  <th>HOLAT</th>
+                  <th>TELEGRAM ID</th>
+                  <th>USERNAME</th>
+                  <th>BOG‘LANGAN VAQT</th>
+                  <th>AMAL</th>
+                </tr>
+              </thead>
+              <tbody id="bindingRows"></tbody>
+            </table>
+          </div>
+          <p id="bindingEmpty" class="empty-state" hidden>Telegram bog‘lanishi mavjud emas.</p>
+          <div class="button-row pager">
+            <button id="bindingPrevious" class="button button-secondary" type="button">Oldingi</button>
+            <span id="bindingPage" class="count-label"></span>
+            <button id="bindingNext" class="button button-secondary" type="button">Keyingi</button>
+          </div>
         </section>
 
         <!-- Section: Tickets -->
         <section class="view-section" data-section="tickets" aria-labelledby="ticketsTitle" hidden>
           <div class="view-heading">
-            <div>
-              <p class="eyebrow">PRODUCTION FACTS</p>
-              <h1 id="ticketsTitle">Ishlab chiqarish</h1>
-              <p class="view-subtitle">Faqat saqlangan ticket faktlari. Bo‘sh boshlang‘ich holat ham to‘g‘ri natijadir.</p>
-            </div>
+            <h1 id="ticketsTitle">Ishlab chiqarish</h1>
           </div>
-          <!-- Mobile Tickets Feed -->
           <div id="ticketCardGrid" class="ticket-card-feed"></div>
-
-          <article class="surface-card desktop-table-card">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>TICKET ID</th>
-                    <th>ISHCHI</th>
-                    <th>PARTIYA</th>
-                    <th>MODEL</th>
-                    <th>AMAL</th>
-                    <th>MIQDOR</th>
-                    <th>HOLAT</th>
-                    <th>SANA</th>
-                  </tr>
-                </thead>
-                <tbody id="ticketRows"></tbody>
-              </table>
-            </div>
-            <p id="ticketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p>
-          </article>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>TICKET ID</th>
+                  <th>ISHCHI</th>
+                  <th>PARTIYA</th>
+                  <th>MODEL</th>
+                  <th>AMAL</th>
+                  <th>MIQDOR</th>
+                  <th>HOLAT</th>
+                  <th>SANA</th>
+                </tr>
+              </thead>
+              <tbody id="ticketRows"></tbody>
+            </table>
+          </div>
+          <p id="ticketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p>
         </section>
 
         <!-- Section: Balances -->
         <section class="view-section" data-section="balances" aria-labelledby="balancesTitle" hidden>
           <div class="view-heading">
-            <div>
-              <p class="eyebrow">CANONICAL ADJUSTMENT FACTS</p>
-              <h1 id="balancesTitle">Avans va jarima</h1>
-              <p class="view-subtitle">Tarixiy balans faktlari o‘zgarmaydi. Yangi avans yoki jarima shu bo‘limdan kiritilib, ulangan desktoplarga sync qilinadi.</p>
-            </div>
+            <h1 id="balancesTitle">Avans va jarima</h1>
+            <p class="view-subtitle">Yangi avans yoki jarima shu bo‘limdan kiritilib, ulangan desktoplarga sync
+              qilinadi.</p>
           </div>
-          <article class="surface-card filter-card">
-            <label>Biznes scope
-              <select id="balanceCompanySelect">
-                <option value="">Mavjud scope tanlang</option>
+          <select id="balanceCompanySelect">
+            <option value="">Mavjud scope tanlang</option>
+          </select>
+          <select id="balanceViewPeriodSelect">
+            <option value="">Joriy ochiq davr</option>
+          </select>
+          <p id="balancePeriodCaption" class="period-caption">Davr yuklanmoqda</p>
+          <form id="balanceWorkerSearchForm" class="filter-row balance-worker-search">
+            <label>Ishchini qidirish
+              <input name="search" id="balanceWorkerSearch" maxlength="100" placeholder="ID, ism yoki Telegram ID" />
+            </label>
+            <button class="button button-secondary" type="submit">Ishchini topish</button>
+          </form>
+          <form id="balanceAdjustmentForm" class="form-grid balance-adjustment-form">
+            <label>Ishchi
+              <select name="workerId" id="balanceWorkerSelect" required>
+                <option value="">Avval ishchini qidiring</option>
               </select>
             </label>
-            <label>Ko‘rilayotgan davr
-              <select id="balanceViewPeriodSelect"><option value="">Joriy ochiq davr</option></select>
+            <label>Ochiq davr
+              <select name="periodId" id="balancePeriodSelect" required>
+                <option value="">Davrni tanlang</option>
+              </select>
             </label>
-          </article>
-          <p id="balancePeriodCaption" class="period-caption">Davr yuklanmoqda</p>
-          <article class="surface-card section-gap balance-adjustment-card">
-            <div class="card-heading">
-              <div><p class="eyebrow">NEW LEDGER FACT</p><h2>Avans yoki jarima kiritish</h2></div>
-            </div>
-            <form id="balanceWorkerSearchForm" class="filter-row balance-worker-search">
-              <label>Ishchini qidirish
-                <input name="search" id="balanceWorkerSearch" maxlength="100" placeholder="ID, ism yoki Telegram ID" />
-              </label>
-              <button class="button button-secondary" type="submit">Ishchini topish</button>
-            </form>
-            <form id="balanceAdjustmentForm" class="form-grid balance-adjustment-form">
-              <label>Ishchi
-                <select name="workerId" id="balanceWorkerSelect" required><option value="">Avval ishchini qidiring</option></select>
-              </label>
-              <label>Ochiq davr
-                <select name="periodId" id="balancePeriodSelect" required><option value="">Davrni tanlang</option></select>
-              </label>
-              <label>Tur
-                <select name="type" required><option value="AVANS">Avans</option><option value="JARIMA">Jarima</option></select>
-              </label>
-              <label>Miqdor · so‘m
-                <input name="amountDelta" type="number" min="0.01" step="0.01" required />
-              </label>
-              <label class="balance-description">Izoh
-                <input name="description" maxlength="500" placeholder="Sabab yoki qisqa izoh" required />
-              </label>
-              <button id="submitBalanceAdjustment" class="button button-primary" type="submit">Saqlash va sync qilish</button>
-            </form>
-            <p class="helper-text">Yangi fakt PostgreSQL ledger’iga yoziladi va worker revision/change feed orqali ulangan desktoplarga yetadi. Boshlang‘ich balans faktlari esa tarixiy holatda qoladi.</p>
-          </article>
-
-          <!-- Mobile Balances Feed -->
+            <label>Tur
+              <select name="type" required>
+                <option value="AVANS">Avans</option>
+                <option value="JARIMA">Jarima</option>
+              </select>
+            </label>
+            <label>Miqdor · so‘m
+              <input name="amountDelta" type="number" min="0.01" step="0.01" required />
+            </label>
+            <label class="balance-description">Izoh
+              <input name="description" maxlength="500" placeholder="Sabab yoki qisqa izoh" required />
+            </label>
+            <button id="submitBalanceAdjustment" class="button button-primary" type="submit">Saqlash va sync
+              qilish</button>
+          </form>
           <div id="balanceCardGrid" class="balance-card-feed"></div>
-
-          <article class="surface-card desktop-table-card">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ISHCHI</th>
-                    <th>NOMI</th>
-                    <th>TURI</th>
-                    <th>JAMI</th>
-                    <th>FAKTLAR</th>
-                    <th>SHUNDAN BOSHLANG‘ICH</th>
-                  </tr>
-                </thead>
-                <tbody id="balanceRows"></tbody>
-              </table>
-            </div>
-            <p id="balanceEmpty" class="empty-state" hidden>Balans faktlari topilmadi.</p>
-          </article>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ISHCHI</th>
+                  <th>NOMI</th>
+                  <th>TURI</th>
+                  <th>JAMI</th>
+                  <th>FAKTLAR</th>
+                  <th>SHUNDAN BOSHLANG‘ICH</th>
+                </tr>
+              </thead>
+              <tbody id="balanceRows"></tbody>
+            </table>
+          </div>
+          <p id="balanceEmpty" class="empty-state" hidden>Balans faktlari topilmadi.</p>
         </section>
 
-        <!-- Section: System -->
-        <section class="view-section" data-section="system" aria-labelledby="systemTitle" hidden>
-          <div class="sys-overview-head">
-            <div class="sys-overview-titles">
-              <h1 class="sys-page-title" id="systemTitle">Tizim</h1>
-            </div>
-          </div>
-
-          <!-- Mobile System Health Screen (05_tizim.png) -->
-          <div class="sys-health-container">
-            <!-- Status List Card -->
-            <article class="surface-card sys-status-list-card">
-              <div class="sys-status-item">
-                <div class="sys-status-left">
-                  <span class="sys-chip-dot" id="sysPgDot"></span>
-                  <strong>PostgreSQL</strong>
-                </div>
-                <span class="sys-status-badge-pill" id="sysPgLatencyBadge">—</span>
-              </div>
-              <div class="sys-status-item">
-                <div class="sys-status-left">
-                  <span class="sys-chip-dot" id="sysBotDot"></span>
-                  <strong>Telegram bot</strong>
-                </div>
-                <span class="sys-status-badge-pill" id="sysBotStatusBadge">—</span>
-              </div>
-              <div class="sys-status-item">
-                <div class="sys-status-left">
-                  <span class="sys-chip-dot" id="sysApiDot"></span>
-                  <strong>API</strong>
-                </div>
-                <span class="sys-status-badge-pill" id="sysApiLatencyBadge">—</span>
-              </div>
-              <div class="sys-status-item">
-                <div class="sys-status-left">
-                  <span class="sys-chip-dot" id="sysSyncDot"></span>
-                  <strong>Sinxronlash</strong>
-                </div>
-                <span class="sys-status-badge-pill" id="sysSyncDelayBadge">—</span>
-              </div>
-            </article>
-
-            <!-- Restart Sync Button -->
-            <button id="btnRestartSync" class="sys-soft-blue-btn" type="button">
-              <span>Sinxronlashni qayta ishga tushirish</span>
-            </button>
-
-            <!-- Resources Section -->
-            <div class="sys-section section-gap">
-              <div class="sys-section-header">
-                <h2 class="sys-section-title">Resurslar</h2>
-              </div>
-              <article class="surface-card sys-resources-card">
-                <div class="sys-resource-row">
-                  <div class="sys-resource-label-row">
-                    <strong>CPU</strong>
-                    <span id="cpuUsageVal">—</span>
-                  </div>
-                  <div class="co-progress-track">
-                    <div class="co-progress-fill co-fill-blue" id="cpuProgressFill" style="width: 0%;"></div>
-                  </div>
-                </div>
-
-                <div class="sys-resource-row">
-                  <div class="sys-resource-label-row">
-                    <strong>RAM</strong>
-                    <span id="ramUsageVal">—</span>
-                  </div>
-                  <div class="co-progress-track">
-                    <div class="co-progress-fill co-fill-purple" id="ramProgressFill" style="width: 0%;"></div>
-                  </div>
-                </div>
-
-                <div class="sys-resource-row">
-                  <div class="sys-resource-label-row">
-                    <strong>Disk</strong>
-                    <span id="diskUsageVal">—</span>
-                  </div>
-                  <div class="co-progress-track">
-                    <div class="co-progress-fill co-fill-orange" id="diskProgressFill" style="width: 0%;"></div>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <!-- Oxirgi hodisalar (Recent Events) -->
-            <div class="sys-section section-gap">
-              <div class="sys-section-header">
-                <h2 class="sys-section-title">Oxirgi hodisalar</h2>
-                <button class="sys-link-pill-btn" id="btnAllSysEvents" type="button">Barchasi</button>
-              </div>
-              <div class="sys-events-card" id="sysRecentEventsFeed">
-                <p class="empty-state" id="sysRecentEventsEmpty">Oxirgi xatolik yoki hodisalar qayd etilmagan.</p>
-              </div>
-            </div>
-          </div>
-
-          <article class="surface-card desktop-table-card">
-            <dl class="session-facts">
-              <div><dt>API</dt><dd id="systemApi">—</dd></div>
-              <div><dt>PostgreSQL</dt><dd id="systemDatabase">—</dd></div>
-              <div><dt>Schema Migration</dt><dd id="systemMigration">—</dd></div>
-              <div><dt>Server Revision</dt><dd id="systemRevision">—</dd></div>
-              <div><dt>Tekshirilgan vaqt</dt><dd id="systemChecked">—</dd></div>
-              <div><dt>Bot / Backup</dt><dd id="systemExternal">API’dan taqdim etilmaydi</dd></div>
-            </dl>
-          </article>
-        </section>
-
-        <!-- Section: Admin Session -->
+        <!-- Section: Admin -->
         <section class="view-section" data-section="admin" aria-labelledby="adminTitle" hidden>
           <div class="view-heading">
-            <div>
-              <p class="eyebrow">IDENTITY & ACCESS</p>
-              <h1 id="adminTitle">Admin sessiyasi</h1>
-              <p class="view-subtitle">Telegram imzosi serverda tekshiriladi; ushbu panel admin allowlistini o‘zgartirmaydi.</p>
-            </div>
+            <h1 id="adminTitle">Admin sessiyasi</h1>
           </div>
           <article class="surface-card session-card">
-            <div class="session-stamp">AUTHENTICATED</div>
+            <div class="session-stamp">TASDIQLANGAN</div>
             <dl class="session-facts">
-              <div><dt>Telegram ID</dt><dd id="sessionTelegramId">—</dd></div>
-              <div><dt>Admin nomi</dt><dd id="sessionName">—</dd></div>
-              <div><dt>Session tugashi</dt><dd id="sessionExpires">—</dd></div>
-              <div><dt>Ruxsat manbai</dt><dd>VPS secret · ADMIN_TELEGRAM_IDS</dd></div>
-              <div><dt>API authority</dt><dd>Authenticated routes</dd></div>
+              <div>
+                <dt>Telegram ID</dt>
+                <dd id="sessionTelegramId">—</dd>
+              </div>
+              <div>
+                <dt>Admin nomi</dt>
+                <dd id="sessionName">—</dd>
+              </div>
+              <div>
+                <dt>Session tugashi</dt>
+                <dd id="sessionExpires">—</dd>
+              </div>
             </dl>
             <button id="signOutButton" class="button button-secondary" type="button">Sessiyani yopish</button>
           </article>
-          <article class="surface-card section-gap retired-card">
-            <p class="eyebrow">UNSUPPORTED CONTROLS RETIRED</p>
-            <h2>Serverda mavjud bo‘lmagan ma’lumotlar</h2>
-            <p>Qurilma telemetriyasi, korxona egasini tayinlash, kutilayotgan telefon egasi va ixtiyoriy kalit yaratish boshqaruvlari bu panelga kiritilmaydi. PostgreSQL’da mos authority bo‘lmasa, ma’lumot ko‘rsatilmaydi yoki amal rad etiladi.</p>
-          </article>
         </section>
+      </div>
 
-        <section class="view-section" data-section="more" aria-labelledby="moreTitle" hidden>
-          <div class="sys-overview-head">
-            <div class="sys-overview-titles">
-              <h1 class="sys-page-title" id="moreTitle">Yana</h1>
-            </div>
-          </div>
+      <!-- Footer -->
+      <footer class="page-footer">
+        <span>Novda · PostgreSQL authoritative</span>
+        <span id="footerVersion">Boshqaruv paneli</span>
+      </footer>
+    </main>
+  </div>
 
-          <!-- Mobile Redesigned Yana Container (07_yana.png & 08_yana.png) -->
-          <div class="more-screen-container">
-            <!-- Profile Card -->
-            <article id="moreProfileCard" class="more-profile-card more-profile-system">
-              <div class="more-profile-main">
-                <div id="moreAvatar" class="more-avatar">—</div>
-                <div class="more-profile-meta">
-                  <strong id="moreAdminName">—</strong>
-                  <span id="moreAdminRole" class="more-admin-role">—</span>
-                  <span id="moreAdminMeta" class="more-admin-meta">—</span>
-                </div>
-              </div>
-            </article>
+  <dialog id="workerDialog" class="worker-dialog">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <form id="workerEditForm" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">ISHCHI PROFILI</p>
+          <h2>Ishchini tahrirlash</h2>
+        </div><button id="closeWorkerDialog" class="icon-button" type="button" aria-label="Yopish">×</button>
+      </div>
+      <input name="workerId" type="hidden" />
+      <input name="companyId" type="hidden" />
+      <input name="baseRevision" type="hidden" />
+      <label>Ism<input name="name" maxlength="160" required /></label>
+      <label>Lavozim / rol<input name="role" maxlength="128" /></label>
+      <label>Staj summasi<input name="staj" type="number" min="0" step="0.01" required /></label>
+      <p id="workerInactiveNote" class="helper-text" hidden>Nofaol ishchini tahrirlashdan oldin faollashtiring.</p>
+      <div class="adjustment-fields">
+        <p class="eyebrow">HISOB-FAKT</p>
+        <label>Amal turi<select name="adjustmentType">
+            <option value="">Kiritilmaydi</option>
+            <option value="AVANS">Avans</option>
+            <option value="JARIMA">Jarima</option>
+          </select></label>
+        <label>Ochiq davr<select name="periodId" id="workerAdjustmentPeriod">
+            <option value="">Davrni tanlang</option>
+          </select></label>
+        <label>Miqdor<input name="amountDelta" type="number" min="0.01" step="0.01" /></label>
+        <label>Izoh<input name="description" maxlength="500" /></label>
+      </div>
+      <div class="button-row dialog-actions"><button id="workerStatusButton" class="button button-secondary"
+          type="button">Status</button><button class="button button-primary" type="submit">Saqlash</button></div>
+    </form>
+  </dialog>
 
-            <!-- Menu List Card: System Admin -->
-            <div id="moreMenuListSystem" class="more-menu-card">
-              <button class="more-menu-item" data-go="devices" type="button">
-                <div class="more-menu-icon more-icon-blue">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
-                </div>
-                <span class="more-menu-label">Qurilmalar</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="admin" type="button">
-                <div class="more-menu-icon more-icon-purple">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                </div>
-                <span class="more-menu-label">Adminlar</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="bindings" type="button">
-                <div class="more-menu-icon more-icon-cyan">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                </div>
-                <span class="more-menu-label">Telegram bot</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="system" type="button">
-                <div class="more-menu-icon more-icon-amber">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
-                </div>
-                <span class="more-menu-label">Tizim holati</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-            </div>
-
-            <!-- Menu List Card: Company Admin -->
-            <div id="moreMenuListCompany" class="more-menu-card" hidden>
-              <button class="more-menu-item" data-go="models" type="button">
-                <div class="more-menu-icon more-icon-purple">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-                </div>
-                <span class="more-menu-label">Modellar</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="parties" type="button">
-                <div class="more-menu-icon more-icon-orange">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                </div>
-                <span class="more-menu-label">Partiyalar</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="bindings" type="button">
-                <div class="more-menu-icon more-icon-cyan">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                </div>
-                <span class="more-menu-label">Telegram sozlamalari</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="admin" type="button">
-                <div class="more-menu-icon more-icon-blue">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                </div>
-                <span class="more-menu-label">Admin sessiyasi</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-            </div>
-
-            <!-- Danger Logout Card -->
-            <button id="moreSignOutBtn" class="more-signout-card" type="button">
-              <div class="more-signout-content">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                <strong class="more-signout-label">Chiqish</strong>
-              </div>
-              <span class="more-menu-chevron more-chevron-red">›</span>
-            </button>
-          </div>
-
-          <!-- Desktop Fallback Grid -->
-          <div class="quick-grid desktop-only-grid">
-            <button class="quick-card quick-violet" data-go="companies" type="button"><span>🏢</span><strong>Korxonalar</strong><small>Scope va aktivatsiya siyosati</small></button>
-            <button class="quick-card quick-blue" data-go="devices" type="button"><span>💻</span><strong>Qurilmalar</strong><small>Ro‘yxat va holat</small></button>
-            <button class="quick-card quick-green" data-go="models" type="button"><span>🧵</span><strong>Modellar</strong><small>Model va narxlar</small></button>
-            <button class="quick-card quick-orange" data-go="parties" type="button"><span>📦</span><strong>Partiyalar</strong><small>Partiya holatlari</small></button>
-            <button class="quick-card quick-pink" data-go="tickets" type="button"><span>🪡</span><strong>Ishlab chiqarish</strong><small>Ticket faktlari · read-only</small></button>
-            <button class="quick-card quick-cyan" data-go="balances" type="button"><span>💳</span><strong>Avans va jarima</strong><small>Hisob-kitob faktlari</small></button>
-            <button class="quick-card quick-slate" data-go="system" type="button"><span>⚙️</span><strong>Tizim holati</strong><small>Server va baza</small></button>
-            <button class="quick-card quick-violet" data-go="admin" type="button"><span>🛡️</span><strong>Admin sessiyasi</strong><small>Hisob va sessiya</small></button>
-          </div>
-          <div id="moreCompanyNote" class="more-helper-card" hidden>
-            <div class="helper-icon">🏢</div>
-            <div>
-              <strong>Korxona boshqaruvi</strong>
-              <p>Ishchilar, partiyalar, modellar va balanslar har bir korxonaning profili ichida alohida boshqariladi.</p>
-              <button class="button button-secondary button-sm" data-go="companies" type="button">Korxonalar ro‘yxati →</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Footer -->
-        <footer class="page-footer">
-          <span>Novda · PostgreSQL authoritative</span>
-          <span id="footerVersion">ADMIN WEBAPP / LIGHT</span>
-        </footer>
-      </main>
-    </div>
-
-    <dialog id="workerDialog" class="worker-dialog">
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <form id="workerEditForm" method="dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">WORKER PROFILE</p><h2>Ishchini tahrirlash</h2></div><button id="closeWorkerDialog" class="icon-button" type="button" aria-label="Yopish">×</button></div>
-        <input name="workerId" type="hidden" />
-        <input name="companyId" type="hidden" />
-        <input name="baseRevision" type="hidden" />
-        <label>Ism<input name="name" maxlength="160" required /></label>
-        <label>Lavozim / rol<input name="role" maxlength="128" /></label>
-        <label>Staj summasi<input name="staj" type="number" min="0" step="0.01" required /></label>
-        <p id="workerInactiveNote" class="helper-text" hidden>Nofaol ishchini tahrirlashdan oldin faollashtiring.</p>
-        <div class="adjustment-fields">
-          <p class="eyebrow">YANGI HISOB-FAKTI</p>
-          <label>Amal turi<select name="adjustmentType"><option value="">Kiritilmaydi</option><option value="AVANS">Avans</option><option value="JARIMA">Jarima</option></select></label>
-          <label>Ochiq davr<select name="periodId" id="workerAdjustmentPeriod"><option value="">Davrni tanlang</option></select></label>
-          <label>Miqdor<input name="amountDelta" type="number" min="0.01" step="0.01" /></label>
-          <label>Izoh<input name="description" maxlength="500" /></label>
+  <!-- Quick Advance / Penalty Bottom Sheet -->
+  <dialog id="quickAdjustmentDialog" class="worker-dialog bottom-sheet">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <form id="quickAdjustmentForm" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">TEZKOR AMAL</p>
+          <h2 id="quickAdjWorkerTitle">Avans yoki Jarima</h2>
         </div>
-        <div class="button-row dialog-actions"><button id="workerStatusButton" class="button button-secondary" type="button">Status</button><button class="button button-primary" type="submit">Saqlash</button></div>
-      </form>
-    </dialog>
+        <button id="closeQuickAdjDialog" class="icon-button" type="button" aria-label="Yopish">×</button>
+      </div>
+      <input name="workerId" id="quickAdjWorkerId" type="hidden" />
+      <input name="companyId" id="quickAdjCompanyId" type="hidden" />
 
-    <!-- Quick Advance / Penalty Bottom Sheet -->
-    <dialog id="quickAdjustmentDialog" class="worker-dialog bottom-sheet">
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <form id="quickAdjustmentForm" method="dialog">
-        <div class="dialog-heading">
-          <div>
-            <p class="eyebrow">TEZKOR HISOB-FAKTI</p>
-            <h2 id="quickAdjWorkerTitle">Avans yoki Jarima</h2>
-          </div>
-          <button id="closeQuickAdjDialog" class="icon-button" type="button" aria-label="Yopish">×</button>
-        </div>
-        <input name="workerId" id="quickAdjWorkerId" type="hidden" />
-        <input name="companyId" id="quickAdjCompanyId" type="hidden" />
-
-        <div class="quick-adj-worker-badge" id="quickAdjWorkerBadge">
-          <div class="adj-avatar">👤</div>
-          <div>
-            <strong id="quickAdjWorkerName">—</strong>
-            <span id="quickAdjCompanyLabel" class="mono muted">ID: —</span>
-          </div>
-        </div>
-
-        <div id="quickAdjWorkerSelectWrap" class="quick-adj-select-wrap" hidden>
-          <label>Ishchini tanlang
-            <select id="quickAdjWorkerSelect">
-              <option value="">Ishchini tanlang...</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="quick-type-toggle">
-          <label class="toggle-option">
-            <input type="radio" name="type" value="AVANS" checked />
-            <span class="toggle-pill pill-avans">💵 Avans</span>
-          </label>
-          <label class="toggle-option">
-            <input type="radio" name="type" value="JARIMA" />
-            <span class="toggle-pill pill-jarima">⚠️ Jarima</span>
-          </label>
-        </div>
-
-        <label>Ochiq davr
-          <select name="periodId" id="quickAdjPeriodSelect" required>
-            <option value="">Davr yuklanmoqda...</option>
-          </select>
-        </label>
-
-        <label>Miqdor (so‘m)
-          <input name="amountDelta" id="quickAdjAmount" type="number" min="0.01" step="0.01" placeholder="Miqdor (so‘m)" required />
-        </label>
-
-        <div class="quick-amount-chips">
-          <button type="button" class="amount-chip" data-amount="50000">50 ming</button>
-          <button type="button" class="amount-chip" data-amount="100000">100 ming</button>
-          <button type="button" class="amount-chip" data-amount="200000">200 ming</button>
-          <button type="button" class="amount-chip" data-amount="500000">500 ming</button>
-          <button type="button" class="amount-chip" data-amount="1000000">1 mln</button>
-        </div>
-
-        <label>Izoh
-          <input name="description" id="quickAdjDescription" maxlength="500" placeholder="Sabab yoki qisqa izoh" required />
-        </label>
-
-        <div class="button-row dialog-actions">
-          <button id="cancelQuickAdj" class="button button-secondary" type="button">Bekor qilish</button>
-          <button id="submitQuickAdj" class="button button-primary" type="submit">Saqlash va sync qilish</button>
-        </div>
-      </form>
-    <!-- Worker Salary Detail Dialog (03_ishchi_oylik_tafsiloti.png) -->
-    <dialog id="workerSalaryDetailDialog" class="worker-dialog bottom-sheet">
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <div class="wsd-container">
-        <div class="wsd-header">
-          <button id="closeSalaryDetailDialog" class="wsd-back-btn" type="button" aria-label="Orqaga">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <div class="wsd-worker-meta">
-            <h2 id="wsdWorkerName" class="wsd-worker-name">—</h2>
-            <div class="wsd-worker-sub">
-              <span id="wsdWorkerRole">—</span>
-              <span class="wsd-meta-dot">·</span>
-              <span id="wsdWorkerId" class="mono">—</span>
-              <span id="wsdWorkerBoundBadge" class="wsd-bound-badge">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Hero Card (Indigo Gradient) -->
-        <article class="co-hero-banner wsd-hero-banner">
-          <div class="co-hero-content">
-            <span class="co-hero-caption">TO‘LANADIGAN</span>
-            <div class="wsd-hero-amount-row">
-              <strong id="wsdNetPay" class="co-hero-num">—</strong>
-              <span class="co-currency-light">so‘m</span>
-            </div>
-          </div>
-          <div id="wsdPayStatusBadge" class="co-hero-badge wsd-pay-status">
-            <span>Kutilmoqda</span>
-          </div>
-        </article>
-
-        <!-- 3 Stats in a Row -->
-        <div class="wsd-stats-row">
-          <div class="wsd-stat-box">
-            <span class="wsd-stat-label">Dona</span>
-            <strong id="wsdStatPieces" class="wsd-stat-num">—</strong>
-          </div>
-          <div class="wsd-stat-box">
-            <span class="wsd-stat-label">Kun</span>
-            <strong id="wsdStatDays" class="wsd-stat-num">—</strong>
-          </div>
-          <div class="wsd-stat-box">
-            <span class="wsd-stat-label">Kuniga</span>
-            <strong id="wsdStatDaily" class="wsd-stat-num">—</strong>
-          </div>
-        </div>
-
-        <!-- Breakdown Card (Tarkibi) -->
-        <article class="surface-card wsd-breakdown-card">
-          <h3 class="wsd-card-title">Tarkibi</h3>
-          <div class="wsd-line-item">
-            <span>Dona ish haqi</span>
-            <strong id="wsdPieceWorkPay" class="wsd-positive">—</strong>
-          </div>
-          <div class="wsd-line-item">
-            <span>Bonus / Staj</span>
-            <strong id="wsdStajBonus" class="wsd-positive">—</strong>
-          </div>
-          <div class="wsd-line-item">
-            <span>Jarima</span>
-            <strong id="wsdPenalty" class="wsd-negative">—</strong>
-          </div>
-          <div class="wsd-line-item">
-            <span>Avans</span>
-            <strong id="wsdAdvance" class="wsd-negative">—</strong>
-          </div>
-        </article>
-
-        <!-- Previous Months List (Oldingi oylar) -->
-        <article class="surface-card wsd-history-card">
-          <h3 class="wsd-card-title">Oldingi oylar</h3>
-          <div class="wsd-history-list" id="wsdHistoryList">
-            <p class="empty-state" id="wsdHistoryEmpty">Oldingi yopiq davrlar mavjud emas.</p>
-          </div>
-        </article>
-
-        <!-- Action Button -->
-        <div class="wsd-actions">
-          <button id="wsdAddAdjustmentBtn" class="button button-primary button-full" type="button">
-            + Avans yoki Jarima kiritish
-          </button>
+      <div class="quick-adj-worker-badge" id="quickAdjWorkerBadge">
+        <div class="adj-avatar">👤</div>
+        <div>
+          <strong id="quickAdjWorkerName">—</strong>
+          <span id="quickAdjCompanyLabel" class="mono muted">ID: —</span>
         </div>
       </div>
-    </dialog>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  </body>
+      <div id="quickAdjWorkerSelectWrap" class="quick-adj-select-wrap" hidden>
+        <label>Ishchini tanlang
+          <select id="quickAdjWorkerSelect">
+            <option value="">Ishchini tanlang...</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="quick-type-toggle">
+        <label class="toggle-option">
+          <input type="radio" name="type" value="AVANS" checked />
+          <span class="toggle-pill pill-avans">💵 Avans</span>
+        </label>
+        <label class="toggle-option">
+          <input type="radio" name="type" value="JARIMA" />
+          <span class="toggle-pill pill-jarima">⚠️ Jarima</span>
+        </label>
+      </div>
+
+      <label>Ochiq davr
+        <select name="periodId" id="quickAdjPeriodSelect" required>
+          <option value="">Davr yuklanmoqda...</option>
+        </select>
+      </label>
+
+      <label>Miqdor (so‘m)
+        <input name="amountDelta" id="quickAdjAmount" type="number" min="0.01" step="0.01" placeholder="Miqdor (so‘m)"
+          required />
+      </label>
+
+      <div class="quick-amount-chips">
+        <button type="button" class="amount-chip" data-amount="50000">50 ming</button>
+        <button type="button" class="amount-chip" data-amount="100000">100 ming</button>
+        <button type="button" class="amount-chip" data-amount="200000">200 ming</button>
+        <button type="button" class="amount-chip" data-amount="500000">500 ming</button>
+        <button type="button" class="amount-chip" data-amount="1000000">1 mln</button>
+      </div>
+
+      <label>Izoh
+        <input name="description" id="quickAdjDescription" maxlength="500" placeholder="Sabab yoki qisqa izoh"
+          required />
+      </label>
+
+      <div class="button-row dialog-actions">
+        <button id="cancelQuickAdj" class="button button-secondary" type="button">Bekor qilish</button>
+        <button id="submitQuickAdj" class="button button-primary" type="submit">Saqlash va sync qilish</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Worker Salary Detail Dialog (03_ishchi_oylik_tafsiloti.png) -->
+  <dialog id="workerSalaryDetailDialog" class="worker-dialog bottom-sheet">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="wsd-container">
+      <div class="wsd-header">
+        <button id="closeSalaryDetailDialog" class="wsd-back-btn" type="button" aria-label="Orqaga">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+        <div class="wsd-worker-meta">
+          <h2 id="wsdWorkerName" class="wsd-worker-name">—</h2>
+          <div class="wsd-worker-sub">
+            <span id="wsdWorkerRole">—</span>
+            <span class="wsd-meta-dot">·</span>
+            <span id="wsdWorkerId" class="mono">—</span>
+            <span id="wsdWorkerBoundBadge" class="wsd-bound-badge">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Card (Indigo Gradient) -->
+      <article class="co-hero-banner wsd-hero-banner">
+        <div class="co-hero-content">
+          <span class="co-hero-caption">TO‘LANADIGAN</span>
+          <div class="wsd-hero-amount-row">
+            <strong id="wsdNetPay" class="co-hero-num">—</strong>
+            <span class="co-currency-light">so‘m</span>
+          </div>
+        </div>
+        <div id="wsdPayStatusBadge" class="co-hero-badge wsd-pay-status">
+          <span>Kutilmoqda</span>
+        </div>
+      </article>
+
+      <!-- 3 Stats in a Row -->
+      <div class="wsd-stats-row">
+        <div class="wsd-stat-box">
+          <span class="wsd-stat-label">Dona</span>
+          <strong id="wsdStatPieces" class="wsd-stat-num">—</strong>
+        </div>
+        <div class="wsd-stat-box">
+          <span class="wsd-stat-label">Kun</span>
+          <strong id="wsdStatDays" class="wsd-stat-num">—</strong>
+        </div>
+        <div class="wsd-stat-box">
+          <span class="wsd-stat-label">Kuniga</span>
+          <strong id="wsdStatDaily" class="wsd-stat-num">—</strong>
+        </div>
+      </div>
+
+      <!-- Breakdown Card (Tarkibi) -->
+      <article class="surface-card wsd-breakdown-card">
+        <h3 class="wsd-card-title">Tarkibi</h3>
+        <div class="wsd-line-item">
+          <span>Dona ish haqi</span>
+          <strong id="wsdPieceWorkPay" class="wsd-positive">—</strong>
+        </div>
+        <div class="wsd-line-item">
+          <span>Bonus / Staj</span>
+          <strong id="wsdStajBonus" class="wsd-positive">—</strong>
+        </div>
+        <div class="wsd-line-item">
+          <span>Jarima</span>
+          <strong id="wsdPenalty" class="wsd-negative">—</strong>
+        </div>
+        <div class="wsd-line-item">
+          <span>Avans</span>
+          <strong id="wsdAdvance" class="wsd-negative">—</strong>
+        </div>
+      </article>
+
+      <!-- Previous Months List (Oldingi oylar) -->
+      <article class="surface-card wsd-history-card">
+        <h3 class="wsd-card-title">Oldingi oylar</h3>
+        <div class="wsd-history-list" id="wsdHistoryList">
+          <p class="empty-state" id="wsdHistoryEmpty">Oldingi yopiq davrlar mavjud emas.</p>
+        </div>
+      </article>
+
+      <!-- Action Button -->
+      <div class="wsd-actions">
+        <button id="wsdAddAdjustmentBtn" class="button button-primary button-full" type="button">
+          + Avans yoki Jarima kiritish
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+
 </html>
