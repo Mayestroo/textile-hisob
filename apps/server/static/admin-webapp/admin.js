@@ -46,11 +46,59 @@
     if (node) node.textContent = value == null ? '' : String(value);
   }
 
+  function setOnlineStatus(isOnline, labelText = null) {
+    const topDot = byId('topOnlineIndicator');
+    if (topDot) {
+      topDot.classList.toggle('is-offline', !isOnline);
+      topDot.title = isOnline ? 'Tizim onlayn' : 'Aloqa uzilgan (Oflayn)';
+    }
+    const pill = byId('connectionPill');
+    if (pill) {
+      pill.classList.toggle('is-offline', !isOnline);
+    }
+    const label = byId('connectionLabel');
+    if (label) {
+      label.textContent = labelText || (isOnline ? 'Ulangan' : 'Oflayn');
+    }
+  }
+
+  function setChipDot(id, status) {
+    const el = byId(id);
+    if (!el) return;
+    el.className = `sys-chip-dot ${status === 'green' ? 'sys-dot-green' : status === 'amber' ? 'sys-dot-amber' : 'sys-dot-red'}`;
+  }
+
   function node(tag, className, value) {
     const element = document.createElement(tag);
     if (className) element.className = className;
     if (value !== undefined && value !== null) element.textContent = String(value);
     return element;
+  }
+
+  function svgIcon(paths, size = 18, strokeWidth = 2, viewBox = '0 0 24 24') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(size));
+    svg.setAttribute('height', String(size));
+    svg.setAttribute('viewBox', viewBox);
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', String(strokeWidth));
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    for (const d of (Array.isArray(paths) ? paths : [paths])) {
+      if (typeof d === 'string') {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        svg.appendChild(path);
+      } else if (d && d.tag) {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', d.tag);
+        for (const [k, v] of Object.entries(d.attrs || {})) {
+          el.setAttribute(k, String(v));
+        }
+        svg.appendChild(el);
+      }
+    }
+    return svg;
   }
 
   function cell(row, value, className, label) {
@@ -81,6 +129,21 @@
     }).formatToParts(date);
     const fields = Object.fromEntries(parts.map((part) => [part.type, part.value]));
     return `${fields.day}.${fields.month}.${fields.year} ${fields.hour}:${fields.minute}`;
+  }
+
+  function formatRelativeTime(value) {
+    if (!value) return 'Hali sinxronlanmagan';
+    const date = new Date(value);
+    const time = date.getTime();
+    if (Number.isNaN(time)) return 'Hali sinxronlanmagan';
+    const diffSec = Math.max(0, Math.floor((Date.now() - time) / 1000));
+    if (diffSec < 60) return 'Hozirgina';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} daqiqa oldin`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours} soat oldin`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} kun oldin`;
   }
 
   function statusLabel(value) {
@@ -151,10 +214,12 @@
         redirect: 'error'
       });
     } catch {
+      setOnlineStatus(false, 'Aloqa yo‘q');
       const error = new Error('API_UNAVAILABLE');
       error.code = 'API_UNAVAILABLE';
       throw error;
     }
+    setOnlineStatus(true, 'Ulangan');
     let result;
     try { result = await response.json(); } catch { result = null; }
     if (response.status === 401 || response.status === 403) {
@@ -192,6 +257,9 @@
       if (count > 0) {
         setText('urgentBannerTitle', `${number(count)} ta yangi aktivatsiya so‘rovi`);
         setText('urgentBannerSubtitle', 'Qurilmalarni tasdiqlash yoki ko‘rib chiqish uchun bosing');
+      } else {
+        setText('urgentBannerTitle', '—');
+        setText('urgentBannerSubtitle', '—');
       }
     }
   }
@@ -235,9 +303,12 @@
       dirContainer.hidden = false;
       globalContainer.hidden = true;
       const companyId = state.access?.companyIds?.[0] || '';
-      const company = (state.companies || []).find((c) => c.companyId === companyId) || { companyId, companyName: 'Novda Textile' };
-      setText('dirCompanyName', company.companyName || company.companyId || 'To‘qimachilik Korxonasi');
+      const company = (state.companies || []).find((c) => c.companyId === companyId) || { companyId, companyName: companyId ? `Korxona (${companyId})` : 'Korxona' };
+      const coTitle = company.companyName || (company.companyId ? `Korxona (${company.companyId})` : 'Korxona');
+      setText('dirCompanyName', coTitle);
       setText('dirCompanyId', `ID: ${company.companyId || '—'}`);
+      setText('mobileBrandName', coTitle);
+      setText('mobileBrandInitial', coTitle.charAt(0).toUpperCase());
 
       try {
         const [overviewRes, payrollRes, partiesRes, ticketsRes] = await Promise.all([
@@ -264,6 +335,11 @@
         const pendingCount = Number(summary.pendingActivations || 0);
         setText('coPendingHeroCount', number(pendingCount));
         setText('coPendingHeroText', pendingCount > 0 ? `${pendingCount} ta so‘rov` : 'Navbat bo‘sh');
+        const heroBadge = byId('coPendingHeroBadge');
+        if (heroBadge) {
+          const checkSpan = heroBadge.querySelector('.co-badge-check');
+          if (checkSpan) checkSpan.textContent = pendingCount > 0 ? '⚡' : '✓';
+        }
 
         const workersCount = Number(summary.workers || workersList.length || 0);
         setText('coStatWorkers', number(workersCount));
@@ -272,13 +348,13 @@
         setText('coStatParties', number(activeParties));
         setText('coStatDevices', number(summary.devices || 0));
 
-        setText('coStatPayroll', totalGross > 0 ? number(totalGross) : '186 400 000');
-        const payPct = totalGross > 0 ? Math.round((totalNet / totalGross) * 100) : 69;
+        setText('coStatPayroll', totalGross > 0 ? number(totalGross) : '0');
+        const payPct = totalGross > 0 ? Math.round((totalNet / totalGross) * 100) : 0;
         setText('coPayrollPct', `${payPct}%`);
         const payFill = byId('coPayrollProgressFill');
         if (payFill) payFill.style.width = `${payPct}%`;
-        setText('coPayrollPaid', `To‘langan ${totalNet > 0 ? (totalNet / 1000000).toFixed(1) : '128,6'} mln`);
-        setText('coPayrollRemaining', `Qoldi ${remaining > 0 ? (remaining / 1000000).toFixed(1) : '57,8'} mln`);
+        setText('coPayrollPaid', totalNet > 0 ? `To‘langan ${(totalNet / 1000000).toFixed(1)} mln` : 'To‘langan 0');
+        setText('coPayrollRemaining', remaining > 0 ? `Qoldi ${(remaining / 1000000).toFixed(1)} mln` : 'Qoldi 0');
 
         const boundWorkers = Number(summary.workerBindings || 0);
         setText('coTelegramRatio', `${number(boundWorkers)} / ${number(workersCount)}`);
@@ -343,13 +419,22 @@
             ticketList.appendChild(card);
           }
         }
+        updatePendingNavBadge(pendingCount);
+        setText('lastUpdated', `Yangilandi ${timestamp(new Date().toISOString())}`);
+        return;
       } catch {
         // Fallback gracefully
+        return;
       }
     } else if (dirContainer && globalContainer) {
       dirContainer.hidden = true;
       globalContainer.hidden = false;
     }
+
+    if (dirContainer) dirContainer.hidden = true;
+    if (globalContainer) globalContainer.hidden = false;
+    setText('mobileBrandName', 'Novo System');
+    setText('mobileBrandInitial', 'N');
 
     const [overviewResult, activationResult] = await Promise.all([
       request(`${API}/overview`),
@@ -366,17 +451,29 @@
     setText('recentSyncAt', summary.recentSyncAt ? timestamp(summary.recentSyncAt) : 'Hali mavjud emas');
 
     // System Admin Executive Mobile Dashboard Fields
-    setText('sysPendingHeroCount', number(summary.pendingActivations ?? 7));
-    setText('sysMetricCompanies', number(summary.companies ?? 14));
-    setText('sysMetricWorkers', number(summary.workers ?? 3482));
-    setText('sysMetricDevices', number(summary.devices ?? 126));
-    if (byId('sysAlertPartiesSub')) {
-      byId('sysAlertPartiesSub').textContent = `${number(summary.parties ?? 41)} ta · Farg'ona Garment: 19`;
-    }
+    const pendingCount = Number(summary.pendingActivations || 0);
+    setText('sysPendingHeroCount', number(pendingCount));
+    setText('sysPendingHeroText', pendingCount > 0 ? `${pendingCount} ta so‘rov` : 'Navbat bo‘sh');
+    setText('sysMetricCompanies', number(summary.companies || 0));
+    setText('sysMetricWorkers', number(summary.workers || 0));
+    setText('sysMetricDevices', number(summary.devices || 0));
+
+    // Dynamic Executive Dashboard Chips
+    const isBotActive = Boolean(telegram && (telegram.initData || telegram.version));
+    setChipDot('sysChipPgDot', 'green');
+    setChipDot('sysChipBotDot', isBotActive ? 'green' : 'amber');
+    setChipDot('sysChipApiDot', 'green');
+    const syncAgeMinutes = summary.recentSyncAt
+      ? Math.max(0, Math.round((Date.now() - new Date(summary.recentSyncAt).getTime()) / 60000))
+      : 999;
+    setChipDot('sysChipSyncDot', summary.recentSyncAt && syncAgeMinutes < 120 ? 'green' : 'amber');
+
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const timeStr = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`;
     setText('sysOverviewTimestamp', timeStr);
+
+    renderSysAttentionFeed(summary, pendingCount);
 
     if (state.companies && state.companies.length) {
       renderSysActiveCompanies();
@@ -384,7 +481,7 @@
       try {
         const coRes = await request(`${API}/companies`);
         state.companies = coRes.companies || [];
-        if (state.companies.length) renderSysActiveCompanies();
+        renderSysActiveCompanies();
       } catch {}
     }
 
@@ -408,16 +505,110 @@
     setText('lastUpdated', `Yangilandi ${timestamp(new Date().toISOString())}`);
   }
 
+  function renderSysAttentionFeed(summary, pendingCount) {
+    const feed = byId('sysAttentionFeed');
+    const badge = byId('sysAttentionCountBadge');
+    if (!feed) return;
+    feed.replaceChildren();
+
+    const items = [];
+    if (pendingCount > 0) {
+      items.push({
+        iconType: 'red',
+        iconSvg: 'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83',
+        title: 'Kutilayotgan aktivatsiyalar',
+        sub: `${pendingCount} ta yangi so‘rov tasdiqlash kutmoqda`,
+        tag: 'Shoshilinch',
+        tagClass: 'sys-pill-red',
+        onClick: () => showView('activations')
+      });
+    }
+
+    if (summary.recentSyncAt) {
+      const syncDate = new Date(summary.recentSyncAt);
+      const diffMs = Date.now() - syncDate.getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours >= 1) {
+        items.push({
+          iconType: 'orange',
+          iconSvg: 'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+          title: 'Sinxronlash holati',
+          sub: `${diffHours} soatdan beri sinxronlanmadi`,
+          tag: 'Kechikish',
+          tagClass: 'sys-pill-orange',
+          onClick: () => showView('system')
+        });
+      }
+    }
+
+    const totalWorkers = Number(summary.workers || 0);
+    const boundWorkers = Number(summary.workerBindings || 0);
+    if (totalWorkers > 0 && boundWorkers < totalWorkers * 0.5) {
+      const pct = Math.round((boundWorkers / totalWorkers) * 100);
+      items.push({
+        iconType: 'blue',
+        iconSvg: 'm22 2-7 20-4-9-9-4Z',
+        title: 'Telegram identifikatsiyasi',
+        sub: `Ishchilarning faqat ${pct}% ulangan (${boundWorkers} / ${totalWorkers})`,
+        tag: 'Past',
+        tagClass: 'sys-pill-orange',
+        onClick: () => showView('bindings')
+      });
+    }
+
+    const activeParties = Number(summary.parties || 0);
+    if (activeParties > 0) {
+      items.push({
+        iconType: 'amber',
+        iconSvg: 'm7.5 4.27 9 5.15M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z',
+        title: 'Yopilmagan partiyalar',
+        sub: `${number(activeParties)} ta partiya jarayonda`,
+        tag: 'Faol',
+        tagClass: 'sys-pill-amber',
+        onClick: () => showView('parties')
+      });
+    }
+
+    if (badge) badge.textContent = String(items.length);
+
+    if (items.length === 0) {
+      feed.appendChild(node('p', 'empty-state', 'Diqqat talab qiluvchi muammolar yo‘q · Barcha xizmatlar barqaror.'));
+      return;
+    }
+
+    for (const item of items) {
+      const alertItem = node('div', 'sys-alert-item');
+      if (item.onClick) alertItem.onclick = item.onClick;
+      const iconWrap = node('div', `sys-alert-icon sys-alert-icon-${item.iconType}`);
+      iconWrap.appendChild(svgIcon(item.iconSvg, 18));
+      alertItem.appendChild(iconWrap);
+
+      const body = node('div', 'sys-alert-body');
+      body.appendChild(node('strong', 'sys-alert-title', item.title));
+      body.appendChild(node('span', 'sys-alert-sub', item.sub));
+      alertItem.appendChild(body);
+
+      const tag = node('span', `sys-pill-tag ${item.tagClass}`, item.tag);
+      alertItem.appendChild(tag);
+      feed.appendChild(alertItem);
+    }
+  }
+
   function renderSysActiveCompanies() {
     const feed = byId('sysActiveCompaniesFeed');
-    if (!feed || !state.companies || !state.companies.length) return;
-    const activeCompanies = state.companies.slice(0, 3);
+    if (!feed) return;
     feed.replaceChildren();
+    if (!state.companies || !state.companies.length) {
+      feed.appendChild(node('p', 'empty-state', 'Ro‘yxatdan o‘tgan korxonalar yo‘q.'));
+      return;
+    }
+    const activeCompanies = state.companies.slice(0, 3);
     const avatars = ['sys-avatar-t', 'sys-avatar-b', 'sys-avatar-s'];
-    const maxWorkers = Math.max(...activeCompanies.map((c) => Number(c.workerCount || 0)), 100);
+    const maxWorkers = Math.max(...activeCompanies.map((c) => Number(c.workerCount || 0)), 50);
     activeCompanies.forEach((co, idx) => {
       const item = node('div', 'sys-company-item');
       item.dataset.openCompany = co.companyId;
+      item.onclick = () => openCompanyProfile(co.companyId);
       const avatarClass = avatars[idx % avatars.length];
       const letter = (co.companyName || co.companyId || 'K').trim().charAt(0).toUpperCase();
       const av = node('div', `sys-co-avatar ${avatarClass}`, letter);
@@ -427,10 +618,10 @@
       metaTop.appendChild(node('strong', 'sys-co-name', co.companyName || co.companyId));
       details.appendChild(metaTop);
       const workers = Number(co.workerCount || 0);
-      details.appendChild(node('span', 'sys-co-stats', `${number(workers)} ishchi · ${number(co.modelCount || 12)} qurilma`));
+      details.appendChild(node('span', 'sys-co-stats', `${number(workers)} ishchi · ${number(co.modelCount || 0)} model`));
       const track = node('div', 'sys-progress-track');
       const fill = node('div', 'sys-progress-fill');
-      const pct = Math.min(100, Math.max(15, Math.round((workers / maxWorkers) * 85)));
+      const pct = Math.min(100, Math.max(10, Math.round((workers / maxWorkers) * 100)));
       fill.style.width = `${pct}%`;
       track.appendChild(fill);
       details.appendChild(track);
@@ -714,7 +905,8 @@
     setText('cpStatWorkers', number(company.workerCount));
     setText('cpStatModels', number(company.modelCount));
     setText('cpStatParties', number(company.partyCount));
-    setText('cpStatDevices', '—');
+    const devCount = (state.devices || []).filter((d) => d.companyId === company.companyId).length;
+    setText('cpStatDevices', devCount > 0 ? number(devCount) : '0');
 
     setText('cpFactId', company.companyId);
     setText('cpFactActivation', !company.activationConfigured ? 'Sozlanmagan' : company.activationActive ? 'Faol' : 'Nofaol');
@@ -722,7 +914,7 @@
     setText('cpFactTicketVal', company.requireTicketValidation == null ? '—' : company.requireTicketValidation ? 'Talab qilinadi' : 'Ixtiyoriy');
     setText('cpFactSizes', (company.availableSizes || []).join(', ') || '—');
     setText('cpFactRevision', company.serverRevision ?? '—');
-    setText('cpLastSync', 'Sinxronlangan');
+    setText('cpLastSync', company.serverRevisionAt ? timestamp(company.serverRevisionAt) : (company.updatedAt ? timestamp(company.updatedAt) : (company.serverRevision ? `Rev #${company.serverRevision}` : '—')));
 
     const policyComp = byId('cpPolicyCompanyHidden');
     if (policyComp) policyComp.value = company.companyId;
@@ -1193,7 +1385,7 @@
 
           const nameWrap = node('div', 'worker-name-block');
           nameWrap.appendChild(node('strong', 'worker-touch-title', worker.name));
-          nameWrap.appendChild(node('span', 'worker-role-sub', `${worker.role || 'Tikuvchi'} · ID ${worker.workerId}`));
+          nameWrap.appendChild(node('span', 'worker-role-sub', `${worker.role ? `${worker.role} · ` : ''}ID ${worker.workerId}`));
           left.appendChild(nameWrap);
           top.appendChild(left);
 
@@ -1393,9 +1585,16 @@
     if (!worker) return;
     state.selectedWorkerPayroll = { ...worker, companyId };
     setText('wsdWorkerName', worker.name || 'Ishchi');
-    setText('wsdWorkerRole', worker.role || 'Tikuvchi');
+    setText('wsdWorkerRole', worker.role || 'Xodim');
     setText('wsdWorkerId', `ID ${worker.workerId}`);
     setText('wsdNetPay', number(worker.net || 0));
+
+    const isBound = Boolean(worker.isBound || worker.boundTelegramId || worker.telegramId);
+    const boundBadge = byId('wsdWorkerBoundBadge');
+    if (boundBadge) {
+      boundBadge.textContent = isBound ? 'Ulangan' : 'Bog‘lanmagan';
+      boundBadge.className = `wsd-bound-badge ${isBound ? 'is-bound' : 'is-unbound'}`;
+    }
 
     const statusBadge = byId('wsdPayStatusBadge');
     if (statusBadge) {
@@ -1403,15 +1602,24 @@
       statusBadge.textContent = isPaid ? 'To‘langan' : 'Kutilmoqda';
     }
 
-    setText('wsdStatPieces', `${number(worker.pieces || 0)} dona`);
-    setText('wsdStatDays', '24 kun');
-    const daily = Math.round((Number(worker.gross || 0)) / 24);
-    setText('wsdStatDaily', number(daily > 0 ? daily : 202000));
+    const pieces = Number(worker.pieces || 0);
+    const gross = Number(worker.gross || 0);
+    setText('wsdStatPieces', `${number(pieces)} dona`);
+    const days = Number(worker.days || worker.workedDays || 0);
+    setText('wsdStatDays', days > 0 ? `${days} kun` : '—');
+    const daily = days > 0 && gross > 0 ? Math.round(gross / days) : 0;
+    setText('wsdStatDaily', daily > 0 ? `${number(daily)}` : '—');
 
     setText('wsdPieceWorkPay', `+${money(worker.gross || 0)}`);
     setText('wsdStajBonus', `+${money(worker.staj || 0)}`);
     setText('wsdPenalty', `-${money(worker.jarima || 0)}`);
     setText('wsdAdvance', `-${money(worker.avans || 0)}`);
+
+    const histList = byId('wsdHistoryList');
+    if (histList) {
+      histList.replaceChildren();
+      histList.appendChild(node('p', 'empty-state', 'Oldingi yopiq davrlar mavjud emas.'));
+    }
 
     const dialog = byId('workerSalaryDetailDialog');
     if (dialog) dialog.showModal();
@@ -1435,9 +1643,9 @@
     const totalPaid = workers.reduce((sum, w) => sum + Number(w.net || 0), 0);
     const remaining = Math.max(0, totalGross - totalPaid);
 
-    setText('payrollHeroTotal', totalGross > 0 ? number(totalGross) : '186 400 000');
-    setText('payrollHeroPaid', `To‘langan ${totalPaid > 0 ? (totalPaid / 1000000).toFixed(1) : '128,6'} mln`);
-    setText('payrollHeroRemaining', `Qoldi ${remaining > 0 ? (remaining / 1000000).toFixed(1) : '57,8'} mln`);
+    setText('payrollHeroTotal', totalGross > 0 ? number(totalGross) : '0');
+    setText('payrollHeroPaid', totalPaid > 0 ? `To‘langan ${(totalPaid / 1000000).toFixed(1)} mln` : 'To‘langan 0');
+    setText('payrollHeroRemaining', remaining > 0 ? `Qoldi ${(remaining / 1000000).toFixed(1)} mln` : 'Qoldi 0');
 
     const tbody = tableMessage('payrollRows', 'payrollEmpty', workers);
     for (const worker of workers) {
@@ -1634,6 +1842,60 @@
           actGrid.appendChild(card);
         }
       }
+    }
+    if (!state.access?.isGlobalAdmin) {
+      const coId = state.access?.companyIds?.[0];
+      const co = (state.companies || []).find((c) => c.companyId === coId);
+      const actNameInput = byId('actPolicyMobileName');
+      if (actNameInput && !actNameInput.value && co?.companyName) {
+        actNameInput.value = co.companyName;
+      }
+    }
+    renderExpiringLicenses();
+  }
+
+  function renderExpiringLicenses() {
+    const feed = byId('expiringLicensesFeed');
+    const badge = byId('expiringCountBadge');
+    if (!feed) return;
+    feed.replaceChildren();
+
+    const expiring = [];
+    const now = Date.now();
+    for (const act of (state.activations || [])) {
+      if (act.status === 'APPROVED' && act.signedActivation) {
+        const reqTime = new Date(act.requestedAt).getTime();
+        const diffDays = Math.max(1, Math.round((now - reqTime) / (1000 * 60 * 60 * 24)));
+        expiring.push({
+          name: act.companyName || act.companyId || act.machineId,
+          sub: `${diffDays} kun oldin tasdiqlangan`,
+          tag: 'Faol',
+          urgent: false
+        });
+      }
+    }
+
+    if (badge) badge.textContent = String(expiring.length);
+
+    if (!expiring.length) {
+      feed.appendChild(node('p', 'empty-state', 'Muddati tugayotgan litsenziyalar yo‘q.'));
+      return;
+    }
+
+    for (const item of expiring.slice(0, 5)) {
+      const alertItem = node('div', 'sys-alert-item');
+      const letter = (item.name || 'K').trim().charAt(0).toUpperCase();
+      const av = node('div', 'sys-co-avatar sys-avatar-t', letter);
+      alertItem.appendChild(av);
+
+      const body = node('div', 'sys-alert-body');
+      body.appendChild(node('strong', 'sys-alert-title', item.name));
+      body.appendChild(node('span', 'sys-alert-sub', item.sub));
+      alertItem.appendChild(body);
+
+      const tag = node('span', `sys-pill-tag ${item.urgent ? 'sys-pill-red' : 'sys-pill-orange'}`, item.tag);
+      alertItem.appendChild(tag);
+      feed.appendChild(alertItem);
     }
   }
 
@@ -1936,10 +2198,162 @@
   }
 
   async function loadSystem() {
+    const start = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const { system } = await request(`${API}/system`);
-    setText('systemApi', system.api); setText('systemDatabase', system.database);
-    setText('systemMigration', system.migrationLevel ?? '—'); setText('systemRevision', system.serverRevision ?? '—');
-    setText('systemChecked', timestamp(system.checkedAt)); setText('systemExternal', 'Bot va backup holati API’da yo‘q');
+    const end = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const latencyMs = Math.max(1, Math.round(end - start));
+
+    setText('systemApi', system.api);
+    setText('systemDatabase', system.database);
+    setText('systemMigration', system.migrationLevel ?? '—');
+    setText('systemRevision', system.serverRevision ?? '—');
+    setText('systemChecked', timestamp(system.checkedAt));
+    setText('systemExternal', 'Bot va backup holati API’da yo‘q');
+
+    // Live Latency & Status Badges
+    setText('sysApiLatencyBadge', `${latencyMs} ms`);
+    const apiBadge = byId('sysApiLatencyBadge');
+    if (apiBadge) {
+      apiBadge.className = latencyMs < 300 ? 'sys-status-badge-pill sys-badge-green' : 'sys-status-badge-pill sys-badge-orange';
+    }
+    setChipDot('sysApiDot', latencyMs < 500 ? 'green' : 'amber');
+    setChipDot('sysChipApiDot', latencyMs < 500 ? 'green' : 'amber');
+
+    const isPgOk = String(system.database || '').toLowerCase() === 'available' || String(system.database || '').toUpperCase() === 'READY';
+    setText('sysPgLatencyBadge', isPgOk ? 'Tayyor' : (system.database || 'Ulanmagan'));
+    const pgBadge = byId('sysPgLatencyBadge');
+    if (pgBadge) {
+      pgBadge.className = isPgOk ? 'sys-status-badge-pill sys-badge-green' : 'sys-status-badge-pill sys-badge-orange';
+    }
+    setChipDot('sysPgDot', isPgOk ? 'green' : 'red');
+    setChipDot('sysChipPgDot', isPgOk ? 'green' : 'red');
+
+    const isBotActive = Boolean(telegram && (telegram.initData || telegram.version));
+    setText('sysBotStatusBadge', isBotActive ? 'Faol (Telegram)' : 'Noma’lum');
+    const botBadge = byId('sysBotStatusBadge');
+    if (botBadge) {
+      botBadge.className = isBotActive ? 'sys-status-badge-pill sys-badge-green' : 'sys-status-badge-pill sys-badge-orange';
+    }
+    setChipDot('sysBotDot', isBotActive ? 'green' : 'amber');
+    setChipDot('sysChipBotDot', isBotActive ? 'green' : 'amber');
+
+    // Sync Delay
+    let syncDelayText = 'O‘z vaqtida';
+    let isDelayOk = true;
+    if (system.checkedAt) {
+      const checkedTime = new Date(system.checkedAt).getTime();
+      const diffMinutes = Math.max(0, Math.round((Date.now() - checkedTime) / (1000 * 60)));
+      if (diffMinutes > 120) {
+        syncDelayText = `${Math.round(diffMinutes / 60)} soat kechikish`;
+        isDelayOk = false;
+      } else if (diffMinutes > 15) {
+        syncDelayText = `${diffMinutes} daq. kechikish`;
+        isDelayOk = false;
+      }
+    }
+    setText('sysSyncDelayBadge', syncDelayText);
+    const syncBadge = byId('sysSyncDelayBadge');
+    if (syncBadge) {
+      syncBadge.className = isDelayOk ? 'sys-status-badge-pill sys-badge-green' : 'sys-status-badge-pill sys-badge-orange';
+    }
+    setChipDot('sysSyncDot', isDelayOk ? 'green' : 'amber');
+    setChipDot('sysChipSyncDot', isDelayOk ? 'green' : 'amber');
+
+    // Telemetry Indicators (Real browser resources when supported, otherwise clean empty state)
+    if (typeof performance !== 'undefined' && performance.memory && performance.memory.usedJSHeapSize && performance.memory.jsHeapSizeLimit) {
+      const ramPct = Math.min(99, Math.max(1, Math.round((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100)));
+      const ramMb = Math.round(performance.memory.usedJSHeapSize / (1024 * 1024));
+      setText('ramUsageVal', `${ramMb} MB (${ramPct}%)`);
+      const ramFill = byId('ramProgressFill');
+      if (ramFill) ramFill.style.width = `${ramPct}%`;
+    } else {
+      setText('ramUsageVal', '—');
+      const ramFill = byId('ramProgressFill');
+      if (ramFill) ramFill.style.width = '0%';
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
+      try {
+        const est = await navigator.storage.estimate();
+        if (est.quota && est.usage) {
+          const diskPct = Math.min(99, Math.max(1, Math.round((est.usage / est.quota) * 100)));
+          const diskMb = Math.round(est.usage / (1024 * 1024));
+          setText('diskUsageVal', `${diskMb} MB (${diskPct}%)`);
+          const diskFill = byId('diskProgressFill');
+          if (diskFill) diskFill.style.width = `${diskPct}%`;
+        } else {
+          setText('diskUsageVal', '—');
+          const diskFill = byId('diskProgressFill');
+          if (diskFill) diskFill.style.width = '0%';
+        }
+      } catch {
+        setText('diskUsageVal', '—');
+        const diskFill = byId('diskProgressFill');
+        if (diskFill) diskFill.style.width = '0%';
+      }
+    } else {
+      setText('diskUsageVal', '—');
+      const diskFill = byId('diskProgressFill');
+      if (diskFill) diskFill.style.width = '0%';
+    }
+
+    // CPU percentage is host-internal and not exposed via web standards without an OS agent
+    setText('cpuUsageVal', '—');
+    const cpuFill = byId('cpuProgressFill');
+    if (cpuFill) cpuFill.style.width = '0%';
+
+    // Dynamic Recent Events
+    renderSysRecentEvents(system);
+  }
+
+  function renderSysRecentEvents(system) {
+    const feed = byId('sysRecentEventsFeed');
+    if (!feed) return;
+    feed.replaceChildren();
+
+    const events = [];
+    if (system.checkedAt) {
+      events.push({
+        type: 'blue',
+        title: 'Tizim salomatligi tekshirildi',
+        time: timestamp(system.checkedAt).slice(-5)
+      });
+    }
+    if (state.activations && state.activations.length) {
+      const latestAct = state.activations[0];
+      events.push({
+        type: latestAct.status === 'APPROVED' ? 'green' : 'red',
+        title: latestAct.status === 'APPROVED' ? `Aktivatsiya tasdiqlandi (#${String(latestAct.requestId).slice(0, 6)})` : `Yangi so‘rov kelib tushdi (#${String(latestAct.requestId).slice(0, 6)})`,
+        time: timestamp(latestAct.requestedAt).slice(-5)
+      });
+    }
+    if (state.companies && state.companies.length) {
+      events.push({
+        type: 'green',
+        title: `${state.companies[0].companyName || state.companies[0].companyId} yangilandi`,
+        time: state.summary?.recentSyncAt ? timestamp(state.summary.recentSyncAt).slice(-5) : 'Bugun'
+      });
+    }
+
+    if (!events.length) {
+      feed.appendChild(node('p', 'empty-state', 'Oxirgi xatolik yoki hodisalar qayd etilmagan.'));
+      return;
+    }
+
+    for (const ev of events) {
+      const item = node('div', 'sys-event-item');
+      const iconWrap = node('div', `sys-alert-icon sys-alert-icon-${ev.type}`);
+      iconWrap.appendChild(svgIcon('M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83', 18));
+      item.appendChild(iconWrap);
+
+      const body = node('div', 'sys-alert-body');
+      body.appendChild(node('strong', 'sys-alert-title', ev.title));
+      item.appendChild(body);
+
+      const time = node('time', 'sys-event-time', ev.time);
+      item.appendChild(time);
+      feed.appendChild(item);
+    }
   }
 
   const loaders = {
@@ -2013,6 +2427,7 @@
 
     // Role-specific Mobile Tab Labels & Yana screen
     if (isGlobal) {
+      setText('breadcrumbBadge', 'TIZIM BOSHQARUVI');
       setText('navActivationsMobileLabel', 'Litsenziya');
       setText('activationsTitle', 'Litsenziya');
       const actTabPolicy = byId('actTabPolicyBtn');
@@ -2023,13 +2438,19 @@
       if (profileCard) {
         profileCard.className = 'more-profile-card more-profile-system';
       }
-      setText('moreAdminName', 'SYSTEM');
+      setText('mobileBrandName', 'Novo System');
+      setText('mobileBrandInitial', 'N');
+      const userName = [state.user?.firstName, state.user?.lastName].filter(Boolean).join(' ') || state.user?.username || 'Tizim administratori';
+      setText('moreAdminName', userName);
       setText('moreAdminRole', 'Tizim administratori');
-      setText('moreAvatar', 'S');
+      setText('moreAvatar', (userName || 'S').charAt(0).toUpperCase());
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
-      setText('moreAdminMeta', `Kirish: ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`);
+      setText('moreAdminMeta', state.summary?.recentSyncAt
+        ? `Oxirgi sinxron: ${formatRelativeTime(state.summary.recentSyncAt)}`
+        : `Kirish: ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`);
     } else {
+      setText('breadcrumbBadge', 'KORXONA BOSHQARUVI');
       setText('navActivationsMobileLabel', 'Aktivatsiya');
       setText('activationsTitle', 'Aktivatsiya');
       const actTabPolicy = byId('actTabPolicyBtn');
@@ -2040,11 +2461,24 @@
       if (profileCard) {
         profileCard.className = 'more-profile-card more-profile-company';
       }
-      const coName = state.companies?.[0]?.companyName || 'Novda';
-      setText('moreAdminName', `ADMIN · ${coName}`);
-      setText('moreAdminRole', 'Korxona administratori');
-      setText('moreAvatar', coName.charAt(0).toUpperCase());
-      setText('moreAdminMeta', 'Oxirgi sinxron: 2 daqiqa oldin');
+      const coId = state.access?.companyIds?.[0];
+      const co = (state.companies || []).find((c) => c.companyId === coId);
+      const coName = co?.companyName || (coId ? `Korxona (${coId})` : 'Korxona');
+      setText('mobileBrandName', coName);
+      setText('mobileBrandInitial', coName.charAt(0).toUpperCase());
+      const userName = [state.user?.firstName, state.user?.lastName].filter(Boolean).join(' ') || state.user?.username || `Admin · ${coName}`;
+      setText('moreAdminName', userName);
+      setText('moreAdminRole', `Korxona administratori · ${coName}`);
+      setText('moreAvatar', (userName || coName).charAt(0).toUpperCase());
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      setText('moreAdminMeta', state.summary?.recentSyncAt
+        ? `Oxirgi sinxron: ${formatRelativeTime(state.summary.recentSyncAt)}`
+        : `Kirish: ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} · ${pad(now.getHours())}:${pad(now.getMinutes())}`);
+      const actNameInput = byId('actPolicyMobileName');
+      if (actNameInput && !actNameInput.value && co?.companyName) {
+        actNameInput.value = co.companyName;
+      }
     }
 
     // Quick-grid items in #more section
@@ -2138,7 +2572,20 @@
     void loadCurrentView();
   }
 
+  function enforceLightModeTheme() {
+    try {
+      document.documentElement.style.setProperty('color-scheme', 'light', 'important');
+      document.body.style.setProperty('color', '#2c354f', 'important');
+      if (telegram) {
+        telegram.setHeaderColor?.('#0b132b');
+        const isMobile = typeof window !== 'undefined' && window.innerWidth <= 820;
+        telegram.setBackgroundColor?.(isMobile ? '#f4f6fa' : '#0b132b');
+      }
+    } catch {}
+  }
+
   async function beginAuthentication() {
+    enforceLightModeTheme();
     byId('authError').hidden = true;
     byId('retryAuth').hidden = true;
     byId('authMessage').textContent = 'Telegram administrator identity tekshirilmoqda…';
@@ -2151,11 +2598,11 @@
       telegram.expand();
       try {
         telegram.enableClosingConfirmation?.();
-        telegram.setHeaderColor?.('#0b132b');
-        telegram.setBackgroundColor?.('#0b132b');
+        enforceLightModeTheme();
         if (telegram.BackButton) {
           telegram.BackButton.onClick(() => { handleNavigateBack(); });
         }
+        telegram.onEvent?.('themeChanged', enforceLightModeTheme);
       } catch {}
       const result = await request(`${API}/session`, {
         method: 'POST', auth: false, body: { initData: telegram.initData }
@@ -2580,6 +3027,7 @@
       const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
       setText('payrollMonthLabel', label);
     };
+    updatePayrollMonthLabel();
     byId('payrollMonthPrev')?.addEventListener('click', () => {
       state.payrollMonthOffset -= 1;
       updatePayrollMonthLabel();
@@ -2646,7 +3094,8 @@
     // Redesign: Mobile Activation Policy Save
     byId('actPolicyMobileSaveBtn')?.addEventListener('click', async () => {
       const companyId = state.access?.companyIds?.[0] || state.companies?.[0]?.companyId;
-      const companyName = byId('actPolicyMobileName')?.value || 'Novda';
+      const targetCo = (state.companies || []).find((c) => c.companyId === companyId);
+      const companyName = byId('actPolicyMobileName')?.value?.trim() || targetCo?.companyName || (companyId ? `Korxona (${companyId})` : 'Korxona');
       const isActive = byId('actPolicyMobileActive')?.checked ?? true;
       const roles = [...document.querySelectorAll('input[name="actMobileRoles"]:checked')].map((el) => el.value);
       if (!companyId) { toast('Kompaniya topilmadi.'); return; }
@@ -2673,8 +3122,14 @@
     byId('moreSignOutBtn')?.addEventListener('click', () => {
       clearSession('Sessiya yopildi. Panelni Telegram’dan qayta oching.');
     });
+
+    // Browser Online/Offline Connectivity
+    window.addEventListener('online', () => setOnlineStatus(true, 'Ulangan'));
+    window.addEventListener('offline', () => setOnlineStatus(false, 'Oflayn'));
+    setOnlineStatus(navigator.onLine !== false, navigator.onLine !== false ? 'Ulangan' : 'Oflayn');
   }
 
+  enforceLightModeTheme();
   bindEvents();
   void beginAuthentication();
 })();

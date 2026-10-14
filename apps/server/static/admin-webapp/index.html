@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b132b" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
     <meta name="novda-admin-webapp-version" content="-20261013" />
     <title>Novda — Admin Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,23 +121,23 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <div class="mobile-brand">
-              <div class="brand-mark brand-mark-small" aria-hidden="true"><span>N</span><i></i></div>
-              <strong class="brand-name-text">Novo System</strong>
-              <span class="online-indicator-dot" title="Tizim onlayn"></span>
+              <div class="brand-mark brand-mark-small" aria-hidden="true"><span id="mobileBrandInitial">—</span><i></i></div>
+              <strong id="mobileBrandName" class="brand-name-text">—</strong>
+              <span id="topOnlineIndicator" class="online-indicator-dot" title="Tizim onlayn"></span>
             </div>
             <span id="mobileViewTitle" class="mobile-view-title" hidden>Umumiy</span>
           </div>
           <div class="breadcrumb">
-            <span class="breadcrumb-badge">CONTROL ROOM</span>
+            <span id="breadcrumbBadge" class="breadcrumb-badge">BOSHQARUV</span>
             <b>/</b>
             <strong id="currentViewLabel">Umumiy ko‘rinish</strong>
           </div>
           <div class="topbar-right">
-            <span class="connection-pill desktop-only-inline">
-              <i></i>
-              <span>Ulangan</span>
+            <span id="connectionPill" class="connection-pill desktop-only-inline">
+              <i id="connectionDot"></i>
+              <span id="connectionLabel">Ulangan</span>
             </span>
-            <span id="adminBadge" class="admin-badge">SYSTEM</span>
+            <span id="adminBadge" class="admin-badge">—</span>
             <button id="refreshButton" class="icon-button desktop-only-inline" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
             </button>
@@ -148,8 +150,8 @@
         <div id="urgentActivationBanner" class="urgent-banner" hidden>
           <div class="urgent-banner-icon">⚡</div>
           <div class="urgent-banner-content">
-            <strong id="urgentBannerTitle">Kutilayotgan aktivatsiya</strong>
-            <span id="urgentBannerSubtitle">Tasdiqlashni kutayotgan qurilmalar mavjud</span>
+            <strong id="urgentBannerTitle">—</strong>
+            <span id="urgentBannerSubtitle">—</span>
           </div>
           <button class="button button-primary button-sm" data-go="activations" type="button">Ko‘rish →</button>
         </div>
@@ -163,7 +165,7 @@
               <div class="sys-overview-head">
                 <div class="sys-overview-titles">
                   <h1 class="sys-page-title">Umumiy</h1>
-                  <span id="coOverviewTimestamp" class="sys-timestamp">13.10.2026 · 15:00</span>
+                  <span id="coOverviewTimestamp" class="sys-timestamp">—</span>
                 </div>
                 <button id="coRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -179,11 +181,11 @@
               <article class="co-hero-banner" data-go="activations">
                 <div class="co-hero-content">
                   <span class="co-hero-caption">KUTILAYOTGAN AKTIVATSIYA</span>
-                  <strong id="coPendingHeroCount" class="co-hero-num">0</strong>
+                  <strong id="coPendingHeroCount" class="co-hero-num">—</strong>
                 </div>
                 <div id="coPendingHeroBadge" class="co-hero-badge">
                   <span class="co-badge-check">✓</span>
-                  <span id="coPendingHeroText">Navbat bo‘sh</span>
+                  <span id="coPendingHeroText">—</span>
                 </div>
               </article>
 
@@ -199,7 +201,7 @@
                     </svg>
                   </div>
                   <span class="co-kpi-label">ISHCHILAR</span>
-                  <strong id="coStatWorkers" class="co-kpi-val">212</strong>
+                  <strong id="coStatWorkers" class="co-kpi-val">—</strong>
                 </article>
 
                 <article class="co-kpi-card" data-go="models">
@@ -211,7 +213,7 @@
                     </svg>
                   </div>
                   <span class="co-kpi-label">MODELLAR</span>
-                  <strong id="coStatModels" class="co-kpi-val">20</strong>
+                  <strong id="coStatModels" class="co-kpi-val">—</strong>
                 </article>
 
                 <article class="co-kpi-card" data-go="parties">
@@ -223,7 +225,7 @@
                     </svg>
                   </div>
                   <span class="co-kpi-label">PARTIYALAR</span>
-                  <strong id="coStatParties" class="co-kpi-val">26</strong>
+                  <strong id="coStatParties" class="co-kpi-val">—</strong>
                   <span class="co-kpi-tag co-tag-amber">yopilmagan</span>
                 </article>
 
@@ -235,7 +237,7 @@
                     </svg>
                   </div>
                   <span class="co-kpi-label">QURILMALAR</span>
-                  <strong id="coStatDevices" class="co-kpi-val">3</strong>
+                  <strong id="coStatDevices" class="co-kpi-val">—</strong>
                 </article>
               </div>
 
@@ -243,18 +245,18 @@
               <article class="co-card co-payroll-card" data-go="workers">
                 <div class="co-card-head">
                   <strong class="co-card-title">Oylik fondi</strong>
-                  <span id="coPayrollPct" class="co-badge-pill co-badge-green">69%</span>
+                  <span id="coPayrollPct" class="co-badge-pill co-badge-green">—</span>
                 </div>
                 <div class="co-payroll-amount-row">
-                  <strong id="coStatPayroll" class="co-payroll-amount">186 400 000</strong>
+                  <strong id="coStatPayroll" class="co-payroll-amount">—</strong>
                   <span class="co-currency">so‘m</span>
                 </div>
                 <div class="co-progress-track">
-                  <div id="coPayrollProgressFill" class="co-progress-fill co-fill-emerald" style="width: 69%;"></div>
+                  <div id="coPayrollProgressFill" class="co-progress-fill co-fill-emerald" style="width: 0%;"></div>
                 </div>
                 <div class="co-payroll-sub-row">
-                  <span id="coPayrollPaid">To‘langan 128,6 mln</span>
-                  <span id="coPayrollRemaining">Qoldi 57,8 mln</span>
+                  <span id="coPayrollPaid">To‘langan —</span>
+                  <span id="coPayrollRemaining">Qoldi —</span>
                 </div>
               </article>
 
@@ -262,10 +264,10 @@
               <article class="co-card co-telegram-card" data-go="bindings">
                 <div class="co-card-head">
                   <strong class="co-card-title">Telegram ulanishi</strong>
-                  <span id="coTelegramRatio" class="co-badge-pill co-badge-blue">42 / 212</span>
+                  <span id="coTelegramRatio" class="co-badge-pill co-badge-blue">—</span>
                 </div>
                 <div class="co-progress-track">
-                  <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 20%;"></div>
+                  <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 0%;"></div>
                 </div>
               </article>
             </div>
@@ -295,7 +297,7 @@
               <div class="sys-overview-head">
                 <div class="sys-overview-titles">
                   <h1 class="sys-page-title" id="overviewTitle">Umumiy</h1>
-                  <span id="sysOverviewTimestamp" class="sys-timestamp">13.10.2026 · 15:00</span>
+                  <span id="sysOverviewTimestamp" class="sys-timestamp">—</span>
                 </div>
                 <button id="sysRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -311,7 +313,7 @@
               <article class="sys-hero-banner">
                 <div class="sys-hero-content">
                   <span class="sys-hero-caption">KUTILAYOTGAN AKTIVATSIYALAR</span>
-                  <strong id="sysPendingHeroCount" class="sys-hero-num">7</strong>
+                  <strong id="sysPendingHeroCount" class="sys-hero-num">—</strong>
                 </div>
                 <button class="sys-hero-btn" data-go="activations" type="button">
                   <span>Ko‘rib chiqish</span>
@@ -322,19 +324,19 @@
               <!-- Status Chips Row -->
               <div class="sys-status-chips">
                 <div class="sys-chip">
-                  <span class="sys-chip-dot sys-dot-green"></span>
+                  <span class="sys-chip-dot" id="sysChipPgDot"></span>
                   <span>PostgreSQL</span>
                 </div>
                 <div class="sys-chip">
-                  <span class="sys-chip-dot sys-dot-green"></span>
+                  <span class="sys-chip-dot" id="sysChipBotDot"></span>
                   <span>Telegram bot</span>
                 </div>
                 <div class="sys-chip">
-                  <span class="sys-chip-dot sys-dot-green"></span>
+                  <span class="sys-chip-dot" id="sysChipApiDot"></span>
                   <span>API</span>
                 </div>
                 <div class="sys-chip">
-                  <span class="sys-chip-dot sys-dot-amber"></span>
+                  <span class="sys-chip-dot" id="sysChipSyncDot"></span>
                   <span>Sinxron</span>
                 </div>
               </div>
@@ -351,8 +353,8 @@
                     </svg>
                   </div>
                   <span class="sys-metric-label">KORXONA</span>
-                  <strong id="sysMetricCompanies" class="sys-metric-val">14</strong>
-                  <span class="sys-metric-growth">+2 bu oy</span>
+                  <strong id="sysMetricCompanies" class="sys-metric-val">—</strong>
+                  <span id="sysMetricCompaniesGrowth" class="sys-metric-growth">PostgreSQL</span>
                 </article>
 
                 <article class="sys-metric-card" data-go="companies">
@@ -365,7 +367,7 @@
                     </svg>
                   </div>
                   <span class="sys-metric-label">ISHCHI</span>
-                  <strong id="sysMetricWorkers" class="sys-metric-val">3 482</strong>
+                  <strong id="sysMetricWorkers" class="sys-metric-val">—</strong>
                 </article>
 
                 <article class="sys-metric-card" data-go="devices">
@@ -376,7 +378,7 @@
                     </svg>
                   </div>
                   <span class="sys-metric-label">QURILMA</span>
-                  <strong id="sysMetricDevices" class="sys-metric-val">126</strong>
+                  <strong id="sysMetricDevices" class="sys-metric-val">—</strong>
                 </article>
               </div>
 
@@ -385,53 +387,11 @@
                 <div class="sys-section-header">
                   <div class="sys-section-title-wrap">
                     <h2 class="sys-section-title">Diqqat talab qiladi</h2>
-                    <span id="sysAttentionCountBadge" class="sys-count-badge">4</span>
+                    <span id="sysAttentionCountBadge" class="sys-count-badge">0</span>
                   </div>
                 </div>
                 <div id="sysAttentionFeed" class="sys-attention-card">
-                  <div class="sys-alert-item" data-go="activations">
-                    <div class="sys-alert-icon sys-alert-icon-red">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg>
-                    </div>
-                    <div class="sys-alert-body">
-                      <strong class="sys-alert-title">Toshkent Tekstil</strong>
-                      <span class="sys-alert-sub">Litsenziya 3 kunda tugaydi</span>
-                    </div>
-                    <span class="sys-pill-tag sys-pill-red">Shoshilinch</span>
-                  </div>
-
-                  <div class="sys-alert-item" data-go="system">
-                    <div class="sys-alert-icon sys-alert-icon-orange">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-                    </div>
-                    <div class="sys-alert-body">
-                      <strong class="sys-alert-title">Samarqand Tikuv</strong>
-                      <span class="sys-alert-sub">Sinxronlash 2 soat kechikdi</span>
-                    </div>
-                    <span class="sys-pill-tag sys-pill-orange">Kechikish</span>
-                  </div>
-
-                  <div class="sys-alert-item" data-go="companies">
-                    <div class="sys-alert-icon sys-alert-icon-blue">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                    </div>
-                    <div class="sys-alert-body">
-                      <strong class="sys-alert-title">Buxoro Trikotaj</strong>
-                      <span class="sys-alert-sub">Telegram: ishchilarning 38% ulangan</span>
-                    </div>
-                    <span class="sys-pill-tag sys-pill-amber">Past</span>
-                  </div>
-
-                  <div class="sys-alert-item" data-go="parties">
-                    <div class="sys-alert-icon sys-alert-icon-amber">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                    </div>
-                    <div class="sys-alert-body">
-                      <strong class="sys-alert-title">Yopilmagan partiyalar</strong>
-                      <span id="sysAlertPartiesSub" class="sys-alert-sub">41 ta · Farg'ona Garment: 19</span>
-                    </div>
-                    <span class="sys-pill-tag sys-pill-amber">Ko‘p</span>
-                  </div>
+                  <p class="empty-state">Ma’lumotlar tekshirilmoqda…</p>
                 </div>
               </section>
 
@@ -442,44 +402,7 @@
                   <button class="sys-link-pill-btn" data-go="companies" type="button">Barchasi</button>
                 </div>
                 <div id="sysActiveCompaniesFeed" class="sys-companies-card">
-                  <div class="sys-company-item" data-open-company="comp_toshkent">
-                    <div class="sys-co-avatar sys-avatar-t">T</div>
-                    <div class="sys-co-details">
-                      <div class="sys-co-meta-top">
-                        <strong class="sys-co-name">Toshkent Tekstil</strong>
-                      </div>
-                      <span class="sys-co-stats">812 ishchi · 24 qurilma</span>
-                      <div class="sys-progress-track">
-                        <div class="sys-progress-fill" style="width: 78%;"></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="sys-company-item" data-open-company="comp_buxoro">
-                    <div class="sys-co-avatar sys-avatar-b">B</div>
-                    <div class="sys-co-details">
-                      <div class="sys-co-meta-top">
-                        <strong class="sys-co-name">Buxoro Trikotaj</strong>
-                      </div>
-                      <span class="sys-co-stats">604 ishchi · 18 qurilma</span>
-                      <div class="sys-progress-track">
-                        <div class="sys-progress-fill" style="width: 58%;"></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="sys-company-item" data-open-company="comp_samarqand">
-                    <div class="sys-co-avatar sys-avatar-s">S</div>
-                    <div class="sys-co-details">
-                      <div class="sys-co-meta-top">
-                        <strong class="sys-co-name">Samarqand Tikuv</strong>
-                      </div>
-                      <span class="sys-co-stats">488 ishchi · 15 qurilma</span>
-                      <div class="sys-progress-track">
-                        <div class="sys-progress-fill" style="width: 44%;"></div>
-                      </div>
-                    </div>
-                  </div>
+                  <p class="empty-state">Korxonalar yuklanmoqda…</p>
                 </div>
               </section>
             </div>
@@ -763,23 +686,23 @@
                 <h1 id="cpCompanyName">Kompaniya Profili</h1>
                 <p id="cpCompanyId" class="mono muted">ID: —</p>
               </div>
-              <span id="cpStatusBadge" class="badge badge-active">Faol</span>
+              <span id="cpStatusBadge" class="badge badge-active">—</span>
             </div>
             <div class="profile-quick-stats">
               <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatWorkers">0</span>
+                <span class="stat-num" id="cpStatWorkers">—</span>
                 <span class="stat-lbl">Ishchilar</span>
               </div>
               <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatModels">0</span>
+                <span class="stat-num" id="cpStatModels">—</span>
                 <span class="stat-lbl">Modellar</span>
               </div>
               <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatParties">0</span>
+                <span class="stat-num" id="cpStatParties">—</span>
                 <span class="stat-lbl">Partiyalar</span>
               </div>
               <div class="quick-stat-box">
-                <span class="stat-num" id="cpStatDevices">0</span>
+                <span class="stat-num" id="cpStatDevices">—</span>
                 <span class="stat-lbl">Qurilmalar</span>
               </div>
             </div>
@@ -806,7 +729,7 @@
                 </div>
                 <div class="updated-at">
                   <span class="status-dot"></span>
-                  <span id="cpLastSync">Sinxronlangan</span>
+                  <span id="cpLastSync">—</span>
                 </div>
               </div>
               <div class="fact-line"><span>Biznes ID</span><strong id="cpFactId" class="mono">—</strong></div>
@@ -1021,7 +944,7 @@
               <button id="payrollMonthPrev" class="month-nav-btn" type="button" aria-label="Oldingi oy">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               </button>
-              <strong id="payrollMonthLabel" class="month-label-text">Oktyabr 2026</strong>
+              <strong id="payrollMonthLabel" class="month-label-text">—</strong>
               <button id="payrollMonthNext" class="month-nav-btn" type="button" aria-label="Keyingi oy">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
               </button>
@@ -1032,13 +955,13 @@
               <div class="co-hero-content">
                 <span class="co-hero-caption">OYLIK FONDI</span>
                 <div class="payroll-hero-amount-row">
-                  <strong id="payrollHeroTotal" class="co-hero-num">186 400 000</strong>
+                  <strong id="payrollHeroTotal" class="co-hero-num">—</strong>
                   <span class="co-currency-light">so‘m</span>
                 </div>
               </div>
               <div class="payroll-hero-chips">
-                <span id="payrollHeroPaid" class="payroll-chip-pill">To‘langan 128,6 mln</span>
-                <span id="payrollHeroRemaining" class="payroll-chip-pill">Qoldi 57,8 mln</span>
+                <span id="payrollHeroPaid" class="payroll-chip-pill">To‘langan —</span>
+                <span id="payrollHeroRemaining" class="payroll-chip-pill">Qoldi —</span>
               </div>
             </article>
 
@@ -1156,26 +1079,11 @@
               <div class="sys-section-header">
                 <div class="sys-section-title-wrap">
                   <h2 class="sys-section-title">Muddati tugayotgan</h2>
-                  <span class="sys-count-badge">3</span>
+                  <span id="expiringCountBadge" class="sys-count-badge">0</span>
                 </div>
               </div>
-              <div class="sys-attention-card">
-                <div class="sys-alert-item">
-                  <div class="sys-co-avatar sys-avatar-t">T</div>
-                  <div class="sys-alert-body">
-                    <strong class="sys-alert-title">Toshkent Tekstil</strong>
-                    <span class="sys-alert-sub">3 kun</span>
-                  </div>
-                  <span class="sys-pill-tag sys-pill-red">Shoshilinch</span>
-                </div>
-                <div class="sys-alert-item">
-                  <div class="sys-co-avatar sys-avatar-s">S</div>
-                  <div class="sys-alert-body">
-                    <strong class="sys-alert-title">Samarqand Tikuv</strong>
-                    <span class="sys-alert-sub">12 kun</span>
-                  </div>
-                  <span class="sys-pill-tag sys-pill-orange">Yaqin</span>
-                </div>
+              <div id="expiringLicensesFeed" class="sys-attention-card">
+                <p class="empty-state" id="expiringLicensesEmpty">Muddati tugayotgan litsenziyalar yo‘q.</p>
               </div>
             </div>
           </div>
@@ -1192,7 +1100,7 @@
                   </label>
                 </div>
                 <label>Ko‘rinadigan nom
-                  <input type="text" id="actPolicyMobileName" value="Novda" maxlength="160" required />
+                  <input type="text" id="actPolicyMobileName" placeholder="Korxona nomi" maxlength="160" required />
                 </label>
                 <fieldset class="role-fieldset">
                   <legend>Ruxsat etilgan rollar</legend>
@@ -1465,31 +1373,31 @@
             <article class="surface-card sys-status-list-card">
               <div class="sys-status-item">
                 <div class="sys-status-left">
-                  <span class="sys-chip-dot sys-dot-green"></span>
+                  <span class="sys-chip-dot" id="sysPgDot"></span>
                   <strong>PostgreSQL</strong>
                 </div>
-                <span class="sys-status-badge-pill" id="sysPgLatencyBadge">12 ms</span>
+                <span class="sys-status-badge-pill" id="sysPgLatencyBadge">—</span>
               </div>
               <div class="sys-status-item">
                 <div class="sys-status-left">
-                  <span class="sys-chip-dot sys-dot-green"></span>
+                  <span class="sys-chip-dot" id="sysBotDot"></span>
                   <strong>Telegram bot</strong>
                 </div>
-                <span class="sys-status-badge-pill sys-badge-green" id="sysBotStatusBadge">Faol</span>
+                <span class="sys-status-badge-pill" id="sysBotStatusBadge">—</span>
               </div>
               <div class="sys-status-item">
                 <div class="sys-status-left">
-                  <span class="sys-chip-dot sys-dot-green"></span>
+                  <span class="sys-chip-dot" id="sysApiDot"></span>
                   <strong>API</strong>
                 </div>
-                <span class="sys-status-badge-pill" id="sysApiLatencyBadge">98 ms</span>
+                <span class="sys-status-badge-pill" id="sysApiLatencyBadge">—</span>
               </div>
               <div class="sys-status-item">
                 <div class="sys-status-left">
-                  <span class="sys-chip-dot sys-dot-amber"></span>
+                  <span class="sys-chip-dot" id="sysSyncDot"></span>
                   <strong>Sinxronlash</strong>
                 </div>
-                <span class="sys-status-badge-pill sys-badge-orange" id="sysSyncDelayBadge">2 soat kechikish</span>
+                <span class="sys-status-badge-pill" id="sysSyncDelayBadge">—</span>
               </div>
             </article>
 
@@ -1507,30 +1415,30 @@
                 <div class="sys-resource-row">
                   <div class="sys-resource-label-row">
                     <strong>CPU</strong>
-                    <span id="cpuUsageVal">34%</span>
+                    <span id="cpuUsageVal">—</span>
                   </div>
                   <div class="co-progress-track">
-                    <div class="co-progress-fill co-fill-blue" style="width: 34%;"></div>
+                    <div class="co-progress-fill co-fill-blue" id="cpuProgressFill" style="width: 0%;"></div>
                   </div>
                 </div>
 
                 <div class="sys-resource-row">
                   <div class="sys-resource-label-row">
                     <strong>RAM</strong>
-                    <span id="ramUsageVal">62%</span>
+                    <span id="ramUsageVal">—</span>
                   </div>
                   <div class="co-progress-track">
-                    <div class="co-progress-fill co-fill-purple" style="width: 62%;"></div>
+                    <div class="co-progress-fill co-fill-purple" id="ramProgressFill" style="width: 0%;"></div>
                   </div>
                 </div>
 
                 <div class="sys-resource-row">
                   <div class="sys-resource-label-row">
                     <strong>Disk</strong>
-                    <span id="diskUsageVal">78%</span>
+                    <span id="diskUsageVal">—</span>
                   </div>
                   <div class="co-progress-track">
-                    <div class="co-progress-fill co-fill-orange" style="width: 78%;"></div>
+                    <div class="co-progress-fill co-fill-orange" id="diskProgressFill" style="width: 0%;"></div>
                   </div>
                 </div>
               </article>
@@ -1540,38 +1448,10 @@
             <div class="sys-section section-gap">
               <div class="sys-section-header">
                 <h2 class="sys-section-title">Oxirgi hodisalar</h2>
-                <button class="sys-link-pill-btn" type="button">Barchasi</button>
+                <button class="sys-link-pill-btn" id="btnAllSysEvents" type="button">Barchasi</button>
               </div>
-              <div class="sys-events-card">
-                <div class="sys-event-item">
-                  <div class="sys-alert-icon sys-alert-icon-red">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-                  </div>
-                  <div class="sys-alert-body">
-                    <strong class="sys-alert-title">Sinxronlash xatosi</strong>
-                  </div>
-                  <time class="sys-event-time">14:02</time>
-                </div>
-
-                <div class="sys-event-item">
-                  <div class="sys-alert-icon sys-alert-icon-green">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                  </div>
-                  <div class="sys-alert-body">
-                    <strong class="sys-alert-title">Yangi korxona qo‘shildi</strong>
-                  </div>
-                  <time class="sys-event-time">11:40</time>
-                </div>
-
-                <div class="sys-event-item">
-                  <div class="sys-alert-icon sys-alert-icon-blue">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg>
-                  </div>
-                  <div class="sys-alert-body">
-                    <strong class="sys-alert-title">Litsenziya yangilandi</strong>
-                  </div>
-                  <time class="sys-event-time">09:15</time>
-                </div>
+              <div class="sys-events-card" id="sysRecentEventsFeed">
+                <p class="empty-state" id="sysRecentEventsEmpty">Oxirgi xatolik yoki hodisalar qayd etilmagan.</p>
               </div>
             </div>
           </div>
@@ -1627,11 +1507,11 @@
             <!-- Profile Card -->
             <article id="moreProfileCard" class="more-profile-card more-profile-system">
               <div class="more-profile-main">
-                <div id="moreAvatar" class="more-avatar">S</div>
+                <div id="moreAvatar" class="more-avatar">—</div>
                 <div class="more-profile-meta">
-                  <strong id="moreAdminName">SYSTEM</strong>
-                  <span id="moreAdminRole" class="more-admin-role">Tizim administratori</span>
-                  <span id="moreAdminMeta" class="more-admin-meta">Kirish: 13.10.2026 · 14:02</span>
+                  <strong id="moreAdminName">—</strong>
+                  <span id="moreAdminRole" class="more-admin-role">—</span>
+                  <span id="moreAdminMeta" class="more-admin-meta">—</span>
                 </div>
               </div>
             </article>
@@ -1663,14 +1543,7 @@
                 <div class="more-menu-icon more-icon-amber">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
                 </div>
-                <span class="more-menu-label">Hodisalar jurnali</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="admin" type="button">
-                <div class="more-menu-icon more-icon-slate">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                </div>
-                <span class="more-menu-label">Sozlamalar</span>
+                <span class="more-menu-label">Tizim holati</span>
                 <span class="more-menu-chevron">›</span>
               </button>
             </div>
@@ -1702,14 +1575,7 @@
                 <div class="more-menu-icon more-icon-blue">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 </div>
-                <span class="more-menu-label">Adminlar</span>
-                <span class="more-menu-chevron">›</span>
-              </button>
-              <button class="more-menu-item" data-go="admin" type="button">
-                <div class="more-menu-icon more-icon-slate">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                </div>
-                <span class="more-menu-label">Sozlamalar</span>
+                <span class="more-menu-label">Admin sessiyasi</span>
                 <span class="more-menu-chevron">›</span>
               </button>
             </div>
@@ -1823,7 +1689,7 @@
         </label>
 
         <label>Miqdor (so‘m)
-          <input name="amountDelta" id="quickAdjAmount" type="number" min="0.01" step="0.01" placeholder="Masalan: 200000" required />
+          <input name="amountDelta" id="quickAdjAmount" type="number" min="0.01" step="0.01" placeholder="Miqdor (so‘m)" required />
         </label>
 
         <div class="quick-amount-chips">
@@ -1857,7 +1723,7 @@
               <span id="wsdWorkerRole">—</span>
               <span class="wsd-meta-dot">·</span>
               <span id="wsdWorkerId" class="mono">—</span>
-              <span id="wsdWorkerBoundBadge" class="wsd-bound-badge">Ulangan</span>
+              <span id="wsdWorkerBoundBadge" class="wsd-bound-badge">—</span>
             </div>
           </div>
         </div>
@@ -1917,20 +1783,7 @@
         <article class="surface-card wsd-history-card">
           <h3 class="wsd-card-title">Oldingi oylar</h3>
           <div class="wsd-history-list" id="wsdHistoryList">
-            <div class="wsd-history-item">
-              <div>
-                <strong>Sentyabr 2026</strong>
-                <span class="wsd-history-status">To‘langan</span>
-              </div>
-              <span class="wsd-history-amount">4 620 000 so‘m</span>
-            </div>
-            <div class="wsd-history-item">
-              <div>
-                <strong>Avgust 2026</strong>
-                <span class="wsd-history-status">To‘langan</span>
-              </div>
-              <span class="wsd-history-amount">4 410 000 so‘m</span>
-            </div>
+            <p class="empty-state" id="wsdHistoryEmpty">Oldingi yopiq davrlar mavjud emas.</p>
           </div>
         </article>
 
