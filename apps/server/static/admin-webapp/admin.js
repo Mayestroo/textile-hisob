@@ -333,11 +333,7 @@
         const workersList = payroll.workers || [];
         const totalPieces = workersList.reduce((sum, w) => sum + Number(w.pieces || 0), 0);
         const totalGross = workersList.reduce((sum, w) => sum + Number(w.gross || 0), 0);
-        const totalAvans = workersList.reduce((sum, w) => sum + Number(w.avans || 0), 0);
-        const totalJarima = workersList.reduce((sum, w) => sum + Number(w.jarima || 0), 0);
-        const totalStaj = workersList.reduce((sum, w) => sum + Number(w.staj || 0), 0);
         const totalNet = workersList.reduce((sum, w) => sum + Number(w.net || 0), 0);
-        const remaining = Math.max(0, totalGross - totalNet);
 
         // Date and timestamp
         const now = new Date();
@@ -368,16 +364,7 @@
         const displayedNet = totalNet > 0 ? totalNet : totalGross;
         setText('coStatPayroll', displayedNet > 0 ? number(displayedNet) : '0');
         setText('coGrossPayroll', money(totalGross));
-        setText('coAvansPayroll', totalAvans > 0 ? `-${money(totalAvans)}` : '0 so‘m');
-        setText('coDeductionsPayroll', (totalJarima > 0 || totalStaj > 0) ? `-${money(totalJarima + totalStaj)}` : '0 so‘m');
         setText('coPiecesCount', `${number(totalPieces)} dona`);
-
-        const payPct = totalGross > 0 ? Math.round((totalNet / totalGross) * 100) : 0;
-        setText('coPayrollPct', `${payPct}%`);
-        const payFill = byId('coPayrollProgressFill');
-        if (payFill) payFill.style.width = `${payPct}%`;
-        setText('coPayrollPaid', totalNet > 0 ? `To‘langan ${(totalNet / 1000000).toFixed(1)} mln` : 'To‘langan 0');
-        setText('coPayrollRemaining', remaining > 0 ? `Qoldi ${(remaining / 1000000).toFixed(1)} mln` : 'Qoldi 0');
 
         // 2. Partiyalar umumiy statistikasi
         setText('dirPartySummaryLabel', `${activeParties.length} ta faol · jami ${allParties.length} ta`);
@@ -962,6 +949,7 @@
     if (!companyId) return;
     state.selectedCompanyId = companyId;
     state.currentCpTab = 'overview';
+    applyRoleNavigation();
     showView('overview');
   }
 
@@ -1024,6 +1012,12 @@
       const isCurrent = pane.id === `pane-cp-${tabName}`;
       pane.hidden = !isCurrent;
       pane.classList.toggle('is-visible', isCurrent);
+    }
+    for (const button of document.querySelectorAll('#mainNav .nav-button')) {
+      const v = button.dataset.view;
+      if (['overview', 'workers', 'parties', 'models'].includes(v)) {
+        button.classList.toggle('is-active', v === tabName);
+      }
     }
 
     const companyId = state.selectedCompanyId;
@@ -1109,21 +1103,8 @@
       }
       card.appendChild(stats);
 
-      const actions = node('div', 'worker-touch-actions');
-      const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
-      adjBtn.type = 'button';
-      adjBtn.dataset.quickAdj = String(w.workerId);
-      adjBtn.dataset.companyId = companyId;
-      adjBtn.dataset.workerName = w.name;
-      actions.appendChild(adjBtn);
-
-      const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
-      editBtn.type = 'button';
-      editBtn.dataset.editWorker = String(w.workerId);
-      editBtn.dataset.companyId = companyId;
-      actions.appendChild(editBtn);
-
       if (w.binding) {
+        const actions = node('div', 'worker-touch-actions');
         const unbindBtn = node('button', 'button button-danger button-sm', '🔗 Yechish');
         unbindBtn.type = 'button';
         unbindBtn.dataset.unbindWorker = String(w.workerId);
@@ -1131,8 +1112,8 @@
         unbindBtn.dataset.telegramId = w.binding.telegramId;
         unbindBtn.dataset.workerName = w.name;
         actions.appendChild(unbindBtn);
+        card.appendChild(actions);
       }
-      card.appendChild(actions);
 
       list.appendChild(card);
     }
@@ -1544,21 +1525,8 @@
           }
           card.appendChild(meta);
 
-          const actions = node('div', 'worker-touch-actions');
-          const adjBtn = node('button', 'button button-primary button-sm', '💵 + Avans');
-          adjBtn.type = 'button';
-          adjBtn.dataset.quickAdj = String(worker.workerId);
-          adjBtn.dataset.companyId = worker.companyId;
-          adjBtn.dataset.workerName = worker.name;
-          actions.appendChild(adjBtn);
-
-          const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
-          editBtn.type = 'button';
-          editBtn.dataset.editWorker = String(worker.workerId);
-          editBtn.dataset.companyId = worker.companyId;
-          actions.appendChild(editBtn);
-
           if (worker.binding) {
+            const actions = node('div', 'worker-touch-actions');
             const unbindBtn = node('button', 'button button-danger button-sm', '🔗 Yechish');
             unbindBtn.type = 'button';
             unbindBtn.dataset.unbindWorker = String(worker.workerId);
@@ -1566,8 +1534,8 @@
             unbindBtn.dataset.telegramId = worker.binding.telegramId;
             unbindBtn.dataset.workerName = worker.name;
             actions.appendChild(unbindBtn);
+            card.appendChild(actions);
           }
-          card.appendChild(actions);
 
           cardGrid.appendChild(card);
         }
@@ -2606,8 +2574,14 @@
       return;
     }
     try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch { }
-    if (state.currentView === 'overview' && state.selectedCompanyId && state.access?.isGlobalAdmin) {
+    if (state.selectedCompanyId && state.access?.isGlobalAdmin) {
+      if (state.currentView === 'company-profile') {
+        showView('overview');
+        return;
+      }
       state.selectedCompanyId = null;
+      state.currentCpTab = 'overview';
+      applyRoleNavigation();
       showView('companies');
       return;
     }
@@ -2625,22 +2599,21 @@
 
   function applyRoleNavigation() {
     const isGlobal = Boolean(state.access?.isGlobalAdmin);
+    const inCompanyMode = !isGlobal || Boolean(state.selectedCompanyId) || state.currentView === 'company-profile';
     const factoryViews = ['workers', 'models', 'parties'];
     const platformViews = ['companies', 'system'];
 
     for (const button of document.querySelectorAll('#mainNav .nav-button[data-view]')) {
       const v = button.dataset.view;
-      if (isGlobal) {
-        // System admin manages platform directory; factory operations are strictly scoped inside Company Profile
-        button.hidden = factoryViews.includes(v);
+      if (inCompanyMode) {
+        button.hidden = platformViews.includes(v) || (!state.access.isGlobalAdmin && button.dataset.view === 'system') || v === 'activations' || v === 'devices';
       } else {
-        // Factory director oversees their factory; platform administration views are hidden
-        button.hidden = platformViews.includes(v) || (!state.access.isGlobalAdmin && button.dataset.view === 'system');
+        button.hidden = factoryViews.includes(v) || (!state.access.isGlobalAdmin && button.dataset.view === 'system');
       }
     }
 
     // Role-specific Mobile Tab Labels & Yana screen
-    if (isGlobal) {
+    if (isGlobal && !state.selectedCompanyId) {
       setText('breadcrumbBadge', 'TIZIM BOSHQARUVI');
       setText('navActivationsMobileLabel', 'Litsenziya');
       setText('activationsTitle', 'Litsenziya');
@@ -2675,14 +2648,14 @@
       if (profileCard) {
         profileCard.className = 'more-profile-card more-profile-company';
       }
-      const coId = state.access?.companyIds?.[0];
+      const coId = state.selectedCompanyId || state.access?.companyIds?.[0];
       const co = (state.companies || []).find((c) => c.companyId === coId);
       const coName = co?.companyName || (coId ? `Korxona (${coId})` : 'Korxona');
       setText('mobileBrandName', coName);
       setText('mobileBrandInitial', coName.charAt(0).toUpperCase());
       const userName = [state.user?.firstName, state.user?.lastName].filter(Boolean).join(' ') || state.user?.username || `Admin · ${coName}`;
       setText('moreAdminName', userName);
-      setText('moreAdminRole', `Korxona administratori · ${coName}`);
+      setText('moreAdminRole', isGlobal ? `Tizim admini · ${coName}` : `Korxona administratori · ${coName}`);
       setText('moreAvatar', (userName || coName).charAt(0).toUpperCase());
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
@@ -2698,7 +2671,7 @@
     // Quick-grid items in #more section
     for (const card of document.querySelectorAll('.quick-grid [data-go]')) {
       const go = card.dataset.go;
-      if (isGlobal) {
+      if (isGlobal && !state.selectedCompanyId) {
         card.hidden = factoryViews.includes(go);
       } else {
         card.hidden = platformViews.includes(go);
@@ -2728,16 +2701,14 @@
     if (state.access?.isGlobalAdmin === false && view === 'system') return;
 
     const isGlobal = state.access?.isGlobalAdmin === true;
+    const inCompanyMode = !isGlobal || Boolean(state.selectedCompanyId) || view === 'company-profile';
     const factoryViews = ['workers', 'models', 'parties'];
 
-    // System admin manages factory workforce/batches inside Company Profile
-    if (isGlobal && factoryViews.includes(view)) {
-      if (state.selectedCompanyId) {
-        void openCompanyProfile(state.selectedCompanyId).then(() => {
-          void switchCpTab(view);
-        });
-        return;
-      }
+    // In Company Mode, route workers/models/parties to company profile tabs
+    if (inCompanyMode && factoryViews.includes(view)) {
+      state.currentCpTab = view;
+      view = 'company-profile';
+    } else if (isGlobal && !state.selectedCompanyId && factoryViews.includes(view)) {
       view = 'companies';
       toast('Ishchilar va zavod amallari korxona profili ichida ochiladi. Kerakli korxonani tanlang.');
     }
@@ -2749,18 +2720,24 @@
       section.hidden = !visible;
       section.classList.toggle('is-visible', visible);
     }
-    const primaryMobileViews = isGlobal
-      ? ['overview', 'companies', 'devices', 'activations', 'more']
-      : ['overview', 'workers', 'parties', 'models', 'more'];
+
+    applyRoleNavigation();
+
+    const primaryMobileViews = inCompanyMode
+      ? ['overview', 'workers', 'parties', 'models', 'more']
+      : ['overview', 'companies', 'devices', 'activations', 'more'];
+
     for (const button of document.querySelectorAll('.nav-button')) {
       const v = button.dataset.view;
       const isPrimary = primaryMobileViews.includes(v);
       button.classList.toggle('mobile-primary-tab', isPrimary);
-      const active = v === view || (v === 'more' && !primaryMobileViews.includes(view));
+      const isCpMatch = view === 'company-profile' && v === (state.currentCpTab || 'overview');
+      const active = (v === view && view !== 'company-profile') || isCpMatch || (v === 'more' && !primaryMobileViews.includes(view));
       button.classList.toggle('is-active', active);
       if (active) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     }
+
     const labels = {
       overview: 'Umumiy',
       devices: 'Qurilmalar',
@@ -2775,7 +2752,7 @@
     };
     setText('currentViewLabel', labels[view] || view);
     setText('mobileViewTitle', labels[view] || view);
-    const isRootHome = view === 'overview';
+    const isRootHome = view === 'overview' && (!isGlobal || !state.selectedCompanyId);
     const mobileBack = byId('mobileBackButton');
     if (mobileBack) mobileBack.hidden = isRootHome;
     const mobileTitle = byId('mobileViewTitle');
@@ -2833,9 +2810,10 @@
       if (session.session.telegramId !== state.user.id) throw new Error('ADMIN_SESSION_INVALID');
       state.access = session.access || state.access;
       if (!state.access) throw new Error('ADMIN_SESSION_INVALID');
-      applyRoleNavigation();
       if (!state.access.isGlobalAdmin && state.access.companyIds?.length === 1) {
         const companyId = state.access.companyIds[0];
+        state.selectedCompanyId = companyId;
+        state.currentCpTab = 'overview';
         const workerCompany = byId('workerFilterForm').elements.companyId;
         const payrollCompany = byId('payrollForm').elements.companyId;
         workerCompany.value = companyId;
@@ -2843,6 +2821,7 @@
         workerCompany.readOnly = true;
         payrollCompany.readOnly = true;
       }
+      applyRoleNavigation();
       byId('authGate').hidden = true;
       byId('adminApp').hidden = false;
       setText('adminBadge', state.access.isGlobalAdmin ? 'SYSTEM' : (state.user.firstName || state.user.username || 'Admin'));
@@ -2972,7 +2951,19 @@
       const button = event.target.closest('[data-view]');
       if (button) {
         try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch { }
-        showView(button.dataset.view);
+        const view = button.dataset.view;
+        const inCompanyMode = !state.access?.isGlobalAdmin || Boolean(state.selectedCompanyId) || state.currentView === 'company-profile';
+        if (inCompanyMode && ['workers', 'parties', 'models'].includes(view)) {
+          state.currentCpTab = view;
+          showView('company-profile');
+          return;
+        }
+        if (inCompanyMode && view === 'overview') {
+          state.currentCpTab = 'overview';
+          showView('overview');
+          return;
+        }
+        showView(view);
       }
     });
     document.addEventListener('click', (event) => {
@@ -3208,11 +3199,14 @@
       try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch { }
       void loadCurrentView();
     });
-    byId('coReturnToGlobalBtn')?.addEventListener('click', () => {
+    const returnToGlobal = () => {
       try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch { }
       state.selectedCompanyId = null;
-      showView('overview');
-    });
+      state.currentCpTab = 'overview';
+      applyRoleNavigation();
+      showView('companies');
+    };
+    byId('coReturnToGlobalBtn')?.addEventListener('click', returnToGlobal);
 
     // Redesign: Worker Subtabs (Ro'yxat vs Oyliklar)
     byId('workerSubTabs')?.addEventListener('click', (event) => {

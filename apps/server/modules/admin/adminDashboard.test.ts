@@ -184,6 +184,25 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(result.workers[0]).toMatchObject({ workerId: 200, gross: 0, avans: 0, jarima: 0, net: 0, pieces: 0 });
     expect(query.mock.calls[1][0]).toContain('ticket_entries');
     expect(query.mock.calls[1][0]).toContain('worker_adjustments');
+    expect(query.mock.calls[1][1]).toEqual(['comp_novda', 'period-1', '2026-09-01', null]);
+  });
+
+  it('keeps payroll facts scoped to the selected period and date-matches only unassigned legacy facts', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'period-closed', name: 'September', start_date: '2026-09-01', end_date: '2026-09-30', is_closed: 1 }] })
+      .mockResolvedValueOnce({ rows: [{
+        worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0',
+        gross: '0', pieces: '0', avans: '0', jarima: '0'
+      }] });
+
+    await serviceFor(query).getPayroll({ companyId: 'comp_novda', periodId: 'period-closed' });
+
+    const payrollSql = query.mock.calls[1][0] as string;
+    expect(payrollSql).toContain('ticket.period_id = $2');
+    expect(payrollSql).toContain('ticket.period_id IS NULL');
+    expect(payrollSql).toContain('period_id IS NULL');
+    expect(payrollSql).not.toContain('ticket.is_closed = 1');
+    expect(query.mock.calls[1][1]).toEqual(['comp_novda', 'period-closed', '2026-09-01', '2026-09-30']);
   });
 
   it('rejects an unassigned non-allowlisted company mutation after checking the company-admin grants', async () => {

@@ -33,6 +33,7 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain("button.dataset.view === 'system'");
     expect(javascript).toContain("view === 'system'");
     expect(javascript).toContain('state.access = session.access || state.access');
+    expect(javascript).toContain('state.selectedCompanyId = companyId');
     expect(javascript).toContain('if (state.access?.isGlobalAdmin === false');
   });
 
@@ -59,10 +60,8 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain("{ companyId, periodId }");
   });
 
-  it('keeps worker edit, advance, and unbind actions on mobile profit cards', () => {
+  it('keeps worker unbind action on mobile profit cards', () => {
     expect(javascript).toContain('Sof foyda: ${money(worker.net || 0)}');
-    expect(javascript).toContain('adjBtn.dataset.quickAdj = String(worker.workerId)');
-    expect(javascript).toContain('editBtn.dataset.editWorker = String(worker.workerId)');
     expect(javascript).toContain('unbindBtn.dataset.unbindWorker = String(worker.workerId)');
   });
 

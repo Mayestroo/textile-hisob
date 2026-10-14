@@ -250,17 +250,37 @@ function createAdminDashboardService(options = {}) {
       SELECT id, name, start_date, end_date, is_closed
       FROM periods
       WHERE company_id = $1 AND (($2::VARCHAR IS NOT NULL AND id = $2) OR ($2::VARCHAR IS NULL AND is_closed = 0))
-      ORDER BY start_date DESC LIMIT 1
+      ORDER BY start_date DESC NULLS LAST, id DESC LIMIT 1
     `, [companyId, requestedPeriodId]);
     const period = periodResult.rows[0] || null;
     if (requestedPeriodId && !period) throw activationError('PERIOD_NOT_FOUND', 404);
     const periodId = period?.id || null;
-    const startDate = period?.start_date || null;
-    const endDate = period?.end_date || null;
+    let startDate = period?.start_date ? String(period.start_date).slice(0, 10) : null;
+    const endDate = period?.end_date ? String(period.end_date).slice(0, 10) : null;
+
+    if (period && !startDate && !Boolean(period.is_closed)) {
+      const name = String(period?.name || '').toLowerCase();
+      const uzbekMonths = {
+        yanvar: '01', fevral: '02', mart: '03', aprel: '04', may: '05', iyun: '06',
+        iyul: '07', avgust: '08', sentabr: '09', oktabr: '10', noyabr: '11', dekabr: '12'
+      };
+      let year = String(new Date().getFullYear());
+      let month = String(new Date().getMonth() + 1).padStart(2, '0');
+      const yearMatch = name.match(/(20\d{2})/);
+      if (yearMatch) year = yearMatch[1];
+      for (const [mName, mNum] of Object.entries(uzbekMonths)) {
+        if (name.includes(mName)) {
+          month = mNum;
+          break;
+        }
+      }
+      startDate = `${year}-${month}-01`;
+    }
+
     const payrollResult = await pool.query(`
       WITH earnings AS (
         SELECT entry.worker_id,
-               COALESCE(SUM(entry.qty * COALESCE(entry.rate_snapshot, rates.rate, 0)), 0)::TEXT AS gross,
+               COALESCE(SUM(entry.qty * COALESCE(NULLIF(entry.rate_snapshot, 0), rates.rate, 0)), 0)::TEXT AS gross,
                COALESCE(SUM(entry.qty), 0)::TEXT AS pieces
         FROM ticket_entries entry
         JOIN tickets ticket ON ticket.company_id = entry.company_id AND ticket.id = entry.ticket_id
@@ -276,12 +296,15 @@ function createAdminDashboardService(options = {}) {
           LIMIT 1
         ) rates ON TRUE
         WHERE entry.company_id = $1 AND ticket.status = 'CONFIRMED'
-          AND (($2::VARCHAR IS NULL AND ticket.is_closed = 0)
+          AND (
+            ($2::VARCHAR IS NULL AND ticket.is_closed = 0)
             OR ($2::VARCHAR IS NOT NULL AND (
-              ticket.period_id = $2 OR (ticket.period_id IS NULL
+              ticket.period_id = $2
+              OR (ticket.period_id IS NULL
                 AND ($3::DATE IS NULL OR ticket.submitted_at::DATE >= $3::DATE)
                 AND ($4::DATE IS NULL OR ticket.submitted_at::DATE <= $4::DATE))
-            )))
+            ))
+          )
         GROUP BY entry.worker_id
       ), adjustments AS (
         SELECT worker_id,
@@ -289,9 +312,15 @@ function createAdminDashboardService(options = {}) {
                COALESCE(SUM(amount) FILTER (WHERE type = 'JARIMA'), 0)::TEXT AS jarima
         FROM worker_adjustments
         WHERE company_id = $1
-          AND ($2::VARCHAR IS NULL OR period_id = $2 OR (period_id IS NULL
-            AND ($3::DATE IS NULL OR created_at::DATE >= $3::DATE)
-            AND ($4::DATE IS NULL OR created_at::DATE <= $4::DATE)))
+          AND (
+            ($2::VARCHAR IS NOT NULL AND period_id = $2)
+            OR (
+              period_id IS NULL
+              AND ($3::DATE IS NOT NULL OR $4::DATE IS NOT NULL)
+              AND ($3::DATE IS NULL OR created_at::DATE >= $3::DATE)
+              AND ($4::DATE IS NULL OR created_at::DATE <= $4::DATE)
+            )
+          )
         GROUP BY worker_id
       )
       SELECT worker.id AS worker_id, worker.name AS worker_name, worker.staj,
