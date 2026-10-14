@@ -87,7 +87,7 @@
           <button class="nav-button" data-view="activations" type="button">
             <span class="nav-glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L21 8"/></svg></span>
             <span class="nav-text-desktop">Kalitlar & aktivatsiya</span>
-            <span class="nav-text-mobile">Litsenziya</span>
+            <span class="nav-text-mobile" id="navActivationsMobileLabel">Litsenziya</span>
             <span id="navPendingBadge" class="nav-badge-dot" hidden title="Kutilayotgan aktivatsiyalar"></span>
           </button>
           <button class="nav-button mobile-more-button" data-view="more" type="button">
@@ -161,10 +161,22 @@
           <!-- Director Factory Executive Dashboard (Shown when isGlobalAdmin === false) -->
           <div id="directorOverview" class="director-overview" hidden>
             <div class="sys-overview-container co-overview-container">
+              <!-- System Admin Return to Global View Banner -->
+              <div id="coGlobalReturnBanner" class="co-global-return-banner" hidden>
+                <div class="co-return-info">
+                  <span class="co-return-tag">KORXONA BOSHQARUV PANELI</span>
+                  <strong id="coReturnCompanyName">—</strong>
+                </div>
+                <button id="coReturnToGlobalBtn" class="button button-secondary button-sm" type="button">
+                  ← Tizim ko‘rinishiga qaytish
+                </button>
+              </div>
+
               <!-- Header Row: Title, Live Timestamp & Refresh Button -->
               <div class="sys-overview-head">
                 <div class="sys-overview-titles">
-                  <h1 class="sys-page-title">Umumiy</h1>
+                  <h1 class="sys-page-title" id="dirCompanyName">Umumiy</h1>
+                  <span id="dirCompanyId" class="mono muted" style="font-size: 13px; margin-top: 1px;">ID: —</span>
                   <span id="coOverviewTimestamp" class="sys-timestamp">—</span>
                 </div>
                 <button id="coRefreshBtn" class="sys-refresh-btn" type="button" aria-label="Ma’lumotlarni yangilash" title="Yangilash">
@@ -175,6 +187,16 @@
                     <path d="M16 21h5v-5"/>
                   </svg>
                 </button>
+              </div>
+
+              <!-- Quick Navigation for Company Sub-modules -->
+              <div class="co-quick-nav-pills">
+                <button type="button" class="co-nav-pill" data-open-cp-sub="workers">👥 Ishchilar & Oylik</button>
+                <button type="button" class="co-nav-pill" data-open-cp-sub="parties">📦 Partiyalar</button>
+                <button type="button" class="co-nav-pill" data-open-cp-sub="models">🏷️ Modellar</button>
+                <button type="button" class="co-nav-pill" data-open-cp-sub="devices">📱 Qurilmalar</button>
+                <button type="button" class="co-nav-pill global-only-inline" data-open-cp-sub="admins">🛡️ Adminlar</button>
+                <button type="button" class="co-nav-pill global-only-inline" data-open-cp-sub="policy">⚙️ Siyosat</button>
               </div>
 
               <!-- Hero Banner: Pending Activation (Indigo Gradient) -->
@@ -270,21 +292,35 @@
                   <div id="coTelegramProgressFill" class="co-progress-fill co-fill-blue" style="width: 0%;"></div>
                 </div>
               </article>
+
+              <!-- So'nggi partiyalar Section -->
+              <section class="sys-section" style="margin-top: 14px;">
+                <div class="sys-section-header">
+                  <h2 class="sys-section-title">Faol partiyalar</h2>
+                  <button class="sys-link-pill-btn" data-go="parties" type="button">Barchasi</button>
+                </div>
+                <div id="dirPartyList" class="party-card-feed"></div>
+                <p id="dirPartyEmpty" class="empty-state" hidden>Faol partiyalar mavjud emas.</p>
+              </section>
+
+              <!-- So'nggi patta cheklari Section -->
+              <section class="sys-section" style="margin-top: 14px;">
+                <div class="sys-section-header">
+                  <h2 class="sys-section-title">So‘nggi patta cheklari</h2>
+                  <button class="sys-link-pill-btn" data-go="tickets" type="button">Barchasi</button>
+                </div>
+                <div id="dirTicketList" class="ticket-card-feed"></div>
+                <p id="dirTicketEmpty" class="empty-state" hidden>Hali ticket qayd etilmagan.</p>
+              </section>
             </div>
 
             <!-- Legacy anchors to preserve compatibility -->
             <div hidden>
-              <h1 id="dirCompanyName"></h1>
-              <span id="dirCompanyId"></span>
               <span id="dirPeriodBadge"></span>
               <strong id="dirStatPieces"></strong>
               <strong id="dirStatWorkers"></strong>
               <strong id="dirStatParties"></strong>
               <strong id="dirStatPayroll"></strong>
-              <div id="dirPartyList"></div>
-              <p id="dirPartyEmpty"></p>
-              <div id="dirTicketList"></div>
-              <p id="dirTicketEmpty"></p>
               <button id="dirQuickAdjBtn" type="button"></button>
             </div>
           </div>
@@ -316,7 +352,7 @@
                   <strong id="sysPendingHeroCount" class="sys-hero-num">—</strong>
                 </div>
                 <button class="sys-hero-btn" data-go="activations" type="button">
-                  <span>Ko‘rib chiqish</span>
+                  <span id="sysPendingHeroText">Ko‘rib chiqish</span>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 </button>
               </article>
@@ -1458,8 +1494,8 @@
 
           <article class="surface-card desktop-table-card">
             <dl class="session-facts">
-              <div><dt>API</dt><dd id="systemApi">Kutilmoqda</dd></div>
-              <div><dt>PostgreSQL</dt><dd id="systemDatabase">Kutilmoqda</dd></div>
+              <div><dt>API</dt><dd id="systemApi">—</dd></div>
+              <div><dt>PostgreSQL</dt><dd id="systemDatabase">—</dd></div>
               <div><dt>Schema Migration</dt><dd id="systemMigration">—</dd></div>
               <div><dt>Server Revision</dt><dd id="systemRevision">—</dd></div>
               <div><dt>Tekshirilgan vaqt</dt><dd id="systemChecked">—</dd></div>
