@@ -319,11 +319,13 @@
 
       try {
         const queryParams = { companyId };
-        const [overviewRes, payrollRes, partiesRes, ticketsRes] = await Promise.all([
-          request(withQuery(`${API}/overview`, queryParams)),
-          request(withQuery(`${API}/payroll`, queryParams)),
-          request(withQuery(`${API}/parties`, queryParams)),
-          request(withQuery(`${API}/tickets`, { ...queryParams, limit: 6 }))
+        const [overviewRes, payrollRes, partiesRes, ticketsRes, modelsRes, workersRes] = await Promise.all([
+          request(withQuery(`${API}/overview`, queryParams)).catch(() => ({ overview: {} })),
+          request(withQuery(`${API}/payroll`, queryParams)).catch(() => ({ payroll: {} })),
+          request(withQuery(`${API}/parties`, queryParams)).catch(() => ({ parties: [] })),
+          request(withQuery(`${API}/tickets`, { ...queryParams, limit: 6 })).catch(() => ({ tickets: [] })),
+          request(withQuery(`${API}/models`, queryParams)).catch(() => ({ models: [] })),
+          request(withQuery(`${API}/workers`, { ...queryParams, limit: 100 })).catch(() => ({ workers: [] }))
         ]);
 
         const summary = overviewRes.overview || {};
@@ -331,6 +333,9 @@
         const workersList = payroll.workers || [];
         const totalPieces = workersList.reduce((sum, w) => sum + Number(w.pieces || 0), 0);
         const totalGross = workersList.reduce((sum, w) => sum + Number(w.gross || 0), 0);
+        const totalAvans = workersList.reduce((sum, w) => sum + Number(w.avans || 0), 0);
+        const totalJarima = workersList.reduce((sum, w) => sum + Number(w.jarima || 0), 0);
+        const totalStaj = workersList.reduce((sum, w) => sum + Number(w.staj || 0), 0);
         const totalNet = workersList.reduce((sum, w) => sum + Number(w.net || 0), 0);
         const remaining = Math.max(0, totalGross - totalNet);
 
@@ -349,14 +354,24 @@
           if (checkSpan) checkSpan.textContent = pendingCount > 0 ? '⚡' : '✓';
         }
 
-        const workersCount = Number(summary.workers || workersList.length || 0);
+        const allWorkers = workersRes.workers || [];
+        const workersCount = Number(summary.workers || workersList.length || allWorkers.length || 0);
         setText('coStatWorkers', number(workersCount));
-        setText('coStatModels', number(summary.models || 0));
-        const activeParties = partiesRes.parties ? partiesRes.parties.filter((p) => p.status !== 'CLOSED').length : Number(summary.parties || 0);
-        setText('coStatParties', number(activeParties));
+        const modelsList = modelsRes.models || [];
+        setText('coStatModels', number(modelsList.length || summary.models || 0));
+        const allParties = partiesRes.parties || [];
+        const activeParties = allParties.filter((p) => p.status !== 'CLOSED');
+        setText('coStatParties', number(activeParties.length || summary.parties || 0));
         setText('coStatDevices', number(summary.devices || 0));
 
-        setText('coStatPayroll', totalGross > 0 ? number(totalGross) : '0');
+        // 1. Ishchilar sof foydasi & Oylik fondi
+        const displayedNet = totalNet > 0 ? totalNet : totalGross;
+        setText('coStatPayroll', displayedNet > 0 ? number(displayedNet) : '0');
+        setText('coGrossPayroll', money(totalGross));
+        setText('coAvansPayroll', totalAvans > 0 ? `-${money(totalAvans)}` : '0 so‘m');
+        setText('coDeductionsPayroll', (totalJarima > 0 || totalStaj > 0) ? `-${money(totalJarima + totalStaj)}` : '0 so‘m');
+        setText('coPiecesCount', `${number(totalPieces)} dona`);
+
         const payPct = totalGross > 0 ? Math.round((totalNet / totalGross) * 100) : 0;
         setText('coPayrollPct', `${payPct}%`);
         const payFill = byId('coPayrollProgressFill');
@@ -364,18 +379,77 @@
         setText('coPayrollPaid', totalNet > 0 ? `To‘langan ${(totalNet / 1000000).toFixed(1)} mln` : 'To‘langan 0');
         setText('coPayrollRemaining', remaining > 0 ? `Qoldi ${(remaining / 1000000).toFixed(1)} mln` : 'Qoldi 0');
 
-        const boundWorkers = Number(summary.workerBindings || 0);
-        setText('coTelegramRatio', `${number(boundWorkers)} / ${number(workersCount)}`);
-        const tgPct = workersCount > 0 ? Math.round((boundWorkers / workersCount) * 100) : 0;
+        // 2. Partiyalar umumiy statistikasi
+        setText('dirPartySummaryLabel', `${activeParties.length} ta faol · jami ${allParties.length} ta`);
+
+        // 3. Modellar va ratsenkalar yig'indisi
+        let companyTotalRatesSum = 0;
+        for (const m of modelsList) {
+          const mRate = (m.operations || []).reduce((s, op) => s + Number(op.rate || 0), 0);
+          m.totalRate = mRate;
+          companyTotalRatesSum += mRate;
+        }
+        setText('dirModelTotalRatesLabel', `Jami ratsenka: ${number(companyTotalRatesSum)} so‘m`);
+        const modelList = byId('dirModelList');
+        if (modelList) {
+          modelList.replaceChildren();
+          const previewModels = modelsList.slice(0, 5);
+          byId('dirModelEmpty').hidden = previewModels.length > 0;
+          for (const m of previewModels) {
+            const card = node('article', 'model-touch-card');
+            const top = node('div', 'party-touch-card-top');
+            const title = node('strong', 'party-touch-title', m.name || m.modelId);
+            const rateBadge = node('span', 'badge badge-active', `${number(m.totalRate || 0)} so‘m`);
+            top.appendChild(title);
+            top.appendChild(rateBadge);
+            card.appendChild(top);
+
+            const ops = m.operations || [];
+            const opsDesc = ops.length > 0
+              ? `${ops.length} ta amal: ` + ops.slice(0, 3).map((op) => `${op.name} (${number(op.rate || 0)} so‘m)`).join(', ') + (ops.length > 3 ? '...' : '')
+              : 'Amallar va ratsenkalar belgilanmagan';
+            card.appendChild(node('div', 'count-label', opsDesc));
+            modelList.appendChild(card);
+          }
+        }
+
+        // 4. Workerlar Telegram holati (Bound / Unbound)
+        const boundWorkersList = allWorkers.filter((w) => Boolean(w.binding?.telegramId));
+        const unboundWorkersList = allWorkers.filter((w) => !w.binding?.telegramId && w.status === 'ACTIVE');
+        const boundCount = boundWorkersList.length || Number(summary.workerBindings || 0);
+        const totalWorkersForRatio = allWorkers.length || workersCount;
+
+        setText('coBoundWorkersCount', `${boundCount} ta`);
+        setText('coUnboundWorkersCount', `${unboundWorkersList.length} ta`);
+        setText('coTelegramRatio', `${number(boundCount)} / ${number(totalWorkersForRatio)}`);
+        const tgPct = totalWorkersForRatio > 0 ? Math.round((boundCount / totalWorkersForRatio) * 100) : 0;
         const tgFill = byId('coTelegramProgressFill');
         if (tgFill) tgFill.style.width = `${tgPct}%`;
+
+        const unboundBox = byId('coUnboundAttentionBox');
+        const unboundListEl = byId('coUnboundWorkersList');
+        if (unboundBox && unboundListEl) {
+          unboundListEl.replaceChildren();
+          if (unboundWorkersList.length > 0) {
+            unboundBox.hidden = false;
+            for (const uw of unboundWorkersList.slice(0, 8)) {
+              const chip = node('span', 'co-unbound-chip', `${uw.name} (#${uw.workerId})`);
+              unboundListEl.appendChild(chip);
+            }
+            if (unboundWorkersList.length > 8) {
+              unboundListEl.appendChild(node('span', 'co-unbound-chip co-unbound-more', `+${unboundWorkersList.length - 8} ta yana`));
+            }
+          } else {
+            unboundBox.hidden = true;
+          }
+        }
 
         // Legacy / fallback fields
         setText('dirPeriodBadge', payroll.period?.name || 'Joriy ochiq davr');
         setText('dirStatPieces', totalPieces > 0 ? number(totalPieces) : number(summary.workerBindings || 0));
         setText('dirStatWorkers', number(workersCount));
-        setText('dirStatParties', number(summary.parties || activeParties));
-        setText('dirStatPayroll', money(totalGross));
+        setText('dirStatParties', number(summary.parties || activeParties.length));
+        setText('dirStatPayroll', money(displayedNet));
 
         const partyList = byId('dirPartyList');
         if (partyList) {
@@ -1094,9 +1168,18 @@
         const card = node('article', 'model-touch-card');
         const top = node('div', 'party-touch-card-top');
         top.appendChild(node('strong', 'party-touch-title', m.name));
-        top.appendChild(node('span', 'mono count-label', `ID: ${m.modelId}`));
+        const rateSum = (m.operations || []).reduce((s, op) => s + Number(op.rate || 0), 0);
+        top.appendChild(node('span', 'badge badge-active', `${number(rateSum)} so‘m`));
         card.appendChild(top);
-        card.appendChild(node('div', 'count-label', `Amallar soni: ${m.operations?.length || 0} ta`));
+
+        const sub = node('div', 'count-label mono', `ID: ${m.modelId}`);
+        card.appendChild(sub);
+
+        const ops = m.operations || [];
+        const opsText = ops.length > 0
+          ? `${ops.length} ta amal: ` + ops.map((op) => `${op.name} (${number(op.rate || 0)} so‘m)`).join(', ')
+          : 'Amallar kiritilmagan';
+        card.appendChild(node('div', 'count-label', opsText));
         list.appendChild(card);
       }
     } catch (err) {
