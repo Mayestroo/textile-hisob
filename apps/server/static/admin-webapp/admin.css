@@ -2538,7 +2538,7 @@ body { background: #0b132b; }
   -webkit-overflow-scrolling: touch;
   margin: 0 -18px -14px -18px;
   padding: 8px 18px 12px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
 }
 .profile-tabs-scroll::-webkit-scrollbar {
   display: none;
@@ -2548,31 +2548,33 @@ body { background: #0b132b; }
   gap: 8px;
 }
 .profile-tab {
-  padding: 7px 14px;
+  padding: 7px 15px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e2e8f0;
-  font-size: 12px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #334155;
+  font-size: 12.5px;
   font-weight: 650;
   white-space: nowrap;
   transition: all 0.15s ease;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .profile-tab:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #93c5fd;
 }
 .profile-tab:active {
   transform: scale(0.96);
 }
 .profile-tab.is-active {
   background: #2563eb;
-  border-color: #3b82f6;
+  border-color: #2563eb;
   color: #ffffff;
-  font-weight: 700;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
+  font-weight: 750;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
 }
 .cp-pane {
   display: flex;
@@ -3653,6 +3655,82 @@ body { background: #0b132b; }
 .co-badge-check {
   font-size: 13px;
   font-weight: 900;
+}
+
+/* System Admin Return to Global View Banner */
+.co-global-return-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #ffffff;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);
+}
+
+.co-return-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.co-return-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: #2563eb;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.co-return-info strong {
+  font-size: 14px;
+  font-weight: 750;
+  color: #0b132b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Quick Navigation for Company Sub-modules */
+.co-quick-nav-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0 12px;
+  margin-bottom: 4px;
+}
+
+.co-quick-nav-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.co-nav-pill {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.co-nav-pill:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+
+.co-nav-pill:active {
+  transform: scale(0.96);
 }
 
 /* 4 KPI 2x2 Grid */
@@ -4750,6 +4828,18 @@ body { background: #0b132b; }
   }
 
   .chip.is-active {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+  }
+
+  .profile-tab {
+    background-color: #ffffff !important;
+    color: #334155 !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .profile-tab.is-active {
     background-color: #2563eb !important;
     color: #ffffff !important;
     border-color: #2563eb !important;

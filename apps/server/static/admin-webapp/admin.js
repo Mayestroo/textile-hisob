@@ -298,11 +298,12 @@
     const isGlobal = state.access?.isGlobalAdmin !== false;
     const dirContainer = byId('directorOverview');
     const globalContainer = byId('globalOverview');
+    const targetCompanyId = !isGlobal ? (state.access?.companyIds?.[0] || '') : state.selectedCompanyId;
 
-    if (!isGlobal && dirContainer && globalContainer) {
+    if (targetCompanyId && dirContainer && globalContainer) {
       dirContainer.hidden = false;
       globalContainer.hidden = true;
-      const companyId = state.access?.companyIds?.[0] || '';
+      const companyId = targetCompanyId;
       const company = (state.companies || []).find((c) => c.companyId === companyId) || { companyId, companyName: companyId ? `Korxona (${companyId})` : 'Korxona' };
       const coTitle = company.companyName || (company.companyId ? `Korxona (${company.companyId})` : 'Korxona');
       setText('dirCompanyName', coTitle);
@@ -310,12 +311,19 @@
       setText('mobileBrandName', coTitle);
       setText('mobileBrandInitial', coTitle.charAt(0).toUpperCase());
 
+      const returnBanner = byId('coGlobalReturnBanner');
+      if (returnBanner) {
+        returnBanner.hidden = !isGlobal;
+        setText('coReturnCompanyName', coTitle);
+      }
+
       try {
+        const queryParams = { companyId };
         const [overviewRes, payrollRes, partiesRes, ticketsRes] = await Promise.all([
-          request(`${API}/overview`),
-          request(`${API}/payroll`),
-          request(`${API}/parties`),
-          request(withQuery(`${API}/tickets`, { limit: 6 }))
+          request(withQuery(`${API}/overview`, queryParams)),
+          request(withQuery(`${API}/payroll`, queryParams)),
+          request(withQuery(`${API}/parties`, queryParams)),
+          request(withQuery(`${API}/tickets`, { ...queryParams, limit: 6 }))
         ]);
 
         const summary = overviewRes.overview || {};
@@ -880,7 +888,7 @@
     if (!companyId) return;
     state.selectedCompanyId = companyId;
     state.currentCpTab = 'overview';
-    showView('company-profile');
+    showView('overview');
   }
 
   async function loadCompanyProfile(companyId = state.selectedCompanyId) {
@@ -930,6 +938,10 @@
   }
 
   async function switchCpTab(tabName) {
+    if (tabName === 'overview') {
+      showView('overview');
+      return;
+    }
     state.currentCpTab = tabName;
     for (const btn of document.querySelectorAll('#cpTabs .profile-tab')) {
       btn.classList.toggle('is-active', btn.dataset.cpTab === tabName);
@@ -2397,6 +2409,11 @@
       return;
     }
     try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+    if (state.currentView === 'overview' && state.selectedCompanyId && state.access?.isGlobalAdmin) {
+      state.selectedCompanyId = null;
+      showView('companies');
+      return;
+    }
     if (state.currentView === 'company-profile') {
       showView(state.previousView === 'overview' ? 'overview' : 'companies');
       return;
@@ -2787,6 +2804,15 @@
         switchCpTab(switchCpBtn.dataset.switchCpTab);
         return;
       }
+      const cpSubBtn = event.target.closest('[data-open-cp-sub]');
+      if (cpSubBtn) {
+        try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+        const sub = cpSubBtn.dataset.openCpSub;
+        state.currentCpTab = sub;
+        showView('company-profile');
+        void switchCpTab(sub);
+        return;
+      }
       const dirQuickAdj = event.target.closest('#dirQuickAdjBtn');
       if (dirQuickAdj) {
         openQuickAdjustment({ companyId: state.access?.companyIds?.[0] });
@@ -2980,6 +3006,11 @@
     byId('coRefreshBtn')?.addEventListener('click', () => {
       try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
       void loadCurrentView();
+    });
+    byId('coReturnToGlobalBtn')?.addEventListener('click', () => {
+      try { telegram?.HapticFeedback?.impactOccurred?.('light'); } catch {}
+      state.selectedCompanyId = null;
+      showView('overview');
     });
 
     // Redesign: Worker Subtabs (Ro'yxat vs Oyliklar)
