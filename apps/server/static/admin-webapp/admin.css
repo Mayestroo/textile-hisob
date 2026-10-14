@@ -2613,7 +2613,23 @@ body { background: #0b132b; }
   margin-top: 12px;
 }
 
-.worker-touch-card,
+.worker-touch-card {
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #eef2f6;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: default;
+}
+
+.worker-net-profit {
+  font-weight: 700;
+  color: #0f172a;
+}
+
 .party-touch-card,
 .model-touch-card,
 .device-touch-card {
@@ -2630,7 +2646,6 @@ body { background: #0b132b; }
   cursor: pointer;
 }
 
-.worker-touch-card:hover,
 .party-touch-card:hover,
 .model-touch-card:hover,
 .device-touch-card:hover {
@@ -2638,7 +2653,6 @@ body { background: #0b132b; }
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
 }
 
-.worker-touch-card:active,
 .party-touch-card:active,
 .model-touch-card:active,
 .device-touch-card:active {

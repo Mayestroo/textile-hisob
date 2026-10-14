@@ -1047,8 +1047,18 @@
     if (!list) return;
     list.replaceChildren();
     try {
-      const res = await request(withQuery(`${API}/workers`, { companyId, limit: 100 }));
-      state.currentCpWorkers = res.workers || [];
+      const [res, payrollRes] = await Promise.all([
+        request(withQuery(`${API}/workers`, { companyId, limit: 100 })),
+        request(withQuery(`${API}/payroll`, { companyId })).catch(() => ({ payroll: {} }))
+      ]);
+      const payrollMap = new Map((payrollRes.payroll?.workers || []).map((pw) => [String(pw.workerId), pw]));
+      state.currentCpWorkers = (res.workers || []).map((w) => {
+        const pw = payrollMap.get(String(w.workerId));
+        return {
+          ...w,
+          net: pw ? pw.net : 0
+        };
+      });
       renderCpWorkerCards();
     } catch (err) {
       toast(`Ishchilar yuklanmadi: ${err.code || 'API_UNAVAILABLE'}`);
@@ -1091,9 +1101,11 @@
       card.appendChild(top);
 
       const stats = node('div', 'worker-touch-stats');
-      stats.appendChild(node('span', '', `Staj: ${money(w.staj)}`));
+      stats.appendChild(node('span', 'worker-net-profit', `Sof foyda: ${money(w.net || 0)}`));
       if (w.binding) {
         stats.appendChild(node('span', 'mono muted', w.binding.username ? `@${w.binding.username}` : `ID: ${w.binding.telegramId}`));
+      } else {
+        stats.appendChild(node('span', 'mono muted', 'Bog‘lanmagan'));
       }
       card.appendChild(stats);
 
@@ -1121,6 +1133,7 @@
         actions.appendChild(unbindBtn);
       }
       card.appendChild(actions);
+
       list.appendChild(card);
     }
   }
@@ -1196,9 +1209,7 @@
         meta.appendChild(node('span', 'mono muted', `Amallar: ${ops.length} ta`));
         card.appendChild(meta);
 
-        if (m.availableSizes && m.availableSizes.length > 0) {
-          card.appendChild(node('div', 'count-label', `O‘lchamlar: ${m.availableSizes.join(', ')}`));
-        }
+
         list.appendChild(card);
       }
     } catch (err) {
@@ -1427,8 +1438,18 @@
 
   async function loadWorkers(filters = state.workerFilters) {
     state.workerFilters = filters;
-    const result = await request(withQuery(`${API}/workers`, { ...filters, offset: state.workerOffset, limit: 50 }));
-    const workers = result.workers || [];
+    const [result, payrollRes] = await Promise.all([
+      request(withQuery(`${API}/workers`, { ...filters, offset: state.workerOffset, limit: 50 })),
+      request(withQuery(`${API}/payroll`, filters)).catch(() => ({ payroll: {} }))
+    ]);
+    const payrollMap = new Map((payrollRes.payroll?.workers || []).map((pw) => [String(pw.workerId), pw]));
+    const workers = (result.workers || []).map((w) => {
+      const pw = payrollMap.get(String(w.workerId));
+      return {
+        ...w,
+        net: pw ? pw.net : 0
+      };
+    });
     state.workers = workers;
     setText('workerHeaderCount', number(result.total || workers.length));
     const workerRangeStart = result.total ? result.offset + 1 : 0;
@@ -1496,10 +1517,6 @@
       } else {
         for (const worker of displayWorkers) {
           const card = node('article', 'worker-touch-card');
-          card.onclick = (e) => {
-            if (e.target.closest('button')) return;
-            openWorkerDialog(worker.workerId, worker.companyId);
-          };
 
           const top = node('div', 'worker-touch-card-top');
           const left = node('div', 'worker-card-left');
@@ -1519,9 +1536,11 @@
           card.appendChild(top);
 
           const meta = node('div', 'worker-touch-stats');
-          meta.appendChild(node('span', '', `Staj: ${money(worker.staj)}`));
+          meta.appendChild(node('span', 'worker-net-profit', `Sof foyda: ${money(worker.net || 0)}`));
           if (worker.binding) {
             meta.appendChild(node('span', 'mono muted', worker.binding.username ? `@${worker.binding.username}` : `ID: ${worker.binding.telegramId}`));
+          } else {
+            meta.appendChild(node('span', 'mono muted', 'Bog‘lanmagan'));
           }
           card.appendChild(meta);
 
@@ -1535,11 +1554,19 @@
 
           const editBtn = node('button', 'button button-secondary button-sm', '✏️ Tahrirlash');
           editBtn.type = 'button';
-          editBtn.onclick = (e) => {
-            e.stopPropagation();
-            openWorkerDialog(worker.workerId, worker.companyId);
-          };
+          editBtn.dataset.editWorker = String(worker.workerId);
+          editBtn.dataset.companyId = worker.companyId;
           actions.appendChild(editBtn);
+
+          if (worker.binding) {
+            const unbindBtn = node('button', 'button button-danger button-sm', '🔗 Yechish');
+            unbindBtn.type = 'button';
+            unbindBtn.dataset.unbindWorker = String(worker.workerId);
+            unbindBtn.dataset.companyId = worker.companyId;
+            unbindBtn.dataset.telegramId = worker.binding.telegramId;
+            unbindBtn.dataset.workerName = worker.name;
+            actions.appendChild(unbindBtn);
+          }
           card.appendChild(actions);
 
           cardGrid.appendChild(card);
@@ -2102,9 +2129,7 @@
           meta.appendChild(node('span', 'mono muted', `Amallar: ${ops.length} ta`));
           card.appendChild(meta);
 
-          if (item.availableSizes && item.availableSizes.length > 0) {
-            card.appendChild(node('div', 'count-label', `O‘lchamlar: ${item.availableSizes.join(', ')}`));
-          }
+
           grid.appendChild(card);
         }
       }
