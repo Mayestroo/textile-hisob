@@ -52,6 +52,14 @@ function normalizeNumeric(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function dateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
+  }
+  return String(value).match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null;
+}
+
 function createAdminDashboardService(options = {}) {
   const { pool } = options;
   const allowedAdminIds = options.allowedAdminIds || new Set();
@@ -255,8 +263,8 @@ function createAdminDashboardService(options = {}) {
     const period = periodResult.rows[0] || null;
     if (requestedPeriodId && !period) throw activationError('PERIOD_NOT_FOUND', 404);
     const periodId = period?.id || null;
-    let startDate = period?.start_date ? String(period.start_date).slice(0, 10) : null;
-    const endDate = period?.end_date ? String(period.end_date).slice(0, 10) : null;
+    let startDate = dateOnly(period?.start_date);
+    const endDate = dateOnly(period?.end_date);
 
     if (period && !startDate && !Boolean(period.is_closed)) {
       const name = String(period?.name || '').toLowerCase();
