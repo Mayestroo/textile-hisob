@@ -59,6 +59,13 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain("{ companyId, periodId }");
   });
 
+  it('keeps worker edit, advance, and unbind actions on mobile profit cards', () => {
+    expect(javascript).toContain('Sof foyda: ${money(worker.net || 0)}');
+    expect(javascript).toContain('adjBtn.dataset.quickAdj = String(worker.workerId)');
+    expect(javascript).toContain('editBtn.dataset.editWorker = String(worker.workerId)');
+    expect(javascript).toContain('unbindBtn.dataset.unbindWorker = String(worker.workerId)');
+  });
+
   it('labels activation policy separately and does not expose bot-managed ticket mode', () => {
     const policyForm = html.match(/<form id="companyForm"[\s\S]*?<\/form>/)?.[0] || '';
     expect(html).toContain('Activation policy');
