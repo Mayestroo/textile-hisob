@@ -63,6 +63,7 @@ describe(' Admin WebApp static security and usability boundaries', () => {
   it('keeps worker unbind action on mobile profit cards', () => {
     expect(javascript).toContain('Sof foyda: ${money(worker.net || 0)}');
     expect(javascript).toContain('unbindBtn.dataset.unbindWorker = String(worker.workerId)');
+    expect(javascript).toContain('unbindWorker: workerId, companyId, telegramId, workerName');
   });
 
   it('labels activation policy separately and does not expose bot-managed ticket mode', () => {

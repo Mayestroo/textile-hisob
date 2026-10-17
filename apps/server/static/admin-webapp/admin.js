@@ -1696,7 +1696,7 @@
   }
 
   async function unbindWorker(button) {
-    const { workerId, companyId, telegramId, workerName } = button.dataset;
+    const { unbindWorker: workerId, companyId, telegramId, workerName } = button.dataset;
     if (!window.confirm(`${workerName || `#${workerId}`} ishchining Telegram ID ${telegramId} bog‘lanishini bekor qilasizmi?`)) return;
     button.disabled = true;
     let unbound = false;
