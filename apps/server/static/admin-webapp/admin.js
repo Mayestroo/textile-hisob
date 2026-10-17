@@ -2807,6 +2807,16 @@
   function coShowScreen(name, tab = null) {
     for (const screen of document.querySelectorAll('.co-screen')) screen.classList.toggle('is-active', screen.dataset.coScreen === name);
     for (const button of document.querySelectorAll('.co-bottom-nav [data-co-tab]')) button.classList.toggle('selected', button.dataset.coTab === (tab || name));
+    const isSubscreen = name === 'models' || name === 'worker-detail' || name === 'tickets';
+    const bottomNav = document.querySelector('.co-bottom-nav');
+    if (bottomNav) bottomNav.hidden = isSubscreen;
+    if (telegram?.BackButton) {
+      if (isSubscreen) {
+        try { telegram.BackButton.show(); } catch { }
+      } else {
+        try { telegram.BackButton.hide(); } catch { }
+      }
+    }
     if (telegram?.HapticFeedback) { try { telegram.HapticFeedback.impactOccurred('light'); } catch { } }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -2847,7 +2857,12 @@
     const select = byId('companyPeriodSelect');
     select.replaceChildren();
     for (const period of companyPanel.periods) {
-      const option = node('option', '', `${period.name}${period.isClosed ? ' · yopilgan' : ''}`);
+      let label = period.name || 'Davr';
+      if (period.startDate && !label.includes('20')) {
+        const year = String(period.startDate).slice(0, 4);
+        label = `${year} — ${label}`;
+      }
+      const option = node('option', '', `${label}${period.isClosed ? ' · yopilgan' : ''}`);
       option.value = period.periodId; select.appendChild(option);
     }
     if (!companyPanel.periods.length) {
@@ -2895,14 +2910,30 @@
     if (period) byId('companyPeriodSelect').value = period.periodId;
     const missing = companyPanel.models.filter((model) => !model.operations?.length || model.operations.some((operation) => !(Number(operation.rate) > 0)));
     byId('companyPriceWarning').hidden = missing.length === 0;
+    setText('companyWarningTitle', `${missing.length} ta modelda narx yo‘q`);
+    setText('companyWarningSubtitle', 'Summa hisoblanmagan');
     setText('companyMissingPrices', `${missing.length} ta modelda narx yo‘q`);
     setText('companyModelCount', `${companyPanel.models.length} ta model`);
     setText('companySettingWorkers', `${companyPanel.workers.length} ta ishchi`);
     const totalPatta = companyPanel.parties.reduce((sum, party) => sum + Number(party.pattaCount || 0), 0);
     const totalWork = companyPanel.parties.reduce((sum, party) => sum + Number(party.ishSoni || 0), 0);
     const scannedPatta = new Set(companyPanel.tickets.map((ticket) => `${ticket.partyRecordId || ''}:${ticket.pattaNumber || ''}`)).size;
-    setText('companyPattaDone', `${number(scannedPatta)} / ${number(totalPatta)}`);
-    setText('companyWorkDone', `${number(totalWork)} / ${number(totalWork)} dona`);
+    const pattaDoneNode = byId('companyPattaDone');
+    if (pattaDoneNode) {
+      pattaDoneNode.replaceChildren(
+        coText('span', 'co-stat-indigo', number(scannedPatta)),
+        document.createTextNode(' '),
+        coText('small', '', `/ ${number(totalPatta)}`)
+      );
+    }
+    const workDoneNode = byId('companyWorkDone');
+    if (workDoneNode) {
+      workDoneNode.replaceChildren(
+        coText('span', 'co-stat-orange', number(totalWork)),
+        document.createTextNode(' '),
+        coText('small', '', `/ ${number(totalWork)}`)
+      );
+    }
     void payroll; void pieces;
   }
 
@@ -2958,7 +2989,7 @@
       card.appendChild(head);
       const meta = coText('div', 'co-party-meta');
       meta.appendChild(coText('span', '', `Patta 0 / ${number(party.totalPatta)}`));
-      meta.appendChild(coText('span', '', `Ish ${number(party.totalWork)} / ${number(party.totalPatta)} dona`));
+      meta.appendChild(coText('span', '', `Ish 0 / ${number(party.totalWork)} dona`));
       card.appendChild(meta);
       const progress = coText('div', 'co-progress'); const fill = coText('i');
       const total = Number(party.totalPatta || 0); fill.style.width = `${total ? Math.min(100, Math.round(Number(party.totalWork || 0) / total * 100)) : 0}%`;
@@ -2987,36 +3018,61 @@
     const rates = operations.map((operation) => Number(operation.rate || 0));
     const priced = rates.filter((rate) => rate > 0).length;
     const total = rates.reduce((sum, rate) => sum + rate, 0);
+    const hasAllRates = priced === operations.length && operations.length > 0;
     setText('companyModelName', model.name || model.modelId);
-    setText('companyModelStatus', priced === operations.length && operations.length ? 'Narx bor' : 'Narx yo‘q');
+    const statusNode = byId('companyModelStatus');
+    statusNode.textContent = hasAllRates ? 'Narx bor' : 'Narx yo‘q';
+    statusNode.classList.toggle('has-rates', hasAllRates);
     setText('companyRateProgress', `${priced} / ${operations.length} narx kiritildi`);
     setText('companyRateTotal', `Jami: ${coMoney(total)} so‘m`);
     setText('companyOperationCount', operations.length);
     byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
     const host = byId('companyOperations'); host.replaceChildren();
     operations.slice(0, companyPanel.visibleOperations).forEach((operation, index) => {
-      const row = coText('label', 'co-operation-row'); row.appendChild(coText('strong', '', operation.name || `Operatsiya ${index + 1}`));
-      const input = document.createElement('input'); input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.value = Number(operation.rate || 0) || '';
+      const row = coText('div', 'co-operation-row'); row.appendChild(coText('strong', '', operation.name || `Operatsiya ${index + 1}`));
+      const inputWrap = coText('div', 'co-rate-input-wrap');
+      const input = document.createElement('input'); input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.placeholder = '0'; input.value = Number(operation.rate || 0) || '';
       input.setAttribute('aria-label', `${operation.name || 'Operatsiya'} narxi`);
+      input.addEventListener('focus', () => inputWrap.classList.add('is-focused'));
+      input.addEventListener('blur', () => inputWrap.classList.remove('is-focused'));
       input.addEventListener('input', () => { operation.rate = Number(input.value || 0); renderCompanyModelSummaryOnly(); });
-      row.appendChild(input); host.appendChild(row);
+      const suffix = coText('span', 'co-rate-suffix', 'so‘m');
+      inputWrap.appendChild(input);
+      inputWrap.appendChild(suffix);
+      row.appendChild(inputWrap); host.appendChild(row);
     });
-    byId('companyMoreOperations').hidden = operations.length <= companyPanel.visibleOperations;
+    const moreBtn = byId('companyMoreOperations');
+    const remaining = operations.length - companyPanel.visibleOperations;
+    if (remaining > 0) {
+      moreBtn.hidden = false;
+      const step = Math.min(10, remaining);
+      moreBtn.textContent = `Yana ${step} ta ▾`;
+    } else {
+      moreBtn.hidden = true;
+    }
   }
   function renderCompanyModelSummaryOnly() {
     const operations = companyPanel.selectedModel?.operations || [];
     const priced = operations.filter((operation) => Number(operation.rate) > 0).length;
+    const total = operations.reduce((sum, operation) => sum + Number(operation.rate || 0), 0);
+    const hasAllRates = priced === operations.length && operations.length > 0;
     setText('companyRateProgress', `${priced} / ${operations.length} narx kiritildi`);
-    setText('companyRateTotal', `Jami: ${coMoney(operations.reduce((sum, operation) => sum + Number(operation.rate || 0), 0))} so‘m`);
-    setText('companyModelStatus', priced === operations.length && operations.length ? 'Narx bor' : 'Narx yo‘q');
+    setText('companyRateTotal', `Jami: ${coMoney(total)} so‘m`);
+    const statusNode = byId('companyModelStatus');
+    statusNode.textContent = hasAllRates ? 'Narx bor' : 'Narx yo‘q';
+    statusNode.classList.toggle('has-rates', hasAllRates);
     byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
   }
 
   function openCompanyWorker(worker) {
     companyPanel.selectedWorker = worker;
     setText('companyDetailName', worker.name || `Ishchi #${worker.workerId}`);
-    setText('companyDetailBadges', `ID ${worker.workerId} · ${worker.status === 'ACTIVE' ? 'Faol' : 'Nofaol'}`);
-    setText('companyDetailMonth', `Sof foyda · ${selectedPeriod()?.name || ''}`);
+    const badgeHost = byId('companyDetailBadges');
+    badgeHost.replaceChildren(
+      coText('span', 'co-badge co-badge-id', `ID ${worker.workerId}`),
+      coText('span', `co-badge co-badge-status ${worker.status === 'ACTIVE' ? 'active' : ''}`, worker.status === 'ACTIVE' ? 'Faol' : 'Nofaol')
+    );
+    setText('companyDetailMonth', `Sof foyda · ${selectedPeriod()?.name || 'Davr'}`);
     setText('companyDetailNet', coMoney(worker.net || 0)); setText('companyDetailGross', coMoney(worker.gross || 0));
     setText('companyDetailPieces', `${number(worker.pieces || 0)} dona`);
     setText('companyDetailAdvanceAmount', worker.avans ? `−${coMoney(worker.avans)}` : '—');
@@ -3028,11 +3084,36 @@
     if (!tickets.length) host.appendChild(coText('p', 'co-empty', 'Bu davr uchun operatsiya topilmadi.'));
     coShowScreen('worker-detail', 'workers');
   }
+  function coTicketDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('uz-UZ', {
+      timeZone: 'Asia/Tashkent',
+      day: '2-digit', month: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(date);
+    const fields = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+    return `${fields.day}.${fields.month} ${fields.hour}:${fields.minute}`;
+  }
   function companyTicketCard(ticket) {
     const row = coText('article', 'co-ticket-row');
-    const info = coText('div'); info.appendChild(coText('strong', '', ticket.operation || 'Tikuv'));
-    info.appendChild(coText('small', '', `${ticket.modelName || ticket.modelId || 'Model'} · ${timestamp(ticket.effectiveAt)}`)); row.appendChild(info);
-    const sum = coText('span', '', `${coMoney(ticket.quantity || 0)} dona`); row.appendChild(sum); return row;
+    const left = coText('div', 'co-ticket-left');
+    left.appendChild(coText('strong', 'co-ticket-title', ticket.operation || 'Tikuv'));
+    const dateStr = ticket.effectiveAt ? coTicketDate(ticket.effectiveAt) : '';
+    left.appendChild(coText('small', 'co-ticket-sub', `${ticket.modelName || ticket.modelId || 'Model'}${dateStr ? ` · ${dateStr}` : ''}`));
+    row.appendChild(left);
+
+    const right = coText('div', 'co-ticket-right');
+    const model = companyPanel.models.find((m) => m.modelId === ticket.modelId || m.name === ticket.modelName);
+    const op = model?.operations?.find((o) => o.name === ticket.operation);
+    const rate = Number(op?.rate || 0);
+    const total = rate * Number(ticket.quantity || 0);
+
+    right.appendChild(coText('strong', 'co-ticket-sum', `${coMoney(total)} so‘m`));
+    right.appendChild(coText('small', 'co-ticket-qty', `${coMoney(ticket.quantity || 0)} dona`));
+    row.appendChild(right);
+    return row;
   }
   function downloadCompanyCsv() {
     const isWorkerDetail = document.querySelector('[data-co-screen="worker-detail"].is-active');
@@ -3138,7 +3219,7 @@
       if (target === 'models') { renderCompanyModels(); coShowScreen('models', 'settings'); }
       else coShowScreen(target, target);
     }));
-    byId('companyClose').addEventListener('click', () => { try { telegram?.close?.(); } catch { } });
+    byId('companyClose').addEventListener('click', () => { handleNavigateBack(); });
     byId('companyPeriodSelect').addEventListener('change', async (event) => { companyPanel.periodId = event.target.value; await loadCompanyAdminData(); });
     byId('companyWorkerSearch').addEventListener('input', (event) => { companyPanel.workerQuery = event.target.value; renderCompanyWorkers(); });
     byId('companyWorkerFilters').addEventListener('click', (event) => {

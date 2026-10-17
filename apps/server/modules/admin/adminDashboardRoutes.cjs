@@ -210,6 +210,7 @@ function registerAdminDashboardRoutes(app, options = {}) {
   app.get('/admin-app/:asset', async (request, reply) => {
     const assets = {
       'admin.css': { type: 'text/css; charset=utf-8', file: 'admin.css' },
+      'company-admin.css': { type: 'text/css; charset=utf-8', file: 'company-admin.css' },
       'admin.js': { type: 'application/javascript; charset=utf-8', file: 'admin.js' }
     };
     const asset = assets[request.params.asset];

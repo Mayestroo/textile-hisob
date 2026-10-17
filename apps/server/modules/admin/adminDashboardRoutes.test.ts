@@ -65,6 +65,7 @@ describe(' Admin WebApp routes', () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'novda-admin-webapp-'));
     fs.writeFileSync(path.join(tempDir, 'index.html'), '<meta name="novda-admin-webapp-version" content="test">');
     fs.writeFileSync(path.join(tempDir, 'admin.css'), 'body { color: black; }');
+    fs.writeFileSync(path.join(tempDir, 'company-admin.css'), '.company-app { color: green; }');
     fs.writeFileSync(path.join(tempDir, 'admin.js'), 'window.test = true;');
     registerAdminDashboardRoutes(app, {
       dashboard,
@@ -385,6 +386,7 @@ describe(' Admin WebApp routes', () => {
 
     const page = await server.inject({ method: 'GET', url: '/admin-app' });
     const script = await server.inject({ method: 'GET', url: '/admin-app/admin.js' });
+    const companyStyles = await server.inject({ method: 'GET', url: '/admin-app/company-admin.css' });
 
     expect(page.statusCode).toBe(200);
     expect(page.headers['cache-control']).toBe('no-store');
@@ -393,5 +395,8 @@ describe(' Admin WebApp routes', () => {
     expect(page.body).toContain('novda-admin-webapp-version');
     expect(script.statusCode).toBe(200);
     expect(script.headers['content-type']).toContain('javascript');
+    expect(companyStyles.statusCode).toBe(200);
+    expect(companyStyles.headers['content-type']).toContain('text/css');
+    expect(companyStyles.body).toContain('.company-app');
   });
 });
