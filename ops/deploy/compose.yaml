@@ -110,6 +110,7 @@ services:
       NOVDA_ADMIN_TELEGRAM_IDS_FILE: /run/secrets/admin-telegram-ids
       NOVDA_ADMIN_WEBAPP_SESSION_SECRET_FILE: /run/secrets/admin-webapp-session-secret
       NOVDA_ADMIN_BOT_INTERNAL_URL: http://novda-admin-bot:8080
+      NOVDA_WORKER_BOT_HEALTH_URL: http://novda-worker-bot:8081/health
       NOVDA_WORKER_API_TOKEN_FILE: /run/secrets/worker-api-token
       WORKER_AUTH_HMAC_SECRET_FILE: /run/secrets/worker-auth-hmac-secret
       LOG_LEVEL: info

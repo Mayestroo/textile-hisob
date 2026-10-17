@@ -15,6 +15,7 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="/admin-app/admin.css" />
+  <link rel="stylesheet" href="/admin-app/company-admin.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/admin-app/admin.js" defer></script>
 </head>
@@ -36,6 +37,91 @@
       <div id="authError" class="notice notice-error" hidden></div>
       <button id="retryAuth" class="button button-primary" type="button" hidden>Qayta urinish</button>
     </div>
+  </div>
+
+  <div id="companyAdminApp" class="company-app" hidden>
+    <header class="co-topbar">
+      <button id="companyClose" class="co-close" type="button" aria-label="Yopish"><span>×</span> Yopish</button>
+      <div class="co-brand"><strong id="companyBrandName">Kompaniya</strong><span>Company admin</span></div>
+      <span class="co-avatar" aria-hidden="true"></span>
+    </header>
+    <main class="co-main">
+      <section class="co-screen is-active" data-co-screen="home">
+        <div class="co-heading"><h1>Umumiy hisobot</h1><select id="companyPeriodSelect" class="co-period" aria-label="Hisobot davri"></select></div>
+        <article class="co-profit"><span>Sof to‘lanadigan foyda</span><strong id="companyNet">0</strong><small>so‘m</small></article>
+        <div class="co-stat-grid">
+          <article><span>Jami ishlangan</span><strong id="companyGross">0</strong></article>
+          <article><span>Berilgan avans</span><strong id="companyAdvance">0</strong></article>
+          <article><span>Doimiy staj</span><strong id="companyStaj">0</strong></article>
+          <article><span>Ishchilar</span><strong id="companyWorkerCount">0 ta</strong></article>
+        </div>
+        <div id="companyPriceWarning" class="co-warning" hidden><span>⚠</span><div><strong>Narxi belgilanmagan model bor</strong><small>Hisob to‘liq chiqishi uchun narxlarni kiriting.</small></div><button data-co-go="settings">Ko‘rish</button></div>
+        <div class="co-actions">
+          <button data-co-go="parties"><b class="co-action-icon green">＋</b>Patta kiritish</button>
+          <button id="companyAdvanceAction"><b class="co-action-icon amber">▣</b>Avans berish</button>
+          <button id="companyExport"><b class="co-action-icon blue">↓</b>Excel hisobot</button>
+          <button id="companyClosePeriod"><b class="co-action-icon purple">▣</b>Oyni yopish</button>
+        </div>
+      </section>
+
+      <section class="co-screen" data-co-screen="workers">
+        <div class="co-heading"><h1>Ishchilar</h1><span id="companyWorkerCaption" class="co-muted">—</span></div>
+        <label class="co-search"><span>⌕</span><input id="companyWorkerSearch" type="search" placeholder="Ism yoki ID bo‘yicha" /></label>
+        <div class="co-chips" id="companyWorkerFilters"><button class="selected" data-filter="all">Hammasi</button><button data-filter="positive">Avansli</button><button data-filter="negative">Manfiy</button><button data-filter="zero">Nol</button></div>
+        <div id="companyWorkers" class="co-list"></div>
+      </section>
+
+      <section class="co-screen" data-co-screen="parties">
+        <div class="co-heading co-heading-stack"><div><h1>Pattalar</h1><span class="co-muted">Partiyalar nazorati</span></div></div>
+        <div class="co-party-stats"><article><span>Kiritilgan patta</span><strong id="companyPattaDone">0 <small>/ 0</small></strong></article><article><span>Kiritilgan ish</span><strong id="companyWorkDone">0 <small>/ 0 dona</small></strong></article></div>
+        <div class="co-chips" id="companyPartyFilters"><button class="selected" data-filter="active">Patta hisob · 0</button><button data-filter="closed">Yopilgan · 0</button></div>
+        <div id="companyParties" class="co-list"></div>
+      </section>
+
+      <section class="co-screen" data-co-screen="settings">
+        <div class="co-heading"><h1>Sozlamalar</h1></div>
+        <div class="co-settings-list">
+          <button data-co-go="models"><i class="amber">◇</i><span><strong>Operatsiya narxlari</strong><small id="companyMissingPrices">—</small></span><b>›</b></button>
+          <button data-co-go="models"><i class="blue">◈</i><span><strong>Modellar</strong><small id="companyModelCount">—</small></span><b>›</b></button>
+          <button data-co-go="workers"><i class="green">♧</i><span><strong>Ishchilar</strong><small id="companySettingWorkers">—</small></span><b>›</b></button>
+        </div>
+        <p class="co-section-caption">BOTLAR VA ULANISH</p>
+        <div class="co-settings-list">
+          <article><i class="purple">▣</i><span><strong>Worker bot</strong><small id="companyWorkerBotStatus">Holat tekshirilmagan</small></span><em>—</em></article>
+          <article><i class="green">⬡</i><span><strong>Litsenziya</strong><small id="companyLicenseStatus">Holat olinmoqda</small></span><em id="companyLicenseBadge">—</em></article>
+          <button id="companyLanguage"><i class="blue">◎</i><span><strong>Til</strong><small>O‘zbekcha</small></span><b>›</b></button>
+        </div>
+        <button id="companySettingsExport" class="co-outline-button">Hisobotni Excel'ga yuklash</button>
+      </section>
+
+      <section class="co-screen" data-co-screen="models">
+        <div id="companyModelChoices" class="co-model-choices"></div>
+        <div class="co-model-summary"><span>Model</span><strong id="companyModelName">—</strong><em id="companyModelStatus">Narx yo‘q</em><small id="companyRateProgress">0 / 0 narx kiritildi</small><b id="companyRateTotal">Jami: 0 so‘m</b><div class="co-progress"><i id="companyRateProgressFill"></i></div></div>
+        <div class="co-bulk-rate"><strong>Bo‘sh narxlarga bir xil qiymat</strong><input id="companyBulkRate" type="number" inputmode="numeric" min="0" placeholder="0"/><button id="companyApplyBulk">Qo‘llash</button></div>
+        <p class="co-section-caption">OPERATSIYALAR · <span id="companyOperationCount">0</span></p>
+        <div id="companyOperations" class="co-operation-list"></div>
+        <button id="companyMoreOperations" class="co-more-ops" hidden>Yana ko‘rsatish⌄</button>
+        <button id="companySaveRates" class="co-primary-button co-save-rates">Saqlash</button>
+      </section>
+
+      <section class="co-screen" data-co-screen="worker-detail">
+        <div class="co-heading co-worker-detail-heading"><div><h1 id="companyDetailName">Ishchi</h1><span id="companyDetailBadges"></span></div></div>
+        <article class="co-detail-profit"><span id="companyDetailMonth">Sof foyda</span><strong id="companyDetailNet">0</strong><small>so‘m</small></article>
+        <div class="co-stat-grid"><article><span>Hisoblangan</span><strong id="companyDetailGross">0</strong></article><article><span>Jami ish</span><strong id="companyDetailPieces">0 dona</strong></article><article><span>Avans</span><strong id="companyDetailAdvanceAmount">—</strong></article><article><span>Jarima</span><strong id="companyDetailFine">—</strong></article></div>
+        <div class="co-section-row"><strong>OPERATSIYALAR · <span id="companyDetailTicketCount">0</span></strong><button id="companyAllTickets">Barchasi</button></div>
+        <div id="companyWorkerTickets" class="co-list"></div>
+        <div class="co-sticky-actions"><button id="companyDetailAdvance" class="co-primary-button">Avans berish</button><button id="companyDetailExport" class="co-outline-button">Excel hisobot</button></div>
+      </section>
+
+      <section class="co-screen" data-co-screen="tickets">
+        <div class="co-heading"><h1>Operatsiyalar</h1><button id="companyTicketBack" class="co-text-button">‹ Orqaga</button></div>
+        <div id="companyAllWorkerTickets" class="co-list"></div>
+      </section>
+    </main>
+    <nav class="co-bottom-nav" aria-label="Asosiy bo‘limlar">
+      <button class="selected" data-co-tab="home"><span>⌂</span>Bosh sahifa</button><button data-co-tab="workers"><span>♧</span>Ishchilar</button><button data-co-tab="parties"><span>◇</span>Pattalar</button><button data-co-tab="settings"><span>☷</span>Sozlamalar</button>
+    </nav>
+    <div id="companyToast" class="co-toast" role="status" aria-live="polite" hidden></div>
   </div>
 
   <!-- Main Admin Shell -->

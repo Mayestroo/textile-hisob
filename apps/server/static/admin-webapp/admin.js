@@ -185,6 +185,8 @@
   function showAuthError(message, retry = true) {
     byId('authGate').hidden = false;
     byId('adminApp').hidden = true;
+    byId('companyAdminApp').hidden = true;
+    document.body.classList.remove('company-admin-session');
     byId('authMessage').textContent = message;
     byId('authError').hidden = false;
     byId('authError').textContent = 'Kirish rad etildi. Himoyalangan ma’lumot ko‘rsatilmaydi.';
@@ -2563,6 +2565,13 @@
   }
 
   function handleNavigateBack() {
+    if (document.body.classList.contains('company-admin-session')) {
+      if (document.querySelector('[data-co-screen="tickets"].is-active')) coShowScreen('worker-detail', 'workers');
+      else if (document.querySelector('[data-co-screen="worker-detail"].is-active')) coShowScreen('workers');
+      else if (!document.querySelector('[data-co-screen="home"].is-active')) coShowScreen('home');
+      else { try { telegram?.close?.(); } catch { } }
+      return;
+    }
     const quickDialog = byId('quickAdjustmentDialog');
     if (quickDialog && quickDialog.open) {
       quickDialog.close();
@@ -2779,6 +2788,397 @@
     } catch { }
   }
 
+  const companyPanel = {
+    companyId: '', periodId: '', periods: [], workers: [], payroll: [], parties: [], models: [],
+    tickets: [], selectedWorker: null, selectedModel: null, workerFilter: 'all', partyFilter: 'active',
+    workerQuery: '', visibleOperations: 5
+  };
+
+  function coText(tag, className, text) { return node(tag, className, text); }
+  function coMoney(value) { return number(Math.round(Number(value) || 0)); }
+  function coToast(message) {
+    const toastNode = byId('companyToast');
+    if (!toastNode) return;
+    toastNode.textContent = message;
+    toastNode.hidden = false;
+    window.clearTimeout(companyPanel.toastTimer);
+    companyPanel.toastTimer = window.setTimeout(() => { toastNode.hidden = true; }, 3000);
+  }
+  function coShowScreen(name, tab = null) {
+    for (const screen of document.querySelectorAll('.co-screen')) screen.classList.toggle('is-active', screen.dataset.coScreen === name);
+    for (const button of document.querySelectorAll('.co-bottom-nav [data-co-tab]')) button.classList.toggle('selected', button.dataset.coTab === (tab || name));
+    if (telegram?.HapticFeedback) { try { telegram.HapticFeedback.impactOccurred('light'); } catch { } }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function coButton(tag, className, label, onClick) {
+    const button = coText(tag, className, label);
+    button.type = 'button'; button.addEventListener('click', onClick); return button;
+  }
+  function selectedPeriod() { return companyPanel.periods.find((period) => period.periodId === companyPanel.periodId) || null; }
+  function payrollQuery() { return { companyId: companyPanel.companyId, ...(companyPanel.periodId ? { periodId: companyPanel.periodId } : {}) }; }
+  async function loadCompanyCollection(route, companyId, resultKey) {
+    const limit = 100;
+    const rows = [];
+    let offset = 0;
+    while (offset < 10000) {
+      const result = await request(withQuery(route, { companyId, limit, offset }));
+      const page = result[resultKey] || [];
+      rows.push(...page);
+      if (page.length < limit || (Number.isFinite(Number(result.total)) && rows.length >= Number(result.total))) break;
+      offset += page.length;
+    }
+    return rows;
+  }
+
+  async function startCompanyAdminApp(companyId) {
+    companyPanel.companyId = companyId;
+    const [companies, periods] = await Promise.all([
+      request(`${API}/companies`),
+      request(`${API}/companies/${encodeURIComponent(companyId)}/periods`)
+    ]);
+    const company = (companies.companies || []).find((item) => item.companyId === companyId);
+    setText('companyBrandName', company?.companyName || companyId);
+    const licenseActive = Boolean(company?.activationConfigured && company?.activationActive);
+    setText('companyLicenseStatus', company?.activationConfigured ? (licenseActive ? 'Faol' : 'Nofaol') : 'Sozlanmagan');
+    setText('companyLicenseBadge', company?.activationConfigured ? (licenseActive ? 'Faol' : 'Nofaol') : '—');
+    void refreshWorkerBotStatus();
+    companyPanel.periods = periods.periods || [];
+    companyPanel.periodId = companyPanel.periods.find((period) => !period.isClosed)?.periodId || companyPanel.periods[0]?.periodId || '';
+    const select = byId('companyPeriodSelect');
+    select.replaceChildren();
+    for (const period of companyPanel.periods) {
+      const option = node('option', '', `${period.name}${period.isClosed ? ' · yopilgan' : ''}`);
+      option.value = period.periodId; select.appendChild(option);
+    }
+    if (!companyPanel.periods.length) {
+      const option = node('option', '', 'Davr mavjud emas'); option.value = ''; select.appendChild(option);
+    }
+    select.value = companyPanel.periodId;
+    await loadCompanyAdminData();
+  }
+
+  async function loadCompanyAdminData() {
+    const { companyId } = companyPanel;
+    try {
+      const [payrollRes, workers, parties, models, tickets] = await Promise.all([
+        request(withQuery(`${API}/payroll`, payrollQuery())),
+        loadCompanyCollection(`${API}/workers`, companyId, 'workers'),
+        loadCompanyCollection(`${API}/parties`, companyId, 'parties'),
+        loadCompanyCollection(`${API}/models`, companyId, 'models'),
+        loadCompanyCollection(`${API}/tickets`, companyId, 'tickets')
+      ]);
+      companyPanel.payroll = payrollRes.payroll?.workers || [];
+      const payrollMap = new Map(companyPanel.payroll.map((worker) => [String(worker.workerId), worker]));
+      companyPanel.workers = workers.map((worker) => ({ ...worker, ...(payrollMap.get(String(worker.workerId)) || {}) }));
+      companyPanel.parties = parties;
+      companyPanel.models = models;
+      companyPanel.tickets = tickets;
+      renderCompanyHome(payrollRes.payroll || {});
+      renderCompanyWorkers();
+      renderCompanyParties();
+      renderCompanyModels();
+    } catch (error) {
+      coToast(`Ma’lumotlar olinmadi: ${error.code || 'API_UNAVAILABLE'}`);
+    }
+  }
+
+  function renderCompanyHome(payroll) {
+    const workers = companyPanel.payroll;
+    const gross = workers.reduce((sum, worker) => sum + Number(worker.gross || 0), 0);
+    const advance = workers.reduce((sum, worker) => sum + Number(worker.avans || 0), 0);
+    const staj = workers.reduce((sum, worker) => sum + Number(worker.staj || 0), 0);
+    const net = workers.reduce((sum, worker) => sum + Number(worker.net || 0), 0);
+    const pieces = workers.reduce((sum, worker) => sum + Number(worker.pieces || 0), 0);
+    setText('companyNet', coMoney(net)); setText('companyGross', coMoney(gross)); setText('companyAdvance', coMoney(advance));
+    setText('companyStaj', coMoney(staj)); setText('companyWorkerCount', `${number(companyPanel.workers.length)} ta`);
+    const period = selectedPeriod();
+    if (period) byId('companyPeriodSelect').value = period.periodId;
+    const missing = companyPanel.models.filter((model) => !model.operations?.length || model.operations.some((operation) => !(Number(operation.rate) > 0)));
+    byId('companyPriceWarning').hidden = missing.length === 0;
+    setText('companyMissingPrices', `${missing.length} ta modelda narx yo‘q`);
+    setText('companyModelCount', `${companyPanel.models.length} ta model`);
+    setText('companySettingWorkers', `${companyPanel.workers.length} ta ishchi`);
+    const totalPatta = companyPanel.parties.reduce((sum, party) => sum + Number(party.pattaCount || 0), 0);
+    const totalWork = companyPanel.parties.reduce((sum, party) => sum + Number(party.ishSoni || 0), 0);
+    const scannedPatta = new Set(companyPanel.tickets.map((ticket) => `${ticket.partyRecordId || ''}:${ticket.pattaNumber || ''}`)).size;
+    setText('companyPattaDone', `${number(scannedPatta)} / ${number(totalPatta)}`);
+    setText('companyWorkDone', `${number(totalWork)} / ${number(totalWork)} dona`);
+    void payroll; void pieces;
+  }
+
+  function renderCompanyWorkers() {
+    const host = byId('companyWorkers'); host.replaceChildren();
+    const q = companyPanel.workerQuery.trim().toLocaleLowerCase();
+    const workers = companyPanel.workers.filter((worker) => {
+      const net = Number(worker.net || 0);
+      const matchesFilter = companyPanel.workerFilter === 'all' ||
+        (companyPanel.workerFilter === 'positive' && Number(worker.avans || 0) > 0) ||
+        (companyPanel.workerFilter === 'negative' && net < 0) ||
+        (companyPanel.workerFilter === 'zero' && net === 0);
+      return matchesFilter && (!q || String(worker.workerId).includes(q) || String(worker.name || '').toLocaleLowerCase().includes(q));
+    });
+    setText('companyWorkerCaption', `${companyPanel.workers.length} ta · ${selectedPeriod()?.name || 'Davr yo‘q'}`);
+    if (!workers.length) { host.appendChild(coText('p', 'co-empty', 'Ishchilar topilmadi.')); return; }
+    for (const worker of workers) {
+      const row = coText('button', 'co-worker-row'); row.type = 'button';
+      row.addEventListener('click', () => openCompanyWorker(worker));
+      const left = coText('span', 'co-worker-left');
+      left.appendChild(coText('strong', 'co-worker-name', worker.name || `Ishchi #${worker.workerId}`));
+      if (Number(worker.net || 0) < 0) left.appendChild(coText('small', 'co-worker-status negative', 'Manfiy'));
+      else if (Number(worker.avans || 0) > 0) left.appendChild(coText('small', 'co-worker-status', 'Avansli'));
+      else if (Number(worker.staj || 0) > 0) left.appendChild(coText('small', 'co-worker-status', 'Staj'));
+      row.appendChild(left);
+      const amount = coText('strong', `co-worker-amount${Number(worker.net || 0) < 0 ? ' negative' : ''}`, `${Number(worker.net || 0) < 0 ? '−' : ''}${coMoney(Math.abs(Number(worker.net || 0)))}`);
+      row.appendChild(amount); host.appendChild(row);
+    }
+  }
+
+  function renderCompanyParties() {
+    const host = byId('companyParties'); host.replaceChildren();
+    const active = companyPanel.parties.filter((party) => party.status !== 'CLOSED');
+    const closed = companyPanel.parties.filter((party) => party.status === 'CLOSED');
+    const chips = byId('companyPartyFilters');
+    const activeButton = chips.querySelector('[data-filter="active"]');
+    const closedButton = chips.querySelector('[data-filter="closed"]');
+    activeButton.textContent = `Patta hisob · ${active.length}`; closedButton.textContent = `Yopilgan · ${closed.length}`;
+    const list = companyPanel.partyFilter === 'closed' ? closed : active;
+    const grouped = new Map();
+    for (const party of list) {
+      const key = party.modelId || party.modelName || party.partyRecordId;
+      const group = grouped.get(key) || { ...party, partyCount: 0, totalPatta: 0, totalWork: 0 };
+      group.partyCount += 1; group.totalPatta += Number(party.pattaCount || 0); group.totalWork += Number(party.ishSoni || 0); grouped.set(key, group);
+    }
+    const selected = [...grouped.values()].slice(0, 100);
+    if (!selected.length) { host.appendChild(coText('p', 'co-empty', 'Partiyalar topilmadi.')); return; }
+    for (const party of selected) {
+      const card = coText('article', 'co-party-row');
+      const head = coText('div', 'co-party-head');
+      head.appendChild(coText('strong', '', party.modelName || party.modelId || `№ ${party.partyNumber}`));
+      head.appendChild(coText('span', 'co-party-count', `${number(party.partyCount)} partiya`));
+      card.appendChild(head);
+      const meta = coText('div', 'co-party-meta');
+      meta.appendChild(coText('span', '', `Patta 0 / ${number(party.totalPatta)}`));
+      meta.appendChild(coText('span', '', `Ish ${number(party.totalWork)} / ${number(party.totalPatta)} dona`));
+      card.appendChild(meta);
+      const progress = coText('div', 'co-progress'); const fill = coText('i');
+      const total = Number(party.totalPatta || 0); fill.style.width = `${total ? Math.min(100, Math.round(Number(party.totalWork || 0) / total * 100)) : 0}%`;
+      progress.appendChild(fill); card.appendChild(progress); host.appendChild(card);
+    }
+  }
+
+  function renderCompanyModels() {
+    const choices = byId('companyModelChoices'); choices.replaceChildren();
+    const previousModelId = companyPanel.selectedModel?.modelId;
+    companyPanel.selectedModel = companyPanel.models.find((model) => model.modelId === previousModelId) || companyPanel.models[0] || null;
+    for (const model of companyPanel.models) {
+      const button = coButton('button', model.modelId === companyPanel.selectedModel?.modelId ? 'selected' : '', model.name || model.modelId, () => selectCompanyModel(model));
+      choices.appendChild(button);
+    }
+    renderCompanyModelDetail();
+  }
+
+  function selectCompanyModel(model) { companyPanel.selectedModel = model; companyPanel.visibleOperations = 5; renderCompanyModelDetail(); }
+  function renderCompanyModelDetail() {
+    const model = companyPanel.selectedModel;
+    if (!model) { setText('companyModelName', 'Model topilmadi'); byId('companyOperations').replaceChildren(); return; }
+    const choices = byId('companyModelChoices');
+    for (const [index, button] of [...choices.querySelectorAll('button')].entries()) button.classList.toggle('selected', companyPanel.models[index]?.modelId === model.modelId);
+    const operations = model.operations || [];
+    const rates = operations.map((operation) => Number(operation.rate || 0));
+    const priced = rates.filter((rate) => rate > 0).length;
+    const total = rates.reduce((sum, rate) => sum + rate, 0);
+    setText('companyModelName', model.name || model.modelId);
+    setText('companyModelStatus', priced === operations.length && operations.length ? 'Narx bor' : 'Narx yo‘q');
+    setText('companyRateProgress', `${priced} / ${operations.length} narx kiritildi`);
+    setText('companyRateTotal', `Jami: ${coMoney(total)} so‘m`);
+    setText('companyOperationCount', operations.length);
+    byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
+    const host = byId('companyOperations'); host.replaceChildren();
+    operations.slice(0, companyPanel.visibleOperations).forEach((operation, index) => {
+      const row = coText('label', 'co-operation-row'); row.appendChild(coText('strong', '', operation.name || `Operatsiya ${index + 1}`));
+      const input = document.createElement('input'); input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.value = Number(operation.rate || 0) || '';
+      input.setAttribute('aria-label', `${operation.name || 'Operatsiya'} narxi`);
+      input.addEventListener('input', () => { operation.rate = Number(input.value || 0); renderCompanyModelSummaryOnly(); });
+      row.appendChild(input); host.appendChild(row);
+    });
+    byId('companyMoreOperations').hidden = operations.length <= companyPanel.visibleOperations;
+  }
+  function renderCompanyModelSummaryOnly() {
+    const operations = companyPanel.selectedModel?.operations || [];
+    const priced = operations.filter((operation) => Number(operation.rate) > 0).length;
+    setText('companyRateProgress', `${priced} / ${operations.length} narx kiritildi`);
+    setText('companyRateTotal', `Jami: ${coMoney(operations.reduce((sum, operation) => sum + Number(operation.rate || 0), 0))} so‘m`);
+    setText('companyModelStatus', priced === operations.length && operations.length ? 'Narx bor' : 'Narx yo‘q');
+    byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
+  }
+
+  function openCompanyWorker(worker) {
+    companyPanel.selectedWorker = worker;
+    setText('companyDetailName', worker.name || `Ishchi #${worker.workerId}`);
+    setText('companyDetailBadges', `ID ${worker.workerId} · ${worker.status === 'ACTIVE' ? 'Faol' : 'Nofaol'}`);
+    setText('companyDetailMonth', `Sof foyda · ${selectedPeriod()?.name || ''}`);
+    setText('companyDetailNet', coMoney(worker.net || 0)); setText('companyDetailGross', coMoney(worker.gross || 0));
+    setText('companyDetailPieces', `${number(worker.pieces || 0)} dona`);
+    setText('companyDetailAdvanceAmount', worker.avans ? `−${coMoney(worker.avans)}` : '—');
+    setText('companyDetailFine', worker.jarima ? `−${coMoney(worker.jarima)}` : '—');
+    const tickets = companyPanel.tickets.filter((ticket) => String(ticket.workerId) === String(worker.workerId));
+    setText('companyDetailTicketCount', tickets.length);
+    const host = byId('companyWorkerTickets'); host.replaceChildren();
+    for (const ticket of tickets.slice(0, 2)) host.appendChild(companyTicketCard(ticket));
+    if (!tickets.length) host.appendChild(coText('p', 'co-empty', 'Bu davr uchun operatsiya topilmadi.'));
+    coShowScreen('worker-detail', 'workers');
+  }
+  function companyTicketCard(ticket) {
+    const row = coText('article', 'co-ticket-row');
+    const info = coText('div'); info.appendChild(coText('strong', '', ticket.operation || 'Tikuv'));
+    info.appendChild(coText('small', '', `${ticket.modelName || ticket.modelId || 'Model'} · ${timestamp(ticket.effectiveAt)}`)); row.appendChild(info);
+    const sum = coText('span', '', `${coMoney(ticket.quantity || 0)} dona`); row.appendChild(sum); return row;
+  }
+  function downloadCompanyCsv() {
+    const isWorkerDetail = document.querySelector('[data-co-screen="worker-detail"].is-active');
+    const payrollRows = isWorkerDetail && companyPanel.selectedWorker
+      ? [companyPanel.selectedWorker]
+      : companyPanel.payroll;
+    const rows = [['ID', 'Ishchi', 'Hisoblangan', 'Avans', 'Jarima', 'Staj', 'Sof foyda', 'Ish soni'],
+      ...payrollRows.map((worker) => [worker.workerId, worker.name, worker.gross, worker.avans, worker.jarima, worker.staj, worker.net, worker.pieces])];
+    const csv = '\ufeff' + rows.map((row) => row.map((cellValue) => `"${String(cellValue ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = `hisobot-${companyPanel.periodId || 'davr'}.csv`; link.click(); URL.revokeObjectURL(link.href);
+  }
+  async function giveCompanyAdvance(worker) {
+    const target = worker || companyPanel.selectedWorker;
+    if (!target) { coShowScreen('workers'); return coToast('Avans berish uchun ishchini tanlang.'); }
+    const period = companyPanel.periods.find((item) => !item.isClosed);
+    if (!period) return coToast('Avans kiritish uchun ochiq davr topilmadi.');
+    const raw = window.prompt(`${target.name} uchun avans summasi (so‘m):`);
+    if (raw === null) return;
+    const amount = Number(raw);
+    if (!Number.isSafeInteger(amount) || amount <= 0) return coToast('Summani butun musbat son ko‘rinishida kiriting.');
+    const description = window.prompt('Avans izohi:', 'Avans');
+    if (description === null || !description.trim()) return coToast('Izoh kiritilmadi.');
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyPanel.companyId)}/workers/${encodeURIComponent(target.workerId)}`, {
+        method: 'PUT', body: { name: target.name, role: target.role || null, staj: Number(target.staj || 0), baseRevision: Number(target.serverRevision), operationId: crypto.randomUUID(), commandId: crypto.randomUUID(), adjustment: { adjustmentId: crypto.randomUUID(), type: 'AVANS', periodId: period.periodId, amountDelta: amount, description: description.trim() } }
+      });
+      coToast('Avans saqlandi.'); await loadCompanyAdminData();
+    } catch (error) { coToast(`Avans saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+  }
+
+  async function refreshWorkerBotStatus() {
+    try {
+      const result = await request(`${API}/worker-bot-status`);
+      const labels = { online: ['Ulangan', 'Faol'], offline: ['Bot javob bermayapti', 'Oflayn'], unconfigured: ['Server monitoring sozlanmagan', '—'] };
+      const [detail, badge] = labels[result.status] || labels.unconfigured;
+      setText('companyWorkerBotStatus', detail);
+      const badgeNode = byId('companyWorkerBotStatus')?.closest('article')?.querySelector('em');
+      if (badgeNode) badgeNode.textContent = badge;
+    } catch {
+      setText('companyWorkerBotStatus', 'Holatni tekshirib bo‘lmadi');
+    }
+  }
+
+  async function saveCompanyModelRates() {
+    const model = companyPanel.selectedModel;
+    if (!model) return coToast('Saqlash uchun model tanlang.');
+    const button = byId('companySaveRates');
+    button.disabled = true;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyPanel.companyId)}/models/${encodeURIComponent(model.modelId)}/rates`, {
+        method: 'PUT', body: {
+          baseRevision: Number(model.modelRevision || 0), operationId: crypto.randomUUID(), commandId: crypto.randomUUID(),
+          operations: (model.operations || []).map((operation) => ({ name: operation.name, rate: Number(operation.rate || 0) }))
+        }
+      });
+      coToast('Operatsiya narxlari saqlandi.');
+      await loadCompanyAdminData();
+    } catch (error) { coToast(`Narxlar saqlanmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    finally { button.disabled = false; }
+  }
+
+  async function closeCompanyPeriod() {
+    const period = selectedPeriod();
+    if (!period || period.isClosed) return coToast('Yopish uchun ochiq davr topilmadi.');
+    const today = new Date().toISOString().slice(0, 10);
+    const endDate = window.prompt(`${period.name} davri uchun yakun sanasi (YYYY-MM-DD):`, period.endDate || today);
+    if (endDate === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || Number.isNaN(Date.parse(`${endDate}T00:00:00Z`))) return coToast('Sana YYYY-MM-DD ko‘rinishida bo‘lishi kerak.');
+    const nextDate = new Date(`${endDate}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const nextStartDate = nextDate.toISOString().slice(0, 10);
+    const nextMonth = new Intl.DateTimeFormat('uz-UZ', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(nextDate);
+    if (!window.confirm(`${period.name} davri ${endDate} sanasi bilan yopiladi. Faol pattalar keyingi davrga o‘tkaziladi. Davom etasizmi?`)) return;
+    const button = byId('companyClosePeriod'); button.disabled = true;
+    try {
+      await request(`${API}/companies/${encodeURIComponent(companyPanel.companyId)}/periods/${encodeURIComponent(period.periodId)}/close`, {
+        method: 'POST', body: {
+          baseRevision: Number(period.serverRevision || 0), operationId: crypto.randomUUID(), commandId: crypto.randomUUID(), endDate,
+          archiveFilename: `hisobot-${period.periodId}.json`,
+          nextPeriod: { id: `period_${nextStartDate.replace(/-/g, '')}`, name: nextMonth, startDate: nextStartDate }
+        }
+      });
+      const result = await request(`${API}/companies/${encodeURIComponent(companyPanel.companyId)}/periods`);
+      companyPanel.periods = result.periods || [];
+      companyPanel.periodId = companyPanel.periods.find((item) => item.startDate === nextStartDate)?.periodId || companyPanel.periods.find((item) => !item.isClosed)?.periodId || '';
+      const select = byId('companyPeriodSelect'); select.replaceChildren();
+      for (const item of companyPanel.periods) { const option = node('option', '', `${item.name}${item.isClosed ? ' · yopilgan' : ''}`); option.value = item.periodId; select.appendChild(option); }
+      select.value = companyPanel.periodId;
+      coToast('Davr yopildi, yangi davr ochildi.');
+      await loadCompanyAdminData();
+    } catch (error) { coToast(`Davr yopilmadi: ${error.code || 'API_UNAVAILABLE'}`); }
+    finally { button.disabled = false; }
+  }
+
+  function bindCompanyAdminApp() {
+    document.querySelectorAll('.co-bottom-nav [data-co-tab]').forEach((button) => button.addEventListener('click', () => {
+      const screen = button.dataset.coTab; coShowScreen(screen, screen);
+      if (screen === 'workers') renderCompanyWorkers();
+    }));
+    document.querySelectorAll('[data-co-go]').forEach((button) => button.addEventListener('click', () => {
+      const target = button.dataset.coGo;
+      if (target === 'models') { renderCompanyModels(); coShowScreen('models', 'settings'); }
+      else coShowScreen(target, target);
+    }));
+    byId('companyClose').addEventListener('click', () => { try { telegram?.close?.(); } catch { } });
+    byId('companyPeriodSelect').addEventListener('change', async (event) => { companyPanel.periodId = event.target.value; await loadCompanyAdminData(); });
+    byId('companyWorkerSearch').addEventListener('input', (event) => { companyPanel.workerQuery = event.target.value; renderCompanyWorkers(); });
+    byId('companyWorkerFilters').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-filter]'); if (!button) return;
+      companyPanel.workerFilter = button.dataset.filter;
+      byId('companyWorkerFilters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button));
+      renderCompanyWorkers();
+    });
+    byId('companyPartyFilters').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-filter]'); if (!button) return;
+      companyPanel.partyFilter = button.dataset.filter;
+      byId('companyPartyFilters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderCompanyParties();
+    });
+    byId('companyAdvanceAction').addEventListener('click', () => { coShowScreen('workers'); coToast('Avans beriladigan ishchini tanlang.'); });
+    byId('companyDetailAdvance').addEventListener('click', () => giveCompanyAdvance(companyPanel.selectedWorker));
+    byId('companyExport').addEventListener('click', downloadCompanyCsv);
+    byId('companySettingsExport').addEventListener('click', downloadCompanyCsv);
+    byId('companyDetailExport').addEventListener('click', downloadCompanyCsv);
+    byId('companyClosePeriod').addEventListener('click', closeCompanyPeriod);
+    byId('companyLanguage').addEventListener('click', () => coToast('Hozircha faqat o‘zbek tili mavjud.'));
+    byId('companyMoreOperations').addEventListener('click', () => { companyPanel.visibleOperations += 10; renderCompanyModelDetail(); });
+    byId('companyApplyBulk').addEventListener('click', () => {
+      const amount = Number(byId('companyBulkRate').value);
+      if (!Number.isSafeInteger(amount) || amount <= 0) return coToast('Bir xil narxni musbat butun son kiriting.');
+      for (const operation of companyPanel.selectedModel?.operations || []) if (!(Number(operation.rate) > 0)) operation.rate = amount;
+      renderCompanyModelDetail();
+    });
+    byId('companySaveRates').addEventListener('click', saveCompanyModelRates);
+    byId('companyAllTickets').addEventListener('click', () => {
+      const host = byId('companyAllWorkerTickets'); host.replaceChildren();
+      const tickets = companyPanel.tickets.filter((ticket) => String(ticket.workerId) === String(companyPanel.selectedWorker?.workerId));
+      if (!tickets.length) host.appendChild(coText('p', 'co-empty', 'Operatsiyalar topilmadi.'));
+      tickets.forEach((ticket) => host.appendChild(companyTicketCard(ticket)));
+      coShowScreen('tickets', 'workers');
+    });
+    byId('companyTicketBack').addEventListener('click', () => coShowScreen('worker-detail', 'workers'));
+  }
+
+  bindCompanyAdminApp();
+
   async function beginAuthentication() {
     enforceLightModeTheme();
     byId('authError').hidden = true;
@@ -2810,23 +3210,19 @@
       if (session.session.telegramId !== state.user.id) throw new Error('ADMIN_SESSION_INVALID');
       state.access = session.access || state.access;
       if (!state.access) throw new Error('ADMIN_SESSION_INVALID');
-      if (!state.access.isGlobalAdmin && state.access.companyIds?.length === 1) {
-        const companyId = state.access.companyIds[0];
-        state.selectedCompanyId = companyId;
-        state.currentCpTab = 'overview';
-        const workerCompany = byId('workerFilterForm').elements.companyId;
-        const payrollCompany = byId('payrollForm').elements.companyId;
-        workerCompany.value = companyId;
-        payrollCompany.value = companyId;
-        workerCompany.readOnly = true;
-        payrollCompany.readOnly = true;
-      }
-      applyRoleNavigation();
       byId('authGate').hidden = true;
-      byId('adminApp').hidden = false;
+      const companyMode = state.access.isGlobalAdmin === false && state.access.companyIds?.length === 1;
+      if (!companyMode) applyRoleNavigation();
+      byId('adminApp').hidden = companyMode;
+      byId('companyAdminApp').hidden = !companyMode;
       setText('adminBadge', state.access.isGlobalAdmin ? 'SYSTEM' : (state.user.firstName || state.user.username || 'Admin'));
-      const defaultView = 'overview';
-      showView(defaultView);
+      if (companyMode) {
+        document.body.classList.add('company-admin-session');
+        await startCompanyAdminApp(state.access.companyIds[0]);
+      } else {
+        document.body.classList.remove('company-admin-session');
+        showView('overview');
+      }
       if (telegram.BackButton) telegram.BackButton.hide();
     } catch (error) {
       state.sessionToken = '';

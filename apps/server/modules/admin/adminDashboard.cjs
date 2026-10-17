@@ -370,14 +370,15 @@ function createAdminDashboardService(options = {}) {
   async function listPeriods(telegramId, companyId) {
     const scopedCompanyId = validateCompanyId(companyId);
     await actorForCompany(telegramId, scopedCompanyId);
-    const result = await pool.query(`SELECT id, name, start_date, end_date, is_closed
+    const result = await pool.query(`SELECT id, name, start_date, end_date, is_closed, server_revision
       FROM periods WHERE company_id = $1 ORDER BY start_date DESC, id DESC LIMIT 100`, [scopedCompanyId]);
     return result.rows.map((row) => ({
       periodId: row.id,
       name: row.name,
       startDate: String(row.start_date).slice(0, 10),
       endDate: row.end_date ? String(row.end_date).slice(0, 10) : null,
-      isClosed: Boolean(row.is_closed)
+      isClosed: Boolean(row.is_closed),
+      serverRevision: Number(row.server_revision || 0)
     }));
   }
 
@@ -510,7 +511,8 @@ function createAdminDashboardService(options = {}) {
     const offset = safeOffset(filters.offset);
     const result = await pool.query(`
       SELECT m.company_id, m.id, m.name, m.operations_json, m.created_at,
-             s.available_sizes_json, s.server_revision
+             m.server_revision AS model_server_revision,
+             s.available_sizes_json, s.server_revision AS settings_server_revision
       FROM models m
       LEFT JOIN company_batch_settings s ON s.company_id = m.company_id
       WHERE ($1::VARCHAR IS NULL OR m.company_id = $1)
@@ -520,8 +522,9 @@ function createAdminDashboardService(options = {}) {
     return { models: result.rows.map((row) => ({
       companyId: row.company_id, modelId: row.id, name: row.name,
       operations: Array.isArray(row.operations_json) ? row.operations_json : [],
+      modelRevision: Number(row.model_server_revision || 0),
       availableSizes: Array.isArray(row.available_sizes_json) ? row.available_sizes_json : [],
-      serverRevision: row.server_revision == null ? null : Number(row.server_revision),
+      serverRevision: row.settings_server_revision == null ? null : Number(row.settings_server_revision),
       createdAt: row.created_at
     })), limit, offset };
   }
@@ -754,6 +757,86 @@ function createAdminDashboardService(options = {}) {
     return result;
   }
 
+  async function runAdminWorkbookCommand(telegramId, companyId, commandType, entityType, entityId, baseRevision, payload) {
+    const actor = await actorForCompany(telegramId, companyId);
+    const operationId = String(payload.operationId || '').trim();
+    const commandId = String(payload.commandId || '').trim();
+    if (!UUID_PATTERN.test(operationId) || !UUID_PATTERN.test(commandId)) throw activationError('INVALID_OPERATION_ID', 400);
+    const completePayload = { ...payload, companyId, operationId, commandId, baseRevision };
+    const canonicalPayload = canonicalStringify(completePayload);
+    const operation = {
+      operationId, companyId, commandType, entityType, entityId: String(entityId), baseRevision,
+      payloadHash: computePayloadHash(canonicalPayload), payload: completePayload
+    };
+    const result = await processSingleOperation(pool, {
+      auth: { companyId, deviceId: `admin-webapp:${actor}`, adminTelegramId: actor }
+    }, operation);
+    if (result.status !== 'APPLIED') {
+      const code = result.error?.code || 'ADMIN_WORKBOOK_MUTATION_FAILED';
+      const statusCode = ['MODEL_NOT_FOUND', 'PERIOD_NOT_FOUND'].includes(code) ? 404
+        : ['REVISION_CONFLICT', 'MODEL_INACTIVE', 'PERIOD_ALREADY_CLOSED', 'OPEN_PERIOD_EXISTS', 'PERIOD_EXISTS'].includes(code) ? 409 : 400;
+      throw activationError(code, statusCode, result.error?.message || code);
+    }
+    return result;
+  }
+
+  async function updateModelRates(telegramId, input = {}) {
+    const companyId = validateCompanyId(input.companyId);
+    await actorForCompany(telegramId, companyId);
+    const modelId = String(input.modelId || '').trim();
+    if (!modelId || modelId.length > 128) throw activationError('INVALID_MODEL_ID', 400);
+    const baseRevision = Number(input.baseRevision);
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) throw activationError('INVALID_BASE_REVISION', 400);
+    if (!Array.isArray(input.operations) || input.operations.length > 128) throw activationError('INVALID_MODEL_OPERATIONS', 400);
+
+    const result = await pool.query(`SELECT id, name, operations_json, patta_ops_order_json, server_revision,
+      hisob_sheet_name, title, party, color, size, status FROM models WHERE company_id = $1 AND id = $2`, [companyId, modelId]);
+    const model = result.rows[0];
+    if (!model) throw activationError('MODEL_NOT_FOUND', 404);
+    if (model.status !== 'ACTIVE') throw activationError('MODEL_INACTIVE', 409);
+    const stored = Array.isArray(model.operations_json) ? model.operations_json : [];
+    const updates = new Map();
+    for (const operation of input.operations) {
+      const name = String(operation?.name || '').trim();
+      const rate = Number(operation?.rate);
+      if (!name || name.length > 256 || !Number.isSafeInteger(rate) || rate < 0 || updates.has(name.toLocaleLowerCase())) {
+        throw activationError('INVALID_MODEL_OPERATIONS', 400);
+      }
+      updates.set(name.toLocaleLowerCase(), rate);
+    }
+    if (updates.size !== stored.length || stored.some((operation) => !updates.has(String(operation.name || '').toLocaleLowerCase()))) {
+      throw activationError('MODEL_OPERATIONS_MISMATCH', 409);
+    }
+    const operations = stored.map((operation) => ({ ...operation, rate: updates.get(String(operation.name).toLocaleLowerCase()) }));
+    const operationId = String(input.operationId || '');
+    const commandId = String(input.commandId || '');
+    return runAdminWorkbookCommand(telegramId, companyId, 'UpsertModel', 'model', modelId, baseRevision, {
+      operationId, commandId, modelId, name: model.name, operations,
+      pattaOpsOrder: Array.isArray(model.patta_ops_order_json) ? model.patta_ops_order_json : stored.map((operation) => operation.name),
+      hisobSheetName: model.hisob_sheet_name || `${model.name}-hisob`,
+      title: model.title || `Model- ${model.name}`, party: model.party || '', color: model.color || '', size: model.size || ''
+    });
+  }
+
+  async function closePeriod(telegramId, input = {}) {
+    const companyId = validateCompanyId(input.companyId);
+    await actorForCompany(telegramId, companyId);
+    const periodId = String(input.periodId || '').trim();
+    if (!periodId || periodId.length > 128) throw activationError('INVALID_PERIOD_ID', 400);
+    const baseRevision = Number(input.baseRevision);
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) throw activationError('INVALID_BASE_REVISION', 400);
+    const endDate = String(input.endDate || '').trim();
+    const nextPeriod = input.nextPeriod;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || !nextPeriod || typeof nextPeriod !== 'object') {
+      throw activationError('INVALID_PERIOD_RANGE', 400);
+    }
+    return runAdminWorkbookCommand(telegramId, companyId, 'ClosePeriod', 'period', periodId, baseRevision, {
+      operationId: String(input.operationId || ''), commandId: String(input.commandId || ''), periodId, endDate,
+      nextPeriod: { id: String(nextPeriod.id || ''), name: String(nextPeriod.name || ''), startDate: String(nextPeriod.startDate || '') },
+      ...(input.archiveFilename ? { archiveFilename: String(input.archiveFilename) } : {})
+    });
+  }
+
   async function updateWorker(telegramId, input = {}) {
     const companyId = validateCompanyId(input.companyId);
     await actorForCompany(telegramId, companyId);
@@ -926,6 +1009,8 @@ function createAdminDashboardService(options = {}) {
     listWorkers,
     getPayroll,
     listPeriods,
+    closePeriod,
+    updateModelRates,
     updateWorker,
     setWorkerStatus,
     listCompanyAdmins,
