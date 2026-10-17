@@ -61,6 +61,14 @@ function isInternalAdminBotUrl(value) {
   }
 }
 
+function isInternalWorkerBotHealthUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' && parsed.hostname === 'novda-worker-bot' && parsed.port === '8081'
+      && parsed.pathname === '/health' && !parsed.username && !parsed.password && !parsed.search && !parsed.hash;
+  } catch { return false; }
+}
+
 function secureHtmlHeaders(reply) {
   return reply
     .type('text/html; charset=utf-8')
@@ -78,6 +86,8 @@ function registerAdminDashboardRoutes(app, options = {}) {
   const adminApiToken = options.adminApiToken ?? readSecret(env, 'NOVDA_ADMIN_API_TOKEN');
   const adminBotInternalUrl = String(options.adminBotInternalUrl ?? env.NOVDA_ADMIN_BOT_INTERNAL_URL ?? '').trim().replace(/\/$/, '');
   const adminBotInternalUrlReady = isInternalAdminBotUrl(adminBotInternalUrl);
+  const workerBotHealthUrl = String(options.workerBotHealthUrl ?? env.NOVDA_WORKER_BOT_HEALTH_URL ?? '').trim();
+  const workerBotHealthUrlReady = isInternalWorkerBotHealthUrl(workerBotHealthUrl);
   const allowedAdminIds = options.allowedAdminIds instanceof Set
     ? options.allowedAdminIds
     : parseAdminTelegramIds(options.allowedAdminIds ?? readSecret(env, 'NOVDA_ADMIN_TELEGRAM_IDS'));
@@ -294,6 +304,30 @@ function registerAdminDashboardRoutes(app, options = {}) {
     invoke(request, reply, async () => ({
       periods: await dashboard.listPeriods(request.adminSession.telegramId, scopedCompany(request, request.params.companyId))
     })));
+  app.post('/api/admin/webapp/companies/:companyId/periods/:periodId/close', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => ({ period: await dashboard.closePeriod(request.adminSession.telegramId, {
+      ...(request.body || {}), companyId: scopedCompany(request, request.params.companyId), periodId: request.params.periodId
+    }) })));
+  app.put('/api/admin/webapp/companies/:companyId/models/:modelId/rates', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => ({ model: await dashboard.updateModelRates(request.adminSession.telegramId, {
+      ...(request.body || {}), companyId: scopedCompany(request, request.params.companyId), modelId: request.params.modelId
+    }) })));
+  app.get('/api/admin/webapp/worker-bot-status', { preHandler: adminSessionGuard }, async (_request, reply) => {
+    if (!workerBotHealthUrlReady || typeof fetchImpl !== 'function') {
+      return reply.send({ success: true, status: 'unconfigured', checkedAt: new Date().toISOString() });
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    try {
+      const response = await fetchImpl(workerBotHealthUrl, { method: 'GET', cache: 'no-store', signal: controller.signal });
+      let health = null;
+      try { health = await response.json(); } catch { }
+      const online = response.ok && health?.status === 'ok' && health?.service === 'novda-worker-bot';
+      return reply.send({ success: true, status: online ? 'online' : 'offline', checkedAt: new Date().toISOString() });
+    } catch {
+      return reply.send({ success: true, status: 'offline', checkedAt: new Date().toISOString() });
+    } finally { clearTimeout(timeout); }
+  });
   app.put('/api/admin/webapp/companies/:companyId/workers/:workerId', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ worker: await dashboard.updateWorker(request.adminSession.telegramId, {
       ...(request.body || {}), companyId: scopedCompany(request, request.params.companyId), workerId: request.params.workerId
@@ -361,6 +395,7 @@ function registerAdminDashboardRoutes(app, options = {}) {
 module.exports = {
   createSessionRateLimiter,
   isInternalAdminBotUrl,
+  isInternalWorkerBotHealthUrl,
   registerAdminDashboardRoutes,
   sendAdminDashboardError
 };

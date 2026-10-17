@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import fastify from 'fastify';
 
-const { isInternalAdminBotUrl, registerAdminDashboardRoutes } = require('./adminDashboardRoutes.cjs');
+const { isInternalAdminBotUrl, isInternalWorkerBotHealthUrl, registerAdminDashboardRoutes } = require('./adminDashboardRoutes.cjs');
 
 const SECRET = 'test-session-secret-with-enough-entropy';
 const ADMIN_ID = '1526974123';
@@ -25,6 +25,8 @@ function createDashboard() {
     listDevices: vi.fn().mockResolvedValue({ registered: [], activationRequests: [] }),
     listWorkers: vi.fn().mockResolvedValue({ workers: [], limit: 100, offset: 0 }),
     listPeriods: vi.fn().mockResolvedValue([]),
+    closePeriod: vi.fn().mockResolvedValue({ status: 'APPLIED', serverRevision: 2 }),
+    updateModelRates: vi.fn().mockResolvedValue({ status: 'APPLIED', serverRevision: 3 }),
     listCompanyAdmins: vi.fn().mockResolvedValue([]),
     setCompanyAdmin: vi.fn().mockResolvedValue({ companyId: 'comp_novda', telegramId: '274466315', isActive: true }),
     updateWorker: vi.fn().mockResolvedValue({ serverRevision: 2 }),
@@ -71,6 +73,7 @@ describe(' Admin WebApp routes', () => {
       allowedAdminIds: new Set([ADMIN_ID]),
       adminApiToken: 'internal-admin-service-token',
       adminBotInternalUrl: options.adminBotInternalUrl || 'http://novda-admin-bot:8080',
+      workerBotHealthUrl: options.workerBotHealthUrl,
       adminWebAppPath: tempDir,
       fetchImpl: options.fetchImpl
     });
@@ -217,6 +220,45 @@ describe(' Admin WebApp routes', () => {
     expect(dashboard.updateCompanyStrictMode).toHaveBeenCalledWith(ADMIN_ID, {
       strictMode: false, companyId: 'comp_novda', sessionToken
     });
+  });
+
+  it('accepts only the fixed internal worker-bot health service URL', () => {
+    expect(isInternalWorkerBotHealthUrl('http://novda-worker-bot:8081/health')).toBe(true);
+    expect(isInternalWorkerBotHealthUrl('http://127.0.0.1:8081/health')).toBe(false);
+    expect(isInternalWorkerBotHealthUrl('http://novda-worker-bot:8081/health?token=x')).toBe(false);
+    expect(isInternalWorkerBotHealthUrl('https://novda-worker-bot:8081/health')).toBe(false);
+  });
+
+  it('exposes period close and model-rate mutations only through the authenticated company-scoped routes', async () => {
+    const { app: server, dashboard } = startApp();
+    await server.ready();
+    const denied = await server.inject({ method: 'POST', url: '/api/admin/webapp/companies/comp_novda/periods/p1/close' });
+    expect(denied.statusCode).toBe(401);
+    const headers = { authorization: `Bearer ${createSession()}` };
+    const [closed, rates] = await Promise.all([
+      server.inject({ method: 'POST', url: '/api/admin/webapp/companies/comp_novda/periods/p1/close', headers, payload: { companyId: 'spoofed', endDate: '2026-10-31' } }),
+      server.inject({ method: 'PUT', url: '/api/admin/webapp/companies/comp_novda/models/m1/rates', headers, payload: { companyId: 'spoofed', operations: [] } })
+    ]);
+    expect([closed.statusCode, rates.statusCode]).toEqual([200, 200]);
+    expect(dashboard.closePeriod).toHaveBeenCalledWith(ADMIN_ID, expect.objectContaining({ companyId: 'comp_novda', periodId: 'p1' }));
+    expect(dashboard.updateModelRates).toHaveBeenCalledWith(ADMIN_ID, expect.objectContaining({ companyId: 'comp_novda', modelId: 'm1' }));
+    expect(dashboard.closePeriod.mock.calls[0][1].companyId).not.toBe('spoofed');
+    expect(dashboard.updateModelRates.mock.calls[0][1].companyId).not.toBe('spoofed');
+  });
+
+  it('reports worker-bot health as server-confirmed online, offline, or unconfigured', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'ok', service: 'novda-worker-bot' }) });
+    const { app: server } = startApp({ fetchImpl, workerBotHealthUrl: 'http://novda-worker-bot:8081/health' });
+    await server.ready();
+    const response = await server.inject({ method: 'GET', url: '/api/admin/webapp/worker-bot-status', headers: { authorization: `Bearer ${createSession()}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().status).toBe('online');
+    expect(fetchImpl).toHaveBeenCalledWith('http://novda-worker-bot:8081/health', expect.objectContaining({ method: 'GET', cache: 'no-store' }));
+
+    const unconfigured = startApp();
+    await unconfigured.app.ready();
+    const unknown = await unconfigured.app.inject({ method: 'GET', url: '/api/admin/webapp/worker-bot-status', headers: { authorization: `Bearer ${createSession()}` } });
+    expect(unknown.json().status).toBe('unconfigured');
   });
 
   it('limits a company-scoped admin to its granted company across dashboard and device reads', async () => {

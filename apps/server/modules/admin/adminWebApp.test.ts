@@ -5,7 +5,7 @@ import * as path from 'node:path';
 const webAppDirectory = path.join(__dirname, '..', '..', 'static', 'admin-webapp');
 const html = fs.readFileSync(path.join(webAppDirectory, 'index.html'), 'utf8');
 const javascript = fs.readFileSync(path.join(webAppDirectory, 'admin.js'), 'utf8');
-const css = fs.readFileSync(path.join(webAppDirectory, 'admin.css'), 'utf8');
+const css = `${fs.readFileSync(path.join(webAppDirectory, 'admin.css'), 'utf8')}\n${fs.readFileSync(path.join(webAppDirectory, 'company-admin.css'), 'utf8')}`;
 
 describe(' Admin WebApp static security and usability boundaries', () => {
   it('contains the full supported admin navigation and explicit retired legacy state', () => {
@@ -45,6 +45,17 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain("/admins/${encodeURIComponent(telegramId)}");
     expect(css).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
     expect(css).toContain('#workerRows tr');
+  });
+
+  it('renders the isolated company-admin mobile shell and its core report workflows', () => {
+    for (const id of ['companyAdminApp', 'companyPeriodSelect', 'companyWorkers', 'companyParties', 'companyOperations', 'companyWorkerTickets']) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    for (const tab of ['home', 'workers', 'parties', 'settings']) expect(html).toContain(`data-co-tab="${tab}"`);
+    expect(javascript).toContain('startCompanyAdminApp(state.access.companyIds[0])');
+    expect(javascript).toContain('credentials: \'same-origin\'');
+    expect(javascript).toContain('downloadCompanyCsv');
+    expect(css).toContain('.co-bottom-nav');
   });
 
   it('writes period-scoped Avans and Jarima facts through the company-scoped worker command', () => {
