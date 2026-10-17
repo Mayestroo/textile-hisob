@@ -558,8 +558,9 @@ function createAdminDashboardService(options = {}) {
     const result = await pool.query(`
       SELECT t.id, t.company_id, t.model_id, m.name AS model_name, t.party_record_id,
              t.party_number, t.patta_number, t.qty, t.status, t.submitted_at,
+             t.period_id,
              e.worker_id, COALESCE(e.worker_name_snapshot, w.name) AS worker_name,
-             e.op_name, e.qty AS entry_qty
+             e.op_name, e.qty AS entry_qty, e.rate_snapshot
       FROM tickets t
       JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
       LEFT JOIN ticket_entries e ON e.company_id = t.company_id AND e.ticket_id = t.id
@@ -570,7 +571,9 @@ function createAdminDashboardService(options = {}) {
     return { tickets: result.rows.map((row) => ({
       ticketId: row.id, companyId: row.company_id, modelId: row.model_id, modelName: row.model_name,
       partyRecordId: row.party_record_id, partyNumber: row.party_number, pattaNumber: row.patta_number,
-      quantity: normalizeNumeric(row.entry_qty ?? row.qty), status: row.status,
+      quantity: normalizeNumeric(row.entry_qty ?? row.qty), ticketQty: normalizeNumeric(row.qty),
+      status: row.status, periodId: row.period_id || null,
+      rate: row.rate_snapshot != null ? normalizeNumeric(row.rate_snapshot) : null,
       effectiveAt: row.submitted_at, workerId: row.worker_id == null ? null : Number(row.worker_id),
       workerName: row.worker_name || null, operation: row.op_name || null
     })), limit, offset };

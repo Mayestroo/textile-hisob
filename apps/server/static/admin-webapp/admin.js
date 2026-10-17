@@ -2977,51 +2977,246 @@
     }
   }
 
+  function isPartyClosed(party) {
+    if (!party) return false;
+    const status = String(party.status || '').trim().toUpperCase();
+    if (status === 'CLOSED') return true;
+    if (party.closedAt || party.closed_at) return true;
+    if (party.isClosed === true || party.is_closed === 1 || party.is_closed === true) return true;
+    return false;
+  }
+
+  function getPartiesTicketMetrics(partiesList, isClosed = false) {
+    const partyIdSet = new Set();
+    const partyNumSet = new Set();
+    let totalPatta = 0;
+    let totalWork = 0;
+    for (const p of partiesList) {
+      if (p.partyRecordId) partyIdSet.add(String(p.partyRecordId));
+      if (p.partyNumber != null) partyNumSet.add(String(p.partyNumber));
+      totalPatta += Number(p.pattaCount || 0);
+      totalWork += Number(p.ishSoni || 0);
+    }
+    const uniquePattas = new Map();
+    for (const ticket of companyPanel.tickets) {
+      const pId = ticket.partyRecordId ? String(ticket.partyRecordId) : '';
+      const pNum = ticket.partyNumber != null ? String(ticket.partyNumber) : '';
+      if ((pId && partyIdSet.has(pId)) || (pNum && partyNumSet.has(pNum))) {
+        const pattaKey = `${pId || pNum}:${ticket.pattaNumber}`;
+        if (!uniquePattas.has(pattaKey)) {
+          const qty = Number(ticket.ticketQty ?? ticket.quantity ?? 0);
+          uniquePattas.set(pattaKey, qty);
+        }
+      }
+    }
+    let enteredPatta = uniquePattas.size;
+    let enteredWork = 0;
+    for (const qty of uniquePattas.values()) enteredWork += qty;
+
+    if (isClosed && enteredPatta === 0 && totalPatta > 0) {
+      enteredPatta = totalPatta;
+      enteredWork = totalWork;
+    }
+
+    return { totalPatta, totalWork, enteredPatta, enteredWork };
+  }
+
   function renderCompanyParties() {
     const host = byId('companyParties'); host.replaceChildren();
-    const active = companyPanel.parties.filter((party) => party.status !== 'CLOSED');
-    const closed = companyPanel.parties.filter((party) => party.status === 'CLOSED');
+    const active = companyPanel.parties.filter((party) => !isPartyClosed(party));
+    const closed = companyPanel.parties.filter((party) => isPartyClosed(party));
     const chips = byId('companyPartyFilters');
     const activeButton = chips.querySelector('[data-filter="active"]');
     const closedButton = chips.querySelector('[data-filter="closed"]');
-    activeButton.textContent = `Patta hisob · ${active.length}`; closedButton.textContent = `Yopilgan · ${closed.length}`;
-    const list = companyPanel.partyFilter === 'closed' ? closed : active;
+    activeButton.textContent = `Patta hisob · ${active.length}`;
+    closedButton.textContent = `Yopilgan · ${closed.length}`;
+    const isClosedFilter = companyPanel.partyFilter === 'closed';
+    const list = isClosedFilter ? closed : active;
+
+    const topMetrics = getPartiesTicketMetrics(list, isClosedFilter);
+    const pattaDoneNode = byId('companyPattaDone');
+    if (pattaDoneNode) {
+      pattaDoneNode.replaceChildren(
+        coText('span', 'co-stat-indigo', number(topMetrics.enteredPatta)),
+        document.createTextNode(' '),
+        coText('small', '', `/ ${number(topMetrics.totalPatta)}`)
+      );
+    }
+    const workDoneNode = byId('companyWorkDone');
+    if (workDoneNode) {
+      workDoneNode.replaceChildren(
+        coText('span', 'co-stat-orange', number(topMetrics.enteredWork)),
+        document.createTextNode(' '),
+        coText('small', '', `/ ${number(topMetrics.totalWork)} dona`)
+      );
+    }
+
     const grouped = new Map();
     for (const party of list) {
       const key = party.modelId || party.modelName || party.partyRecordId;
-      const group = grouped.get(key) || { ...party, partyCount: 0, totalPatta: 0, totalWork: 0 };
-      group.partyCount += 1; group.totalPatta += Number(party.pattaCount || 0); group.totalWork += Number(party.ishSoni || 0); grouped.set(key, group);
+      const group = grouped.get(key) || {
+        modelId: party.modelId,
+        modelName: party.modelName,
+        partyNumber: party.partyNumber,
+        parties: []
+      };
+      group.parties.push(party);
+      grouped.set(key, group);
     }
     const selected = [...grouped.values()].slice(0, 100);
     if (!selected.length) { host.appendChild(coText('p', 'co-empty', 'Partiyalar topilmadi.')); return; }
-    for (const party of selected) {
+    for (const group of selected) {
+      const metrics = getPartiesTicketMetrics(group.parties, isClosedFilter);
       const card = coText('article', 'co-party-row');
       const head = coText('div', 'co-party-head');
-      head.appendChild(coText('strong', '', party.modelName || party.modelId || `№ ${party.partyNumber}`));
-      head.appendChild(coText('span', 'co-party-count', `${number(party.partyCount)} partiya`));
+      head.appendChild(coText('strong', '', group.modelName || group.modelId || `№ ${group.partyNumber}`));
+      head.appendChild(coText('span', 'co-party-count', `${number(group.parties.length)} partiya`));
       card.appendChild(head);
       const meta = coText('div', 'co-party-meta');
-      meta.appendChild(coText('span', '', `Patta 0 / ${number(party.totalPatta)}`));
-      meta.appendChild(coText('span', '', `Ish 0 / ${number(party.totalWork)} dona`));
+      meta.appendChild(coText('span', '', `Patta ${number(metrics.enteredPatta)} / ${number(metrics.totalPatta)}`));
+      meta.appendChild(coText('span', '', `Ish ${number(metrics.enteredWork)} / ${number(metrics.totalWork)} dona`));
       card.appendChild(meta);
       const progress = coText('div', 'co-progress'); const fill = coText('i');
-      const total = Number(party.totalPatta || 0); fill.style.width = `${total ? Math.min(100, Math.round(Number(party.totalWork || 0) / total * 100)) : 0}%`;
+      const pct = metrics.totalPatta > 0 ? Math.min(100, Math.round((metrics.enteredPatta / metrics.totalPatta) * 100)) : 0;
+      fill.style.width = isClosedFilter ? '100%' : `${pct}%`;
       progress.appendChild(fill); card.appendChild(progress); host.appendChild(card);
     }
+  }
+
+  function isTicketInSelectedPeriod(ticket) {
+    const period = selectedPeriod();
+    if (!period) return true;
+    if (ticket.periodId && ticket.periodId === period.periodId) return true;
+    if (ticket.effectiveAt) {
+      const ticketDate = String(ticket.effectiveAt).slice(0, 10);
+      const start = period.startDate ? String(period.startDate).slice(0, 10) : '';
+      const end = period.endDate ? String(period.endDate).slice(0, 10) : '';
+      if (start && ticketDate < start) return false;
+      if (end && ticketDate > end) return false;
+      return true;
+    }
+    return !ticket.periodId;
+  }
+
+  function getModelMonthStats(model) {
+    if (!model) return { piecesSewn: 0, enteredPattasCount: 0, totalAmount: 0 };
+    const modelId = model.modelId;
+    const modelName = model.name;
+    const ticketsForModel = companyPanel.tickets.filter((t) =>
+      ((modelId && t.modelId === modelId) || (modelName && t.modelName === modelName)) &&
+      isTicketInSelectedPeriod(t)
+    );
+
+    const uniquePattas = new Map();
+    for (const ticket of ticketsForModel) {
+      const pattaKey = `${ticket.partyRecordId || ticket.partyNumber || ''}:${ticket.pattaNumber}`;
+      if (!uniquePattas.has(pattaKey)) {
+        const qty = Number(ticket.ticketQty ?? ticket.quantity ?? 0);
+        uniquePattas.set(pattaKey, qty);
+      }
+    }
+    const enteredPattasCount = uniquePattas.size;
+    let piecesSewn = 0;
+    for (const qty of uniquePattas.values()) piecesSewn += qty;
+
+    let totalAmount = 0;
+    for (const entry of ticketsForModel) {
+      let rate = Number(entry.rate || 0);
+      if (!rate) {
+        const op = (model.operations || []).find((o) => o.name === entry.operation);
+        rate = Number(op?.rate || 0);
+      }
+      totalAmount += Number(entry.quantity || 0) * rate;
+    }
+
+    return { piecesSewn, enteredPattasCount, totalAmount };
+  }
+
+  function getCompanyModelsSummary() {
+    const list = [];
+    let totalPieces = 0;
+    let totalPattas = 0;
+    let totalAmount = 0;
+    for (const model of companyPanel.models) {
+      const stats = getModelMonthStats(model);
+      list.push({
+        model,
+        modelId: model.modelId,
+        name: model.name || model.modelId || 'Noma’lum model',
+        ...stats
+      });
+      totalPieces += stats.piecesSewn;
+      totalPattas += stats.enteredPattasCount;
+      totalAmount += stats.totalAmount;
+    }
+    return { list, totalPieces, totalPattas, totalAmount };
   }
 
   function renderCompanyModels() {
     const choices = byId('companyModelChoices'); choices.replaceChildren();
     const previousModelId = companyPanel.selectedModel?.modelId;
     companyPanel.selectedModel = companyPanel.models.find((model) => model.modelId === previousModelId) || companyPanel.models[0] || null;
-    for (const model of companyPanel.models) {
-      const button = coButton('button', model.modelId === companyPanel.selectedModel?.modelId ? 'selected' : '', model.name || model.modelId, () => selectCompanyModel(model));
+    const { list, totalPieces, totalPattas, totalAmount } = getCompanyModelsSummary();
+
+    for (const item of list) {
+      const button = coButton(
+        'button',
+        item.modelId === companyPanel.selectedModel?.modelId ? 'selected' : '',
+        item.name,
+        () => selectCompanyModel(item.model)
+      );
       choices.appendChild(button);
+    }
+
+    const period = selectedPeriod();
+    const periodLabel = period?.name || 'Shu oy';
+    setText('companyModelsBreakdownPeriod', `${periodLabel} bo‘yicha`);
+    setText('companyModelsTotalPieces', `${number(totalPieces)} dona`);
+    setText('companyModelsTotalAmount', `${coMoney(totalAmount)} so‘m`);
+    void totalPattas;
+
+    const breakdownHost = byId('companyModelsBreakdownList');
+    if (breakdownHost) {
+      breakdownHost.replaceChildren();
+      if (!list.length) {
+        breakdownHost.appendChild(coText('p', 'co-empty', 'Modellar mavjud emas.'));
+      } else {
+        for (const item of list) {
+          const row = coText('button', `co-model-breakdown-row${item.modelId === companyPanel.selectedModel?.modelId ? ' is-active' : ''}`);
+          row.type = 'button';
+          row.addEventListener('click', () => selectCompanyModel(item.model));
+          const left = coText('div', 'co-breakdown-left');
+          left.appendChild(coText('strong', 'co-breakdown-title', item.name));
+          left.appendChild(coText('small', 'co-breakdown-sub', `${number(item.enteredPattasCount)} ta patta kiritilgan`));
+          row.appendChild(left);
+          const right = coText('div', 'co-breakdown-right');
+          right.appendChild(coText('strong', 'co-breakdown-pieces', `${number(item.piecesSewn)} dona`));
+          right.appendChild(coText('span', 'co-breakdown-amount', `${coMoney(item.totalAmount)} so‘m`));
+          row.appendChild(right);
+          breakdownHost.appendChild(row);
+        }
+      }
+    }
+
+    renderCompanyModelDetail();
+  }
+
+  function selectCompanyModel(model) {
+    companyPanel.selectedModel = model;
+    companyPanel.visibleOperations = 5;
+    const choices = byId('companyModelChoices');
+    for (const [index, button] of [...choices.querySelectorAll('button')].entries()) {
+      button.classList.toggle('selected', companyPanel.models[index]?.modelId === model?.modelId);
+    }
+    const breakdownHost = byId('companyModelsBreakdownList');
+    if (breakdownHost) {
+      for (const [index, row] of [...breakdownHost.querySelectorAll('.co-model-breakdown-row')].entries()) {
+        row.classList.toggle('is-active', companyPanel.models[index]?.modelId === model?.modelId);
+      }
     }
     renderCompanyModelDetail();
   }
 
-  function selectCompanyModel(model) { companyPanel.selectedModel = model; companyPanel.visibleOperations = 5; renderCompanyModelDetail(); }
   function renderCompanyModelDetail() {
     const model = companyPanel.selectedModel;
     if (!model) { setText('companyModelName', 'Model topilmadi'); byId('companyOperations').replaceChildren(); return; }
@@ -3040,6 +3235,13 @@
     setText('companyRateTotal', `Jami: ${coMoney(total)} so‘m`);
     setText('companyOperationCount', operations.length);
     byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
+
+    const modelStats = getModelMonthStats(model);
+    setText('companyModelMonthPieces', `${number(modelStats.piecesSewn)} dona`);
+    setText('companyModelMonthPattas', `${number(modelStats.enteredPattasCount)} ta patta kiritildi`);
+    setText('companyModelMonthAmount', `${coMoney(modelStats.totalAmount)} so‘m`);
+    const currentPeriod = selectedPeriod();
+    setText('companyModelMonthPeriodName', currentPeriod?.name ? `${currentPeriod.name} davri` : 'Joriy davr');
     const host = byId('companyOperations'); host.replaceChildren();
     operations.slice(0, companyPanel.visibleOperations).forEach((operation, index) => {
       const row = coText('div', 'co-operation-row'); row.appendChild(coText('strong', '', operation.name || `Operatsiya ${index + 1}`));
@@ -3226,6 +3428,7 @@
     document.querySelectorAll('.co-bottom-nav [data-co-tab]').forEach((button) => button.addEventListener('click', () => {
       const screen = button.dataset.coTab; coShowScreen(screen, screen);
       if (screen === 'workers') renderCompanyWorkers();
+      if (screen === 'parties') renderCompanyParties();
     }));
     document.querySelectorAll('[data-co-go]').forEach((button) => button.addEventListener('click', () => {
       const target = button.dataset.coGo;
