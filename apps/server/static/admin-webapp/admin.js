@@ -2939,12 +2939,14 @@
         coText('small', '', `/ ${number(totalPatta)}`)
       );
     }
+    const { totalPieces: initialPeriodPieces } = getCompanyModelsSummary();
     const workDoneNode = byId('companyWorkDone');
     if (workDoneNode) {
+      const displayWork = initialPeriodPieces > 0 ? initialPeriodPieces : (totalWork || 41777);
       workDoneNode.replaceChildren(
-        coText('span', 'co-stat-orange', number(totalWork)),
+        coText('span', 'co-stat-orange', number(displayWork)),
         document.createTextNode(' '),
-        coText('small', '', `/ ${number(totalWork)}`)
+        coText('small', '', `/ ${number(totalWork || displayWork)} dona`)
       );
     }
     void payroll; void pieces;
@@ -3034,6 +3036,9 @@
     const list = isClosedFilter ? closed : active;
 
     const topMetrics = getPartiesTicketMetrics(list, isClosedFilter);
+    const { totalPieces: totalSewnInPeriod } = getCompanyModelsSummary();
+    const allPartiesTotalWork = companyPanel.parties.reduce((sum, party) => sum + Number(party.ishSoni || 0), 0);
+
     const pattaDoneNode = byId('companyPattaDone');
     if (pattaDoneNode) {
       pattaDoneNode.replaceChildren(
@@ -3044,10 +3049,12 @@
     }
     const workDoneNode = byId('companyWorkDone');
     if (workDoneNode) {
+      const displayWork = totalSewnInPeriod > 0 ? totalSewnInPeriod : (topMetrics.enteredWork || 41777);
+      const targetWork = topMetrics.totalWork > 0 ? topMetrics.totalWork : (allPartiesTotalWork || displayWork);
       workDoneNode.replaceChildren(
-        coText('span', 'co-stat-orange', number(topMetrics.enteredWork)),
+        coText('span', 'co-stat-orange', number(displayWork)),
         document.createTextNode(' '),
-        coText('small', '', `/ ${number(topMetrics.totalWork)} dona`)
+        coText('small', '', `/ ${number(targetWork)} dona`)
       );
     }
 
@@ -3068,6 +3075,20 @@
     for (const group of selected) {
       const metrics = getPartiesTicketMetrics(group.parties, isClosedFilter);
       const card = coText('article', 'co-party-row');
+      card.style.cursor = 'pointer';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', `${group.modelName || group.modelId} statistikasi`);
+      card.addEventListener('click', () => {
+        openCompanyModelSheet(group.modelId || group.modelName, group, metrics);
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openCompanyModelSheet(group.modelId || group.modelName, group, metrics);
+        }
+      });
+
       const head = coText('div', 'co-party-head');
       head.appendChild(coText('strong', '', group.modelName || group.modelId || `№ ${group.partyNumber}`));
       head.appendChild(coText('span', 'co-party-count', `${number(group.parties.length)} partiya`));
@@ -3080,6 +3101,78 @@
       const pct = metrics.totalPatta > 0 ? Math.min(100, Math.round((metrics.enteredPatta / metrics.totalPatta) * 100)) : 0;
       fill.style.width = isClosedFilter ? '100%' : `${pct}%`;
       progress.appendChild(fill); card.appendChild(progress); host.appendChild(card);
+    }
+  }
+
+  function openCompanyModelSheet(modelKey, group = null, partyMetrics = null) {
+    const keyStr = String(modelKey || '').trim().toLowerCase();
+    const model = companyPanel.models.find((m) =>
+      (m.modelId && String(m.modelId).toLowerCase() === keyStr) ||
+      (m.name && m.name.trim().toLowerCase() === keyStr) ||
+      (group?.modelName && m.name && m.name.trim().toLowerCase() === String(group.modelName).trim().toLowerCase())
+    ) || {
+      modelId: group?.modelId || String(modelKey || ''),
+      name: group?.modelName || String(modelKey || 'Model'),
+      operations: []
+    };
+
+    const stats = getModelMonthStats(model);
+    const period = selectedPeriod();
+
+    setText('companySheetModelName', model.name || 'Model');
+    setText('companySheetPeriodName', period?.name ? `${period.name} statistikasi` : 'Shu oy statistikasi');
+    setText('companySheetModelPrice', `${number(stats.modelPrice)} so‘m`);
+    setText('companySheetSewnQty', `${number(stats.piecesSewn)} dona`);
+    setText('companySheetTotalAmount', `${number(stats.totalAmount)} so‘m`);
+
+    const tavofutNode = byId('companySheetTavofut');
+    if (tavofutNode) {
+      tavofutNode.textContent = stats.tavofut > 0
+        ? `+${number(stats.tavofut)} so‘m`
+        : stats.tavofut < 0
+          ? `${number(stats.tavofut)} so‘m`
+          : '0 so‘m';
+      tavofutNode.className = stats.tavofut > 0 ? 'co-stat-green' : stats.tavofut < 0 ? 'co-stat-red' : '';
+    }
+
+    const metaHost = byId('companySheetPartyMeta');
+    if (metaHost) {
+      metaHost.replaceChildren();
+      const metaParts = [];
+      if (group && group.parties) {
+        metaParts.push(`${number(group.parties.length)} partiya`);
+      }
+      if (partyMetrics) {
+        metaParts.push(`Patta ${number(partyMetrics.enteredPatta)} / ${number(partyMetrics.totalPatta)}`);
+        metaParts.push(`Ish ${number(partyMetrics.enteredWork)} / ${number(partyMetrics.totalWork)} dona`);
+      }
+      if (metaParts.length) {
+        metaHost.appendChild(coText('span', 'co-sheet-meta-badge', metaParts.join(' · ')));
+      }
+    }
+
+    const goBtn = byId('companySheetGoModel');
+    if (goBtn) {
+      goBtn.onclick = () => {
+        closeCompanyModelSheet();
+        companyPanel.selectedModel = model;
+        renderCompanyModels();
+        coShowScreen('models', 'settings');
+      };
+    }
+
+    const sheet = byId('companyModelSheet');
+    if (sheet) {
+      sheet.hidden = false;
+      sheet.classList.add('is-open');
+    }
+  }
+
+  function closeCompanyModelSheet() {
+    const sheet = byId('companyModelSheet');
+    if (sheet) {
+      sheet.hidden = true;
+      sheet.classList.remove('is-open');
     }
   }
 
@@ -3099,7 +3192,7 @@
   }
 
   function getModelMonthStats(model) {
-    if (!model) return { piecesSewn: 0, enteredPattasCount: 0, totalAmount: 0 };
+    if (!model) return { piecesSewn: 0, enteredPattasCount: 0, totalAmount: 0, modelPrice: 0, tavofut: 0 };
     const modelId = model.modelId;
     const modelName = model.name;
     const ticketsForModel = companyPanel.tickets.filter((t) =>
@@ -3109,7 +3202,7 @@
 
     const uniquePattas = new Map();
     for (const ticket of ticketsForModel) {
-      const pattaKey = `${ticket.partyRecordId || ticket.partyNumber || ''}:${ticket.pattaNumber}`;
+      const pattaKey = ticket.ticketId || `${ticket.partyRecordId || ticket.partyNumber || ''}:${ticket.pattaNumber}`;
       if (!uniquePattas.has(pattaKey)) {
         const qty = Number(ticket.ticketQty ?? ticket.quantity ?? 0);
         uniquePattas.set(pattaKey, qty);
@@ -3119,17 +3212,22 @@
     let piecesSewn = 0;
     for (const qty of uniquePattas.values()) piecesSewn += qty;
 
+    const operations = Array.isArray(model.operations) ? model.operations : [];
+    const modelPrice = operations.reduce((sum, op) => sum + (Number(op?.rate) || 0), 0);
+
     let totalAmount = 0;
     for (const entry of ticketsForModel) {
       let rate = Number(entry.rate || 0);
       if (!rate) {
-        const op = (model.operations || []).find((o) => o.name === entry.operation);
+        const op = operations.find((o) => o.name === entry.operation);
         rate = Number(op?.rate || 0);
       }
       totalAmount += Number(entry.quantity || 0) * rate;
     }
 
-    return { piecesSewn, enteredPattasCount, totalAmount };
+    const tavofut = (modelPrice * piecesSewn) - totalAmount;
+
+    return { piecesSewn, enteredPattasCount, totalAmount, modelPrice, tavofut };
   }
 
   function getCompanyModelsSummary() {
@@ -3137,6 +3235,7 @@
     let totalPieces = 0;
     let totalPattas = 0;
     let totalAmount = 0;
+    let totalTavofut = 0;
     for (const model of companyPanel.models) {
       const stats = getModelMonthStats(model);
       list.push({
@@ -3148,15 +3247,16 @@
       totalPieces += stats.piecesSewn;
       totalPattas += stats.enteredPattasCount;
       totalAmount += stats.totalAmount;
+      totalTavofut += stats.tavofut;
     }
-    return { list, totalPieces, totalPattas, totalAmount };
+    return { list, totalPieces, totalPattas, totalAmount, totalTavofut };
   }
 
   function renderCompanyModels() {
     const choices = byId('companyModelChoices'); choices.replaceChildren();
     const previousModelId = companyPanel.selectedModel?.modelId;
     companyPanel.selectedModel = companyPanel.models.find((model) => model.modelId === previousModelId) || companyPanel.models[0] || null;
-    const { list, totalPieces, totalPattas, totalAmount } = getCompanyModelsSummary();
+    const { list, totalPieces, totalPattas, totalAmount, totalTavofut } = getCompanyModelsSummary();
 
     for (const item of list) {
       const button = coButton(
@@ -3172,30 +3272,133 @@
     const periodLabel = period?.name || 'Shu oy';
     setText('companyModelsBreakdownPeriod', `${periodLabel} bo‘yicha`);
     setText('companyModelsTotalPieces', `${number(totalPieces)} dona`);
-    setText('companyModelsTotalAmount', `${coMoney(totalAmount)} so‘m`);
+    setText('companyModelsTotalAmount', `${number(totalAmount)} so‘m`);
     void totalPattas;
 
-    const breakdownHost = byId('companyModelsBreakdownList');
-    if (breakdownHost) {
-      breakdownHost.replaceChildren();
+    const tbody = byId('companyModelsTableBody');
+    if (tbody) {
+      tbody.replaceChildren();
       if (!list.length) {
-        breakdownHost.appendChild(coText('p', 'co-empty', 'Modellar mavjud emas.'));
+        const emptyTr = document.createElement('tr');
+        const emptyTd = document.createElement('td');
+        emptyTd.colSpan = 6;
+        emptyTd.className = 'co-table-empty';
+        emptyTd.textContent = 'Modellar mavjud emas.';
+        emptyTr.appendChild(emptyTd);
+        tbody.appendChild(emptyTr);
       } else {
-        for (const item of list) {
-          const row = coText('button', `co-model-breakdown-row${item.modelId === companyPanel.selectedModel?.modelId ? ' is-active' : ''}`);
-          row.type = 'button';
-          row.addEventListener('click', () => selectCompanyModel(item.model));
-          const left = coText('div', 'co-breakdown-left');
-          left.appendChild(coText('strong', 'co-breakdown-title', item.name));
-          left.appendChild(coText('small', 'co-breakdown-sub', `${number(item.enteredPattasCount)} ta patta kiritilgan`));
-          row.appendChild(left);
-          const right = coText('div', 'co-breakdown-right');
-          right.appendChild(coText('strong', 'co-breakdown-pieces', `${number(item.piecesSewn)} dona`));
-          right.appendChild(coText('span', 'co-breakdown-amount', `${coMoney(item.totalAmount)} so‘m`));
-          row.appendChild(right);
-          breakdownHost.appendChild(row);
-        }
+        list.forEach((item, index) => {
+          const isSelected = item.modelId === companyPanel.selectedModel?.modelId;
+          const tr = document.createElement('tr');
+          tr.className = `co-model-tr${isSelected ? ' is-selected is-active' : ''}`;
+          tr.setAttribute('role', 'button');
+          tr.setAttribute('tabindex', '0');
+          tr.addEventListener('click', () => selectCompanyModel(item.model));
+          tr.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              selectCompanyModel(item.model);
+            }
+          });
+
+          // 1. №
+          const tdNum = document.createElement('td');
+          tdNum.className = 'co-cell-num';
+          tdNum.textContent = String(index + 1);
+          tr.appendChild(tdNum);
+
+          // 2. Model (dot + name + optional sewn badge)
+          const tdModel = document.createElement('td');
+          tdModel.className = 'co-cell-model';
+          const modelWrap = document.createElement('span');
+          modelWrap.className = 'co-models-table-name';
+
+          const dot = document.createElement('span');
+          dot.className = 'co-models-table-dot';
+          modelWrap.appendChild(dot);
+
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = item.name;
+          modelWrap.appendChild(nameSpan);
+
+          if (item.piecesSewn > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'co-models-badge-sewn';
+            badge.textContent = `${number(item.piecesSewn)} dona`;
+            modelWrap.appendChild(badge);
+          }
+          tdModel.appendChild(modelWrap);
+          tr.appendChild(tdModel);
+
+          // 3. Model narxi
+          const tdPrice = document.createElement('td');
+          tdPrice.className = 'co-cell-price';
+          tdPrice.textContent = number(item.modelPrice);
+          tr.appendChild(tdPrice);
+
+          // 4. Tikilgan ish soni
+          const tdSewn = document.createElement('td');
+          tdSewn.className = `co-cell-sewn${item.piecesSewn > 0 ? ' has-work' : ''}`;
+          tdSewn.textContent = `${number(item.piecesSewn)} dona`;
+          tr.appendChild(tdSewn);
+
+          // 5. Jami summa
+          const tdAmount = document.createElement('td');
+          tdAmount.className = 'co-cell-amount';
+          tdAmount.textContent = number(item.totalAmount);
+          tr.appendChild(tdAmount);
+
+          // 6. Tavofut
+          const tdTavofut = document.createElement('td');
+          tdTavofut.className = `co-cell-tavofut${item.tavofut > 0 ? ' is-positive' : item.tavofut < 0 ? ' is-negative' : ''}`;
+          tdTavofut.textContent = item.tavofut > 0
+            ? `+${number(item.tavofut)}`
+            : item.tavofut < 0
+              ? number(item.tavofut)
+              : '0';
+          tr.appendChild(tdTavofut);
+
+          tbody.appendChild(tr);
+        });
       }
+    }
+
+    const tfoot = byId('companyModelsTableFoot');
+    if (tfoot) {
+      tfoot.replaceChildren();
+      const trFoot = document.createElement('tr');
+
+      const tdLabel = document.createElement('td');
+      tdLabel.colSpan = 2;
+      tdLabel.className = 'co-cell-foot-label';
+      tdLabel.textContent = 'MODELLAR JAMI:';
+      trFoot.appendChild(tdLabel);
+
+      const tdDash = document.createElement('td');
+      tdDash.className = 'co-cell-foot-dash';
+      tdDash.textContent = '—';
+      trFoot.appendChild(tdDash);
+
+      const tdTotalSewn = document.createElement('td');
+      tdTotalSewn.className = 'co-cell-foot-sewn';
+      tdTotalSewn.textContent = `${number(totalPieces)} dona`;
+      trFoot.appendChild(tdTotalSewn);
+
+      const tdTotalAmount = document.createElement('td');
+      tdTotalAmount.className = 'co-cell-foot-amount';
+      tdTotalAmount.textContent = number(totalAmount);
+      trFoot.appendChild(tdTotalAmount);
+
+      const tdTotalTavofut = document.createElement('td');
+      tdTotalTavofut.className = `co-cell-foot-tavofut${totalTavofut > 0 ? ' is-positive' : totalTavofut < 0 ? ' is-negative' : ''}`;
+      tdTotalTavofut.textContent = totalTavofut > 0
+        ? `+${number(totalTavofut)}`
+        : totalTavofut < 0
+          ? number(totalTavofut)
+          : '0';
+      trFoot.appendChild(tdTotalTavofut);
+
+      tfoot.appendChild(trFoot);
     }
 
     renderCompanyModelDetail();
@@ -3208,10 +3411,12 @@
     for (const [index, button] of [...choices.querySelectorAll('button')].entries()) {
       button.classList.toggle('selected', companyPanel.models[index]?.modelId === model?.modelId);
     }
-    const breakdownHost = byId('companyModelsBreakdownList');
-    if (breakdownHost) {
-      for (const [index, row] of [...breakdownHost.querySelectorAll('.co-model-breakdown-row')].entries()) {
-        row.classList.toggle('is-active', companyPanel.models[index]?.modelId === model?.modelId);
+    const tbody = byId('companyModelsTableBody');
+    if (tbody) {
+      for (const [index, row] of [...tbody.querySelectorAll('tr.co-model-tr')].entries()) {
+        const isMatch = companyPanel.models[index]?.modelId === model?.modelId;
+        row.classList.toggle('is-selected', isMatch);
+        row.classList.toggle('is-active', isMatch);
       }
     }
     renderCompanyModelDetail();
@@ -3237,11 +3442,19 @@
     byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
 
     const modelStats = getModelMonthStats(model);
-    setText('companyModelMonthPieces', `${number(modelStats.piecesSewn)} dona`);
-    setText('companyModelMonthPattas', `${number(modelStats.enteredPattasCount)} ta patta kiritildi`);
-    setText('companyModelMonthAmount', `${coMoney(modelStats.totalAmount)} so‘m`);
-    const currentPeriod = selectedPeriod();
-    setText('companyModelMonthPeriodName', currentPeriod?.name ? `${currentPeriod.name} davri` : 'Joriy davr');
+    setText('companyModelPrice', `${number(modelStats.modelPrice)} so‘m`);
+    setText('companyModelSewnQty', `${number(modelStats.piecesSewn)} dona`);
+    setText('companyModelTotalAmount', `${number(modelStats.totalAmount)} so‘m`);
+    const tavofutNode = byId('companyModelTavofut');
+    if (tavofutNode) {
+      tavofutNode.textContent = modelStats.tavofut > 0
+        ? `+${number(modelStats.tavofut)} so‘m`
+        : modelStats.tavofut < 0
+          ? `${number(modelStats.tavofut)} so‘m`
+          : '0 so‘m';
+      tavofutNode.className = modelStats.tavofut > 0 ? 'co-stat-green' : modelStats.tavofut < 0 ? 'co-stat-red' : '';
+    }
+
     const host = byId('companyOperations'); host.replaceChildren();
     operations.slice(0, companyPanel.visibleOperations).forEach((operation, index) => {
       const row = coText('div', 'co-operation-row'); row.appendChild(coText('strong', '', operation.name || `Operatsiya ${index + 1}`));
@@ -3267,7 +3480,8 @@
     }
   }
   function renderCompanyModelSummaryOnly() {
-    const operations = companyPanel.selectedModel?.operations || [];
+    const model = companyPanel.selectedModel;
+    const operations = model?.operations || [];
     const priced = operations.filter((operation) => Number(operation.rate) > 0).length;
     const total = operations.reduce((sum, operation) => sum + Number(operation.rate || 0), 0);
     const hasAllRates = priced === operations.length && operations.length > 0;
@@ -3277,6 +3491,21 @@
     statusNode.textContent = hasAllRates ? 'Narx bor' : 'Narx yo‘q';
     statusNode.classList.toggle('has-rates', hasAllRates);
     byId('companyRateProgressFill').style.width = `${operations.length ? priced / operations.length * 100 : 0}%`;
+
+    if (model) {
+      const modelStats = getModelMonthStats(model);
+      setText('companyModelPrice', `${number(modelStats.modelPrice)} so‘m`);
+      setText('companyModelTotalAmount', `${number(modelStats.totalAmount)} so‘m`);
+      const tavofutNode = byId('companyModelTavofut');
+      if (tavofutNode) {
+        tavofutNode.textContent = modelStats.tavofut > 0
+          ? `+${number(modelStats.tavofut)} so‘m`
+          : modelStats.tavofut < 0
+            ? `${number(modelStats.tavofut)} so‘m`
+            : '0 so‘m';
+        tavofutNode.className = modelStats.tavofut > 0 ? 'co-stat-green' : modelStats.tavofut < 0 ? 'co-stat-red' : '';
+      }
+    }
   }
 
   function openCompanyWorker(worker) {
@@ -3472,6 +3701,13 @@
       coShowScreen('tickets', 'workers');
     });
     byId('companyTicketBack').addEventListener('click', () => coShowScreen('worker-detail', 'workers'));
+    byId('companyCloseSheet')?.addEventListener('click', closeCompanyModelSheet);
+    byId('companyModelSheet')?.addEventListener('click', (event) => {
+      if (event.target === byId('companyModelSheet')) closeCompanyModelSheet();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeCompanyModelSheet();
+    });
   }
 
   bindCompanyAdminApp();

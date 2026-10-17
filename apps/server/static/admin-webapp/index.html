@@ -160,16 +160,22 @@
             <b id="companyRateTotal">Jami: 0 so‘m</b>
           </div>
           <div class="co-progress"><i id="companyRateProgressFill"></i></div>
-          <div class="co-model-month-banner">
-            <div class="co-model-month-item">
-              <span class="co-label">Shu oyda tikildi</span>
-              <strong id="companyModelMonthPieces" class="co-stat-orange">0 dona</strong>
-              <small id="companyModelMonthPattas">0 ta patta kiritildi</small>
+          <div class="co-model-stats-grid">
+            <div class="co-model-stat-cell">
+              <span class="co-label">Model narxi</span>
+              <strong id="companyModelPrice">0 so‘m</strong>
             </div>
-            <div class="co-model-month-item">
-              <span class="co-label">Ish haqi summasi</span>
-              <strong id="companyModelMonthAmount" class="co-stat-green">0 so‘m</strong>
-              <small id="companyModelMonthPeriodName">Joriy davr</small>
+            <div class="co-model-stat-cell">
+              <span class="co-label">Tikilgan ish soni</span>
+              <strong id="companyModelSewnQty" class="co-stat-orange">0 dona</strong>
+            </div>
+            <div class="co-model-stat-cell">
+              <span class="co-label">Jami summa</span>
+              <strong id="companyModelTotalAmount" class="co-stat-green">0 so‘m</strong>
+            </div>
+            <div class="co-model-stat-cell">
+              <span class="co-label">Tavofut</span>
+              <strong id="companyModelTavofut">0 so‘m</strong>
             </div>
           </div>
         </div>
@@ -177,7 +183,7 @@
         <div class="co-models-breakdown-card">
           <div class="co-models-breakdown-head">
             <div>
-              <strong>Modellar kesimida hisobot</strong>
+              <strong>MODELLAR KESIMIDA JAMI:</strong>
               <small id="companyModelsBreakdownPeriod">Shu oy bo‘yicha</small>
             </div>
             <div class="co-models-breakdown-totals">
@@ -185,7 +191,22 @@
               <span id="companyModelsTotalAmount">0 so‘m</span>
             </div>
           </div>
-          <div id="companyModelsBreakdownList" class="co-models-breakdown-list"></div>
+          <div class="co-models-table-wrap">
+            <table class="co-models-table">
+              <thead>
+                <tr>
+                  <th style="width: 32px; text-align: center;">№</th>
+                  <th style="text-align: left;">Model</th>
+                  <th style="text-align: right;">Model narxi</th>
+                  <th style="text-align: right;">Tikilgan ish soni</th>
+                  <th style="text-align: right;">Jami summa</th>
+                  <th style="text-align: right;">Tavofut</th>
+                </tr>
+              </thead>
+              <tbody id="companyModelsTableBody"></tbody>
+              <tfoot id="companyModelsTableFoot"></tfoot>
+            </table>
+          </div>
         </div>
 
         <div class="co-bulk-rate">
@@ -275,6 +296,37 @@
         <span>Sozlamalar</span>
       </button>
     </nav>
+    <div id="companyModelSheet" class="co-sheet-backdrop" hidden>
+      <div class="co-sheet-card">
+        <div class="co-sheet-header">
+          <div>
+            <h3 id="companySheetModelName">Model nomi</h3>
+            <span id="companySheetPeriodName" class="co-muted">Shu oy statistikasi</span>
+          </div>
+          <button id="companyCloseSheet" class="co-sheet-close" type="button" aria-label="Yopish">✕</button>
+        </div>
+        <div class="co-model-stats-grid">
+          <div class="co-model-stat-cell">
+            <span class="co-label">Model narxi</span>
+            <strong id="companySheetModelPrice">0 so‘m</strong>
+          </div>
+          <div class="co-model-stat-cell">
+            <span class="co-label">Tikilgan ish soni</span>
+            <strong id="companySheetSewnQty" class="co-stat-orange">0 dona</strong>
+          </div>
+          <div class="co-model-stat-cell">
+            <span class="co-label">Jami summa</span>
+            <strong id="companySheetTotalAmount" class="co-stat-green">0 so‘m</strong>
+          </div>
+          <div class="co-model-stat-cell">
+            <span class="co-label">Tavofut</span>
+            <strong id="companySheetTavofut">0 so‘m</strong>
+          </div>
+        </div>
+        <div id="companySheetPartyMeta" class="co-sheet-party-meta"></div>
+        <button id="companySheetGoModel" class="co-primary-button" type="button">Operatsiya narxlarini ko‘rish</button>
+      </div>
+    </div>
     <div id="companyToast" class="co-toast" role="status" aria-live="polite" hidden></div>
   </div>
 
