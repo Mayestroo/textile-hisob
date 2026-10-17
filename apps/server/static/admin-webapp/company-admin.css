@@ -41,7 +41,7 @@
   justify-self: start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 6px 14px;
   border-radius: 9999px;
   background: #eff3f8;
@@ -50,7 +50,13 @@
   font-weight: 700;
   border: none;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
+}
+
+.co-close.is-hidden {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .co-close:hover {
@@ -87,7 +93,7 @@
 
 .co-brand span {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--co-muted);
 }
 
@@ -96,7 +102,15 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #e2e8f0;
+  background: #eff3f8;
+  color: #047857;
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  text-transform: uppercase;
 }
 
 /* MAIN CONTAINER */
@@ -165,39 +179,67 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 9999px;
-  background: #ffffff;
-  padding: 0 10px 0 14px;
-  height: 34px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  padding: 0 28px 0 14px;
+  height: 36px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
   cursor: pointer;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
   transition: border-color 0.15s;
 }
 
 .co-period-badge:hover {
-  border-color: #94a3b8;
+  border-color: #94a3b8 !important;
 }
 
-.co-period {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
-  cursor: pointer;
-  padding-right: 16px;
-  font-family: inherit;
+.company-app select.co-period,
+.co-period-badge select,
+select#companyPeriodSelect {
+  width: auto !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  font-family: inherit !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  line-height: normal !important;
+}
+
+.company-app select.co-period:focus,
+.co-period-badge select:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .co-period-chevron {
   position: absolute;
   right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   pointer-events: none;
   color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* HERO PROFIT CARD */
@@ -440,17 +482,31 @@
   align-items: center;
 }
 
+.company-app .co-search input,
 .co-search input {
-  min-width: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--co-ink);
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
+  min-width: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.company-app .co-search input:focus,
+.co-search input:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* CHIPS / SEGMENT CONTROL */
@@ -926,6 +982,24 @@
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
 }
 
+/* Disable spin buttons (up/down arrows) on all company number inputs */
+.company-app input[type="number"]::-webkit-outer-spin-button,
+.company-app input[type="number"]::-webkit-inner-spin-button,
+.co-rate-input-wrap input::-webkit-outer-spin-button,
+.co-rate-input-wrap input::-webkit-inner-spin-button,
+.co-bulk-rate input::-webkit-outer-spin-button,
+.co-bulk-rate input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+.company-app input[type="number"],
+.co-rate-input-wrap input,
+.co-bulk-rate input {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
 .co-bulk-title {
   font-size: 13px;
   font-weight: 700;
@@ -934,22 +1008,32 @@
   line-height: 1.3;
 }
 
+.company-app .co-bulk-rate input,
 .co-bulk-rate input {
-  width: 76px;
-  height: 38px;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-  font-family: inherit;
-  background: #ffffff;
-  outline: none;
+  width: 76px !important;
+  height: 38px !important;
+  min-height: 0 !important;
+  max-height: 38px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  text-align: center !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  font-family: inherit !important;
+  background-color: #ffffff !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 6px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
 }
 
+.company-app .co-bulk-rate input:focus,
 .co-bulk-rate input:focus {
-  border-color: #10b981;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
 }
 
 .co-bulk-rate button {
@@ -1006,39 +1090,65 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  width: 132px;
+  width: 140px;
   height: 40px;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
   padding: 0 10px;
-  background: #ffffff;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+.co-rate-input-wrap:focus-within,
 .co-rate-input-wrap.is-focused {
-  border: 1.5px solid #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
 }
 
+.company-app .co-rate-input-wrap input,
 .co-rate-input-wrap input {
-  width: 65px;
-  border: none;
-  background: transparent;
-  text-align: right;
-  font-size: 13px;
-  font-weight: 600;
-  color: #0f172a;
-  outline: none;
-  font-family: inherit;
-  padding: 0;
+  width: 70px !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  text-align: right !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  font-family: inherit !important;
+  padding: 0 4px 0 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+.company-app .co-rate-input-wrap input:focus,
+.co-rate-input-wrap input:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .co-rate-suffix {
+  flex: 0 0 auto;
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  margin-left: 4px;
+  margin-left: 2px;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .co-more-ops {

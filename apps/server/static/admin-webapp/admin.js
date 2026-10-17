@@ -2810,6 +2810,10 @@
     const isSubscreen = name === 'models' || name === 'worker-detail' || name === 'tickets';
     const bottomNav = document.querySelector('.co-bottom-nav');
     if (bottomNav) bottomNav.hidden = isSubscreen;
+    const backBtn = byId('companyClose');
+    if (backBtn) {
+      backBtn.classList.toggle('is-hidden', !isSubscreen);
+    }
     if (telegram?.BackButton) {
       if (isSubscreen) {
         try { telegram.BackButton.show(); } catch { }
@@ -2846,8 +2850,17 @@
       request(`${API}/companies`),
       request(`${API}/companies/${encodeURIComponent(companyId)}/periods`)
     ]);
-    const company = (companies.companies || []).find((item) => item.companyId === companyId);
-    setText('companyBrandName', company?.companyName || companyId);
+    const company = (companies?.companies || state.companies || []).find((item) => item.companyId === companyId);
+    const companyDisplayName = company?.companyName || companyId || 'Kompaniya';
+    setText('companyBrandName', companyDisplayName);
+    const userRoleText = state.access?.isGlobalAdmin
+      ? 'Tizim admini'
+      : (state.user?.firstName ? `${state.user.firstName} · Admin` : 'Company admin');
+    setText('companyBrandRole', userRoleText);
+    const avatar = byId('companyAvatar');
+    if (avatar) {
+      avatar.textContent = (companyDisplayName || 'N').trim().charAt(0).toUpperCase();
+    }
     const licenseActive = Boolean(company?.activationConfigured && company?.activationActive);
     setText('companyLicenseStatus', company?.activationConfigured ? (licenseActive ? 'Faol' : 'Nofaol') : 'Sozlanmagan');
     setText('companyLicenseBadge', company?.activationConfigured ? (licenseActive ? 'Faol' : 'Nofaol') : '—');
