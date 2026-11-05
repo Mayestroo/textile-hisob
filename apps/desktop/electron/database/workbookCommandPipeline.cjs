@@ -1006,21 +1006,22 @@ function executeClosePeriod(db, normalized) {
     VALUES (?, ?, ?, ?, 0, 'OPEN', ?, ?, 0, 'LOCAL_COMMAND')
   `).run(payload.nextPeriod.id, companyId, payload.nextPeriod.name, payload.nextPeriod.startDate, now, now);
 
-  const completeParty = db.prepare(`
-    UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = ?, updated_at = ?
-    WHERE company_id = ? AND id = ? AND status != 'CLOSED'
-  `);
-  for (const partyId of completedPartyIds) {
-    const result = completeParty.run(now, now, companyId, partyId);
-    if (result.changes !== 1) throw createCommandError('PARTY_NOT_FOUND', `Completed party "${partyId}" was not found or is closed`);
-  }
-  const rolloverParty = db.prepare(`
+  const updatePartyArchive = db.prepare(`
     UPDATE parties SET archived_patta_numbers_json = ?, updated_at = ?
     WHERE company_id = ? AND id = ? AND status != 'CLOSED'
   `);
-  for (const party of rolledOverParties) {
-    const result = rolloverParty.run(JSON.stringify(party.archivedPattaNumbers), now, companyId, party.partyRecordId);
-    if (result.changes !== 1) throw createCommandError('PARTY_NOT_FOUND', `Rollover party "${party.partyRecordId}" was not found or is closed`);
+  for (const party of activeParties) {
+    const submitted = ticketsByParty.get(party.id) || [];
+    let archived = [];
+    if (party.archived_patta_numbers_json) {
+      try {
+        const parsed = JSON.parse(party.archived_patta_numbers_json);
+        if (Array.isArray(parsed)) archived = parsed;
+      } catch {}
+    }
+    const allArchived = Array.from(new Set([...archived, ...submitted])).sort((a, b) => a - b);
+    const result = updatePartyArchive.run(JSON.stringify(allArchived), now, companyId, party.id);
+    if (result.changes !== 1) throw createCommandError('PARTY_NOT_FOUND', `Party "${party.id}" was not found or is closed`);
   }
   db.prepare(`
     UPDATE tickets SET is_closed = 1

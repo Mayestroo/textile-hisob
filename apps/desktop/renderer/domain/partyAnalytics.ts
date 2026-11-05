@@ -28,7 +28,7 @@ export function buildPartyTicketsList(
   partyRecord: PrintedPartyRecord,
   submittedTickets: SubmittedTicketRecord[],
   activeSizes: string[],
-  includeArchived: boolean = false,
+  includeArchived: boolean = true,
   onlySubmitted: boolean = false
 ): PartyPattaItem[] {
   const list: PartyPattaItem[] = [];
@@ -79,22 +79,23 @@ export function buildPartyTicketsList(
     for (let i = 0; i < countForSize; i++) {
       const relNum = currentPattaIndex++;
       const actualSeqNum = startPatta + relNum - 1;
+      const isArchived = archivedSet.has(relNum) || archivedSet.has(actualSeqNum);
 
       // If this patta was already archived in previous periods, skip it in active month
-      if (!includeArchived && (archivedSet.has(relNum) || archivedSet.has(actualSeqNum))) {
+      if (!includeArchived && isArchived) {
         continue;
       }
 
       // O(1) Map lookup for both relative number (1, 2, 3...) and sequential printed number (5, 6, 7...)
       const sub = ticketByPattaNumber.get(actualSeqNum) || ticketByPattaNumber.get(relNum);
-      const isSubmitted = !!sub;
+      const isSubmitted = !!sub || isArchived;
 
       // In closed/archived months, if onlySubmitted is requested, skip unentered tickets!
       if (onlySubmitted && !isSubmitted) {
         continue;
       }
 
-      const enteredQty = sub ? sub.qty : 0;
+      const enteredQty = sub ? sub.qty : (isArchived ? ishSoniPerPatta : 0);
       const expected = ishSoniPerPatta;
       const deficit = isSubmitted ? expected - enteredQty : expected;
 

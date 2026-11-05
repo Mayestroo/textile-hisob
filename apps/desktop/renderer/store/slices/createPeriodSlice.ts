@@ -237,16 +237,19 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       rolledOverPartiesCount: incompleteParties.length
     };
 
-    const rolloverParties = incompleteParties.map((party) => {
+    // In accordance with business rules, month close (Oyni yopish) must not reset or free up party and patta numbers.
+    // All active parties (both completed and incomplete) remain in printedPartyHistory with their submitted pattas archived.
+    // Only an explicit "Partiyani yakunlash" (CompletePartySeries) will close parties and reset numbering to 1.
+    const updatedPartyHistory: PrintedPartyRecord[] = (state.printedPartyHistory || []).map((party) => {
+      if (party.isClosed) return party;
       const tickets = buildPartyTicketsList(party, state.submittedTickets || [], activeSizes, true);
       const newlySubmittedNumbers = tickets.filter((ticket) => ticket.isSubmitted).map((ticket) => ticket.pattaNumber);
-      const archivedPattaNumbers = Array.from(new Set([...(party.archivedPattaNumbers || []), ...newlySubmittedNumbers]));
-      return { partyRecordId: party.id, archivedPattaNumbers };
+      const archivedPattaNumbers = Array.from(new Set([...(party.archivedPattaNumbers || []), ...newlySubmittedNumbers])).sort((a, b) => a - b);
+      return {
+        ...party,
+        archivedPattaNumbers
+      };
     });
-    const cleanPartyHistory: PrintedPartyRecord[] = rolloverParties.map((rollover) => ({
-      ...incompleteParties.find((party) => party.id === rollover.partyRecordId)!,
-      archivedPattaNumbers: rollover.archivedPattaNumbers
-    }));
 
     const sync = await submitPeriodMutation(state, get, set, 'ClosePeriod', state.currentPeriod.id, {
       periodId: state.currentPeriod.id,
@@ -260,7 +263,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
         state.addNotification(
           'info',
           'Sinxronlash navbatda',
-          localCommitSyncNotice(`"${closedPeriod.name}" davri yopildi. ${completedParties.length} ta partiya arxivlandi; ${incompleteParties.length} ta partiya ko'chirildi.`)
+          localCommitSyncNotice(`"${closedPeriod.name}" davri yopildi. Partiya va patta raqamlari yangi oyda uzluksiz davom etadi.`)
         );
       }
       return sync.success;
@@ -321,7 +324,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       currentPeriod: nextPeriod,
       periods: updatedPeriods,
       ticketForms: cleanForms,
-      printedPartyHistory: cleanPartyHistory,
+      printedPartyHistory: updatedPartyHistory,
       submittedTickets: cleanSubmittedTickets,
       selectedArchiveFilename: null,
       selectedArchiveData: null
@@ -333,7 +336,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       currentPeriod: nextPeriod,
       periods: updatedPeriods,
       ticketForms: cleanForms,
-      printedPartyHistory: cleanPartyHistory,
+      printedPartyHistory: updatedPartyHistory,
       submittedTickets: cleanSubmittedTickets,
       companyId: initialLicenseStatus?.companyId
     }, { forceBackup: true }))) return false;
@@ -342,7 +345,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
     state.addNotification(
       'success',
       'Davr muvaffaqiyatli arxivlandi',
-      `"${closedPeriod.name}" yopildi. To'liq kiritilgan ${completedParties.length} ta partiya arxivga o'tdi. To'ldirilmagan ${incompleteParties.length} ta partiya yangi oyga o'tkazildi!`
+      `"${closedPeriod.name}" yopildi. Partiya va patta raqamlari yangi oyda uzluksiz davom etadi!`
     );
     return true;
   }

@@ -547,7 +547,8 @@ describe(' workbook local command pipeline', () => {
     });
 
     expect(result.committed).toBe(true);
-    expect(db.prepare('SELECT status FROM parties WHERE id = ?').get('party_complete').status).toBe('CLOSED');
+    expect(db.prepare('SELECT status, archived_patta_numbers_json FROM parties WHERE id = ?').get('party_complete'))
+      .toEqual({ status: 'ACTIVE', archived_patta_numbers_json: '[1,2]' });
     expect(db.prepare('SELECT status, archived_patta_numbers_json FROM parties WHERE id = ?').get('party_rollover'))
       .toEqual({ status: 'ACTIVE', archived_patta_numbers_json: '[1]' });
     expect(db.prepare('SELECT is_closed FROM tickets WHERE party_record_id = ?').get('party_complete').is_closed).toBe(1);

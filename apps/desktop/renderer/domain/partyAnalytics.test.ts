@@ -27,4 +27,23 @@ describe('buildPartyTicketsList work quantities', () => {
     expect(tickets.map((ticket) => ticket.expectedQty)).toEqual(Array(10).fill(65));
     expect(tickets.reduce((sum, ticket) => sum + ticket.expectedQty, 0)).toBe(650);
   });
+
+  it('marks archived patta numbers from previous months as submitted when includeArchived is true', () => {
+    const party = {
+      id: 'party-prev', partyNumber: '1', modelId: 'model-a', modelName: 'Model A',
+      color: 'Ko\'k', pattaCount: 5, cumulativePattaCount: 5,
+      ishSoniPerPatta: 50, totalIshSoni: 250, ishSoni: 250, cumulativeIshSoni: 0,
+      sizes: { M: '5' }, printedAt: '2026-09-01T10:00:00.000Z',
+      archivedPattaNumbers: [1, 2, 3]
+    };
+
+    const tickets = buildPartyTicketsList(party, [], ['M'], true);
+    expect(tickets).toHaveLength(5);
+    expect(tickets.filter((t) => t.isSubmitted)).toHaveLength(3);
+    expect(tickets.filter((t) => !t.isSubmitted)).toHaveLength(2);
+    expect(tickets[0].enteredQty).toBe(50);
+    expect(tickets[0].deficit).toBe(0);
+    expect(tickets[3].enteredQty).toBe(0);
+    expect(tickets[3].deficit).toBe(50);
+  });
 });

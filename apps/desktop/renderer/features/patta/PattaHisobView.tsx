@@ -340,7 +340,7 @@ export const PattaHisobView: React.FC = () => {
         };
       }
 
-      const tickets = buildPartyTicketsList(record, submittedTickets, activeSizes, isArchiveMode, isArchiveMode);
+      const tickets = buildPartyTicketsList(record, submittedTickets, activeSizes, true, isArchiveMode);
       if (isArchiveMode && tickets.length === 0) {
         // In closed months, parties with 0 submitted tickets are not shown
         continue;
@@ -466,7 +466,7 @@ export const PattaHisobView: React.FC = () => {
     let unsubIsh = 0;
 
     for (const p of visiblePartyHistory || []) {
-      const tickets = buildPartyTicketsList(p, submittedTickets, activeSizes, isArchiveMode, isArchiveMode);
+      const tickets = buildPartyTicketsList(p, submittedTickets, activeSizes, true, isArchiveMode);
       if (isArchiveMode && tickets.length === 0) {
         continue;
       }
@@ -1362,7 +1362,7 @@ export const PattaHisobView: React.FC = () => {
                           {parties.map((item, idx) => {
                             const row = item.party;
                             const isExpanded = expandedPartyIds.has(row.id);
-                            const partyTickets = buildPartyTicketsList(row, submittedTickets, activeSizes, isArchiveMode, isArchiveMode);
+                            const partyTickets = buildPartyTicketsList(row, submittedTickets, activeSizes, true, isArchiveMode);
                             const partyHealth = getPartyHealth(partyTickets);
 
                             const partyPattaCount = partyTickets.length;

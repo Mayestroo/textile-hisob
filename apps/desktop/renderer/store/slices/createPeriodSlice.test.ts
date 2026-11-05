@@ -84,4 +84,58 @@ describe(' period legacy-storage boundary', () => {
 
     expect(set).toHaveBeenCalledWith({ selectedArchiveFilename: null, selectedArchiveData: null });
   });
+
+  it('preserves completed parties as active across month close and archives submitted pattas', async () => {
+    const { slice, state, set } = makeSlice();
+    state.saveToDisk.mockResolvedValue(true);
+    state.availableSizes = ['M'];
+    state.models = [{ id: 'm1', name: 'Model 1', hisobQuantities: {} }];
+    state.printedPartyHistory = [{
+      id: 'party-1',
+      partyNumber: 1,
+      modelId: 'm1',
+      modelName: 'Model 1',
+      pattaCount: 2,
+      pattaStartNumber: 1,
+      pattaEndNumber: 2,
+      ishSoniPerPatta: 50,
+      totalIshSoni: 100,
+      ishSoni: 100,
+      sizes: { M: '2' },
+      printedAt: '2026-09-01T10:00:00.000Z',
+      archivedPattaNumbers: [],
+      isClosed: false
+    }];
+    state.submittedTickets = [
+      { id: 't1', partyRecordId: 'party-1', pattaNumber: 1, size: 'M', quantity: 50, workerId: 'w1', submittedAt: '2026-09-02T10:00:00.000Z' },
+      { id: 't2', partyRecordId: 'party-1', pattaNumber: 2, size: 'M', quantity: 50, workerId: 'w2', submittedAt: '2026-09-03T10:00:00.000Z' }
+    ];
+
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'legacy' }),
+        archiveSave: vi.fn().mockResolvedValue(true)
+      }
+    });
+
+    const success = await slice.closeCurrentPeriod('2026-09-30');
+
+    expect(success).toBe(true);
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+      printedPartyHistory: [
+        expect.objectContaining({
+          id: 'party-1',
+          partyNumber: 1,
+          isClosed: false,
+          archivedPattaNumbers: [1, 2]
+        })
+      ],
+      submittedTickets: []
+    }));
+    expect(state.addNotification).toHaveBeenCalledWith(
+      'success',
+      'Davr muvaffaqiyatli arxivlandi',
+      expect.stringContaining('uzluksiz davom etadi')
+    );
+  });
 });
