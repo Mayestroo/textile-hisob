@@ -93,14 +93,14 @@ export const PattaBatchView: React.FC = () => {
     const parties: Record<string, string> = {};
     const conflicts: Record<string, string> = {};
 
-    // 1. Gather all existing active party numbers from printedPartyHistory
-    const activeHistory = (printedPartyHistory || []).filter((h) => !h.isClosed);
-    const existingActivePartyNumbers = new Set<string>();
+    // 1. Gather all existing party numbers in the current series (both active and closed from previous months)
+    const seriesHistory = (printedPartyHistory || []).filter((h) => h.isArchived !== true);
+    const existingSeriesPartyNumbers = new Set<string>();
     let maxExistingPartyNum = 0;
-    for (const h of activeHistory) {
+    for (const h of seriesHistory) {
       const pStr = String(h.partyNumber || '').trim();
       if (pStr) {
-        existingActivePartyNumbers.add(pStr);
+        existingSeriesPartyNumbers.add(pStr);
         const pInt = parseInt(pStr, 10);
         if (!isNaN(pInt) && pInt > maxExistingPartyNum) {
           maxExistingPartyNum = pInt;
@@ -108,7 +108,7 @@ export const PattaBatchView: React.FC = () => {
       }
     }
 
-    const usedPartyNumbers = new Set<string>(existingActivePartyNumbers);
+    const usedPartyNumbers = new Set<string>(existingSeriesPartyNumbers);
     const customNumbersEntered = new Map<string, string>(); // partyNumber -> firstModelId
 
     // 2. Check custom numbers entered by user
@@ -118,9 +118,9 @@ export const PattaBatchView: React.FC = () => {
         const val = cfg.partyNumber.trim();
         parties[m.id] = val;
 
-        // Check collision with existing active printed history
-        if (existingActivePartyNumbers.has(val)) {
-          conflicts[m.id] = `Partiya ${val} allaqachon faol partiyalarda mavjud!`;
+        // Check collision with existing printed history of current series
+        if (existingSeriesPartyNumbers.has(val)) {
+          conflicts[m.id] = `Partiya ${val} allaqachon joriy turkumda mavjud!`;
         }
         // Check collision with another model in current batch
         if (customNumbersEntered.has(val)) {
@@ -137,7 +137,7 @@ export const PattaBatchView: React.FC = () => {
       }
     }
 
-    let partyCounter = 1;
+    let partyCounter = Math.max(1, maxExistingPartyNum + 1);
 
     const getNextSequential = () => {
       while (usedPartyNumbers.has(String(partyCounter))) {
@@ -157,8 +157,8 @@ export const PattaBatchView: React.FC = () => {
       }
     }
 
-    // 4. For unfilled models, show what the prospective sequential numbers would be (filling lowest available gaps)
-    let prospectiveCounter = 1;
+    // 4. For unfilled models, show what the prospective sequential numbers would be (continuing forward)
+    let prospectiveCounter = partyCounter;
     for (const m of models) {
       if (!parties[m.id]) {
         while (usedPartyNumbers.has(String(prospectiveCounter))) {

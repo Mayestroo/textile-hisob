@@ -385,13 +385,13 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
     startDate: new Date().toISOString().slice(0, 10),
     isClosed: false
   };
-  const activePartyNumbers = printedPartyHistory
-    .filter((party) => !party.isClosed)
+  const seriesPartyNumbers = printedPartyHistory
+    .filter((party) => !party.isArchived)
     .map((party) => Number.parseInt(String(party.partyNumber), 10))
     .filter((partyNumber) => Number.isSafeInteger(partyNumber) && partyNumber > 0);
-  const activePartyNumberSet = new Set(activePartyNumbers);
+  const seriesPartyNumberSet = new Set(seriesPartyNumbers);
   let nextPartyNumber = 1;
-  while (activePartyNumberSet.has(nextPartyNumber)) nextPartyNumber += 1;
+  while (seriesPartyNumberSet.has(nextPartyNumber)) nextPartyNumber += 1;
 
   return {
     companyId,

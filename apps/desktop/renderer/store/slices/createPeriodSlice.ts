@@ -245,8 +245,11 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       const tickets = buildPartyTicketsList(party, state.submittedTickets || [], activeSizes, true);
       const newlySubmittedNumbers = tickets.filter((ticket) => ticket.isSubmitted).map((ticket) => ticket.pattaNumber);
       const archivedPattaNumbers = Array.from(new Set([...(party.archivedPattaNumbers || []), ...newlySubmittedNumbers])).sort((a, b) => a - b);
+      const isComplete = completedParties.some((p) => p.id === party.id);
       return {
         ...party,
+        isClosed: isComplete,
+        closedAt: isComplete ? cleanDate : undefined,
         archivedPattaNumbers
       };
     });

@@ -93,11 +93,11 @@ export function findAvailablePattaStart(
 }
 
 export function findNextPartyNumber(history: PrintedPartyRecord[]): number {
-  const activeNumbers = new Set(history.filter((party) => !party.isClosed && party.isArchived !== true)
+  const seriesNumbers = new Set(history.filter((party) => party.isArchived !== true)
     .map((party) => Number.parseInt(String(party.partyNumber).trim(), 10))
     .filter((number) => Number.isSafeInteger(number) && number > 0));
   let next = 1;
-  while (activeNumbers.has(next)) next += 1;
+  while (seriesNumbers.has(next)) next += 1;
   return next;
 }
 
@@ -189,9 +189,9 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   let nextGlobalPatta = Math.max(1, Number(state.nextPattaNumber) || 1);
   for (const item of printedItems) {
     let partyNumber = String(item.partyNumber).trim();
-    const conflictingModel = working.find((party) => !party.isClosed && party.modelId !== item.modelId && String(party.partyNumber).trim() === partyNumber);
+    const conflictingModel = working.find((party) => party.isArchived !== true && party.modelId !== item.modelId && String(party.partyNumber).trim() === partyNumber);
     if (conflictingModel) {
-      while (working.some((party) => !party.isClosed && String(party.partyNumber).trim() === String(nextSequential))) nextSequential += 1;
+      while (working.some((party) => party.isArchived !== true && String(party.partyNumber).trim() === String(nextSequential))) nextSequential += 1;
       partyNumber = String(nextSequential++);
     }
     const model = state.models.find((candidate) => candidate.id === item.modelId);

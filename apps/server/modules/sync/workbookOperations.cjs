@@ -396,14 +396,21 @@ async function executeClosePeriod(client, companyId, operationId, payload, canon
     { ...payload.nextPeriod, periodId: payload.nextPeriod.id, companyId, isClosed: false }, now);
   lastChangeId = Number(nextPeriodChange.rows[0].change_id);
 
-  const allPartiesToUpdate = activeParties.rows.map((party) => {
-    const archivedValue = party.archived_patta_numbers_json;
+  for (const partyId of completed) {
+    const partyRow = activeParties.rows.find((p) => p.id === partyId);
+    const archivedValue = partyRow?.archived_patta_numbers_json;
     const archived = Array.isArray(archivedValue) ? archivedValue.map(Number) : [];
-    const submitted = ticketsByParty.get(party.id) || [];
+    const submitted = ticketsByParty.get(partyId) || [];
     const completedPattaNumbers = Array.from(new Set([...archived, ...submitted])).sort((a, b) => a - b);
-    return { partyRecordId: party.id, archivedPattaNumbers: completedPattaNumbers };
-  });
-  for (const { partyRecordId: partyId, archivedPattaNumbers } of allPartiesToUpdate) {
+    const updated = await client.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = $1,
+      archived_patta_numbers_json = $2::jsonb, server_revision = server_revision + 1, updated_at = $1
+      WHERE company_id = $3 AND id = $4 RETURNING server_revision`,
+    [now, JSON.stringify(completedPattaNumbers), companyId, partyId]);
+    const change = await appendChange(client, companyId, 'party', partyId, updated.rows[0].server_revision, operationId, 'UPDATE',
+      { partyRecordId: partyId, status: 'CLOSED', isClosed: true, closedAt: now, archivedPattaNumbers: completedPattaNumbers }, now);
+    lastChangeId = Number(change.rows[0].change_id);
+  }
+  for (const { partyRecordId: partyId, archivedPattaNumbers } of rollover) {
     const updated = await client.query(`UPDATE parties SET archived_patta_numbers_json = $1::jsonb,
       server_revision = server_revision + 1, updated_at = $2 WHERE company_id = $3 AND id = $4 RETURNING server_revision`,
     [JSON.stringify(archivedPattaNumbers), now, companyId, partyId]);

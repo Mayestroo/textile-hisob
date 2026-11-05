@@ -121,6 +121,15 @@ describe(' patta batch command payloads', () => {
     ])).toBe(1);
   });
 
+  it('does not make closed party numbers from current series available for reuse', () => {
+    expect(findNextPartyNumber([
+      { id: 'closed-in-series', partyNumber: '1', modelId: 'model-a', modelName: 'Model A', color: 'Qora', pattaCount: 1, cumulativePattaCount: 1,
+        ishSoni: 0, cumulativeIshSoni: 0, printedAt: '', isClosed: true, isArchived: false },
+      { id: 'active', partyNumber: '2', modelId: 'model-a', modelName: 'Model A', color: 'Qora', pattaCount: 1, cumulativePattaCount: 2,
+        ishSoni: 0, cumulativeIshSoni: 0, printedAt: '' }
+    ])).toBe(3);
+  });
+
   it('previews archived patta ranges before the high-water sequence without overlapping active ranges', () => {
     const starts = buildPattaPreviewStarts([{
       id: 'active', partyNumber: '2', modelId: 'model-b', modelName: 'Model B', color: 'Qora',

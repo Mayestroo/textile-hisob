@@ -409,7 +409,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const partyRows = await pool!.query(`SELECT id, status, is_archived, archived_patta_numbers_json FROM parties
       WHERE company_id = $1 AND id IN ('party_1', 'party_2') ORDER BY id`, [companyId]);
     expect(partyRows.rows).toEqual([
-      expect.objectContaining({ id: 'party_1', status: 'ACTIVE', archived_patta_numbers_json: [2, 3] }),
+      expect.objectContaining({ id: 'party_1', status: 'CLOSED', archived_patta_numbers_json: [2, 3] }),
       expect.objectContaining({ id: 'party_2', status: 'ACTIVE', archived_patta_numbers_json: [4] })
     ]);
 

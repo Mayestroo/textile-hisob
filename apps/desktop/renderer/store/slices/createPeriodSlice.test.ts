@@ -126,7 +126,7 @@ describe(' period legacy-storage boundary', () => {
         expect.objectContaining({
           id: 'party-1',
           partyNumber: 1,
-          isClosed: false,
+          isClosed: true,
           archivedPattaNumbers: [1, 2]
         })
       ],
