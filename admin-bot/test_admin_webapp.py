@@ -153,6 +153,19 @@ class AdminWebAppAuthTests(unittest.TestCase):
         self.assertTrue(all(reply is None for reply in replies[1:]))
         self.assertEqual([route for _, route, _ in calls], ["/internal/admin/webapp/authorize"])
 
+    def test_admin_updates_ignore_group_and_mismatched_private_destinations(self):
+        update = lambda chat_id, chat_type: {"message": {
+            "chat": {"id": chat_id, "type": chat_type},
+            "from": {"id": int(ADMIN_ID)}, "text": "/start"
+        }}
+        with patch.object(admin_bot, "ADMIN_IDS", {ADMIN_ID}), \
+                patch.object(admin_bot, "api_request") as api_request, \
+                patch.object(admin_bot, "send_message") as send_message:
+            admin_bot.process_update(update(-100123, "group"))
+            admin_bot.process_update(update(999, "private"))
+        api_request.assert_not_called()
+        send_message.assert_not_called()
+
     def test_signer_requires_current_allowlisted_session(self):
         session = create_admin_web_session(ADMIN_ID, SESSION_SECRET, now=int(time.time()))
         payload = {

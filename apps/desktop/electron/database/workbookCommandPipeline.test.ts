@@ -247,7 +247,7 @@ describe(' workbook local command pipeline', () => {
       .run(ticketId, companyId, now, now);
     db.prepare(`INSERT INTO ticket_entries (
       id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, qty, created_at
-    ) VALUES ('entry_before_edit', ?, ?, 'Cut', 1, 'Worker A', 3, 5, ?)`)
+    ) VALUES ('entry_before_edit', ?, ?, 'Cut', 1, 'Worker A', 5, 5, ?)`)
       .run(ticketId, companyId, now);
 
     const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
@@ -259,6 +259,8 @@ describe(' workbook local command pipeline', () => {
     expect(result).toMatchObject({ committed: true, entityId: ticketId, status: 'PENDING_SYNC' });
     expect(db.prepare('SELECT op_name, worker_id, worker_name_snapshot FROM ticket_entries WHERE ticket_id = ?')
       .all(ticketId)).toEqual([{ op_name: 'Cut', worker_id: 2, worker_name_snapshot: 'Worker B' }]);
+    expect(db.prepare('SELECT id, rate_snapshot FROM ticket_entries WHERE ticket_id = ?').get(ticketId))
+      .toEqual({ id: 'entry_before_edit', rate_snapshot: 5 });
     const outbox = db.prepare(`SELECT command_type, base_revision, local_archive_json FROM local_outbox WHERE operation_id = ?`)
       .get('op_update_ticket');
     expect(outbox.command_type).toBe('UpdateTicket');
@@ -280,6 +282,94 @@ describe(' workbook local command pipeline', () => {
       .toEqual([{ op_name: 'Cut', worker_id: 1 }]);
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_update_ticket').status)
       .toBe('DEAD_LETTER');
+  });
+
+  it('retains zero and unknown rates across local reorder and worker edits without accepting new tariff claims', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at) VALUES (1, ?, 'A', ?, ?), (2, ?, 'B', ?, ?)`)
+      .run(companyId, now, now, companyId, now, now);
+    const ticketId = '11111111-1111-4111-8111-111111111119';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty,
+      status, submitted_at, created_at, server_revision) VALUES (?, ?, 'model_one', '1', 1, 3,
+      'CONFIRMED', ?, ?, 1)`).run(ticketId, companyId, now, now);
+    const insert = db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id,
+      rate_snapshot, qty, created_at) VALUES (?, ?, ?, ?, 1, ?, 3, ?)`);
+    insert.run('old-zero', ticketId, companyId, 'Zero', 0, now);
+    insert.run('old-unknown', ticketId, companyId, 'Unknown', null, now);
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateTicket', commandId: 'cmd_reorder', operationId: 'op_reorder',
+      companyId, entityId: ticketId, baseRevision: 1,
+      payload: { ticketId, entries: [
+        { opName: 'Unknown', workerId: 2, rateSnapshot: 9 },
+        { opName: 'Zero', workerId: 2, rateSnapshot: 9 },
+        { opName: 'New', workerId: 2, rateSnapshot: 9 }
+      ] }
+    });
+    expect(db.prepare('SELECT id, op_name, rate_snapshot FROM ticket_entries WHERE ticket_id = ? ORDER BY op_name')
+      .all(ticketId)).toEqual([
+        { id: `${ticketId}_edit_op_reorder_entry_3`, op_name: 'New', rate_snapshot: null },
+        { id: 'old-unknown', op_name: 'Unknown', rate_snapshot: null },
+        { id: 'old-zero', op_name: 'Zero', rate_snapshot: 0 }
+      ]);
+  });
+
+  it('never recycles removed work identities over successive local edits, including a re-added operation', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at) VALUES (1, ?, 'A', ?, ?)`)
+      .run(companyId, now, now);
+    const ticketId = '11111111-1111-4111-8111-111111111121';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty,
+      status, submitted_at, created_at, server_revision) VALUES (?, ?, 'model_one', '1', 1, 3,
+      'CONFIRMED', ?, ?, 1)`).run(ticketId, companyId, now, now);
+    const insert = db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id,
+      rate_snapshot, qty, created_at) VALUES (?, ?, ?, ?, 1, ?, 3, ?)`);
+    insert.run(`${ticketId}_entry_1`, ticketId, companyId, 'Cut', 5, now);
+    insert.run(`${ticketId}_entry_2`, ticketId, companyId, 'Sew', 7, now);
+    const edit = (operationId: string, baseRevision: number, entries: Array<{ opName: string; entryId?: string }>) =>
+      workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+        commandType: 'UpdateTicket', commandId: `cmd_${operationId}`, operationId,
+        companyId, entityId: ticketId, baseRevision,
+        payload: { ticketId, entries: entries.map((entry) => ({ ...entry, workerId: 1, rateSnapshot: 999 })) }
+      });
+    edit('remove_sew', 1, [{ opName: 'Cut' }]);
+    edit('add_pack', 2, [{ opName: 'Pack' }, { opName: 'Cut' }]);
+    const packId = `${ticketId}_edit_add_pack_entry_1`;
+    expect(db.prepare('SELECT id, rate_snapshot FROM ticket_entries WHERE op_name = ?').get('Pack'))
+      .toEqual({ id: packId, rate_snapshot: null });
+    edit('replace_pack', 3, [{ opName: 'Cut' }]);
+    edit('readd_sew', 4, [{ opName: 'Sew' }, { opName: 'Cut' }, { opName: 'Pack' }]);
+    expect(db.prepare('SELECT id, op_name, rate_snapshot FROM ticket_entries WHERE ticket_id = ? ORDER BY op_name').all(ticketId))
+      .toEqual([
+        { id: `${ticketId}_entry_1`, op_name: 'Cut', rate_snapshot: 5 },
+        { id: `${ticketId}_edit_readd_sew_entry_3`, op_name: 'Pack', rate_snapshot: null },
+        { id: `${ticketId}_edit_readd_sew_entry_1`, op_name: 'Sew', rate_snapshot: null }
+      ]);
+    expect(db.prepare('SELECT local_archive_json FROM local_outbox WHERE operation_id = ?').get('remove_sew'))
+      .toMatchObject({ local_archive_json: expect.stringContaining(`${ticketId}_entry_2`) });
+  });
+
+  it('rejects ambiguous historical operation matches without deleting existing entries', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at) VALUES (1, ?, 'A', ?, ?)`)
+      .run(companyId, now, now);
+    const ticketId = '11111111-1111-4111-8111-111111111120';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty,
+      status, submitted_at, created_at, server_revision) VALUES (?, ?, 'model_one', '1', 1, 3,
+      'CONFIRMED', ?, ?, 1)`).run(ticketId, companyId, now, now);
+    const insert = db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id,
+      rate_snapshot, qty, created_at) VALUES (?, ?, ?, 'Cut', 1, ?, 3, ?)`);
+    insert.run('old-one', ticketId, companyId, 5, now);
+    insert.run('old-two', ticketId, companyId, 9, now);
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateTicket', commandId: 'cmd_ambiguous', operationId: 'op_ambiguous',
+      companyId, entityId: ticketId, baseRevision: 1,
+      payload: { ticketId, entries: [{ opName: 'Cut', workerId: 2, rateSnapshot: 5 }] }
+    })).toThrow(/Cannot identify original work/);
+    expect(db.prepare('SELECT id, rate_snapshot FROM ticket_entries WHERE ticket_id = ? ORDER BY id').all(ticketId))
+      .toEqual([{ id: 'old-one', rate_snapshot: 5 }, { id: 'old-two', rate_snapshot: 9 }]);
   });
 
   it('rejects a changed replay and cross-company command without changing local facts', () => {
@@ -700,5 +790,55 @@ describe(' workbook local command pipeline', () => {
     expect(db.prepare('SELECT status, is_archived FROM parties WHERE company_id = ? AND id = ?').get(companyId, 'party_current'))
       .toMatchObject({ status: 'CLOSED', is_archived: 0 });
     expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(10);
+  });
+
+  it('persists four distinct period-scoped worker adjustments atomically and rejects duplicate or closed-period writes', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO periods(id,company_id,name,start_date,is_closed,status,server_revision,created_at,updated_at)
+      VALUES ('period-money',?,'Money','2026-09-01',0,'OPEN',1,?,?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO workers(id,company_id,name,staj,role,status,server_revision,created_at,updated_at)
+      VALUES (81,?,'Worker',25000,'Sewing','ACTIVE',1,?,?)`).run(companyId, now, now);
+    const command = (operationId: string, balanceAdjustments: any[], baseRevision = 1) => ({
+      commandType: 'UpsertWorker', commandId: `cmd_${operationId}`, operationId, companyId,
+      entityId: '81', baseRevision,
+      payload: { workerId: 81, name: 'Worker', staj: 25000, role: 'Sewing', status: 'ACTIVE', balanceAdjustments }
+    });
+    const balances = [
+      { adjustmentId: 'av-81', type: 'AVANS', amountDelta: 200000, periodId: 'period-money' },
+      { adjustmentId: 'ja-81', type: 'JARIMA', amountDelta: 50000, periodId: 'period-money' },
+      { adjustmentId: 'ok-81', type: 'OKLAD', amountDelta: 2000000, periodId: 'period-money' },
+      { adjustmentId: 'mg-81', type: 'MAGAZIN', amountDelta: 100000, periodId: 'period-money' }
+    ];
+    expect(workbookCommandPipeline.executeWorkbookCommand(userData, companyId, command('op_money_four', balances)))
+      .toMatchObject({ committed: true, status: 'PENDING_SYNC' });
+    expect(db.prepare(`SELECT type,amount,period_id,status FROM worker_adjustments
+      WHERE company_id=? AND worker_id=81 ORDER BY type`).all(companyId)).toEqual([
+      { type: 'AVANS', amount: 200000, period_id: 'period-money', status: 'POSTED' },
+      { type: 'JARIMA', amount: 50000, period_id: 'period-money', status: 'POSTED' },
+      { type: 'MAGAZIN', amount: 100000, period_id: 'period-money', status: 'POSTED' },
+      { type: 'OKLAD', amount: 2000000, period_id: 'period-money', status: 'POSTED' }
+    ]);
+    expect(db.prepare(`SELECT json_extract(payload_json,'$.balanceAdjustments') AS balances FROM local_outbox
+      WHERE company_id=? AND operation_id='op_money_four'`).get(companyId).balances).toBeTruthy();
+
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId,
+      command('op_money_duplicate_kind', [balances[0], { ...balances[1], adjustmentId: 'av-duplicate', type: 'AVANS' }], 2)))
+      .toThrow(/DUPLICATE_WORKER_ADJUSTMENT/);
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId,
+      command('op_money_duplicate_id', [balances[0], { ...balances[1], adjustmentId: 'av-81' }], 2)))
+      .toThrow(/DUPLICATE_WORKER_ADJUSTMENT/);
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId,
+      command('op_money_unsafe', [{ ...balances[2], adjustmentId: 'ok-unsafe', amountDelta: 1.5 }], 2)))
+      .toThrow(/INVALID_NUMBER/);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM local_outbox WHERE company_id=? AND operation_id LIKE 'op_money_duplicate_%'").get(companyId).n).toBe(0);
+
+    db.prepare("UPDATE periods SET is_closed=1,status='CLOSED' WHERE company_id=? AND id='period-money'").run(companyId);
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId,
+      command('op_money_closed', [{ ...balances[2], adjustmentId: 'ok-closed' }], 2))).toThrow(/PERIOD_NOT_FOUND/);
+    expect(db.prepare("SELECT name,server_revision FROM workers WHERE company_id=? AND id=81").get(companyId))
+      .toMatchObject({ name: 'Worker', server_revision: 1 });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM worker_adjustments WHERE company_id=? AND worker_id=81").get(companyId).n).toBe(4);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM local_outbox WHERE company_id=? AND operation_id='op_money_closed'").get(companyId).n).toBe(0);
   });
 });

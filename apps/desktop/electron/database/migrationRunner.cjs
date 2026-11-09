@@ -83,7 +83,8 @@ function applyMigrations(db, options = {}) {
     : MIGRATIONS[MIGRATIONS.length - 1].version;
 
   // Filter migrations with version > activeVersion
-  const pending = MIGRATIONS
+  const migrations = Array.isArray(options.migrations) ? options.migrations : MIGRATIONS;
+  const pending = migrations
     .filter(m => m.version > activeVersion && m.version <= targetVersion)
     .sort((a, b) => a.version - b.version);
 

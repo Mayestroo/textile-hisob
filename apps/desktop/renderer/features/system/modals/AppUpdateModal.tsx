@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { startDownloadAndInstall, CURRENT_APP_VERSION } from '../../../services/updateService';
 import { UpdateProgress } from '../../../types/update';
@@ -22,6 +22,17 @@ export const AppUpdateModal: React.FC = () => {
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDone, setIsDone] = useState(false);
+
+  useEffect(() => {
+    if (!isDownloading) return;
+    const guardBusyUpdateEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented && !useWorkbookStore.getState().confirmState) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', guardBusyUpdateEscape, true);
+    return () => window.removeEventListener('keydown', guardBusyUpdateEscape, true);
+  }, [isDownloading]);
 
   if (modalType !== 'app_update') return null;
 
@@ -56,7 +67,7 @@ export const AppUpdateModal: React.FC = () => {
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay phase-c-dialog"
       style={{
         backgroundColor: 'rgba(15, 23, 42, 0.78)',
         zIndex: 99999

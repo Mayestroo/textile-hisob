@@ -25,7 +25,10 @@ export interface WorkerPayrollSummary {
   workerId: number;
   workerName: string;
   earningsByModel: Record<string, number>;
-  umumiy: number; // Gross Total (= sum of all -hisob sheets)
+  pieceworkGross: number; // Sum of operation/model payroll only
+  oklad: number; // Manually entered, explicit-period salary addition
+  magazin: number; // Explicit-period shop deduction
+  umumiy: number; // Gross Total (= piecework + Oklad)
   staj: number;   // Staj allowance
   avans: number;  // Avans
   jarima: number; // Jarima
@@ -35,6 +38,9 @@ export interface WorkerPayrollSummary {
 export interface MasterPayrollReport {
   workers: WorkerPayrollSummary[];
   totalUmumiy: number;
+  totalPieceworkGross: number;
+  totalOklad: number;
+  totalMagazin: number;
   totalStaj: number;
   totalAvans: number;
   totalJarima: number;
@@ -158,6 +164,9 @@ export function calculateMasterPayroll(models: ModelConfig[], workers: Worker[])
 
   const workerSummaries: WorkerPayrollSummary[] = [];
   let totalUmumiy = 0;
+  let totalPieceworkGross = 0;
+  let totalOklad = 0;
+  let totalMagazin = 0;
   let totalStaj = 0;
   let totalAvans = 0;
   let totalJarima = 0;
@@ -190,6 +199,9 @@ export function calculateMasterPayroll(models: ModelConfig[], workers: Worker[])
       workerId: worker.id,
       workerName: worker.name || `Ishchi #${worker.id}`,
       earningsByModel,
+      pieceworkGross: workerUmumiy,
+      oklad: 0,
+      magazin: 0,
       umumiy: workerUmumiy,
       staj,
       avans,
@@ -198,6 +210,7 @@ export function calculateMasterPayroll(models: ModelConfig[], workers: Worker[])
     });
 
     totalUmumiy += workerUmumiy;
+    totalPieceworkGross += workerUmumiy;
     totalStaj += staj;
     totalAvans += avans;
     totalJarima += jarima;
@@ -207,6 +220,9 @@ export function calculateMasterPayroll(models: ModelConfig[], workers: Worker[])
   return {
     workers: workerSummaries,
     totalUmumiy,
+    totalPieceworkGross,
+    totalOklad,
+    totalMagazin,
     totalStaj,
     totalAvans,
     totalJarima,

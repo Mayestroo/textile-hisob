@@ -1,6 +1,6 @@
 'use strict';
 
-const { updateOperationStatus, getOperation } = require('../database/outboxManager.cjs');
+const { updateOperationStatus, getOperation, acknowledgeOutboxOperation } = require('../database/outboxManager.cjs');
 const { rebuildCompanyProjections } = require('../database/projectionReader.cjs');
 const { applyWorkerChange } = require('./changeFeedApplier.cjs');
 
@@ -57,6 +57,12 @@ function isRevisionConflict(errorValue) {
   }
 }
 
+function hasNewerServerTicketRevision(db, companyId, op) {
+  const ticket = db.prepare('SELECT server_revision FROM tickets WHERE company_id = ? AND id = ?')
+    .get(companyId, op.entity_id);
+  return Number(ticket?.server_revision || 0) > Number(op.base_revision || 0);
+}
+
 function supersedeOlderBatchSettingsConflicts(db, companyId, acceptedOperation) {
   const acceptedPayload = JSON.parse(acceptedOperation.payload_json);
   if (!Array.isArray(acceptedPayload.availableSizes) || !Array.isArray(acceptedPayload.configs)) return 0;
@@ -91,40 +97,35 @@ function supersedeOlderBatchSettingsConflicts(db, companyId, acceptedOperation) 
  * @returns {Promise<object>} DispatchResult
  */
 async function dispatchOutbox(db, companyId, syncClient, options = {}) {
-  const batchSize = options.batchSize || 25;
+  // Match the server operations endpoint's maximum; invalid limits use default.
+  const batchSize = Number.isSafeInteger(options.batchSize) && options.batchSize > 0
+    ? Math.min(options.batchSize, 100) : 25;
 
-  // 1. Fetch pending operations ordered by causal sequence and creation time
-  const pendingRows = db.prepare(`
-    SELECT * FROM local_outbox
-    WHERE company_id = ? AND status = 'PENDING'
-    ORDER BY causal_sequence ASC, created_at ASC
+  // Filter BEFORE LIMIT: a blocked prefix must not starve independent work.
+  // Only persisted SYNCED parents qualify, never another member of this request.
+  // The indexed, tenant-scoped parent lookup is non-recursive; at most batchSize
+  // payloads enter JS/memory/the network, regardless of the blocked queue size.
+  const eligible = db.prepare(`
+    SELECT op.* FROM local_outbox op
+    WHERE op.company_id = ? AND op.status = 'PENDING'
+      AND (op.depends_on_operation_id IS NULL OR TRIM(op.depends_on_operation_id) = ''
+        OR EXISTS (
+          SELECT 1 FROM local_outbox parent
+          WHERE parent.company_id = op.company_id
+            AND parent.operation_id = TRIM(op.depends_on_operation_id)
+            AND parent.status = 'SYNCED'
+        ))
+    ORDER BY op.causal_sequence ASC, op.created_at ASC, op.operation_id ASC
     LIMIT ?
   `).all(companyId, batchSize);
 
-  if (pendingRows.length === 0) {
-    return { attempted: 0, synced: 0, conflict: 0, deadLetter: 0, transientErrors: 0 };
-  }
-
-  // 2. Filter eligible operations preserving causal order
-  const eligible = [];
-  const blockedOpIds = new Set();
-
-  for (const op of pendingRows) {
-    if (op.depends_on_operation_id && blockedOpIds.has(op.depends_on_operation_id)) {
-      blockedOpIds.add(op.operation_id);
-      continue;
-    }
-
-    if (!isDependencySatisfied(db, companyId, op)) {
-      blockedOpIds.add(op.operation_id);
-      continue;
-    }
-
-    eligible.push(op);
-  }
-
   if (eligible.length === 0) {
-    return { attempted: 0, synced: 0, conflict: 0, deadLetter: 0, transientErrors: 0, blockedCount: pendingRows.length };
+    // Preserve bounded diagnostic sampling; do not load blocked payloads or count
+    // the entire queue merely to report a no-op.
+    const blockedCount = db.prepare(`SELECT operation_id FROM local_outbox
+      WHERE company_id = ? AND status = 'PENDING' LIMIT ?`).all(companyId, batchSize).length;
+    return { attempted: 0, synced: 0, conflict: 0, deadLetter: 0, transientErrors: 0,
+      ...(blockedCount ? { blockedCount } : {}) };
   }
 
   // 3. Transition eligible operations: PENDING -> SENDING
@@ -201,31 +202,70 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
 
     if (res.status === 'APPLIED') {
       // Transactionally update outbox to SYNCED and fact to CONFIRMED
-      db.transaction(() => {
-        updateOperationStatus(db, companyId, op.operation_id, 'SYNCED');
-
+      const accepted = db.transaction(() => {
+        if (op.command_type === 'UpsertWorker' && res.payloadHash
+          && (res.payloadHash !== op.payload_hash || Number(res.serverRevision) !== Number(op.base_revision) + 1)) {
+          updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', 'ACK_WORKER_PAYLOAD_OR_REVISION_MISMATCH');
+          return false;
+        }
+        if (op.entity_type === 'ticket' && ['SubmitTicket', 'UpdateTicket', 'DeleteTicket'].includes(op.command_type)
+          && res.payloadHash === op.payload_hash && Number(res.serverRevision) !== Number(op.base_revision) + 1) {
+          updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', 'ACK_TICKET_REVISION_MISMATCH');
+          return false;
+        }
         if (op.command_type === 'SubmitTicket') {
+          const capturedPeriod = db.prepare('SELECT period_id FROM tickets WHERE company_id = ? AND id = ?')
+            .get(companyId, op.entity_id)?.period_id;
+          if (capturedPeriod && capturedPeriod !== (res.periodId || null)) {
+            updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', JSON.stringify({
+              code: 'TICKET_PERIOD_AUTHORITY_MISMATCH', capturedPeriod, receivedPeriod: res.periodId ?? null
+            }));
+            return false;
+          }
+        }
+        // The response must identify the exact immutable submitted payload before
+        // it can serve as durable acceptance evidence. Older servers may omit
+        // payloadHash: retain their legacy lifecycle, but record no proof.
+        if (!acknowledgeOutboxOperation(db, companyId, op.operation_id, res.payloadHash, res.serverRevision, res.cursor)) {
+          if (res.payloadHash && res.payloadHash !== op.payload_hash) {
+            updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', 'ACK_PAYLOAD_HASH_MISMATCH');
+            return false;
+          }
+          updateOperationStatus(db, companyId, op.operation_id, 'SYNCED');
+        }
+
+        const newerTicketMutation = op.entity_type === 'ticket' && db.prepare(`SELECT 1 FROM local_outbox
+          WHERE company_id = ? AND entity_id = ? AND entity_type = 'ticket'
+            AND command_type IN ('SubmitTicket', 'UpdateTicket', 'DeleteTicket')
+            AND operation_id <> ? AND (base_revision > ? OR causal_sequence > ?)
+            LIMIT 1`).get(companyId, op.entity_id, op.operation_id, op.base_revision, op.causal_sequence);
+
+        if (op.command_type === 'SubmitTicket' && !newerTicketMutation) {
           db.prepare(`
             UPDATE tickets
-            SET status = 'CONFIRMED', period_id = COALESCE(?, period_id), server_revision = MAX(server_revision, ?)
-            WHERE company_id = ? AND id = ?
-          `).run(res.periodId || null, res.serverRevision || 0, companyId, op.entity_id);
+             SET status = 'CONFIRMED', period_id = COALESCE(period_id, ?), server_revision = MAX(server_revision, ?)
+            WHERE company_id = ? AND id = ? AND server_revision <= ?
+          `).run(res.periodId || null, res.serverRevision || 0, companyId, op.entity_id, res.serverRevision || 0);
           factsUpdated++;
         } else if (op.command_type === 'DeleteTicket') {
-          db.prepare(`UPDATE tickets SET status = 'VOIDED', server_revision = ? WHERE company_id = ? AND id = ?`)
-            .run(res.serverRevision || 0, companyId, op.entity_id);
+          db.prepare(`UPDATE tickets SET status = 'VOIDED', server_revision = ? WHERE company_id = ? AND id = ? AND server_revision <= ?`)
+            .run(res.serverRevision || 0, companyId, op.entity_id, res.serverRevision || 0);
           factsUpdated++;
-        } else if (op.command_type === 'UpdateTicket') {
+        } else if (op.command_type === 'UpdateTicket' && !newerTicketMutation) {
           db.prepare(`UPDATE tickets SET server_revision = MAX(server_revision, ?)
             WHERE company_id = ? AND id = ?`).run(res.serverRevision || 0, companyId, op.entity_id);
+          factsUpdated++;
+        } else if (op.command_type === 'RecordProductionAdjustment') {
+          db.prepare(`UPDATE production_adjustments SET server_revision = MAX(server_revision, ?)
+            WHERE company_id = ? AND adjustment_id = ?`).run(res.serverRevision || 0, companyId, op.entity_id);
           factsUpdated++;
         } else if (op.command_type === 'UpsertModel' || op.command_type === 'DeactivateModel') {
           const status = op.command_type === 'DeactivateModel' ? 'INACTIVE' : 'ACTIVE';
           const modelAlias = db.prepare(`SELECT canonical_model_id FROM model_id_aliases
             WHERE company_id = ? AND legacy_model_id = ?`).get(companyId, op.entity_id);
           const modelId = modelAlias?.canonical_model_id || op.entity_id;
-          db.prepare(`UPDATE models SET status = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
-            .run(status, res.serverRevision, res.committedAt || new Date().toISOString(), companyId, modelId);
+          db.prepare(`UPDATE models SET status = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ? AND server_revision <= ?`)
+            .run(status, res.serverRevision, res.committedAt || new Date().toISOString(), companyId, modelId, res.serverRevision);
           if (op.command_type === 'UpsertModel') {
             db.prepare(`UPDATE local_outbox SET status = 'SUPERSEDED', error_message = NULL, last_error = NULL,
               updated_at = ? WHERE company_id = ? AND command_type = 'UpsertModel' AND status = 'DEAD_LETTER'
@@ -235,10 +275,12 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
               )`).run(new Date().toISOString(), companyId, companyId, modelId);
           }
           factsUpdated++;
-        } else if (op.command_type === 'UpsertWorker' || op.command_type === 'DeactivateWorker') {
+        } else if (op.command_type === 'UpsertWorker' || op.command_type === 'DeactivateWorker' || op.command_type === 'ActivateWorker') {
           const status = op.command_type === 'DeactivateWorker' ? 'INACTIVE' : 'ACTIVE';
-          db.prepare(`UPDATE workers SET status = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
-            .run(status, res.serverRevision, res.committedAt || new Date().toISOString(), companyId, Number(op.entity_id));
+          const updatedAt = res.committedAt instanceof Date ? res.committedAt.toISOString()
+            : res.committedAt || new Date().toISOString();
+          db.prepare(`UPDATE workers SET status = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ? AND server_revision <= ?`)
+            .run(status, res.serverRevision, updatedAt, companyId, Number(op.entity_id), res.serverRevision);
           factsUpdated++;
         } else if (op.command_type === 'CreateWorker') {
           const payload = JSON.parse(op.payload_json);
@@ -257,10 +299,11 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           const isClosed = op.command_type === 'ClosePeriod' ? 1 : 0;
           const closedAt = op.command_type === 'ClosePeriod' ? (res.committedAt || new Date().toISOString()) : null;
           db.prepare(`UPDATE periods SET server_revision = ?, is_closed = ?, closed_at = COALESCE(?, closed_at),
-            status = ?, updated_at = COALESCE(?, updated_at) WHERE company_id = ? AND id = ?`)
-            .run(res.serverRevision, isClosed, closedAt, isClosed ? 'CLOSED' : 'OPEN', res.committedAt || null, companyId, op.entity_id);
+            status = ?, updated_at = COALESCE(?, updated_at) WHERE company_id = ? AND id = ? AND server_revision <= ?`)
+            .run(res.serverRevision, isClosed, closedAt, isClosed ? 'CLOSED' : 'OPEN', res.committedAt || null, companyId, op.entity_id, res.serverRevision);
           if (op.command_type === 'ClosePeriod' && payload.nextPeriod?.id) {
-            db.prepare(`UPDATE periods SET server_revision = MAX(server_revision, 1), status = 'OPEN' WHERE company_id = ? AND id = ?`)
+            db.prepare(`UPDATE periods SET server_revision = MAX(server_revision, 1), status = 'OPEN'
+              WHERE company_id = ? AND id = ? AND server_revision <= 1 AND is_closed = 0`)
               .run(companyId, payload.nextPeriod.id);
           }
           factsUpdated++;
@@ -273,31 +316,34 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           const partyId = partyAlias?.canonical_party_id || requestedPartyId;
           db.prepare(`UPDATE parties SET server_revision = ?, status = ?, is_closed = ?,
             closed_at = COALESCE(?, closed_at), updated_at = COALESCE(?, updated_at)
-            WHERE company_id = ? AND id = ?`)
+            WHERE company_id = ? AND id = ? AND server_revision <= ?`)
             .run(res.serverRevision, status, status === 'CLOSED' ? 1 : 0,
               status === 'CLOSED' ? (res.committedAt || new Date().toISOString()) : null,
-              res.committedAt || null, companyId, partyId);
+              res.committedAt || null, companyId, partyId, res.serverRevision);
           factsUpdated++;
         } else if (op.command_type === 'UpdateBatchSettings') {
-          db.prepare(`UPDATE company_batch_settings SET server_revision = ?, updated_at = ? WHERE company_id = ?`)
-            .run(res.serverRevision, res.committedAt || new Date().toISOString(), companyId);
+          db.prepare(`UPDATE company_batch_settings SET server_revision = ?, updated_at = ? WHERE company_id = ? AND server_revision <= ?`)
+            .run(res.serverRevision, res.committedAt || new Date().toISOString(), companyId, res.serverRevision);
           supersedeOlderBatchSettingsConflicts(db, companyId, op);
           factsUpdated++;
         } else if (op.command_type === 'CompletePattaBatch' || op.command_type === 'CompletePartySeries') {
           factsUpdated++;
         } else if (op.command_type === 'ReverseProductionAdjustment') {
           const payload = JSON.parse(op.payload_json);
+          db.prepare(`UPDATE production_adjustments SET server_revision = MAX(server_revision, ?)
+            WHERE company_id = ? AND adjustment_id = ?`).run(res.serverRevision || 0, companyId, op.entity_id);
           if (payload.originalAdjustmentId) {
             db.prepare(`
               UPDATE production_adjustments
-              SET status = 'REVERSED'
-              WHERE company_id = ? AND adjustment_id = ?
-            `).run(companyId, payload.originalAdjustmentId);
+              SET status = 'REVERSED', server_revision = ?
+              WHERE company_id = ? AND adjustment_id = ? AND server_revision <= ?
+            `).run(res.serverRevision, companyId, payload.originalAdjustmentId, res.serverRevision);
           }
           factsUpdated++;
         }
       })();
-      synced++;
+      if (accepted === false) conflict++;
+      else synced++;
     } else if (res.status === 'CONFLICT') {
       const errJson = JSON.stringify(res.error || { code: 'CONFLICT' });
       updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', errJson);
@@ -305,8 +351,13 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
           .run(companyId, op.entity_id);
         factsUpdated++;
-      } else if (op.command_type === 'UpdateTicket' && restoreTicketEntries(db, companyId, op)) {
-        factsUpdated++;
+      } else if (op.command_type === 'UpdateTicket') {
+        // A feed may already have installed a newer authoritative server revision.
+        // Rolling back to the edit's local archive in that case would overwrite
+        // the newer server fact; retain the conflicted intent in the outbox.
+        if (!hasNewerServerTicketRevision(db, companyId, op) && restoreTicketEntries(db, companyId, op)) {
+          factsUpdated++;
+        }
       }
       conflict++;
     } else {

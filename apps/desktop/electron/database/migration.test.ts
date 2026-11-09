@@ -587,7 +587,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       insert.run('keep-unrelated-failure', companyId, 'SubmitTicket', 'ticket', 'ticket-a',
         'c'.repeat(64), now, now, JSON.stringify({ code: 'PERIOD_CLOSED' }), JSON.stringify({ code: 'PERIOD_CLOSED' }));
 
-      const result = migrationRunner.applyMigrations(db);
+      const result = migrationRunner.applyMigrations(db, { targetVersion: 19 });
       expect(result.currentVersion).toBe(19);
       expect(db.prepare('SELECT operation_id, status, last_error FROM local_outbox ORDER BY operation_id').all())
         .toEqual([
@@ -598,6 +598,128 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     } finally {
       db.close();
     }
+  });
+
+  it('migration 020 leaves existing adjustments explicitly unresolved', () => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(tempUserDataDir, 'migration-020-attribution.sqlite'));
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 19 });
+      db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+        VALUES ('model-old', ?, 'Model', '[]', datetime('now'), datetime('now'))`).run(companyId);
+      db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at)
+        VALUES (1, ?, 'Worker', datetime('now'), datetime('now'))`).run(companyId);
+      db.prepare(`INSERT INTO production_adjustments (adjustment_id, company_id, model_id, worker_id, op_name,
+        delta_qty, reason, status, created_at, created_by) VALUES ('legacy-adjustment', ?, 'model-old', 1,
+        'Sew', 2, 'Legacy', 'APPROVED', datetime('now'), 'operator')`).run(companyId);
+      expect(migrationRunner.applyMigrations(db).currentVersion).toBe(22);
+      expect(db.prepare(`SELECT original_ticket_id, original_entry_id, original_period_id,
+        original_rate_snapshot, attribution_status FROM production_adjustments WHERE adjustment_id = 'legacy-adjustment'`).get())
+        .toEqual({ original_ticket_id: null, original_entry_id: null, original_period_id: null,
+          original_rate_snapshot: null, attribution_status: 'UNRESOLVED' });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('upgrades an older outbox without inventing receipts and preserves work across restart and rerun', () => {
+    const Database = require('better-sqlite3');
+    const dbPath = path.join(tempUserDataDir, 'migration-021-receipt.sqlite');
+    const payloads = [
+      ['old-pending', 'PENDING', '{"qty":4,"ticketId":"ticket-p"}', 'a'.repeat(64)],
+      ['old-ack', 'SYNCED', '{"qty":5,"ticketId":"ticket-a"}', 'b'.repeat(64)],
+      ['old-conflict', 'CONFLICT', '{"qty":6,"ticketId":"ticket-c"}', 'c'.repeat(64)]
+    ];
+    const db = new Database(dbPath);
+    try {
+      migrationRunner.applyMigrations(db, { targetVersion: 20 });
+      const now = '2026-11-05T10:00:00.000Z';
+      const insert = db.prepare(`INSERT INTO local_outbox(operation_id,company_id,command_type,entity_type,entity_id,
+        base_revision,payload_json,payload_hash,status,created_at,updated_at)
+        VALUES(?,?,'SubmitTicket','ticket',?,3,?,?,?, ?, ?)`);
+      for (const [operationId, status, payload, hash] of payloads) {
+        insert.run(operationId, companyId, operationId, payload, hash, status, now, now);
+      }
+      db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+        VALUES ('migration-021-model', ?, 'Migration 021', '[{"name":"Sew","rate":7}]', ?, ?)`)
+        .run(companyId, now, now);
+      db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at)
+        VALUES (21021, ?, 'Migration 021 Worker', ?, ?)`).run(companyId, now, now);
+      db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, closed_at, status, created_at)
+        VALUES ('migration-021-closed', ?, 'Closed legacy period', '2026-10-01', 1, ?, 'CLOSED', ?)`)
+        .run(companyId, now, now);
+      db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty,
+        status, is_closed, submitted_at, created_at, period_id, server_revision)
+        VALUES ('migration-021-ticket', ?, 'migration-021-model', 'legacy-21', 4, 12,
+          'CONFIRMED', 1, ?, ?, 'migration-021-closed', 8)`).run(companyId, now, now);
+      db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id,
+        worker_name_snapshot, rate_snapshot, qty, created_at)
+        VALUES ('migration-021-entry', 'migration-021-ticket', ?, 'Sew', 21021,
+          'Migration 021 Worker', 5, 12, ?)`).run(companyId, now);
+      db.prepare(`INSERT INTO production_adjustments (adjustment_id, company_id, model_id, worker_id,
+        op_name, delta_qty, reason, status, created_at, created_by, original_ticket_id, original_entry_id,
+        original_period_id, original_rate_snapshot, attribution_status)
+        VALUES ('migration-021-correction', ?, 'migration-021-model', 21021, 'Sew', -2,
+          'Legacy synthetic correction', 'APPROVED', ?, 'synthetic', 'migration-021-ticket',
+          'migration-021-entry', 'migration-021-closed', 5, 'RESOLVED')`).run(companyId, now);
+      const archiveJson = '{"period":"migration-021-closed","tariff":7,"quantity":12}';
+      db.prepare(`INSERT INTO period_archives(company_id, period_id, archive_json, sha256, archived_at)
+        VALUES (?, 'migration-021-closed', ?, ?, ?)`).run(companyId, archiveJson,
+        crypto.createHash('sha256').update(archiveJson).digest('hex'), now);
+      const independentlyExpectedGross = (12 - 2) * 7;
+      expect(independentlyExpectedGross).toBe(70);
+      const ledgerBefore = db.prepare('SELECT id, company_id, name, operations_json FROM models').all();
+      const workersBefore = db.prepare('SELECT id, company_id, name FROM workers').all();
+      const ticketsBefore = db.prepare('SELECT * FROM tickets').all();
+      const entriesBefore = db.prepare('SELECT * FROM ticket_entries').all();
+      const correctionsBefore = db.prepare('SELECT * FROM production_adjustments').all();
+      const archivesBefore = db.prepare('SELECT * FROM period_archives').all();
+      const outboxBefore = db.prepare(`SELECT operation_id, company_id, command_type, entity_type, entity_id,
+        base_revision, payload_json, payload_hash, status FROM local_outbox ORDER BY operation_id`).all();
+      const interruptedMigrations = MIGRATIONS.map((migration: any) => migration.version === 21
+        ? { ...migration, up: (targetDb: any) => { migration.up(targetDb); throw new Error('INJECTED_MIGRATION_INTERRUPTION'); } }
+        : migration);
+      expect(() => migrationRunner.applyMigrations(db, { migrations: interruptedMigrations }))
+        .toThrow('INJECTED_MIGRATION_INTERRUPTION');
+      expect(migrationRunner.verifySchemaVersionConsistency(db)).toBe(20);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('local_outbox') WHERE name IN ('accepted_payload_hash','accepted_server_revision','accepted_change_id')").get().count).toBe(0);
+      expect(db.prepare(`SELECT operation_id, payload_json, payload_hash, status FROM local_outbox ORDER BY operation_id`).all())
+        .toEqual(outboxBefore.map(({ operation_id, payload_json, payload_hash, status }: any) => ({ operation_id, payload_json, payload_hash, status })));
+      expect(migrationRunner.applyMigrations(db).currentVersion).toBe(22);
+      expect(db.prepare(`SELECT operation_id, company_id, command_type, entity_type, entity_id, base_revision,
+        payload_json, payload_hash, status, accepted_payload_hash, accepted_server_revision, accepted_change_id
+        FROM local_outbox ORDER BY operation_id`).all()).toEqual(outboxBefore.map((row: any) => ({
+        ...row, accepted_payload_hash: null, accepted_server_revision: null, accepted_change_id: null
+      })));
+      expect(db.prepare('SELECT id, company_id, name, operations_json FROM models').all()).toEqual(ledgerBefore);
+      expect(db.prepare('SELECT id, company_id, name FROM workers').all()).toEqual(workersBefore);
+      expect(db.prepare('SELECT * FROM tickets').all()).toEqual(ticketsBefore);
+      expect(db.prepare('SELECT * FROM ticket_entries').all()).toEqual(entriesBefore);
+      expect(db.prepare('SELECT * FROM production_adjustments').all()).toEqual(correctionsBefore);
+      expect(db.prepare('SELECT * FROM period_archives').all()).toEqual(archivesBefore);
+      expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 22, currentVersion: 22, appliedCount: 0 });
+    } finally { db.close(); }
+
+    const reopened = new Database(dbPath);
+    try {
+      expect(migrationRunner.verifySchemaVersionConsistency(reopened)).toBe(22);
+      expect(reopened.prepare(`SELECT operation_id, payload_json, payload_hash, status,
+        accepted_payload_hash, accepted_server_revision, accepted_change_id FROM local_outbox ORDER BY operation_id`).all()).toEqual([
+        { operation_id: 'old-ack', payload_json: payloads[1][2], payload_hash: payloads[1][3], status: 'SYNCED', accepted_payload_hash: null, accepted_server_revision: null, accepted_change_id: null },
+        { operation_id: 'old-conflict', payload_json: payloads[2][2], payload_hash: payloads[2][3], status: 'CONFLICT', accepted_payload_hash: null, accepted_server_revision: null, accepted_change_id: null },
+        { operation_id: 'old-pending', payload_json: payloads[0][2], payload_hash: payloads[0][3], status: 'PENDING', accepted_payload_hash: null, accepted_server_revision: null, accepted_change_id: null }
+      ]);
+      expect(reopened.prepare('SELECT id, qty, period_id, server_revision FROM tickets').all()).toEqual([
+        { id: 'migration-021-ticket', qty: 12, period_id: 'migration-021-closed', server_revision: 8 }
+      ]);
+      expect(reopened.prepare('SELECT adjustment_id, delta_qty, original_period_id, original_rate_snapshot, attribution_status FROM production_adjustments').all()).toEqual([
+        { adjustment_id: 'migration-021-correction', delta_qty: -2, original_period_id: 'migration-021-closed', original_rate_snapshot: 5, attribution_status: 'RESOLVED' }
+      ]);
+      expect(reopened.prepare('SELECT archive_json, sha256 FROM period_archives').all()).toEqual([{
+        archive_json: '{"period":"migration-021-closed","tariff":7,"quantity":12}',
+        sha256: crypto.createHash('sha256').update('{"period":"migration-021-closed","tariff":7,"quantity":12}').digest('hex')
+      }]);
+    } finally { reopened.close(); }
   });
 
   it('migration 017 preserves ticket column identities while allowing a missing printed party', () => {

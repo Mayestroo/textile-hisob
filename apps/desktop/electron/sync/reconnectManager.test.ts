@@ -53,7 +53,7 @@ describe('reconnect accepted-operation reconciliation', () => {
         return {
           success: true,
           results: [
-            { operationId: 'op-accepted', status: 'APPLIED', payloadHash: acceptedHash },
+            { operationId: 'op-accepted', status: 'APPLIED', payloadHash: acceptedHash, serverRevision: 1 },
             { operationId: 'op-dependent', status: 'NOT_FOUND' },
             { operationId: 'op-hash-mismatch', status: 'APPLIED', payloadHash: '0'.repeat(64) }
           ]
@@ -64,6 +64,7 @@ describe('reconnect accepted-operation reconciliation', () => {
     await expect(reconcileAcceptedOutboxOperations(db, companyId, syncClient)).resolves.toBe(1);
 
     expect(getOperation(db, companyId, 'op-accepted').status).toBe('SYNCED');
+    expect(getOperation(db, companyId, 'op-accepted').accepted_payload_hash).toBe(acceptedHash);
     expect(getOperation(db, companyId, 'op-dependent').status).toBe('PENDING');
     expect(getOperation(db, companyId, 'op-hash-mismatch').status).toBe('PENDING');
     expect(isDependencySatisfied(db, companyId, { depends_on_operation_id: 'op-accepted' })).toBe(true);

@@ -1,12 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
+import { useAuthStore } from '../../../store/authStore';
 import { X, Layers, Search, Download, Clock } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
+import { displayedMoney, payrollDisplay } from '../../../engine/payrollDisplay';
 import { formatDateIso, formatTicketDateTime } from '../../../utils/formatters';
+import { Worker } from '../../../types/workbook';
 
 interface WorkerOperationRecord {
+  kind: 'PAYROLL' | 'AUDIT';
   id: string;
   ticketId: string;
+  periodId: string;
   submittedAt: string;
   konveyer: string;
   modelId: string;
@@ -16,9 +21,9 @@ interface WorkerOperationRecord {
   size: string;
   color: string;
   opName: string;
-  rate: number;
-  qty: number;
-  summa: number;
+  rate: number | null;
+  qty: number | null;
+  summa: number | null;
 }
 
 export const WorkerDetailModal: React.FC = () => {
@@ -30,13 +35,32 @@ export const WorkerDetailModal: React.FC = () => {
   const workers = useWorkbookStore((s) => s.workers);
   const models = useWorkbookStore((s) => s.models);
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
+  const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
+  const licenseCompanyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
+  const authCompanyId = useAuthStore((s) => s.companyId);
+  const companyId = licenseCompanyId || authCompanyId;
+  const periodId = currentPeriod.id;
+  const displayWorkers = useMemo(() => {
+    const known = new Set(workers.map((item) => Number(item.id)));
+    const historic = payrollValuation.workers.filter((item: any) => !known.has(Number(item.workerId)))
+      .map((item: any) => ({ id: Number(item.workerId), name: item.name || item.workerName || `Ishchi #${item.workerId}`,
+        staj: Number(item.staj || 0), avans: Number(item.avans || 0), jarima: Number(item.jarima || 0) } as Worker));
+    return [...workers, ...historic];
+  }, [workers, payrollValuation]);
+  const display = useMemo(() => payrollDisplay(models, displayWorkers, payrollValuation, companyId || undefined, periodId),
+    [models, displayWorkers, payrollValuation, companyId, periodId]);
 
   const isOpen = modalType === 'worker_detail';
 
   const worker = useMemo(() => {
     if (!isOpen || !workerId) return null;
-    return workers.find((w) => w.id === workerId) || null;
-  }, [isOpen, workers, workerId]);
+    const current = workers.find((w) => w.id === workerId);
+    if (current) return current;
+    const historical = payrollValuation.workers.find((w: any) => Number(w.workerId) === Number(workerId));
+    return historical ? { id: Number(workerId), name: historical.name || historical.workerName || `Ishchi #${workerId}`,
+      staj: Number(historical.staj || 0), avans: Number(historical.avans || 0), jarima: Number(historical.jarima || 0) } : null;
+  }, [isOpen, workers, workerId, payrollValuation]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>('all');
@@ -60,39 +84,29 @@ export const WorkerDetailModal: React.FC = () => {
       setSelectedKonveyer('all');
       setSearchQuery('');
     }
-  }, [isOpen, modalModelId, modalOpName, models]);
+  }, [isOpen, workerId, modalModelId, modalOpName, models]);
 
-  // Extract all operations performed by this worker across all submitted tickets
+  // Source-ticket rows preserve capture/audit information only. They are never added to payroll totals.
   const operationRecords = useMemo<WorkerOperationRecord[]>(() => {
     if (!isOpen || !workerId) return [];
 
     const records: WorkerOperationRecord[] = [];
-    // Precompute model name and operation rate lookup map for O(1) operations
-    const modelMetaMap = new Map<string, { name: string; opRates: Map<string, number> }>();
-    for (const m of models) {
-      const opRates = new Map<string, number>();
-      for (const op of m.operations) {
-        opRates.set(op.name, op.rate);
-      }
-      modelMetaMap.set(m.id, { name: m.name || m.id, opRates });
-    }
+    const modelMetaMap = new Map(display.displayModels.map((m: any) => [m.id, m.name || m.id]));
 
     for (const ticket of submittedTickets || []) {
-      const meta = modelMetaMap.get(ticket.modelId);
-      const mName = meta?.name || ticket.modelId;
-      const opRates = meta?.opRates;
+      const mName = modelMetaMap.get(ticket.modelId) || ticket.modelId;
 
       for (const entry of ticket.entries || []) {
         if (entry.workerId === workerId) {
-          const rate = entry.rateSnapshot !== undefined && entry.rateSnapshot > 0 
-            ? entry.rateSnapshot 
-            : (opRates?.get(entry.opName) || 0);
+          const rate = typeof entry.rateSnapshot === 'number' && Number.isFinite(entry.rateSnapshot)
+            ? entry.rateSnapshot : null;
           const qty = ticket.qty || 0;
-          const summa = qty * rate;
 
           records.push({
+            kind: 'AUDIT',
             id: `${ticket.id}_${entry.opName}`,
             ticketId: ticket.id,
+            periodId: ticket.periodId || 'Davr noma’lum',
             submittedAt: formatTicketDateTime(ticket),
             konveyer: ticket.konveyer ? `${ticket.konveyer}-Konveyer` : '—',
             modelId: ticket.modelId,
@@ -104,81 +118,64 @@ export const WorkerDetailModal: React.FC = () => {
             opName: entry.opName,
             rate,
             qty,
-            summa
+            summa: null
           });
         }
       }
     }
 
-    // Also check direct model hisobQuantities if any direct quantities were entered
-    for (const m of models) {
-      const workerOpMap = m.hisobQuantities?.[workerId];
-      if (workerOpMap) {
-        for (const [opName, totalHqQty] of Object.entries(workerOpMap)) {
-          if (typeof totalHqQty === 'number' && totalHqQty > 0) {
-            const fromTicketsSum = records
-              .filter((r) => r.modelId === m.id && r.opName === opName)
-              .reduce((s, r) => s + r.qty, 0);
-
-            const directDiff = totalHqQty - fromTicketsSum;
-            if (directDiff > 0) {
-              const op = m.operations.find((o) => o.name === opName);
-              const rate = op?.rate || 0;
-              records.push({
-                id: `direct_${m.id}_${workerId}_${opName}`,
-                ticketId: 'direct',
-                submittedAt: 'Jadvaldan kiritilgan',
-                konveyer: '—',
-                modelId: m.id,
-                modelName: m.name || m.id,
-                partyNumber: '—',
-                pattaNumber: 0,
-                size: '—',
-                color: '—',
-                opName,
-                rate,
-                qty: directDiff,
-                summa: directDiff * rate
-              });
-            }
-          }
-        }
-      }
-    }
-
     return records;
-  }, [isOpen, workerId, models, submittedTickets]);
+  }, [isOpen, workerId, display.displayModels, submittedTickets]);
+
+  const payrollRecords = useMemo<WorkerOperationRecord[]>(() => {
+    if (!isOpen || !workerId) return [];
+    return display.displayModels.flatMap((model: any) => model.operations.flatMap((op: any) => {
+      const cell = display.key(model.id, workerId, op.name);
+      const amount = display.cellAmounts[cell] ?? null;
+      const qty = display.cellQuantities[cell] ?? null;
+      if (amount === 0 && qty === 0) return [];
+      return [{ kind: 'PAYROLL' as const, id: `payroll_${model.id}_${workerId}_${op.name}`, ticketId: 'PAYROLL',
+        periodId, submittedAt: `Davr: ${currentPeriod.name}`, konveyer: '—', modelId: model.id, modelName: model.name,
+        partyNumber: '—', pattaNumber: 0, size: '—', color: '—', opName: op.name,
+        rate: display.operationRates[model.id]?.[op.name] ?? null, qty, summa: amount }];
+    }));
+  }, [isOpen, workerId, display, periodId, currentPeriod.name]);
+
+  const allRecords = useMemo(() => [...payrollRecords, ...operationRecords], [payrollRecords, operationRecords]);
+  const workerHasUnknownMoney = !display.ready
+    || (Boolean(companyId) && !payrollValuation.workers.some((entry: any) => Number(entry.workerId) === Number(workerId)))
+    || payrollRecords.some((record) => record.summa === null);
 
   // Unique models and konveyers for filtering
   const uniqueModels = useMemo(() => {
     const set = new Set<string>();
-    for (const r of operationRecords) {
+    for (const r of allRecords) {
       set.add(r.modelName);
     }
     return Array.from(set);
-  }, [operationRecords]);
+  }, [allRecords]);
 
   const uniqueOperations = useMemo(() => {
     const set = new Set<string>();
-    for (const r of operationRecords) {
+    for (const r of allRecords) {
       if (selectedModel === 'all' || r.modelName === selectedModel) {
         set.add(r.opName);
       }
     }
     return Array.from(set);
-  }, [operationRecords, selectedModel]);
+  }, [allRecords, selectedModel]);
 
   const uniqueKonveyers = useMemo(() => {
     const set = new Set<string>();
-    for (const r of operationRecords) {
+    for (const r of allRecords) {
       if (r.konveyer && r.konveyer !== '—') set.add(r.konveyer);
     }
     return Array.from(set);
-  }, [operationRecords]);
+  }, [allRecords]);
 
   // Filtered records
   const filteredRecords = useMemo(() => {
-    return operationRecords.filter((r) => {
+    return allRecords.filter((r) => {
       if (selectedModel !== 'all' && r.modelName !== selectedModel) return false;
       if (selectedOp !== 'all' && r.opName !== selectedOp) return false;
       if (selectedKonveyer !== 'all' && r.konveyer !== selectedKonveyer) return false;
@@ -196,20 +193,24 @@ export const WorkerDetailModal: React.FC = () => {
       }
       return true;
     });
-  }, [operationRecords, selectedModel, selectedOp, selectedKonveyer, searchQuery]);
+  }, [allRecords, selectedModel, selectedOp, selectedKonveyer, searchQuery]);
 
   // Summary totals
   const totals = useMemo(() => {
     let totalQty = 0;
     let totalSumma = 0;
+    let unknownPayroll = false;
     for (const r of filteredRecords) {
-      totalQty += r.qty;
-      totalSumma += r.summa;
+      if (r.kind !== 'PAYROLL') continue;
+      if (r.summa === null || r.qty === null) unknownPayroll = true;
+      else { totalSumma += r.summa; totalQty += r.qty; }
     }
+    if (filteredRecords.some((r) => r.kind === 'AUDIT') && !filteredRecords.some((r) => r.kind === 'PAYROLL')) unknownPayroll = true;
     return {
-      totalOperations: filteredRecords.length,
+      totalOperations: filteredRecords.filter((r) => r.kind === 'PAYROLL').length,
       totalQty,
-      totalSumma
+      totalSumma,
+      unknownPayroll
     };
   }, [filteredRecords]);
 
@@ -220,11 +221,15 @@ export const WorkerDetailModal: React.FC = () => {
   };
 
   // Export to CSV
-  const handleExportCSV = () => {
-    if (!worker || filteredRecords.length === 0) return;
+  const payrollWorker = display.masterReport.workers.find((row: any) => Number(row.workerId) === Number(worker?.id));
 
-    const headers = ['№', 'Vaqt', 'Konveyer', 'Model', 'Partiya №', 'Patta №', 'Razmer', 'Rang', 'Bajarilgan Operatsiya', 'Dona Narxi (so\'m)', 'Ish Soni (dona)', 'Jami Summa (so\'m)'];
+  const handleExportCSV = () => {
+    if (!worker || (filteredRecords.length === 0 && !payrollWorker)) return;
+
+    const headers = ['Tur', 'Davr', '№', 'Vaqt', 'Konveyer', 'Model', 'Partiya №', 'Patta №', 'Razmer', 'Rang', 'Operatsiya', 'Davr tarifi / saqlangan tarif', 'Ish Soni (dona)', 'Ish haqi (so‘m)'];
     const rows = filteredRecords.map((r, idx) => [
+      r.kind === 'PAYROLL' ? 'DAVR ISH HAQI' : 'PATTA MA’LUMOTI — ISH HAQI EMAS',
+      r.periodId,
       idx + 1,
       r.submittedAt,
       r.konveyer,
@@ -234,15 +239,25 @@ export const WorkerDetailModal: React.FC = () => {
       r.size,
       r.color,
       r.opName,
-      r.rate,
-      r.qty,
-      r.summa
+      r.rate === null ? 'Noma’lum' : r.rate,
+      r.qty === null ? 'Noma’lum' : r.qty,
+      r.kind === 'PAYROLL' ? (r.summa === null ? 'Noma’lum' : r.summa) : ''
     ]);
 
     const csvContent = '\uFEFF' + [
       toCsvCell(`Ishchi: ${worker.name} (ID: ${worker.id})`),
-      toCsvCell(`Jami Ish Soni: ${totals.totalQty} dona`),
-      toCsvCell(`Jami Hisoblangan Summa: ${totals.totalSumma} so'm`),
+      toCsvCell(`Davr: ${currentPeriod.name} (${periodId})`),
+      toCsvCell(`Hisob holati: ${display.label || 'Tasdiqlangan davr qiymati'}`),
+      toCsvCell(`Piecework ish haqi: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.pieceworkGross, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Oklad (piecework ustiga qo‘shilgan): ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.oklad, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Jami ish haqi (piecework + Oklad): ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.umumiy, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Magazin (sof to‘lovdan ayriladi): ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.magazin, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Avans: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.avans, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Jarima: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.jarima, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Staj: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.staj, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Davr bo‘yicha sof qoldiq: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.sofFoyda, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Ko‘rsatilgan operatsiyalar jami: ${displayedMoney(totals.totalSumma, display.ready && !workerHasUnknownMoney && !totals.unknownPayroll, display.incomplete || workerHasUnknownMoney || totals.unknownPayroll)} so‘m`),
+      toCsvCell('Pattadagi saqlangan tariflar ma’lumot uchun; ish haqiga qayta qo‘shilmaydi.'),
       '',
       headers.join(','),
       ...rows.map((row) => row.map(toCsvCell).join(','))
@@ -260,15 +275,19 @@ export const WorkerDetailModal: React.FC = () => {
 
   if (!isOpen || !worker) return null;
 
-  const staj = worker.staj || 0;
-  const avans = worker.avans || 0;
-  const jarima = worker.jarima || 0;
-  const sofFoyda = totals.totalSumma + staj - avans - jarima;
+  const staj = payrollWorker?.staj ?? worker.staj ?? 0;
+  const avans = payrollWorker?.avans ?? worker.avans ?? 0;
+  const jarima = payrollWorker?.jarima ?? worker.jarima ?? 0;
+  const pieceworkGross = payrollWorker?.pieceworkGross ?? 0;
+  const oklad = payrollWorker?.oklad ?? 0;
+  const magazin = payrollWorker?.magazin ?? 0;
+  const gross = payrollWorker?.umumiy ?? 0;
+  const sofFoyda = payrollWorker?.sofFoyda ?? 0;
 
   return (
-    <div className="modal-overlay" onClick={closeModal} style={{ zIndex: 1100 }}>
+    <div className="modal-overlay phase-c-modal phase-c-worker-detail" onClick={closeModal} style={{ zIndex: 1100 }}>
       <div 
-        className="modal-card" 
+        className="modal-card e3-detail-card"
         style={{ 
           maxWidth: '1050px', 
           width: '95vw', 
@@ -282,7 +301,7 @@ export const WorkerDetailModal: React.FC = () => {
       >
         {/* Modal Header */}
         <div 
-          className="modal-header" 
+          className="modal-header e3-detail-header"
           style={{ 
             padding: '16px 20px', 
             background: 'var(--bg-surface-subtle)', 
@@ -310,7 +329,7 @@ export const WorkerDetailModal: React.FC = () => {
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                <h2 style={{ fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
                   {worker.name}
                 </h2>
                 <span style={{
@@ -343,8 +362,8 @@ export const WorkerDetailModal: React.FC = () => {
                 <span>Excelga eksport</span>
               </button>
             )}
-            <button 
-              onClick={closeModal} 
+              <button aria-label="Oynani yopish"
+                onClick={closeModal}
               style={{ 
                 border: 'none', 
                 background: 'transparent', 
@@ -363,7 +382,7 @@ export const WorkerDetailModal: React.FC = () => {
         </div>
 
         {/* Financial KPI Summary Cards */}
-        <div style={{ 
+        <div className="e3-detail-stats" style={{
           padding: '12px 20px', 
           background: 'var(--bg-surface)', 
           borderBottom: '1px solid var(--border-subtle)',
@@ -376,17 +395,41 @@ export const WorkerDetailModal: React.FC = () => {
             <div>
               <div className="kpi-label" style={{ fontSize: '10.5px' }}>Sof Foyda (Qo'lga)</div>
               <div className="kpi-value" style={{ color: 'var(--primary)', fontSize: '16px' }}>
-                {formatMoney(sofFoyda)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+                  {workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(sofFoyda, display.ready, display.incomplete)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
               </div>
             </div>
           </div>
 
-          {/* Jami Hisoblangan */}
+          {/* Piecework only */}
           <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1', padding: '8px 12px' }}>
             <div>
-              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Hisoblangan Ish Haqi</div>
+              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Piecework ish haqi</div>
               <div className="kpi-value" style={{ color: '#818cf8', fontSize: '16px' }}>
-                {formatMoney(totals.totalSumma)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+                {workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(pieceworkGross, display.ready, display.incomplete)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="kpi-card" style={{ borderLeft: '4px solid #059669', padding: '8px 12px' }}>
+            <div><div className="kpi-label" style={{ fontSize: '10.5px' }}>Oklad qo‘shimchasi</div>
+              <div className="kpi-value" style={{ color: '#059669', fontSize: '16px' }}>
+                {workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(oklad, display.ready, display.incomplete)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="kpi-card" style={{ borderLeft: '4px solid #334155', padding: '8px 12px' }}>
+            <div><div className="kpi-label" style={{ fontSize: '10.5px' }}>Jami ish haqi (ish + Oklad)</div>
+              <div className="kpi-value" style={{ color: 'var(--text-primary)', fontSize: '16px' }}>
+                {workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(gross, display.ready, display.incomplete)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="kpi-card" style={{ borderLeft: '4px solid #0284c7', padding: '8px 12px' }}>
+            <div><div className="kpi-label" style={{ fontSize: '10.5px' }}>Magazin ushlanmasi</div>
+              <div className="kpi-value" style={{ color: '#0284c7', fontSize: '16px' }}>
+                {workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(magazin, display.ready, display.incomplete)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
               </div>
             </div>
           </div>
@@ -396,7 +439,7 @@ export const WorkerDetailModal: React.FC = () => {
             <div>
               <div className="kpi-label" style={{ fontSize: '10.5px' }}>Jami Ish Soni</div>
               <div className="kpi-value" style={{ color: '#38bdf8', fontSize: '16px' }}>
-                {totals.totalQty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
+                  {totals.unknownPayroll ? 'Noma’lum' : totals.totalQty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
               </div>
             </div>
           </div>
@@ -406,7 +449,7 @@ export const WorkerDetailModal: React.FC = () => {
             <div>
               <div className="kpi-label" style={{ fontSize: '10.5px' }}>Staj Qo'shimchasi</div>
               <div className="kpi-value" style={{ color: '#a78bfa', fontSize: '16px' }}>
-                {formatMoney(staj)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+                {workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(staj, display.ready, display.incomplete)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
               </div>
             </div>
           </div>
@@ -416,14 +459,20 @@ export const WorkerDetailModal: React.FC = () => {
             <div>
               <div className="kpi-label" style={{ fontSize: '10.5px' }}>Avans / Jarima</div>
               <div className="kpi-value" style={{ color: '#fbbf24', fontSize: '14px' }}>
-                {formatMoney(avans)} / {formatMoney(jarima)}
+                {workerHasUnknownMoney ? 'Noma’lum' : `${displayedMoney(avans, display.ready, display.incomplete)} / ${displayedMoney(jarima, display.ready, display.incomplete)}`}
               </div>
             </div>
           </div>
         </div>
 
+        {display.label && (
+          <div className="e3-detail-status" role="status" style={{ padding: '7px 20px', color: '#b45309', background: 'rgba(245, 158, 11, 0.1)', fontSize: '11px', fontWeight: 650 }}>
+            {display.label} — ish haqi davr hisobidan olinadi; patta ma’lumoti qayta qo‘shilmaydi.
+          </div>
+        )}
+
         {/* Filter Controls Bar */}
-        <div style={{
+        <div className="e3-detail-filters" style={{
           padding: '10px 20px',
           background: 'var(--bg-surface-subtle)',
           borderBottom: '1px solid var(--border-subtle)',
@@ -434,7 +483,7 @@ export const WorkerDetailModal: React.FC = () => {
           flexWrap: 'wrap'
         }}>
           {/* Search Box */}
-          <div style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
+          <div className="e3-detail-search" style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
               type="text"
@@ -535,7 +584,7 @@ export const WorkerDetailModal: React.FC = () => {
         </div>
 
         {/* Operations Table */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, background: 'var(--bg-surface)' }}>
+        <div className="e3-detail-table" style={{ flex: 1, overflowY: 'auto', minHeight: 0, background: 'var(--bg-surface)' }}>
           {filteredRecords.length === 0 ? (
             <div style={{
               padding: '60px 20px',
@@ -563,8 +612,8 @@ export const WorkerDetailModal: React.FC = () => {
                   <th className="col-header" style={{ width: '75px', textAlign: 'center' }}>Patta №</th>
                   <th className="col-header" style={{ width: '75px', textAlign: 'center' }}>Razmer</th>
                   <th className="col-header" style={{ width: '85px', textAlign: 'center' }}>Rang</th>
-                  <th className="col-header" style={{ textAlign: 'left', paddingLeft: '12px' }}>Bajarilgan Operatsiya</th>
-                  <th className="col-header" style={{ width: '105px', textAlign: 'right' }}>Dona Narxi</th>
+                  <th className="col-header" style={{ textAlign: 'left', paddingLeft: '12px' }}>Davr ish haqi / patta ma’lumoti</th>
+                  <th className="col-header" style={{ width: '105px', textAlign: 'right' }}>Davr / saqlangan tarif</th>
                   <th className="col-header" style={{ width: '105px', textAlign: 'right' }}>Ish Soni</th>
                   <th className="col-header" style={{ width: '125px', textAlign: 'right', paddingRight: '16px' }}>Jami Summa</th>
                 </tr>
@@ -647,19 +696,20 @@ export const WorkerDetailModal: React.FC = () => {
                     </td>
 
                     <td style={{ paddingLeft: '12px', fontWeight: 700, color: '#818cf8' }}>
-                      {r.opName}
+                      {r.kind === 'PAYROLL' ? `${r.opName} — davr ish haqi (${r.periodId})` : `${r.opName} — patta ma’lumoti (${r.periodId})`}
                     </td>
 
                     <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      {formatMoney(r.rate)} so'm
+                      {r.rate === null ? 'Noma’lum' : `${formatMoney(r.rate)} so'm`}
                     </td>
 
                     <td style={{ textAlign: 'right', fontWeight: 800, color: '#38bdf8' }}>
-                      {r.qty.toLocaleString()} dona
+                      {r.qty === null ? 'Noma’lum' : `${r.qty.toLocaleString()} dona`}
                     </td>
 
                     <td style={{ textAlign: 'right', paddingRight: '16px', fontWeight: 800, color: 'var(--primary)', fontSize: '12.5px' }}>
-                      {formatMoney(r.summa)} so'm
+                      {r.kind === 'AUDIT' ? 'Ish haqiga qo‘shilmaydi' : r.summa === null
+                        ? 'Noma’lum' : `${displayedMoney(r.summa, display.ready, display.incomplete)} so'm`}
                     </td>
                   </tr>
                 ))}
@@ -669,7 +719,7 @@ export const WorkerDetailModal: React.FC = () => {
         </div>
 
         {/* Modal Footer Summary */}
-        <div style={{
+        <div className="e3-detail-footer" style={{
           padding: '12px 20px',
           background: 'var(--bg-surface-subtle)',
           borderTop: '1px solid var(--border-subtle)',
@@ -680,16 +730,16 @@ export const WorkerDetailModal: React.FC = () => {
           gap: '12px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '12.5px' }}>
-            <span>Jami operatsiyalar: <strong style={{ color: 'var(--text-primary)' }}>{totals.totalOperations} ta</strong></span>
-            <span>Jami ish soni: <strong style={{ color: '#38bdf8' }}>{totals.totalQty.toLocaleString()} dona</strong></span>
+            <span>Ish haqi satrlari: <strong style={{ color: 'var(--text-primary)' }}>{totals.totalOperations} ta</strong></span>
+            <span>Operatsiyalar jami: <strong style={{ color: '#38bdf8' }}>{totals.unknownPayroll ? 'Noma’lum' : `${totals.totalQty.toLocaleString()} dona`}</strong></span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              Jami Hisoblangan Ish Haqi:
+              Tanlangan satrlar jami:
             </span>
             <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--primary)' }}>
-              {formatMoney(totals.totalSumma)} so'm
+              {displayedMoney(totals.totalSumma, display.ready && !totals.unknownPayroll, display.incomplete || totals.unknownPayroll)} so'm
             </span>
           </div>
         </div>

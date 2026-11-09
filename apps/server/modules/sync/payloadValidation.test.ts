@@ -78,7 +78,7 @@ function expectCode(action: () => unknown, code: string) {
 }
 
 describe(' payload and authority validation', () => {
-  it('resolves tickets to the open period containing their date even when a stale period ID was sent', async () => {
+  it('refuses to replace a captured period with the current open period', async () => {
     const client = {
       query: async () => ({ rows: [
         { id: 'period-current', start_date: '2026-09-01', end_date: null }
@@ -86,7 +86,76 @@ describe(' payload and authority validation', () => {
     };
 
     await expect(resolveTicketPeriodForDate(client, COMPANY, '2026-09-22', 'period-old'))
-      .resolves.toBe('period-current');
+      .rejects.toMatchObject({ code: 'PERIOD_SCOPE_MISMATCH' });
+  });
+
+  it.each([5, 0, 9])('accepts captured rate %s without turning it into current tariff 9', async (rate) => {
+    const insertedRates: unknown[] = [];
+    const pool = { connect: async () => ({
+      query: async (sql: string, args: unknown[] = []) => {
+        if (sql.includes('FROM periods') && sql.includes('is_closed = 0')) return { rows: [{ id: 'period-original', start_date: '2026-09-01', end_date: null }] };
+        if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-1', status: 'ACTIVE', operations_json: [{ name: 'Bichish', rate: 9 }] }] };
+        if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
+        if (sql.includes('INSERT INTO ticket_entries')) insertedRates.push(args[6]);
+        if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: 7, committed_at: '2026-09-22T10:00:00.000Z' }] };
+        return { rows: [] };
+      }, release: () => undefined
+    }) } as any;
+    const payload = ticketPayload({ periodId: 'period-original', strictParty: false, strictPatta: false,
+      partyRecordId: null, entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: rate }] });
+    const result = await processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1' } }, envelope('SubmitTicket', payload));
+    expect(result).toMatchObject({ status: 'APPLIED', periodId: 'period-original' });
+    expect(insertedRates).toEqual([rate]);
+  });
+
+  it('accepts operator-session positive capture with a legacy omitted period resolved from the work date', async () => {
+    const writes: unknown[] = [];
+    const pool = { connect: async () => ({
+      query: async (sql: string, args: unknown[] = []) => {
+        if (sql.includes('FROM periods') && sql.includes('is_closed = 0')) return { rows: [
+          { id: 'period-october', start_date: '2026-10-01', end_date: null },
+          { id: 'period-september', start_date: '2026-09-01', end_date: '2026-09-30' }
+        ] };
+        if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-1', status: 'ACTIVE', operations_json: [{ name: 'Bichish', rate: 9 }] }] };
+        if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
+        if (sql.includes('INSERT INTO ticket_entries')) writes.push(args[6]);
+        if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: 8, committed_at: '2026-09-22T10:00:00.000Z' }] };
+        return { rows: [] };
+      }, release: () => undefined
+    }) } as any;
+    const payload = ticketPayload({ strictParty: false, strictPatta: false, partyRecordId: null,
+      entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: 5 }] });
+    const result = await processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1', operator: OPERATOR } },
+      envelope('SubmitTicket', payload));
+    expect(result).toMatchObject({ status: 'APPLIED', periodId: 'period-september' });
+    expect(writes).toEqual([5]);
+  });
+
+  it('accepts an explicitly unknown legacy rate as null, never the model tariff', async () => {
+    const insertedRates: unknown[] = [];
+    const pool = { connect: async () => ({
+      query: async (sql: string, args: unknown[] = []) => {
+        if (sql.includes('FROM periods') && sql.includes('is_closed = 0')) return { rows: [{ id: 'period-original', start_date: '2026-09-01', end_date: null }] };
+        if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-1', status: 'ACTIVE', operations_json: [{ name: 'Bichish', rate: 9 }] }] };
+        if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
+        if (sql.includes('INSERT INTO ticket_entries')) insertedRates.push(args[6]);
+        if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: 7, committed_at: '2026-09-22T10:00:00.000Z' }] };
+        return { rows: [] };
+      }, release: () => undefined
+    }) } as any;
+    const payload = ticketPayload({ periodId: 'period-original', strictParty: false, strictPatta: false,
+      partyRecordId: null, entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: null }] });
+    const result = await processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1' } }, envelope('SubmitTicket', payload));
+    expect(result).toMatchObject({ status: 'APPLIED', periodId: 'period-original' });
+    expect(insertedRates).toEqual([null]);
+  });
+
+  it('resolves a legacy missing period by recorded work date, retaining unknown for companies without periods', async () => {
+    const client = { query: async () => ({ rows: [{ id: 'period-new', start_date: '2026-09-01', end_date: null }] }) };
+    await expect(resolveTicketPeriodForDate(client, COMPANY, '2026-09-22'))
+      .resolves.toBe('period-new');
+    await expect(resolveTicketPeriodForDate({ query: async () => ({ rows: [] }) }, COMPANY, '2026-09-22'))
+      .resolves.toBeNull();
   });
 
   it('rejects ticket dates that are outside every open period without changing the date', async () => {
@@ -121,6 +190,7 @@ describe(' payload and authority validation', () => {
     });
     expectCode(() => validateCommandPayload('UpdateTicket', payload, context({ ...operation, entityId: 'other-ticket' })), 'ENTITY_ID_MISMATCH');
     expectCode(() => validateCommandPayload('UpdateTicket', payload, context({ ...operation, baseRevision: undefined })), 'MISSING_BASE_REVISION');
+    expect(validateCommandPayload('UpdateTicket', { ...payload, entries: [{ ...payload.entries[0], entryId: 'old-sew' }] }, context(operation)).entries[0].entryId).toBe('old-sew');
   });
 
   it('preserves explicit per-ticket strict/free switches and rejects non-boolean values', () => {
@@ -159,6 +229,7 @@ describe(' payload and authority validation', () => {
         if (sql.includes('FROM models')) {
           return { rows: [{ operations_json: [{ name: 'Sew', rate: 7 }], status: 'ACTIVE' }] };
         }
+        if (sql.includes('FROM ticket_entries')) return { rows: [{ id: 'original-sew', op_name: 'Sew', rate_snapshot: 5, brak: null }] };
         if (sql.includes('FROM workers')) {
           return { rows: [{ id: 71, name: 'Worker 71', status: 'ACTIVE' }] };
         }
@@ -174,9 +245,82 @@ describe(' payload and authority validation', () => {
 
     expect(result).toMatchObject({ entityId: TICKET_ID, serverRevision: 4, changeId: 19 });
     const insertedEntry = calls.find(({ sql }) => sql.includes('INSERT INTO ticket_entries'));
-    expect(insertedEntry?.values.slice(0, 9)).toEqual([`${TICKET_ID}_entry_1`, TICKET_ID, COMPANY, 'Sew', 71, 'Worker 71', 7, null, 5]);
+    expect(insertedEntry?.values.slice(0, 9)).toEqual(['original-sew', TICKET_ID, COMPANY, 'Sew', 71, 'Worker 71', 5, null, 5]);
     const change = calls.find(({ sql }) => sql.includes('INSERT INTO change_log'));
     expect(JSON.parse(change!.values[6])).toMatchObject({ ticketId: TICKET_ID, entries: [{ opName: 'Sew', workerId: 71, qty: 5 }] });
+  });
+
+  it('keeps original rates and identities across reorder, ignores spoofed rates, and leaves new work unknown', async () => {
+    const inserts: any[][] = [];
+    const client = { query: async (sql: string, values: any[] = []) => {
+      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 4, status: 'CONFIRMED', is_closed: false, server_revision: 2 }] };
+      if (sql.includes('FROM models')) return { rows: [{ operations_json: [{ name: 'A', rate: 9 }, { name: 'B', rate: 9 }, { name: 'New', rate: 9 }], status: 'ACTIVE' }] };
+      if (sql.includes('FROM ticket_entries')) return { rows: [
+        { id: 'old-a', op_name: 'A', rate_snapshot: 5, brak: 'old' },
+        { id: 'old-b', op_name: 'B', rate_snapshot: 0, brak: null }
+      ] };
+      if (sql.includes('FROM workers')) return { rows: [{ id: 71, name: 'Worker 71', status: 'ACTIVE' }] };
+      if (sql.includes('INSERT INTO ticket_entries')) inserts.push(values);
+      if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: '20' }] };
+      return { rows: [] };
+    } };
+    await executeUpdateTicket(client, COMPANY, 'edit-operation', { ticketId: TICKET_ID, baseRevision: 2,
+      entries: [{ opName: 'B', workerId: 71, rateSnapshot: 999 }, { opName: 'A', workerId: 71, rateSnapshot: 999 }, { opName: 'New', workerId: 71, rateSnapshot: 999 }] });
+    expect(inserts.map((values) => [values[0], values[6], values[7]])).toEqual([
+      ['old-b', 0, null], ['old-a', 5, 'old'], [`${TICKET_ID}_edit_edit-operation_entry_3`, null, null]
+    ]);
+  });
+
+  it('does not reuse deleted IDs or attach old snapshots to re-added work across server revisions', async () => {
+    let revision = 1;
+    let rows = [
+      { id: `${TICKET_ID}_entry_1`, op_name: 'Cut', rate_snapshot: 5, brak: 'original' },
+      { id: `${TICKET_ID}_entry_2`, op_name: 'Sew', rate_snapshot: 7, brak: null }
+    ];
+    const changes: any[] = [];
+    const client = { query: async (sql: string, values: any[] = []) => {
+      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 4, status: 'CONFIRMED', is_closed: false, server_revision: revision }] };
+      if (sql.includes('FROM models')) return { rows: [{ operations_json: ['Cut', 'Sew', 'Pack'], status: 'ACTIVE' }] };
+      if (sql.startsWith('DELETE FROM ticket_entries')) { rows = []; return { rows: [] }; }
+      if (sql.includes('FROM ticket_entries')) return { rows: rows.map((row) => ({ ...row })) };
+      if (sql.includes('FROM workers')) return { rows: [{ id: 71, name: 'Worker 71', status: 'ACTIVE' }] };
+      if (sql.startsWith('INSERT INTO ticket_entries')) rows.push({ id: values[0], op_name: values[3], rate_snapshot: values[6], brak: values[7] });
+      if (sql.startsWith('UPDATE tickets SET server_revision')) revision = values[2];
+      if (sql.includes('INSERT INTO change_log')) { changes.push(JSON.parse(values[6])); return { rows: [{ change_id: String(changes.length) }] }; }
+      return { rows: [] };
+    } };
+    const edit = async (operationId: string, names: string[]) => executeUpdateTicket(client, COMPANY, operationId, {
+      ticketId: TICKET_ID, baseRevision: revision,
+      entries: names.map((opName) => ({ opName, workerId: 71, rateSnapshot: 999 }))
+    });
+    await edit('remove_sew', ['Cut']);
+    await edit('add_pack', ['Pack', 'Cut']);
+    expect(rows.find((row) => row.op_name === 'Pack')).toMatchObject({ id: `${TICKET_ID}_edit_add_pack_entry_1`, rate_snapshot: null });
+    await edit('replace_pack', ['Cut']);
+    await edit('readd_sew', ['Sew', 'Cut', 'Pack']);
+    expect(rows).toEqual([
+      { id: `${TICKET_ID}_edit_readd_sew_entry_1`, op_name: 'Sew', rate_snapshot: null, brak: null },
+      { id: `${TICKET_ID}_entry_1`, op_name: 'Cut', rate_snapshot: 5, brak: 'original' },
+      { id: `${TICKET_ID}_edit_readd_sew_entry_3`, op_name: 'Pack', rate_snapshot: null, brak: null }
+    ]);
+    expect(changes[0].entries.find((entry: any) => entry.opName === 'Cut').entryId).toBe(`${TICKET_ID}_entry_1`);
+    expect(changes[1].entries.find((entry: any) => entry.opName === 'Pack').entryId).not.toBe(`${TICKET_ID}_entry_2`);
+  });
+
+  it('does not replace a missing historical rate with a current tariff or a client claim', async () => {
+    const inserts: any[][] = [];
+    const client = { query: async (sql: string, values: any[] = []) => {
+      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 3, status: 'CONFIRMED', is_closed: false, server_revision: 1 }] };
+      if (sql.includes('FROM models')) return { rows: [{ operations_json: [{ name: 'A', rate: 9 }], status: 'ACTIVE' }] };
+      if (sql.includes('FROM ticket_entries')) return { rows: [{ id: 'old-unknown', op_name: 'A', rate_snapshot: null, brak: null }] };
+      if (sql.includes('FROM workers')) return { rows: [{ id: 71, name: 'Worker 71', status: 'ACTIVE' }] };
+      if (sql.includes('INSERT INTO ticket_entries')) inserts.push(values);
+      if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: '21' }] };
+      return { rows: [] };
+    } };
+    await executeUpdateTicket(client, COMPANY, 'edit-operation', { ticketId: TICKET_ID, baseRevision: 1,
+      entries: [{ opName: 'A', workerId: 71, rateSnapshot: 5 }] });
+    expect(inserts[0][6]).toBeNull();
   });
 
   it('exposes stable validation errors', () => {
@@ -204,6 +348,30 @@ describe(' payload and authority validation', () => {
     };
     expect(validateCommandPayload('UpsertWorker', worker, context(workbookEnvelope('UpsertWorker', 'worker', '71', worker))))
       .toMatchObject({ workerId: 71, role: 'Bichuvchi', balanceAdjustments: [{ type: 'AVANS', amountDelta: 50 }] });
+    const fourBalances = { ...worker, balanceAdjustments: [
+      { adjustmentId: 'av-1', type: 'AVANS', amountDelta: 200000, periodId: 'period-current' },
+      { adjustmentId: 'ja-1', type: 'JARIMA', amountDelta: 50000, periodId: 'period-current' },
+      { adjustmentId: 'ok-1', type: 'OKLAD', amountDelta: 2000000, periodId: 'period-current' },
+      { adjustmentId: 'mg-1', type: 'MAGAZIN', amountDelta: -100000, periodId: 'period-current' }
+    ] };
+    expect(validateCommandPayload('UpsertWorker', fourBalances,
+      context(workbookEnvelope('UpsertWorker', 'worker', '71', fourBalances)))).toMatchObject({
+      balanceAdjustments: [{ type: 'AVANS' }, { type: 'JARIMA' }, { type: 'OKLAD' }, { type: 'MAGAZIN', amountDelta: -100000 }]
+    });
+    const duplicateKind = { ...fourBalances, balanceAdjustments: [fourBalances.balanceAdjustments[0],
+      { ...fourBalances.balanceAdjustments[1], adjustmentId: 'av-2', type: 'AVANS' }] };
+    expectCode(() => validateCommandPayload('UpsertWorker', duplicateKind,
+      context(workbookEnvelope('UpsertWorker', 'worker', '71', duplicateKind))), 'DUPLICATE_WORKER_ADJUSTMENT');
+    const duplicateId = { ...fourBalances, balanceAdjustments: [fourBalances.balanceAdjustments[0],
+      { ...fourBalances.balanceAdjustments[1], adjustmentId: fourBalances.balanceAdjustments[0].adjustmentId }] };
+    expectCode(() => validateCommandPayload('UpsertWorker', duplicateId,
+      context(workbookEnvelope('UpsertWorker', 'worker', '71', duplicateId))), 'DUPLICATE_WORKER_ADJUSTMENT');
+    const missingManualPeriod = { ...worker, balanceAdjustments: [{ adjustmentId: 'ok-2', type: 'OKLAD', amountDelta: 200, periodId: null }] };
+    expectCode(() => validateCommandPayload('UpsertWorker', missingManualPeriod,
+      context(workbookEnvelope('UpsertWorker', 'worker', '71', missingManualPeriod))), 'INVALID_FIELD_TYPE');
+    const unsafeManualMoney = { ...worker, balanceAdjustments: [{ adjustmentId: 'ok-3', type: 'OKLAD', amountDelta: 1.5, periodId: 'period-current' }] };
+    expectCode(() => validateCommandPayload('UpsertWorker', unsafeManualMoney,
+      context(workbookEnvelope('UpsertWorker', 'worker', '71', unsafeManualMoney))), 'INVALID_NUMBER');
 
     const activation = {
       commandId: 'command-activate-worker', operationId: 'operation-activate-worker', companyId: COMPANY,
@@ -764,6 +932,7 @@ describe(' payload and authority validation', () => {
           queries.push({ sql, params });
           if (/FROM models/i.test(sql) || /FROM workers/i.test(sql)) return { rows: [{ id: 'model-1' }] };
           if (/operations_dedup/i.test(sql)) return { rows: [] };
+          if (/INSERT INTO production_adjustments/i.test(sql)) return { rows: [{ created_at: '2026-09-22T00:00:00.000Z' }] };
           if (/INSERT INTO change_log/i.test(sql)) return { rows: [{ change_id: 1, committed_at: '2026-09-22T00:00:00.000Z' }] };
           return { rows: [] };
         },
@@ -790,6 +959,10 @@ describe(' payload and authority validation', () => {
     const adjustmentInsert = queries.find((entry) => /INSERT INTO production_adjustments/i.test(entry.sql));
     expect(adjustmentInsert?.params?.[7]).toBe('PENDING_REVIEW');
     expect(adjustmentInsert?.params?.[9]).toBe('trusted-operator');
+    const pendingChange = queries.find((entry) => /INSERT INTO change_log/i.test(entry.sql));
+    expect(JSON.parse(String(pendingChange?.params?.[4]))).toMatchObject({
+      status: 'PENDING_REVIEW', createdAt: '2026-09-22T00:00:00.000Z', createdBy: 'trusted-operator'
+    });
 
     const omittedPayload = { ...pendingPayload, operationId: 'operation-default', adjustmentId: 'adjustment-default' };
     delete omittedPayload.status;
@@ -810,14 +983,18 @@ describe(' payload and authority validation', () => {
               model_id: 'model-1',
               worker_id: 7,
               op_name: 'Bichish',
-              delta_qty: 2,
-              status: 'APPROVED',
-              server_revision: 1
+               delta_qty: 2,
+               status: 'APPROVED',
+               server_revision: 1,
+               original_ticket_id: 'ticket-frozen', original_entry_id: 'entry-frozen',
+               original_period_id: 'period-september', original_rate_snapshot: 5,
+               attribution_status: 'RESOLVED'
             }] };
           }
           if (/INSERT INTO change_log/i.test(sql)) {
             return { rows: [{ change_id: 1, committed_at: '2026-09-22T00:00:00.000Z' }] };
           }
+          if (/INSERT INTO production_adjustments/i.test(sql)) return { rows: [{ created_at: '2026-09-22T00:00:00.000Z' }] };
           return { rows: [] };
         },
         release: () => undefined
@@ -847,6 +1024,70 @@ describe(' payload and authority validation', () => {
     expect(result.status).toBe('APPLIED');
     const reversalInsert = queries.find((entry) => /INSERT INTO production_adjustments/i.test(entry.sql));
     expect(reversalInsert?.params?.[7]).toBe('trusted-operator');
+    expect(reversalInsert?.params?.slice(-5)).toEqual(['ticket-frozen', 'entry-frozen', 'period-september', 5, 'RESOLVED']);
+    const changes = queries.filter((entry) => /INSERT INTO change_log/i.test(entry.sql));
+    expect(JSON.parse(String(changes[0].params?.[4]))).toMatchObject({ status: 'REVERSED' });
+    expect(JSON.parse(String(changes[1].params?.[3]))).toMatchObject({
+      adjustmentId: 'reversal-audit', originalAdjustmentId: 'adjustment-reversal-audit',
+      modelId: 'model-1', workerId: 7, opName: 'Bichish', deltaQty: -2, status: 'REVERSED',
+      originalTicketId: 'ticket-frozen', originalPeriodId: 'period-september', originalRateSnapshot: 5,
+      attributionStatus: 'RESOLVED',
+      createdAt: '2026-09-22T00:00:00.000Z', createdBy: 'trusted-operator'
+    });
+  });
+
+  it('derives linked original period and saved rate under tenant/entry identity, rejecting forged inputs', async () => {
+    const ticketId = '00000000-0000-4000-8000-000000000098';
+    const base = { commandId: 'cmd-linked', operationId: 'op-linked', companyId: COMPANY,
+      adjustmentId: 'adj-linked', modelId: 'model-1', workerId: 7, opName: 'Bichish',
+      deltaQty: 2, reason: 'Correction', effectiveDate: '2026-10-05',
+      originalTicketId: ticketId, originalEntryId: 'entry-linked' };
+    for (const fields of [{ originalEntryId: undefined }, { originalPeriodId: 'forged' },
+      { originalRateSnapshot: 9 }, { attributionStatus: 'RESOLVED' }]) {
+      expect(() => validateCommandPayload('RecordProductionAdjustment', { ...base, ...fields }, context())).toThrow();
+    }
+    let sourceRows: any[] = [{ period_id: 'period-september', rate_snapshot: 5 }];
+    const queries: Array<{ sql: string; params?: any[] }> = [];
+    const pool = { connect: async () => ({
+      query: async (sql: string, params?: any[]) => {
+        queries.push({ sql, params });
+        if (/FROM ticket_entries e/i.test(sql)) return { rows: sourceRows };
+        if (/SELECT id FROM periods WHERE/i.test(sql)) return { rows: /is_closed = 1/i.test(sql) ? [] : [{ id: 'period-september' }] };
+        if (/FROM models WHERE|FROM workers WHERE/i.test(sql)) return { rows: [{ id: 7 }] };
+        if (/INSERT INTO production_adjustments/i.test(sql)) return { rows: [{ created_at: '2026-10-05T00:00:00.000Z' }] };
+        if (/INSERT INTO change_log/i.test(sql)) return { rows: [{ change_id: 1, committed_at: '2026-10-05T00:00:00.000Z' }] };
+        return { rows: [] };
+      }, release: () => undefined
+    }) } as any;
+    const req = { auth: { companyId: COMPANY, deviceId: 'device-1', operator: { operatorId: 'trusted' } } };
+    const firstResult = await processSingleOperation(pool, req, envelope('RecordProductionAdjustment', base));
+    expect(firstResult.status, JSON.stringify(firstResult)).toBe('APPLIED');
+    const insert = queries.find((entry) => /INSERT INTO production_adjustments/i.test(entry.sql));
+    expect(insert?.params?.slice(-5)).toEqual([ticketId, 'entry-linked', 'period-september', 5, 'RESOLVED']);
+    expect(JSON.parse(String(queries.find((entry) => /INSERT INTO change_log/i.test(entry.sql))?.params?.[4])))
+      .toMatchObject({ originalPeriodId: 'period-september', originalRateSnapshot: 5, attributionStatus: 'RESOLVED' });
+    expect(queries.find((entry) => /FROM ticket_entries e/i.test(entry.sql))?.params)
+      .toEqual([COMPANY, ticketId, 'entry-linked', 'model-1', 7, 'Bichish']);
+    for (const rate of [0, null]) {
+      queries.length = 0;
+      sourceRows = [{ period_id: 'period-september', rate_snapshot: rate }];
+      await processSingleOperation(pool, req, envelope('RecordProductionAdjustment',
+        { ...base, operationId: `op-${rate}`, adjustmentId: `adj-${rate}` }));
+      const nullRateInsert = queries.find((entry) => /INSERT INTO production_adjustments/i.test(entry.sql));
+      expect(nullRateInsert?.params?.at(-2)).toBe(rate);
+      expect(nullRateInsert?.params?.at(-1)).toBe('RESOLVED');
+      expect(JSON.parse(String(queries.find((entry) => /INSERT INTO change_log/i.test(entry.sql))?.params?.[4])))
+        .toMatchObject({ originalRateSnapshot: rate, attributionStatus: 'RESOLVED' });
+    }
+    queries.length = 0;
+    sourceRows = [{ period_id: null, rate_snapshot: null }];
+    await processSingleOperation(pool, req, envelope('RecordProductionAdjustment',
+      { ...base, operationId: 'op-no-period', adjustmentId: 'adj-no-period' }));
+    const noPeriodInsert = queries.find((entry) => /INSERT INTO production_adjustments/i.test(entry.sql));
+    expect(noPeriodInsert?.params?.slice(-2)).toEqual([null, 'UNRESOLVED']);
+    sourceRows = [];
+    expect((await processSingleOperation(pool, req, envelope('RecordProductionAdjustment',
+      { ...base, operationId: 'op-wrong', adjustmentId: 'adj-wrong' }))).status).not.toBe('APPLIED');
   });
 
   it('falls back from trusted operator to device and then SYSTEM for adjustment audit attribution', () => {

@@ -33,7 +33,7 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
     ? [period.id, period.startDate, period.endDate || null, period.endDate || null]
     : [];
   const ticketsQuery = db.prepare(`
-     SELECT t.id, t.model_id, t.party_number, t.party_record_id, t.patta_number, t.qty,
+     SELECT t.id, t.model_id, t.period_id, t.party_number, t.party_record_id, t.patta_number, t.qty,
             t.size, t.color, t.konveyer, t.status, t.is_closed, t.server_revision, t.submitted_at
     FROM tickets t
     WHERE t.company_id = ?${periodFilter}
@@ -42,7 +42,7 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
   const ticketRows = ticketsQuery.all(companyId, ...periodParams);
 
   const entriesQuery = db.prepare(`
-    SELECT e.ticket_id, e.op_name, e.worker_id, e.worker_name_snapshot,
+    SELECT e.id, e.ticket_id, e.op_name, e.worker_id, e.worker_name_snapshot,
            e.rate_snapshot, e.brak, e.qty
     FROM ticket_entries e
     INNER JOIN tickets t ON t.id = e.ticket_id AND t.company_id = e.company_id
@@ -60,6 +60,7 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
       entriesByTicket.set(e.ticket_id, list);
     }
     list.push({
+      entryId: e.id,
       workerId: e.worker_id,
       opName: e.op_name,
       workerNameSnapshot: e.worker_name_snapshot,
@@ -69,9 +70,11 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
   }
 
   return ticketRows.map((t) => ({
+    id: t.id,
     ticketId: t.id,
     companyId,
     modelId: t.model_id,
+    periodId: t.period_id || undefined,
     partyNumber: t.party_number,
     partyRecordId: t.party_record_id,
     pattaNumber: t.patta_number,
@@ -85,6 +88,20 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
     submittedAt: t.submitted_at,
     entries: entriesByTicket.get(t.id) || []
   }));
+}
+
+// Read-only picker data. Keep closed periods available without changing the open-period workbook projection.
+function loadAdjustmentSources(db, companyId, modelId, workerId, opName) {
+  return db.prepare(`SELECT t.id AS originalTicketId, e.id AS originalEntryId,
+      t.period_id AS originalPeriodId, p.name AS periodName, p.start_date AS periodStartDate,
+      e.rate_snapshot AS originalRateSnapshot, t.party_number AS partyNumber, t.patta_number AS pattaNumber
+    FROM ticket_entries e
+    JOIN tickets t ON t.id = e.ticket_id AND t.company_id = e.company_id
+    LEFT JOIN periods p ON p.id = t.period_id AND p.company_id = t.company_id
+    WHERE e.company_id = ? AND t.company_id = ? AND t.model_id = ?
+      AND e.worker_id = ? AND e.op_name = ? AND t.status = 'CONFIRMED'
+    ORDER BY t.submitted_at DESC, t.id, e.id`)
+    .all(companyId, companyId, modelId, workerId, opName);
 }
 
 /**
@@ -106,7 +123,8 @@ function loadProductionAdjustmentFactsFromSqlite(db, companyId) {
 
   const query = db.prepare(`
     SELECT adjustment_id, company_id, model_id, worker_id, op_name, delta_qty,
-           reason, status, provenance, created_at, created_by, original_adjustment_id
+           reason, status, provenance, created_at, created_by, original_adjustment_id,
+           original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
     FROM production_adjustments
     WHERE company_id = ?
     ORDER BY adjustment_id ASC
@@ -125,7 +143,12 @@ function loadProductionAdjustmentFactsFromSqlite(db, companyId) {
     provenance: r.provenance,
     createdAt: r.created_at,
     createdBy: r.created_by,
-    originalAdjustmentId: r.original_adjustment_id || undefined
+    originalAdjustmentId: r.original_adjustment_id || undefined,
+    originalTicketId: r.original_ticket_id,
+    originalEntryId: r.original_entry_id,
+    originalPeriodId: r.original_period_id,
+    originalRateSnapshot: r.original_rate_snapshot,
+    attributionStatus: r.attribution_status
   }));
 }
 
@@ -168,8 +191,8 @@ function loadModelsFromSqlite(db, companyId, projections) {
 function loadWorkersFromSqlite(db, companyId, periodId = null) {
   const rows = db.prepare(`
     SELECT id, company_id, name, staj, role, status, server_revision,
-           COALESCE((
-             SELECT SUM(a.amount)
+            COALESCE((
+              SELECT SUM(a.amount)
              FROM worker_adjustments a
               WHERE a.company_id = w.company_id
                 AND a.worker_id = w.id
@@ -185,12 +208,30 @@ function loadWorkersFromSqlite(db, companyId, periodId = null) {
                 AND (? IS NULL OR a.period_id = ?)
                 AND a.type = 'JARIMA'
                 AND a.status = 'POSTED'
-           ), 0) AS jarima,
-           updated_at
+            ), 0) AS jarima,
+            COALESCE((
+              SELECT SUM(a.amount)
+              FROM worker_adjustments a
+               WHERE a.company_id = w.company_id
+                 AND a.worker_id = w.id
+                 AND a.period_id = ?
+                 AND a.type = 'OKLAD'
+                 AND a.status = 'POSTED'
+            ), 0) AS oklad,
+            COALESCE((
+              SELECT SUM(a.amount)
+              FROM worker_adjustments a
+               WHERE a.company_id = w.company_id
+                 AND a.worker_id = w.id
+                 AND a.period_id = ?
+                 AND a.type = 'MAGAZIN'
+                 AND a.status = 'POSTED'
+            ), 0) AS magazin,
+            updated_at
     FROM workers w
     WHERE company_id = ? AND status = 'ACTIVE'
     ORDER BY id ASC
-  `).all(periodId, periodId, periodId, periodId, companyId);
+  `).all(periodId, periodId, periodId, periodId, periodId, periodId, companyId);
 
   return rows.map((row) => ({
     id: Number(row.id),
@@ -201,6 +242,8 @@ function loadWorkersFromSqlite(db, companyId, periodId = null) {
     serverRevision: Number(row.server_revision || 0),
     avans: Number(row.avans || 0),
     jarima: Number(row.jarima || 0),
+    oklad: Number(row.oklad || 0),
+    magazin: Number(row.magazin || 0),
     updatedAt: row.updated_at ? Date.parse(row.updated_at) || undefined : undefined
   }));
 }
@@ -326,6 +369,7 @@ function toSubmittedTicket(fact) {
     id: fact.ticketId,
     companyId: fact.companyId,
     modelId: fact.modelId,
+    periodId: fact.periodId,
     partyNumber: fact.partyNumber,
     partyRecordId: fact.partyRecordId || undefined,
     pattaNumber: Number(fact.pattaNumber),
@@ -338,6 +382,7 @@ function toSubmittedTicket(fact) {
     serverRevision: fact.serverRevision,
     submittedAt: fact.submittedAt,
     entries: (fact.entries || []).map((entry) => ({
+      entryId: entry.entryId,
       opName: entry.opName,
       workerId: entry.workerId,
       workerName: entry.workerNameSnapshot || '',
@@ -359,12 +404,14 @@ function toSubmittedTicket(fact) {
 function loadWorkbookProjectionFromSqlite(db, companyId) {
   const periods = loadPeriodsFromSqlite(db, companyId);
   const openPeriod = periods.find((period) => !period.isClosed);
-  const tickets = loadTicketFactsFromSqlite(db, companyId, openPeriod);
+  const visiblePeriod = openPeriod || periods[0];
+  const tickets = loadTicketFactsFromSqlite(db, companyId, visiblePeriod);
   const visibleTickets = tickets.filter((ticket) => ticket.status !== 'VOIDED' && ticket.status !== 'PENDING_DELETE');
-  const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId);
+   const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId)
+     .filter((adjustment) => visiblePeriod && adjustment.originalPeriodId === visiblePeriod.id);
   const projections = buildHisobProjections({ tickets: visibleTickets, productionAdjustments });
   const models = loadModelsFromSqlite(db, companyId, projections);
-  const workers = loadWorkersFromSqlite(db, companyId, openPeriod?.id || null);
+   const workers = loadWorkersFromSqlite(db, companyId, visiblePeriod?.id || null);
   const printedPartyHistory = loadPartiesFromSqlite(db, companyId);
   const batchSettings = loadBatchSettingsFromSqlite(db, companyId, models);
   const submittedTickets = visibleTickets.map(toSubmittedTicket);
@@ -379,7 +426,7 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
       AND COALESCE(p.patta_end_number, r.patta_end_number) IS NOT NULL
     ORDER BY COALESCE(p.patta_start_number, r.patta_start_number), p.id`).all(companyId)
     .map((row) => ({ start: Number(row.patta_start_number), end: Number(row.patta_end_number) }));
-  const currentPeriod = openPeriod || periods[0] || {
+   const currentPeriod = visiblePeriod || {
     id: 'period_default',
     name: 'Default period',
     startDate: new Date().toISOString().slice(0, 10),
@@ -424,13 +471,16 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
  */
 function rebuildCompanyProjections(baseUserDataPath, companyId) {
   const db = getCompanyDatabase(baseUserDataPath, companyId);
-  const openPeriod = loadPeriodsFromSqlite(db, companyId).find((period) => !period.isClosed);
-  const tickets = loadTicketFactsFromSqlite(db, companyId, openPeriod);
-  const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId);
+   const periods = loadPeriodsFromSqlite(db, companyId);
+   const visiblePeriod = periods.find((period) => !period.isClosed) || periods[0];
+   const tickets = loadTicketFactsFromSqlite(db, companyId, visiblePeriod);
+   const productionAdjustments = loadProductionAdjustmentFactsFromSqlite(db, companyId)
+     .filter((adjustment) => visiblePeriod && adjustment.originalPeriodId === visiblePeriod.id);
   return buildHisobProjections({ tickets, productionAdjustments });
 }
 
 module.exports = {
+  loadAdjustmentSources,
   loadTicketFactsFromSqlite,
   loadProductionAdjustmentFactsFromSqlite,
   loadWorkbookProjectionFromSqlite,

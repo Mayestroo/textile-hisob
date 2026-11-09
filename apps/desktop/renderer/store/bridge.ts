@@ -3,7 +3,7 @@ import { useWorkbookStore } from './workbookStore';
 import { useUIStore } from './uiStore';
 import { useAuthStore, applyRolePermissions } from './authStore';
 import { ACTIVE_SHEET_STORAGE_KEY } from '../constants/sheetConstants';
-import { captureSessionIdentity } from './sessionGuard';
+import { invalidateSessionIdentity } from './sessionGuard';
 import { cancelDebouncedSave } from './helpers/debounceSave';
 
 export const syncLicenseAuth = (lic: any) => {
@@ -11,6 +11,7 @@ export const syncLicenseAuth = (lic: any) => {
     useAuthStore.getState().setAuth({
       status: 'pending_approval',
       role: null,
+      permissions: [],
       companyId: null,
       user: null
     });
@@ -23,6 +24,7 @@ export const syncLicenseAuth = (lic: any) => {
     useAuthStore.getState().setAuth({
       status: lic.isBlocked ? 'suspended' : 'pending_approval',
       role: null,
+      permissions: [],
       companyId: companyId || null,
       user: lic.user || null,
       deviceId
@@ -40,6 +42,12 @@ export const syncLicenseAuth = (lic: any) => {
     deviceId
   });
 };
+
+function licenseSessionKey(license: any): string {
+  if (!license) return '';
+  return [license.companyId || '', license.activationId || '', license.machineId || '',
+    Boolean(license.isActivated), Boolean(license.isBlocked), license.role || ''].join('|');
+}
 
 let bridgeStarted = false;
 
@@ -59,9 +67,16 @@ export function startStoreBridge() {
   });
 
   useWorkbookStore.subscribe((state, previous) => {
-    if (state.licenseStatus !== previous.licenseStatus) {
+    if (licenseSessionKey(state.licenseStatus) !== licenseSessionKey(previous.licenseStatus)) {
       cancelDebouncedSave();
-      captureSessionIdentity(state.licenseStatus?.companyId);
+      invalidateSessionIdentity(state.licenseStatus?.companyId);
+      const companyId = state.licenseStatus?.companyId || '';
+      useWorkbookStore.setState({
+        payrollValuation: {
+          companyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+          accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+        }
+      });
       syncLicenseAuth(state.licenseStatus);
     }
   });

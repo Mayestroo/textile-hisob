@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allowsManualSync, BACKGROUND_CHANGE_POLL_INTERVAL_MS, isEditableInputTarget, resolveManualSyncCompany, shouldRunBackgroundSync, summarizeFailedOutboxOperations, summarizeReconnectFailure } from './ConnectionStatus';
+import { allowsManualSync, BACKGROUND_CHANGE_POLL_INTERVAL_MS, isEditableInputTarget, reconnectRequiresProjectionReload, resolveManualSyncCompany, shouldRunBackgroundSync, summarizeFailedOutboxOperations, summarizeReconnectFailure } from './ConnectionStatus';
 
 describe('manual sync company authority', () => {
   it('fails closed when auth and licensed companies disagree', () => {
@@ -41,6 +41,21 @@ describe('manual sync company authority', () => {
 
   it('uses a two-second foreground change-feed poll interval', () => {
     expect(BACKGROUND_CHANGE_POLL_INTERVAL_MS).toBe(2_000);
+  });
+
+  it('skips idle reconnect workbook reads but reloads after feed changes and outbox delivery', () => {
+    let reads = 0;
+    const maybeReadProjection = (result: unknown) => {
+      if (reconnectRequiresProjectionReload(result)) reads += 1;
+    };
+
+    maybeReadProjection({ success: true, result: { pulledInitial: 0, pulledFinal: 0, pushed: { synced: 0 } } });
+    expect(reads).toBe(0);
+    maybeReadProjection({ success: true, result: { pulledInitial: 0, pulledFinal: 0, proofChanged: true, pushed: { synced: 0 } } });
+    expect(reads).toBe(0);
+    maybeReadProjection({ success: true, result: { pulledInitial: 1, pulledFinal: 0, pushed: { synced: 0 } } });
+    maybeReadProjection({ success: true, result: { pulledInitial: 0, pulledFinal: 0, pushed: { synced: 1 } } });
+    expect(reads).toBe(2);
   });
 
   it('summarizes failed outbox commands without exposing their payloads', () => {

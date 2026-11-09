@@ -136,6 +136,8 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
         created_at, updated_at, provenance
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(2, otherCompanyId, 'Other Worker', 3, 'Sewing', 'ACTIVE', 99, 88, now, now, 'TEST');
+    db.prepare(`INSERT INTO periods(id,company_id,name,start_date,is_closed,created_at)
+      VALUES ('period-a',?,'Period A','2026-09-01',0,?)`).run(companyId, now);
     db.prepare(`
       INSERT INTO worker_adjustments (
         id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
@@ -146,6 +148,13 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
         id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run('adjust-jarima-a', companyId, 1, 'period-a', 'JARIMA', 7, 'Canonical jarima', 'TEST', 'POSTED', now);
+    db.prepare(`INSERT INTO worker_adjustments (
+      id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
+    ) VALUES ('adjust-oklad-a', ?, 1, 'period-a', 'OKLAD', 2000, 'Manual salary', 'TEST', 'POSTED', ?),
+      ('adjust-magazin-a', ?, 1, 'period-a', 'MAGAZIN', 300, 'Shop goods', 'TEST', 'POSTED', ?),
+      ('adjust-magazin-pending', ?, 1, 'period-a', 'MAGAZIN', 900, 'Not posted', 'TEST', 'PENDING', ?),
+      ('adjust-oklad-other-period', ?, 1, 'period-other', 'OKLAD', 9000, 'Other period', 'TEST', 'POSTED', ?)
+    `).run(companyId, now, companyId, now, companyId, now, companyId, now);
     db.prepare(`
       INSERT INTO worker_adjustments (
         id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
@@ -197,7 +206,8 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
     expect(projection.models[0]).toEqual(expect.objectContaining({ id: 'model-a' }));
     expect(projection.models[0].hisobQuantities).toEqual({ '1': { Sew: 5 } });
     expect(projection.nextPartyNumber).toBe(2);
-    expect(projection.workers).toEqual([expect.objectContaining({ id: 1, name: 'Worker A', avans: 25, jarima: 7 })]);
+    expect(projection.workers).toEqual([expect.objectContaining({ id: 1, name: 'Worker A',
+      avans: 25, jarima: 7, oklad: 2000, magazin: 300 })]);
     expect(projection.printedPartyHistory).toEqual([expect.objectContaining({ id: 'party-a', partyNumber: '1' })]);
     expect(projection.submittedTickets).toEqual([
       expect.objectContaining({ id: ticketId, partyRecordId: 'party-a', qty: 5, status: 'CONFIRMED' })

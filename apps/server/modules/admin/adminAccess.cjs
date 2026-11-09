@@ -42,7 +42,9 @@ function requireGlobalAdmin(access) {
 function scopeCompanyFilters(access, filters = {}) {
   if (access?.isGlobalAdmin === true) return filters;
   const requestedCompanyId = String(filters.companyId || '').trim();
-  if (requestedCompanyId) assertCompanyAccess(access, requestedCompanyId);
+  if (requestedCompanyId) {
+    return { ...filters, companyId: assertCompanyAccess(access, requestedCompanyId) };
+  }
   if (!Array.isArray(access?.companyIds) || access.companyIds.length !== 1) {
     throw adminAccessError('ADMIN_COMPANY_SELECTION_REQUIRED');
   }

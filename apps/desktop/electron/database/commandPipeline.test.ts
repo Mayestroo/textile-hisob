@@ -60,6 +60,63 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
   // SECTION A: TICKET REPLAY & PAYLOAD INTEGRITY (Items 1-5)
   // =========================================================================
 
+  it('captures period and rate 5 in immutable offline intent despite tariff 9 and rollover', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, created_at)
+      VALUES ('period-old', ?, 'Old', '2026-09-01', 0, 'OPEN', datetime('now'))`).run(companyA);
+    const cmd = {
+      commandId: 'cmd-capture', operationId: 'op-capture', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000000071', modelId: 'model_101',
+      periodId: 'period-old', effectiveDate: '2026-09-20', submittedAt: '2026-09-20T10:00:00.000Z',
+      partyNumber: '1', pattaNumber: 1, qty: 3,
+      entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: 5 }, { opName: 'Tikish', workerId: 2, rateSnapshot: 0 }]
+    };
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, cmd);
+    const original = db.prepare('SELECT payload_json, payload_hash FROM local_outbox WHERE operation_id = ?').get(cmd.operationId);
+    db.prepare('UPDATE models SET operations_json = ? WHERE id = ?').run(JSON.stringify([
+      { name: 'Bichish', rate: 9 }, { name: 'Tikish', rate: 9 }
+    ]), 'model_101');
+    db.prepare("UPDATE periods SET end_date = '2026-09-30', is_closed = 1, status = 'CLOSED' WHERE id = 'period-old'").run();
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, created_at)
+      VALUES ('period-new', ?, 'New', '2026-10-01', 0, 'OPEN', datetime('now'))`).run(companyA);
+    expect(db.prepare('SELECT period_id FROM tickets WHERE id = ?').get(cmd.ticketId).period_id).toBe('period-old');
+    expect(db.prepare('SELECT rate_snapshot FROM ticket_entries WHERE ticket_id = ? ORDER BY op_name').all(cmd.ticketId).map((e: any) => e.rate_snapshot)).toEqual([5, 0]);
+    expect(db.prepare('SELECT payload_json, payload_hash FROM local_outbox WHERE operation_id = ?').get(cmd.operationId)).toEqual(original);
+    expect(JSON.parse(original.payload_json).entries.map((e: any) => e.rateSnapshot)).toEqual([5, 0]);
+    expect(commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, cmd).isReplay).toBe(true);
+    expect(db.prepare('SELECT payload_json, payload_hash FROM local_outbox WHERE operation_id = ?').get(cmd.operationId)).toEqual(original);
+  });
+
+  it('refuses an unrelated period at local capture instead of recording a false origin', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, end_date, is_closed, status, created_at)
+      VALUES ('period-future', ?, 'Future', '2026-10-01', NULL, 0, 'OPEN', datetime('now'))`).run(companyA);
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      commandId: 'cmd-bad-period', operationId: 'op-bad-period', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000000072', modelId: 'model_101',
+      periodId: 'period-future', effectiveDate: '2026-09-20', partyNumber: '1', pattaNumber: 1,
+      qty: 1, entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: null }]
+    })).toThrowError(expect.objectContaining({ code: 'PERIOD_SCOPE_MISMATCH' }));
+    expect(db.prepare('SELECT COUNT(*) AS n FROM local_outbox').get().n).toBe(0);
+  });
+
+  it('keeps an old command with omitted period null in immutable payload until authoritative ACK', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, created_at)
+      VALUES ('period-current', ?, 'Current', '2026-09-01', 0, datetime('now'))`).run(companyA);
+    expect(commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      commandId: 'cmd-legacy', operationId: 'op-legacy', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000000073', modelId: 'model_101',
+      effectiveDate: '2026-09-20', partyNumber: '1', pattaNumber: 1, qty: 1,
+      entries: [{ opName: 'Bichish', workerId: 1 }]
+    }).committed).toBe(true);
+    expect(db.prepare('SELECT period_id FROM tickets').get().period_id).toBeNull();
+    expect(JSON.parse(db.prepare("SELECT payload_json FROM local_outbox WHERE operation_id = 'op-legacy'").get().payload_json).periodId).toBeNull();
+  });
+
   it('1. exact ticket replay succeeds with isReplay=true and zero duplicate mutations', () => {
     seedCompany(companyA);
     const cmd = {
@@ -298,6 +355,107 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
   // =========================================================================
   // SECTION B: ADJUSTMENT REPLAY & PAYLOAD INTEGRITY (Items 6-10)
   // =========================================================================
+
+  it('freezes linked original period and saved 5/0/null rates across rollover, edits and reversal', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    const now = '2026-10-05T10:00:00.000Z';
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, end_date, is_closed, status, created_at)
+      VALUES ('old-period', ?, 'September', '2026-09-01', '2026-09-30', 1, 'CLOSED', ?),
+             ('new-period', ?, 'October', '2026-10-01', NULL, 0, 'OPEN', ?)`).run(companyA, now, companyA, now);
+    const ticketId = '00000000-0000-4000-8000-000000000099';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, period_id, party_number, patta_number,
+      qty, status, submitted_at, created_at) VALUES (?, ?, 'model_101', 'old-period', '1', 1, 3,
+      'CONFIRMED', ?, ?)`).run(ticketId, companyA, now, now);
+    for (const [id, rate] of [['entry-five', 5], ['entry-zero', 0], ['entry-unknown', null]] as const) {
+      db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, rate_snapshot, qty, created_at)
+        VALUES (?, ?, ?, 'Bichish', 1, ?, 1, ?)`).run(id, ticketId, companyA, rate, now);
+    }
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty, status, submitted_at, created_at)
+      VALUES ('ticket-unentered', ?, 'model_101', '1', 2, 1, 'UNENTERED', ?, ?)`).run(companyA, now, now);
+    db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, rate_snapshot, qty, created_at)
+      VALUES ('entry-unentered', 'ticket-unentered', ?, 'Bichish', 1, 9, 1, ?)`).run(companyA, now);
+    db.prepare(`UPDATE models SET operations_json = ? WHERE id = 'model_101'`)
+      .run(JSON.stringify([{ name: 'Bichish', rate: 9 }]));
+    const { loadAdjustmentSources } = require('./projectionReader.cjs');
+    const choices = loadAdjustmentSources(db, companyA, 'model_101', 1, 'Bichish');
+    expect(choices.map((choice: any) => [choice.originalEntryId, choice.originalPeriodId, choice.originalRateSnapshot]))
+      .toEqual([['entry-five', 'old-period', 5], ['entry-unknown', 'old-period', null], ['entry-zero', 'old-period', 0]]);
+    expect(loadAdjustmentSources(db, companyA, 'model_101', 2, 'Bichish')).toEqual([]);
+    expect(loadAdjustmentSources(db, companyA, 'model_101', 1, 'Tikish')).toEqual([]);
+    expect(loadAdjustmentSources(db, companyB, 'model_101', 1, 'Bichish')).toEqual([]);
+    const base = { companyId: companyA, modelId: 'model_101', workerId: 1, opName: 'Bichish',
+      deltaQty: 2, reason: 'Correction', createdBy: 'supervisor', effectiveDate: '2026-10-05' };
+    for (const [id, rate] of [['entry-five', 5], ['entry-zero', 0], ['entry-unknown', null]] as const) {
+      const command = { ...base, commandId: `cmd-${id}`, operationId: `op-${id}`, adjustmentId: `adj-${id}`,
+        originalTicketId: ticketId, originalEntryId: id };
+      commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA, command);
+      const row = db.prepare(`SELECT original_period_id, original_rate_snapshot, attribution_status FROM production_adjustments
+        WHERE adjustment_id = ?`).get(command.adjustmentId);
+      expect(row).toEqual({ original_period_id: 'old-period', original_rate_snapshot: rate,
+        attribution_status: 'RESOLVED' });
+      expect(commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA, command).isReplay).toBe(true);
+      expect(() => commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA,
+        { ...command, originalEntryId: 'different-entry' })).toThrow(/IDEMPOTENCY_CONFLICT/);
+    }
+    const noPeriodTicket = '00000000-0000-4000-8000-000000000098';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty, status, submitted_at, created_at)
+      VALUES (?, ?, 'model_101', '1', 3, 1, 'CONFIRMED', ?, ?)`).run(noPeriodTicket, companyA, now, now);
+    db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, rate_snapshot, qty, created_at)
+      VALUES ('entry-no-period', ?, ?, 'Bichish', 1, NULL, 1, ?)`).run(noPeriodTicket, companyA, now);
+    commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA, { ...base,
+      commandId: 'cmd-no-period', operationId: 'op-no-period', adjustmentId: 'adj-no-period',
+      originalTicketId: noPeriodTicket, originalEntryId: 'entry-no-period' });
+    expect(db.prepare(`SELECT original_period_id, original_rate_snapshot, attribution_status FROM production_adjustments
+      WHERE adjustment_id = 'adj-no-period'`).get()).toEqual({
+      original_period_id: null, original_rate_snapshot: null, attribution_status: 'UNRESOLVED'
+    });
+    db.prepare(`UPDATE ticket_entries SET rate_snapshot = 9 WHERE id = 'entry-five'`).run();
+    commandPipeline.executeReverseAdjustmentCommand(tempUserDataDir, companyA, {
+      commandId: 'cmd-rev-linked', operationId: 'op-rev-linked', originalAdjustmentId: 'adj-entry-five',
+      reversalAdjustmentId: 'rev-linked', companyId: companyA, createdBy: 'supervisor', effectiveDate: '2026-10-05'
+    });
+    expect(db.prepare(`SELECT original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot,
+      attribution_status, delta_qty FROM production_adjustments WHERE adjustment_id = 'rev-linked'`).get())
+      .toEqual({ original_ticket_id: ticketId, original_entry_id: 'entry-five', original_period_id: 'old-period',
+        original_rate_snapshot: 5, attribution_status: 'RESOLVED', delta_qty: -2 });
+    const invalid = { ...base, commandId: 'cmd-invalid', operationId: 'op-invalid', adjustmentId: 'adj-invalid',
+      originalTicketId: ticketId, originalEntryId: 'entry-zero' };
+    for (const change of [{ workerId: 2 }, { opName: 'Tikish' }, { originalEntryId: 'missing' },
+      { originalPeriodId: 'new-period' }, { originalRateSnapshot: 9 }, { originalEntryId: undefined }]) {
+      expect(() => commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA,
+        { ...invalid, ...change })).toThrow();
+    }
+    commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA,
+      { ...base, commandId: 'cmd-legacy-adj', operationId: 'op-legacy-adj', adjustmentId: 'adj-legacy' });
+    expect(db.prepare(`SELECT attribution_status, original_period_id FROM production_adjustments
+      WHERE adjustment_id = 'adj-legacy'`).get()).toEqual({ attribution_status: 'UNRESOLVED', original_period_id: null });
+  });
+
+  it('rejects all snake-case attribution aliases before fact/outbox writes, permitting a corrected same-ID retry', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    const command = { commandId: 'alias-cmd', operationId: 'alias-op', companyId: companyA,
+      adjustmentId: 'alias-adj', modelId: 'model_101', workerId: 1, opName: 'Bichish',
+      deltaQty: 2, reason: 'Correction', createdBy: 'operator' };
+    const reversal = { commandId: 'alias-rev-cmd', operationId: 'alias-rev-op', companyId: companyA,
+      originalAdjustmentId: 'alias-adj', reversalAdjustmentId: 'alias-rev', createdBy: 'operator' };
+    const aliases = ['original_ticket_id', 'original_entry_id', 'original_period_id',
+      'original_rate_snapshot', 'attribution_status'];
+    for (const alias of aliases) {
+      expect(() => commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA,
+        { ...command, [alias]: alias === 'original_rate_snapshot' ? 0 : 'malformed' })).toThrow(/attribution/i);
+      expect(() => commandPipeline.executeReverseAdjustmentCommand(tempUserDataDir, companyA,
+        { ...reversal, [alias]: null })).toThrow(/attribution/i);
+    }
+    expect(db.prepare("SELECT count(*) AS n FROM production_adjustments WHERE adjustment_id IN ('alias-adj', 'alias-rev')").get().n).toBe(0);
+    expect(db.prepare("SELECT count(*) AS n FROM local_outbox WHERE operation_id IN ('alias-op', 'alias-rev-op')").get().n).toBe(0);
+    expect(commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA, command).committed).toBe(true);
+    expect(commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA, command).isReplay).toBe(true);
+    expect(db.prepare("SELECT attribution_status FROM production_adjustments WHERE adjustment_id = 'alias-adj'").get().attribution_status).toBe('UNRESOLVED');
+    expect(commandPipeline.executeReverseAdjustmentCommand(tempUserDataDir, companyA, reversal).committed).toBe(true);
+    expect(db.prepare("SELECT count(*) AS n FROM local_outbox WHERE operation_id IN ('alias-op', 'alias-rev-op')").get().n).toBe(2);
+  });
 
   it('6. exact adjustment replay succeeds with isReplay=true', () => {
     seedCompany(companyA);
@@ -1021,6 +1179,15 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
 
   it('negative delta supported on RecordProductionAdjustment and reflects in projections', () => {
     seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, created_at)
+      VALUES ('period-negative', ?, 'Negative', '2020-01-01', 0, 'OPEN', datetime('now'))`).run(companyA);
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, period_id, party_number, patta_number,
+      qty, status, submitted_at, created_at)
+      VALUES ('ticket-negative', ?, 'model_101', 'period-negative', '1', 1,
+        10, 'CONFIRMED', datetime('now'), datetime('now'))`).run(companyA);
+    db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, qty, created_at)
+      VALUES ('entry-negative', 'ticket-negative', ?, 'Tikish', 2, 10, datetime('now'))`).run(companyA);
     const cmd = {
       commandId: 'cmd_adj_neg',
       operationId: 'op_adj_neg',
@@ -1030,19 +1197,21 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
       workerId: 2,
       opName: 'Tikish',
       deltaQty: -7,
+      originalTicketId: 'ticket-negative',
+      originalEntryId: 'entry-negative',
       reason: 'Defective bundle retraction',
       createdBy: 'qa_lead'
     };
 
     commandPipeline.executeRecordAdjustmentCommand(tempUserDataDir, companyA, cmd);
 
-    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
     const fact = db.prepare('SELECT * FROM production_adjustments WHERE adjustment_id = ?').get('adj_neg_1');
     expect(fact.delta_qty).toBe(-7);
+    expect(fact.original_period_id).toBe('period-negative');
 
     const proj = rebuildCompanyProjections(tempUserDataDir, companyA);
-    expect(proj.optimistic['model_101']['2']['Tikish']).toBe(-7);
-    expect(proj.accounting['model_101']['2']['Tikish']).toBe(-7);
+    expect(proj.optimistic['model_101']['2']['Tikish']).toBe(3); // 10 confirmed - 7 correction
+    expect(proj.accounting['model_101']['2']['Tikish']).toBe(3);
   });
 
   it('outbox company isolation: operations never leak between companies', () => {
@@ -1105,10 +1274,12 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     seedCompany(companyA);
 
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, created_at)
+      VALUES ('period-deterministic', ?, 'Deterministic', '2020-01-01', 0, 'OPEN', datetime('now'))`).run(companyA);
     db.prepare(`
-      INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, submitted_at, created_at)
-      VALUES ('20000000-0000-4000-8000-000000000001', '${companyA}', 'model_101', '1', 'party_1', 1, 100, 'CONFIRMED', datetime('now'), datetime('now'))
-    `).run();
+      INSERT INTO tickets (id, company_id, model_id, period_id, party_number, party_record_id, patta_number, qty, status, submitted_at, created_at)
+      VALUES ('20000000-0000-4000-8000-000000000001', ?, 'model_101', 'period-deterministic', '1', 'party_1', 1, 100, 'CONFIRMED', datetime('now'), datetime('now'))
+    `).run(companyA);
     db.prepare(`
       INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, qty, created_at)
       VALUES ('e_conf', '20000000-0000-4000-8000-000000000001', '${companyA}', 'Bichish', 1, 100, datetime('now'))
@@ -1136,6 +1307,8 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
       workerId: 1,
       opName: 'Bichish',
       deltaQty: 10,
+      originalTicketId: '20000000-0000-4000-8000-000000000001',
+      originalEntryId: 'e_conf',
       reason: 'Adjustment',
       createdBy: 'admin'
     });
@@ -1143,6 +1316,8 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     const run1 = rebuildCompanyProjections(tempUserDataDir, companyA);
     const run2 = rebuildCompanyProjections(tempUserDataDir, companyA);
 
+    expect(db.prepare('SELECT original_period_id FROM production_adjustments WHERE adjustment_id = ?')
+      .get('adj_det').original_period_id).toBe('period-deterministic');
     expect(run1.optimistic['model_101']['1']['Bichish']).toBe(150);
     expect(run1.accounting['model_101']['1']['Bichish']).toBe(110);
     expect(run1).toEqual(run2);

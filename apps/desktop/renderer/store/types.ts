@@ -4,6 +4,7 @@ import {
   TicketFormState,
   Notification,
   PayrollPeriod,
+  PayrollValuation,
   LicenseStatus,
   ModelPattaBatchConfig,
   PrintedPartyRecord,
@@ -59,7 +60,7 @@ export interface ModelSlice {
   syncDeleteOperation: (modelId: string, opName: string) => Promise<void> | void;
   updateOperationRate: (modelId: string, opName: string, rate: number) => Promise<boolean> | boolean;
   updateOperationName: (modelId: string, oldOpName: string, newName: string) => Promise<void> | void;
-  updateHisobQuantity: (modelId: string, workerId: number, opName: string, qty: number) => Promise<boolean> | boolean;
+  updateHisobQuantity: (modelId: string, workerId: number, opName: string, qty: number, source?: { originalTicketId: string; originalEntryId: string }) => Promise<boolean> | boolean;
   reorderOperations: (modelId: string, newOrder: string[]) => Promise<void> | void;
 }
 
@@ -99,6 +100,7 @@ export interface ArchivedPeriodData {
 export interface PeriodSlice {
   currentPeriod: PayrollPeriod;
   periods: PayrollPeriod[];
+  payrollValuation: PayrollValuation;
   selectedArchiveFilename: string | null;
   selectedArchiveData: ArchivedPeriodData | null;
   startNewPeriod: (name: string, startDate: string) => Promise<boolean>;

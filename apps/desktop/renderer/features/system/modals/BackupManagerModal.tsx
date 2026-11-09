@@ -166,7 +166,7 @@ export const BackupManagerModal: React.FC = () => {
   if (modalType !== 'backup_manager') return null;
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
+    <div className="modal-overlay phase-c-dialog" onClick={closeModal}>
       <div className="modal-card" style={{ maxWidth: '680px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>

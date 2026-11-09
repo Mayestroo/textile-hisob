@@ -185,8 +185,25 @@ describe(' ticket command routing', () => {
     expect(WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
       commandType: 'DeleteTicket', entityId: 'ticket-a', payload: { ticketId: 'ticket-a' }
     }));
-    expect(set).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith({ payrollValuation: expect.objectContaining({
+      companyId: 'company-a', accountingStatus: 'UNAVAILABLE', syncStatus: 'UNKNOWN'
+    }) });
     expect(state().submittedTickets).toHaveLength(1);
+  });
+
+  it.each([0, undefined])('captures original period and rate %s without inferring zero for unknown', async (rate) => {
+    const SubmitTicketCommand = vi.fn().mockResolvedValue({ success: true });
+    vi.stubGlobal('window', { electronAPI: {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      SubmitTicketCommand,
+      dbRead: vi.fn().mockResolvedValue({ success: false })
+    } });
+    const { slice, state } = makeSlice();
+    state().periods = [{ id: 'period-original', startDate: '2026-09-01', isClosed: false }];
+    state().models[0].operations[0].rate = rate;
+    await slice.jonatish('model-a');
+    expect(SubmitTicketCommand.mock.calls[0][0].periodId).toBe('period-original');
+    expect(SubmitTicketCommand.mock.calls[0][0].entries[0].rateSnapshot).toBe(rate);
   });
 
   it('blocks a ticket date outside the active period before it reaches the local outbox', async () => {
@@ -244,10 +261,11 @@ describe(' ticket command routing', () => {
       id: 'ticket-a', modelId: 'model-a', partyNumber: '1', partyRecordId: 'party-a',
       pattaNumber: 1, qty: 5, status: 'CONFIRMED', serverRevision: 2,
       submittedAt: '2026-09-23T10:00:00.000Z',
-      entries: [{ opName: 'Sew', workerId: 1, workerNameSnapshot: 'Worker A', rateSnapshot: 2 }]
+      entries: [{ entryId: 'original-sew', opName: 'Sew', workerId: 1, workerNameSnapshot: 'Worker A', rateSnapshot: 5 }]
     }];
 
-    const result = await slice.updateSubmittedTicket('ticket-a', [{ opName: 'Sew', workerId: 2, rateSnapshot: 2 }]);
+    state().models[0].operations[0].rate = 9;
+    const result = await slice.updateSubmittedTicket('ticket-a', [{ opName: 'Sew', workerId: 2, rateSnapshot: 9 }]);
 
     expect(result).toBe(true);
     expect(WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
@@ -258,6 +276,7 @@ describe(' ticket command routing', () => {
       localArchive: { entries: [expect.objectContaining({ opName: 'Sew', workerId: 1 })] }
     }));
     expect(dbRead).toHaveBeenCalledWith('company-a');
+    expect(WorkbookCommand.mock.calls[0][0].payload.entries[0]).toMatchObject({ entryId: 'original-sew', rateSnapshot: 5 });
   });
 
   it('shares one in-flight command for identical concurrent submissions', async () => {

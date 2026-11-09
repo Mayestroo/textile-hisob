@@ -9,6 +9,7 @@ export const LoadingOverlay: React.FC = () => {
 
   return (
     <div
+      className="phase-c-loading-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -23,6 +24,7 @@ export const LoadingOverlay: React.FC = () => {
       }}
     >
       <div
+        className="phase-c-loading-card"
         style={{
           backgroundColor: '#ffffff',
           padding: '28px 40px',

@@ -128,7 +128,7 @@ function registerWorkerRoutes(app, options = {}) {
   app.get('/api/worker/profile', async (request, reply) => {
     try {
       const input = await authorizeWorkerRead(request);
-      const profile = await workerService.getWorkerProfile(pool, input);
+      const profile = await workerService.getWorkerProfile(pool, { ...input, periodId: request.query?.periodId });
       return reply.header('Cache-Control', 'no-store').send({ success: true, profile });
     } catch (error) { return sendWorkerError(reply, error); }
   });

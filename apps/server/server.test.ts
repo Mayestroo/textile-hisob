@@ -736,14 +736,11 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     };
 
     // Process with an injected error right before COMMIT
-    const result = await processSingleOperation(pool, mockReq, opDescriptor, {
+    await expect(processSingleOperation(pool, mockReq, opDescriptor, {
       testHookBeforeCommit: async () => {
         throw new Error('INJECTED_DATABASE_DISK_CRASH');
       }
-    });
-
-    expect(result.status).toBe('REJECTED');
-    expect(result.error.message).toContain('INJECTED_DATABASE_DISK_CRASH');
+    })).rejects.toThrow('INJECTED_DATABASE_DISK_CRASH');
 
     // Verify rollback: 0 ticket rows, 0 dedup rows, 0 change log rows
     const ticketCheck = await pool.query('SELECT * FROM tickets WHERE id = $1', ['00000000-0000-4000-8000-000000000102']);

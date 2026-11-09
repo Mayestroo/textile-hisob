@@ -32,7 +32,7 @@ export const DeleteOperationModal: React.FC = () => {
   };
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
+    <div className="modal-overlay phase-c-dialog" onClick={closeModal}>
       <div className="modal-card" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626' }}>

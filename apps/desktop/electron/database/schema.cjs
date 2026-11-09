@@ -1588,6 +1588,36 @@ const MIGRATIONS = [
             AND COALESCE(${codeExpr('last_error')}, ${codeExpr('error_message')}) = 'PARTY_NOT_FOUND')
         )`).run(new Date().toISOString());
     }
+  },
+  {
+    version: 20,
+    name: '020_production_adjustment_attribution',
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE production_adjustments ADD COLUMN original_ticket_id TEXT;
+        ALTER TABLE production_adjustments ADD COLUMN original_entry_id TEXT;
+        ALTER TABLE production_adjustments ADD COLUMN original_period_id TEXT;
+        ALTER TABLE production_adjustments ADD COLUMN original_rate_snapshot REAL;
+        ALTER TABLE production_adjustments ADD COLUMN attribution_status TEXT NOT NULL DEFAULT 'UNRESOLVED';
+        CREATE INDEX idx_prod_adj_source ON production_adjustments(company_id, original_ticket_id, original_entry_id);
+      `);
+    }
+  },
+  {
+    version: 21,
+    name: '021_outbox_accepted_revision_receipt',
+    up: (db) => {
+      // Legacy SYNCED rows have no verifiable receipt; never infer one from status.
+      db.exec(`ALTER TABLE local_outbox ADD COLUMN accepted_payload_hash TEXT;
+        ALTER TABLE local_outbox ADD COLUMN accepted_server_revision INTEGER;`);
+    }
+  },
+  {
+    version: 22,
+    name: '022_outbox_accepted_change_cursor',
+    up: (db) => {
+      db.exec('ALTER TABLE local_outbox ADD COLUMN accepted_change_id TEXT;');
+    }
   }
 ];
 

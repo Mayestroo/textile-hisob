@@ -59,6 +59,7 @@ debug.log*
 
 # Editor / IDE
 .vscode/
+.opencode/
 .idea/
 *.swp
 *.swo
@@ -140,3 +141,4 @@ data/Novda_Hisob_Oxirgi.xlsx
 data/backups/
 data/archives/
 data/legacy_excel/
+opencode.json

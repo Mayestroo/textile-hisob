@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import {
   X,
@@ -17,7 +17,8 @@ import {
   AlertCircle,
   Check
 } from 'lucide-react';
-import { calculateMasterPayroll, formatMoney } from '../../../engine/formulaEngine';
+import { formatMoney } from '../../../engine/formulaEngine';
+import { displayedMoney, payrollDisplay } from '../../../engine/payrollDisplay';
 import { formatDateIso, formatUzbekDate, getUzbekMonthName } from '../../../utils/formatters';
 import { exportWorkbookToExcel } from '../../../engine/excelSync';
 import { SYSTEM_SHEETS } from '../../../constants/sheetConstants';
@@ -48,6 +49,7 @@ export const PeriodManagerModal: React.FC = () => {
   const setActiveSheet = useWorkbookStore((s) => s.setActiveSheet);
   const models = useWorkbookStore((s) => s.models);
   const workers = useWorkbookStore((s) => s.workers);
+  const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
   const companyId = licenseStatus?.companyId || 'company_main';
   const addNotification = useWorkbookStore((s) => s.addNotification);
@@ -66,6 +68,10 @@ export const PeriodManagerModal: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [serverArchives, setServerArchives] = useState<ArchiveItem[]>([]);
   const [searchHistory, setSearchHistory] = useState('');
+  const [periodSummary, setPeriodSummary] = useState<any>(null);
+  const [archiveSummary, setArchiveSummary] = useState<{ filename: string; periodName: string; display: any } | null>(null);
+  const [archiveSummaryError, setArchiveSummaryError] = useState('');
+  const [isArchiveReading, setIsArchiveReading] = useState(false);
 
   const fetchArchives = useCallback(async () => {
     const eAPI = getElectronApi();
@@ -145,16 +151,60 @@ export const PeriodManagerModal: React.FC = () => {
     }
   };
 
-  const payroll = useMemo(() => {
+  useLayoutEffect(() => {
+    if (modalType !== 'period_manager') return;
+    let cancelled = false;
+    const capturedCompanyId = companyId;
+    const capturedPeriodId = currentPeriod.id;
+    const api = getElectronApi();
+    setPeriodSummary({ companyId: capturedCompanyId, periodId: capturedPeriodId, valuation: null });
+    setArchiveSummary(null);
+    setArchiveSummaryError('');
+    void (async () => {
+      const runtime = await resolveElectronRuntimeMode(api);
+      if (cancelled) return;
+      if (runtime.mode === 'sync' || (api && typeof api.dbRead === 'function')) {
+        if (!runtime.success && runtime.mode === 'sync') {
+          setPeriodSummary({ companyId: capturedCompanyId, periodId: capturedPeriodId, valuation: null });
+          return;
+        }
+        try {
+          const result = await api?.dbRead?.(capturedCompanyId);
+          const latest = useWorkbookStore.getState();
+          if (cancelled || latest.licenseStatus?.companyId !== capturedCompanyId || latest.currentPeriod.id !== capturedPeriodId) return;
+          const data = result?.success ? result.data : null;
+          const valid = data?.companyId === capturedCompanyId && data?.currentPeriod?.id === capturedPeriodId
+            && data?.payrollValuation?.companyId === capturedCompanyId
+            && data?.payrollValuation?.period?.periodId === capturedPeriodId;
+          setPeriodSummary({ companyId: capturedCompanyId, periodId: capturedPeriodId,
+            valuation: valid ? data.payrollValuation : null });
+        } catch {
+          if (!cancelled) setPeriodSummary({ companyId: capturedCompanyId, periodId: capturedPeriodId, valuation: null });
+        }
+        return;
+      }
+      const valid = payrollValuation?.companyId === capturedCompanyId && payrollValuation.period?.periodId === capturedPeriodId;
+      setPeriodSummary({ companyId: capturedCompanyId, periodId: capturedPeriodId, valuation: valid ? payrollValuation : null });
+    })();
+    return () => { cancelled = true; };
+  }, [modalType, companyId, currentPeriod.id]);
+
+  const currentDisplay = useMemo(() => {
     if (modalType !== 'period_manager') return null;
-    return calculateMasterPayroll(models, workers);
-  }, [modalType, models, workers]);
+    const valuation = periodSummary?.companyId === companyId && periodSummary?.periodId === currentPeriod.id
+      ? periodSummary.valuation : null;
+    return payrollDisplay(models, workers, valuation || {
+      companyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+      accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+    }, companyId, currentPeriod.id);
+  }, [modalType, models, workers, companyId, currentPeriod.id, periodSummary]);
+  const payroll = currentDisplay?.masterReport || null;
 
   const totalAvans = useMemo(() => {
     return workers.reduce((sum, w) => sum + (Number(w.avans) || 0), 0);
   }, [workers]);
 
-  if (modalType !== 'period_manager' || !payroll) return null;
+  if (modalType !== 'period_manager' || !payroll || !currentDisplay) return null;
 
   // Handle month closing
   const handleClosePeriod = async (e: React.FormEvent) => {
@@ -188,7 +238,26 @@ export const PeriodManagerModal: React.FC = () => {
       }
       // 1. Export final Excel for the closing month
       const safePeriodName = (currentPeriod.name || 'Oylik').replace(/[^a-zA-Z0-9_\u0400-\u04FF-]/g, '_');
-      exportWorkbookToExcel(models, workers, `Buxoro_Hisob_${safePeriodName}_${closeDate}.xlsx`);
+      if (runtime.mode === 'sync' || (getElectronApi() && typeof getElectronApi()?.dbRead === 'function')) {
+        const fresh = await getElectronApi()?.dbRead?.(companyId);
+        const data = fresh?.success ? fresh.data : null;
+        const stillSamePeriod = useWorkbookStore.getState().currentPeriod.id === currentPeriod.id
+          && useWorkbookStore.getState().licenseStatus?.companyId === companyId;
+        const trusted = stillSamePeriod && data?.companyId === companyId && data?.currentPeriod?.id === currentPeriod.id;
+        if (!stillSamePeriod) return;
+        const valuation = trusted && data.payrollValuation?.companyId === companyId
+          && data.payrollValuation.period?.periodId === currentPeriod.id
+          ? data.payrollValuation
+          : { companyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE' as const,
+            accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' as const };
+        exportWorkbookToExcel(trusted ? data.models || [] : models, trusted ? data.workers || [] : workers,
+          `Buxoro_Hisob_${safePeriodName}_${closeDate}.xlsx`, valuation);
+      } else {
+        const boundValuation = payrollValuation?.companyId === companyId && payrollValuation.period?.periodId === currentPeriod.id
+          ? payrollValuation : (companyId ? { companyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE' as const,
+            accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' as const } : undefined);
+        exportWorkbookToExcel(models, workers, `Buxoro_Hisob_${safePeriodName}_${closeDate}.xlsx`, boundValuation);
+      }
 
       // 2. Close current period and initialize next
       const closed = await closeCurrentPeriod(closeDate, finalNextName, nextPeriodStartDate);
@@ -221,34 +290,48 @@ export const PeriodManagerModal: React.FC = () => {
     }
   };
 
-  // Download Excel for archived period directly from archive data
-  const handleDownloadArchiveExcel = async (item: ArchiveItem) => {
+  const readSelectedArchive = async (item: ArchiveItem) => {
     const eAPI = getElectronApi();
     const runtime = await resolveElectronRuntimeMode(eAPI);
+    const capturedCompanyId = companyId;
+    const capturedPeriodId = currentPeriod.id;
     let archiveData: any = null;
+    let valuation: any = null;
+    const expectedPeriod = periods.find((period) => period.id === item.filename || period.archiveFilename === item.filename);
 
     if (runtime.mode === 'sync') {
       if (!runtime.success || !companyId || typeof eAPI?.PeriodArchiveRead !== 'function') {
         addNotification('error', runtime.code || 'PERIOD_ARCHIVE_READ_FAILED', runtime.error || 'Server arxivini o‘qish xizmati mavjud emas.');
-        return;
+        return null;
       }
       try {
         const result = await eAPI.PeriodArchiveRead({ companyId, filename: item.filename });
-        if (result?.success && result.data) archiveData = result.data;
+        if (result?.success && result.data) {
+          archiveData = result.data;
+          if (result.companyId === capturedCompanyId && result.periodId
+            && (!expectedPeriod || result.periodId === expectedPeriod.id)
+            && result.payrollValuation?.companyId === capturedCompanyId
+            && result.payrollValuation.period?.periodId === result.periodId) valuation = result.payrollValuation;
+        }
         else {
           addNotification('error', result?.code || 'PERIOD_ARCHIVE_READ_FAILED', result?.error || 'Server arxivi topilmadi.');
-          return;
+          return null;
         }
       } catch (error) {
         addNotification('error', 'PERIOD_ARCHIVE_READ_FAILED', error instanceof Error ? error.message : 'Server arxivini o‘qib bo‘lmadi.');
-        return;
+        return null;
       }
     }
 
     if (runtime.mode !== 'sync' && eAPI && eAPI.archiveRead) {
       try {
-        const res = await eAPI.archiveRead(item.filename);
-        if (res.success && res.data) archiveData = res.data;
+        const res = await eAPI.archiveRead({ filename: item.filename, companyId });
+        if (res.success && res.data) {
+          archiveData = res.data;
+          const archivedPeriodId = archiveData.period?.id;
+          if (res.payrollValuation?.companyId === capturedCompanyId
+            && res.payrollValuation.period?.periodId === archivedPeriodId) valuation = res.payrollValuation;
+        }
       } catch (err) {
         console.warn('Failed to read archive in electron', err);
       }
@@ -263,12 +346,49 @@ export const PeriodManagerModal: React.FC = () => {
       }
     }
 
+    const latest = useWorkbookStore.getState();
+    if (latest.licenseStatus?.companyId !== capturedCompanyId || latest.currentPeriod.id !== capturedPeriodId) return null;
     if (archiveData && archiveData.models && archiveData.workers) {
+      const archivePeriodId = archiveData.period?.id || (expectedPeriod?.id ?? null);
+      if (!valuation || valuation.companyId !== capturedCompanyId || valuation.period?.periodId !== archivePeriodId) {
+        valuation = { companyId: capturedCompanyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+          accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' };
+      }
+      return { archiveData, valuation };
+    }
+    addNotification('warning', 'Yuklab bo\'lmadi', 'Ushbu arxivning ichki modellari topilmadi.');
+    return null;
+  };
+
+  // Download the selected archive without activating it or touching global workbook state.
+  const handleDownloadArchiveExcel = async (item: ArchiveItem) => {
+    const read = await readSelectedArchive(item);
+    if (read) {
+      const { archiveData, valuation } = read;
       const safeName = (item.period.name || 'Arxiv').replace(/[^a-zA-Z0-9_\u0400-\u04FF-]/g, '_');
-      exportWorkbookToExcel(archiveData.models, archiveData.workers, `Arxiv_${safeName}.xlsx`);
-      addNotification('success', 'Excel yuklandi', `«${item.period.name}» arxivining Excel hisoboti yuklab olindi.`);
-    } else {
-      addNotification('warning', 'Yuklab bo\'lmadi', 'Ushbu arxivning ichki modellari topilmadi.');
+      exportWorkbookToExcel(archiveData.models, archiveData.workers, `Arxiv_${safeName}.xlsx`, valuation);
+      addNotification(valuation.accountingStatus === 'UNAVAILABLE' ? 'warning' : 'success', 'Excel yuklandi',
+        valuation.accountingStatus === 'UNAVAILABLE'
+          ? `«${item.period.name}» arxivi yuklandi; ish haqi ma’lumoti noma’lum deb belgilandi.`
+          : `«${item.period.name}» arxivining Excel hisoboti yuklab olindi.`);
+    }
+  };
+
+  const handleShowArchiveSummary = async (item: ArchiveItem) => {
+    setIsArchiveReading(true);
+    setArchiveSummaryError('');
+    setArchiveSummary(null);
+    try {
+      const read = await readSelectedArchive(item);
+      if (!read) {
+        setArchiveSummaryError('Arxiv davrining ish haqi qiymatini ishonchli o‘qib bo‘lmadi.');
+        return;
+      }
+      const { archiveData, valuation } = read;
+      setArchiveSummary({ filename: item.filename, periodName: item.period.name,
+        display: payrollDisplay(archiveData.models, archiveData.workers, valuation, companyId, valuation.period?.periodId || '') });
+    } finally {
+      setIsArchiveReading(false);
     }
   };
 
@@ -283,9 +403,9 @@ export const PeriodManagerModal: React.FC = () => {
   });
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
+    <div className="modal-overlay phase-c-modal phase-c-period-manager" onClick={closeModal}>
       <div
-        className="modal-card"
+        className="modal-card e3-period-card"
         style={{
           maxWidth: '700px',
           width: '95%',
@@ -299,7 +419,7 @@ export const PeriodManagerModal: React.FC = () => {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
+        <div className="e3-period-header"
           style={{
             padding: '18px 24px',
             background: 'var(--bg-surface)',
@@ -344,7 +464,7 @@ export const PeriodManagerModal: React.FC = () => {
         </div>
 
         {/* Tab Switcher */}
-        <div
+        <div className="e3-period-tabs"
           style={{
             display: 'flex',
             gap: '8px',
@@ -402,11 +522,11 @@ export const PeriodManagerModal: React.FC = () => {
         </div>
 
         {/* Modal Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        <div className="e3-period-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           {activeTab === 'current' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               {/* Card 1: Current Active Month Overview */}
-              <div
+              <div className="e3-period-overview"
                 style={{
                   background: 'var(--bg-surface)',
                   border: '1.5px solid rgba(16, 185, 129, 0.3)',
@@ -514,7 +634,7 @@ export const PeriodManagerModal: React.FC = () => {
                 )}
 
                 {/* 4 Clean Metric Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: '10px' }}>
+                <div className="e3-period-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: '10px' }}>
                   {/* Card 1: Workers */}
                   <div style={{ background: 'var(--bg-surface-subtle)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
@@ -533,7 +653,7 @@ export const PeriodManagerModal: React.FC = () => {
                       <span>Jami hisoblangan</span>
                     </div>
                     <div style={{ fontSize: '14px', fontWeight: 800, color: '#3b82f6' }}>
-                      {formatMoney(payroll.totalUmumiy)} so'm
+                      {displayedMoney(payroll.totalUmumiy, currentDisplay.ready, currentDisplay.incomplete)} so'm
                     </div>
                   </div>
 
@@ -551,30 +671,35 @@ export const PeriodManagerModal: React.FC = () => {
                   {/* Card 4: Net Payable */}
                   <div
                     style={{
-                      background: payroll.totalSofFoyda >= 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                      background: currentDisplay.ready && payroll.totalSofFoyda < 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
                       padding: '10px 12px',
                       borderRadius: '10px',
-                      border: `1px solid ${payroll.totalSofFoyda >= 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`
+                      border: `1px solid ${currentDisplay.ready && payroll.totalSofFoyda < 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`
                     }}
                   >
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-                      <CheckCircle2 size={13} color={payroll.totalSofFoyda >= 0 ? '#10b981' : '#ef4444'} />
+                      <CheckCircle2 size={13} color={currentDisplay.ready && payroll.totalSofFoyda < 0 ? '#ef4444' : '#10b981'} />
                       <span>To'lanadigan qoldiq</span>
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: 800, color: payroll.totalSofFoyda >= 0 ? '#10b981' : '#ef4444' }}>
-                      {payroll.totalSofFoyda >= 0 ? `${formatMoney(payroll.totalSofFoyda)} so'm` : '0 so\'m'}
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: currentDisplay.ready && payroll.totalSofFoyda < 0 ? '#ef4444' : '#10b981' }}>
+                      {!currentDisplay.ready || payroll.totalSofFoyda >= 0 ? `${displayedMoney(payroll.totalSofFoyda, currentDisplay.ready, currentDisplay.incomplete)} so'm` : '0 so\'m'}
                     </div>
-                    {payroll.totalSofFoyda < 0 && (
+                    {currentDisplay.ready && payroll.totalSofFoyda < 0 && (
                       <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '2px', fontWeight: 600 }}>
                         Avans ko'proq: {formatMoney(Math.abs(payroll.totalSofFoyda))} so'm
                       </div>
                     )}
                   </div>
                 </div>
+                {currentDisplay.label && (
+                  <div role="status" style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.1)', color: '#b45309', fontSize: '11px', fontWeight: 650 }}>
+                    {currentDisplay.label}
+                  </div>
+                )}
               </div>
 
               {/* Card 2: Closing Month & Rollover Form */}
-              <form
+              <form className="e3-period-close-form"
                 onSubmit={handleClosePeriod}
                 style={{
                   background: 'var(--bg-surface)',
@@ -629,7 +754,7 @@ export const PeriodManagerModal: React.FC = () => {
                 </div>
 
                 {/* Form Inputs Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                <div className="e3-period-dates" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                   {/* Field 1: Close Date */}
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '5px' }}>
@@ -819,6 +944,16 @@ export const PeriodManagerModal: React.FC = () => {
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <button
+                          onClick={() => handleShowArchiveSummary(item)}
+                          disabled={isArchiveReading}
+                          className="soft-btn soft-btn-secondary"
+                          style={{ padding: '6px 12px', fontSize: '12px', borderRadius: 'var(--radius-full)', gap: '6px' }}
+                          title="Arxiv davrining umumiy ish haqi qiymatini ko‘rish; faol daftar o‘zgarmaydi"
+                        >
+                          <DollarSign size={13} />
+                          <span>{isArchiveReading ? 'O‘qilmoqda…' : 'Hisobni ko‘rish'}</span>
+                        </button>
+                        <button
                           onClick={() => {
                             loadArchivedPeriod(item.filename);
                             setActiveSheet(SYSTEM_SHEETS.PATTA_HISOB);
@@ -846,12 +981,23 @@ export const PeriodManagerModal: React.FC = () => {
                   ))}
                 </div>
               )}
+              {archiveSummaryError && <div role="status" style={{ marginTop: '12px', color: '#b91c1c', fontSize: '12px' }}>{archiveSummaryError}</div>}
+              {archiveSummary && (
+                <div role="status" data-period-summary={archiveSummary.filename} style={{ marginTop: '14px', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface-subtle)' }}>
+                  <strong>{archiveSummary.periodName} — tarixiy ish haqi</strong>
+                  <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '6px', fontSize: '12px' }}>
+                    <span>Hisoblangan: <strong>{displayedMoney(archiveSummary.display.masterReport.totalUmumiy, archiveSummary.display.ready, archiveSummary.display.incomplete)} so‘m</strong></span>
+                    <span>To‘lanadigan qoldiq: <strong>{displayedMoney(archiveSummary.display.masterReport.totalSofFoyda, archiveSummary.display.ready, archiveSummary.display.incomplete)} so‘m</strong></span>
+                  </div>
+                  {archiveSummary.display.label && <div style={{ marginTop: '6px', color: '#b45309', fontSize: '11px' }}>{archiveSummary.display.label}</div>}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Modal Footer */}
-        <div
+        <div className="e3-period-footer"
           style={{
             padding: '14px 24px',
             background: 'var(--bg-surface-subtle)',

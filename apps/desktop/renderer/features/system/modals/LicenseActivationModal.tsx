@@ -72,7 +72,7 @@ export const LicenseActivationModal: React.FC = () => {
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay phase-c-dialog"
       style={{
         backgroundColor: canClose ? 'rgba(15, 23, 42, 0.65)' : 'rgba(10, 15, 30, 0.95)'
       }}
@@ -88,6 +88,7 @@ export const LicenseActivationModal: React.FC = () => {
       >
         {/* Modal Header */}
         <div
+          className="phase-c-license-header"
           style={{
             background: isBlocked
               ? 'linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)'

@@ -85,7 +85,7 @@ describe(' workbook change-feed application', () => {
     expect(db.prepare('SELECT COUNT(*) AS count FROM worker_adjustments WHERE company_id = ?').get(companyId).count).toBe(1);
   });
 
-  it('replaces a stale local ticket period with the server-authoritative period on replay', () => {
+  it('flags a conflicting captured period instead of replacing it on feed replay', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
@@ -109,7 +109,7 @@ describe(' workbook change-feed application', () => {
     }], '1');
 
     expect(db.prepare('SELECT period_id, status FROM tickets WHERE company_id = ? AND id = ?')
-      .get(companyId, ticketId)).toEqual({ period_id: 'period-server-current', status: 'CONFIRMED' });
+      .get(companyId, ticketId)).toEqual({ period_id: 'period-local-old', status: 'CONFLICT' });
   });
 
   it('archives parties by flag while retaining the canonical fact row', () => {

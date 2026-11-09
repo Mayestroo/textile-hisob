@@ -4,6 +4,7 @@ const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.c
 
 function workbookError(code, message) {
   const error = new Error(message);
+  error[Symbol.for('hisob.sync.applicationError')] = true;
   error.code = code;
   return error;
 }
@@ -138,8 +139,11 @@ async function executeUpsertWorker(client, companyId, operationId, payload, cano
 
   const adjustmentProvenance = options.adminTelegramId ? 'ADMIN_WEBAPP' : 'WORKBOOK_COMMAND';
   for (const adjustment of payload.balanceAdjustments || []) {
+    if (['OKLAD', 'MAGAZIN'].includes(adjustment.type) && !adjustment.periodId) {
+      throw workbookError('PERIOD_REQUIRED', `${adjustment.type} requires an explicit period`);
+    }
     if (adjustment.periodId) {
-      const period = await client.query(`SELECT id FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0`, [companyId, adjustment.periodId]);
+      const period = await client.query(`SELECT id FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0 FOR SHARE`, [companyId, adjustment.periodId]);
       if (!period.rows.length) throw workbookError('PERIOD_CLOSED', `Period "${adjustment.periodId}" is not open`);
     }
     await client.query(`
@@ -235,7 +239,9 @@ async function readPeriodArchiveSource(client, companyId, period) {
     FROM models WHERE company_id = $1 ORDER BY id`, [companyId]);
   const workers = await client.query(`SELECT w.id, w.name, w.staj, w.role,
       COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'AVANS'), 0) AS avans,
-      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'JARIMA'), 0) AS jarima
+      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'JARIMA'), 0) AS jarima,
+      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'OKLAD' AND a.status = 'POSTED'), 0) AS oklad,
+      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'MAGAZIN' AND a.status = 'POSTED'), 0) AS magazin
       FROM workers w LEFT JOIN worker_adjustments a ON a.company_id = w.company_id AND a.worker_id = w.id AND a.period_id = $2
       WHERE w.company_id = $1 GROUP BY w.id, w.company_id, w.name, w.staj, w.role ORDER BY w.id`, [companyId, period.id]);
   const parties = await client.query(`SELECT p.id, p.party_number,
@@ -267,7 +273,7 @@ async function readPeriodArchiveSource(client, companyId, period) {
   const entriesByTicket = new Map();
   for (const entry of entryRows) {
     const list = entriesByTicket.get(entry.ticket_id) || [];
-    list.push({ opName: entry.op_name, workerId: entry.worker_id, workerNameSnapshot: entry.worker_name_snapshot, rateSnapshot: Number(entry.rate_snapshot || 0), brak: entry.brak || undefined });
+    list.push({ opName: entry.op_name, workerId: entry.worker_id, workerNameSnapshot: entry.worker_name_snapshot, rateSnapshot: entry.rate_snapshot == null ? null : Number(entry.rate_snapshot), brak: entry.brak || undefined });
     entriesByTicket.set(entry.ticket_id, list);
   }
   const pattaBatchConfigs = Object.fromEntries(settings.rows.filter((row) => row.model_id).map((row) => [row.model_id, {
@@ -306,7 +312,9 @@ async function readPeriodArchiveSource(client, companyId, period) {
       id: row.id, name: row.name, hisobSheetName: row.hisob_sheet_name, title: row.title, party: row.party,
       color: row.color, size: row.size, operations: row.operations_json || [], pattaOpsOrder: row.patta_ops_order_json || [], hisobQuantities: {}
     })),
-    workers: workers.rows.map((row) => ({ id: row.id, name: row.name, staj: Number(row.staj || 0), role: row.role || undefined, avans: Number(row.avans || 0), jarima: Number(row.jarima || 0) })),
+    workers: workers.rows.map((row) => ({ id: row.id, name: row.name, staj: Number(row.staj || 0), role: row.role || undefined,
+      avans: Number(row.avans || 0), jarima: Number(row.jarima || 0),
+      oklad: Number(row.oklad || 0), magazin: Number(row.magazin || 0) })),
     printedPartyHistory,
     submittedTickets,
     pattaBatchConfigs,
@@ -333,9 +341,11 @@ async function executeClosePeriod(client, companyId, operationId, payload, canon
 
   const activeParties = await client.query(`SELECT id, sizes_json, archived_patta_numbers_json
     FROM parties WHERE company_id = $1 AND status != 'CLOSED' AND is_closed = 0 ORDER BY id FOR UPDATE`, [companyId]);
+  // Only accepted active facts fulfill work. Archive source/retention queries
+  // intentionally keep VOIDED and other historical records independently.
   const periodTickets = await client.query(`SELECT party_record_id, patta_number FROM tickets
     WHERE company_id = $1 AND (period_id = $2 OR (period_id IS NULL AND submitted_at::date >= $3::date AND submitted_at::date <= $4::date))
-      AND is_closed = 0 ORDER BY party_record_id, patta_number`, [companyId, period.id, period.start_date, payload.endDate]);
+      AND is_closed = 0 AND status = 'CONFIRMED' ORDER BY party_record_id, patta_number`, [companyId, period.id, period.start_date, payload.endDate]);
   const ticketsByParty = new Map();
   for (const ticket of periodTickets.rows) {
     const submitted = ticketsByParty.get(ticket.party_record_id) || [];
@@ -670,6 +680,7 @@ async function getPeriodArchive(pool, companyId, periodId) {
 
 module.exports = {
   executeWorkbookOperation,
+  readPeriodArchiveSource,
   getPeriodArchive,
   appendChange
 };

@@ -1,13 +1,15 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Award, Calendar, DollarSign, Search, TrendingUp, Wallet } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { calculateMasterPayroll, formatMoney, WorkerPayrollSummary } from '../../engine/formulaEngine';
+import { formatMoney, WorkerPayrollSummary } from '../../engine/formulaEngine';
+import { displayedMoney, payrollDisplay } from '../../engine/payrollDisplay';
 import { useWorkbookStore } from '../../store/workbookStore';
+import { useAuthStore } from '../../store/authStore';
 import { formatUzbekDate } from '../../utils/formatters';
 
 const VIRTUAL_THRESHOLD = 30;
-const ROW_HEIGHT = 32;
-const COLUMN_HEADER_HEIGHT = 38;
+const ROW_HEIGHT = 58;
+const COLUMN_HEADER_HEIGHT = 52;
 
 interface WorkerSummaryRowProps {
   w: WorkerPayrollSummary;
@@ -16,10 +18,162 @@ interface WorkerSummaryRowProps {
   onSelectRow?: (workerId: number, toggle?: boolean) => void;
   onAvansChange: (workerId: number, val: string) => Promise<boolean> | void;
   onJarimaChange: (workerId: number, val: string) => Promise<boolean> | void;
+  onOkladChange: (workerId: number, val: string) => Promise<boolean>;
+  onMagazinChange: (workerId: number, val: string) => Promise<boolean>;
+  onCancelManualDraft: (label: string) => void;
+  canEditManualMoney: boolean;
+  canEditPayrollAdjustments: boolean;
+  periodContextKey: string;
   onCellFocus: (cellId: string, value: string, formula?: string) => void;
   onOpenWorkerManager: () => void;
   onOpenWorkerDetail: (workerId: number) => void;
+  moneyReady: boolean;
+  moneyIncomplete: boolean;
 }
+
+interface ManualMoneyCellProps {
+  workerId: number;
+  cellId: string;
+  value: number;
+  ready: boolean;
+  disabled: boolean;
+  contextKey: string;
+  label: string;
+  accent: string;
+  onCommit: (workerId: number, val: string) => Promise<boolean>;
+  onCellFocus: (cellId: string, value: string) => void;
+  onCancelDraft: () => void;
+  onSelectRow?: (workerId: number, toggle?: boolean) => void;
+}
+
+const ManualMoneyCell = React.memo<ManualMoneyCellProps>(({
+  workerId, cellId, value, ready, disabled, contextKey, label, accent,
+  onCommit, onCellFocus, onCancelDraft, onSelectRow
+}) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const inFlight = useRef(false);
+  const suppressBlur = useRef(false);
+  const focused = useRef(false);
+  const draftRef = useRef<string | null>(null);
+  const commitRef = useRef<(raw: string) => void>(() => {});
+  const priorContext = useRef(contextKey);
+  draftRef.current = draft;
+
+  useEffect(() => {
+    if (priorContext.current === contextKey) return;
+    const wasFocused = focused.current;
+    const abandoned = wasFocused && draftRef.current !== null;
+    suppressBlur.current = wasFocused;
+    focused.current = false;
+    setDraft(null);
+    setError(false);
+    if (wasFocused) inputRef.current?.blur();
+    priorContext.current = contextKey;
+    if (abandoned) onCancelDraft();
+  }, [contextKey, onCancelDraft]);
+
+  useEffect(() => () => {
+    if (focused.current && draftRef.current !== null && !inFlight.current) onCancelDraft();
+  }, [onCancelDraft]);
+
+  const commit = async (raw: string) => {
+    if (disabled || inFlight.current) return;
+    const normalized = raw.trim().replace(/[\s,]/g, '');
+    const parsed = normalized === '' ? 0 : /^\d+$/.test(normalized) ? Number(normalized) : NaN;
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+      setError(true);
+      try { await onCommit(workerId, 'invalid'); } catch { /* the draft remains visibly invalid */ }
+      setDraft(formatMoney(value));
+      return;
+    }
+    if (parsed === value) {
+      setDraft(null);
+      setError(false);
+      return;
+    }
+    inFlight.current = true;
+    setSaving(true);
+    setError(false);
+    let accepted = false;
+    try {
+      accepted = await onCommit(workerId, String(parsed));
+    } catch {
+      accepted = false;
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
+    setDraft(accepted ? null : formatMoney(value));
+    setError(!accepted);
+  };
+  commitRef.current = (raw) => { void commit(raw); };
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const handleNativeBlur = () => {
+      input.dataset.moneyBlurHandled = 'true';
+      focused.current = false;
+      if (suppressBlur.current) return;
+      if (draftRef.current !== null) commitRef.current(draftRef.current);
+    };
+    input.addEventListener('blur', handleNativeBlur);
+    input.addEventListener('focusout', handleNativeBlur);
+    return () => {
+      input.removeEventListener('blur', handleNativeBlur);
+      input.removeEventListener('focusout', handleNativeBlur);
+    };
+  }, []);
+
+  const shown = !ready ? 'Noma’lum' : draft ?? (value > 0 ? formatMoney(value) : '');
+  return <input
+    ref={inputRef}
+    type="text"
+    inputMode="numeric"
+    aria-label={`${label} #${workerId}`}
+    title={!ready ? `${label}: hisob ma’lumoti noma’lum` : disabled ? `${label}: bu davrda tahrirlash mumkin emas` : label}
+    value={shown}
+    data-money-draft={draft === null ? '__none__' : draft}
+    disabled={disabled || !ready || saving}
+    aria-invalid={error}
+    onClick={(event) => event.stopPropagation()}
+    onChange={(event) => setDraft(event.target.value)}
+    onFocus={() => {
+      if (!ready || disabled) return;
+      suppressBlur.current = false;
+      focused.current = true;
+      setDraft(value > 0 ? String(value) : '');
+      setError(false);
+      onCellFocus(cellId, String(value));
+      onSelectRow?.(workerId, false);
+    }}
+    onKeyDown={(event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        suppressBlur.current = true;
+        void commit(draftRef.current ?? '');
+        inputRef.current?.blur();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        suppressBlur.current = true;
+        focused.current = false;
+        setDraft(null);
+        setError(false);
+        inputRef.current?.blur();
+      }
+    }}
+    style={{
+      width: '100%', height: '38px', border: error ? '1px solid var(--status-error-text)' : '1px solid transparent',
+      borderRadius: 'var(--radius-sm)', outline: 'none', background: 'transparent', textAlign: 'right',
+      paddingRight: '8px', fontFamily: 'inherit', fontSize: '12.5px', color: error ? 'var(--status-error-text)' : accent,
+      fontWeight: value > 0 ? 600 : 400, opacity: disabled || !ready ? 0.7 : 1
+    }}
+  />;
+});
 
 const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
   w,
@@ -28,14 +182,25 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
   onSelectRow,
   onAvansChange,
   onJarimaChange,
+  onOkladChange,
+  onMagazinChange,
+  onCancelManualDraft,
+  canEditManualMoney,
+  canEditPayrollAdjustments,
+  periodContextKey,
   onCellFocus,
   onOpenWorkerManager,
-  onOpenWorkerDetail
+  onOpenWorkerDetail,
+  moneyReady,
+  moneyIncomplete
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [avansDraft, setAvansDraft] = useState<string | null>(null);
   const [jarimaDraft, setJarimaDraft] = useState<string | null>(null);
-  const formulaC = `=G${rowNum}-F${rowNum}-E${rowNum}-D${rowNum}`;
+  const formulaC = `=G${rowNum}-F${rowNum}-E${rowNum}-D${rowNum}-I${rowNum}`;
+  const money = (value: number) => displayedMoney(value, moneyReady, moneyIncomplete);
+  const cancelOkladDraft = useCallback(() => onCancelManualDraft('Oklad'), [onCancelManualDraft]);
+  const cancelMagazinDraft = useCallback(() => onCancelManualDraft('Magazin'), [onCancelManualDraft]);
 
   return (
     <tr
@@ -45,7 +210,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         backgroundColor: isSelected
           ? 'rgba(59, 130, 246, 0.15)'
           : (isHovered ? 'var(--bg-surface-hover)' : 'var(--bg-surface)'),
-        height: '32px',
+        height: `${ROW_HEIGHT}px`,
         cursor: 'pointer',
         transition: 'background-color 0.12s ease',
         boxShadow: isSelected
@@ -121,29 +286,32 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         {w.workerName}
       </td>
 
-      {/* Col C: Sof Foyda (= G - F - E - D) */}
+      {/* Col C: Gross. Cell identities retain their existing spreadsheet semantics. */}
       <td
         style={{
           textAlign: 'right',
           fontWeight: 700,
           paddingRight: '14px',
-          backgroundColor: isSelected
-            ? 'rgba(16, 185, 129, 0.28)'
-            : (isHovered
-              ? (w.sofFoyda > 0 ? 'rgba(16, 185, 129, 0.24)' : 'var(--bg-surface-hover)')
-              : (w.sofFoyda > 0 ? 'var(--primary-light)' : 'transparent')),
-          color: w.sofFoyda > 0 ? 'var(--primary)' : w.sofFoyda < 0 ? '#ef4444' : 'var(--text-muted)',
-          fontSize: '13.5px',
+          color: 'var(--text-primary)',
           borderRight: '1px solid var(--border-subtle)',
           cursor: 'pointer',
           transition: 'background-color 0.12s ease'
         }}
         onClick={() => {
-          onCellFocus(`C${rowNum}`, String(w.sofFoyda), formulaC);
+          onCellFocus(`G${rowNum}`, moneyReady ? String(w.umumiy) : 'Noma’lum', 'Davr bo‘yicha hisob');
           onSelectRow && onSelectRow(w.workerId, false);
         }}
       >
-        {formatMoney(w.sofFoyda)}
+         {money(w.umumiy)}
+      </td>
+
+      {/* Oklad is a separately disclosed manual addition; gross above includes it. */}
+      <td style={{ textAlign: 'right', padding: '2px 6px', borderRight: '1px solid var(--border-subtle)',
+        backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.20)' : w.oklad > 0 ? 'rgba(16, 185, 129, 0.10)' : 'transparent' }}>
+        <ManualMoneyCell workerId={w.workerId} cellId={`H${rowNum}`} value={w.oklad} ready={moneyReady}
+          disabled={!canEditManualMoney} contextKey={periodContextKey} label="Oklad" accent="#059669"
+          onCommit={onOkladChange} onCellFocus={onCellFocus} onSelectRow={onSelectRow}
+          onCancelDraft={cancelOkladDraft} />
       </td>
 
       {/* Col D: Staj */}
@@ -152,12 +320,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           textAlign: 'right',
           paddingRight: '12px',
           fontWeight: w.staj > 0 ? 600 : 400,
-          color: w.staj > 0 ? '#a78bfa' : 'var(--text-muted)',
-          backgroundColor: isSelected
-            ? 'rgba(139, 92, 246, 0.28)'
-            : (isHovered
-              ? (w.staj > 0 ? 'rgba(139, 92, 246, 0.24)' : 'var(--bg-surface-hover)')
-              : (w.staj > 0 ? 'rgba(139, 92, 246, 0.15)' : 'transparent')),
+          color: 'var(--status-purple-text)',
           borderRight: '1px solid var(--border-subtle)',
           cursor: 'pointer',
           transition: 'background-color 0.12s ease'
@@ -169,7 +332,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         }}
         title="Staj Ishchilar ro'yxatidan o'zgartiriladi (ochish uchun bosing)"
       >
-        {w.staj > 0 ? formatMoney(w.staj) : '—'}
+        <span className="umumiy-staj-badge">{money(w.staj)}</span>
       </td>
 
       {/* Col E: Avans */}
@@ -194,7 +357,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         <input
           type="text"
           inputMode="numeric"
-          value={avansDraft ?? (w.avans > 0 ? formatMoney(w.avans) : '')}
+          value={!moneyReady ? 'Noma’lum' : avansDraft ?? (w.avans > 0 ? formatMoney(w.avans) : '')}
+          disabled={!canEditPayrollAdjustments || !moneyReady}
           onChange={(e) => setAvansDraft(e.target.value)}
           onFocus={() => {
             setAvansDraft(w.avans > 0 ? formatMoney(w.avans) : '');
@@ -208,7 +372,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           placeholder=""
           style={{
             width: '100%',
-            height: '28px',
+             height: '38px',
             border: '1px solid transparent',
             borderRadius: 'var(--radius-sm)',
             outline: 'none',
@@ -246,7 +410,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         <input
           type="text"
           inputMode="numeric"
-          value={jarimaDraft ?? (w.jarima > 0 ? formatMoney(w.jarima) : '')}
+          value={!moneyReady ? 'Noma’lum' : jarimaDraft ?? (w.jarima > 0 ? formatMoney(w.jarima) : '')}
+          disabled={!canEditPayrollAdjustments || !moneyReady}
           onChange={(e) => setJarimaDraft(e.target.value)}
           onFocus={() => {
             setJarimaDraft(w.jarima > 0 ? formatMoney(w.jarima) : '');
@@ -260,7 +425,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           placeholder=""
           style={{
             width: '100%',
-            height: '28px',
+             height: '38px',
             border: '1px solid transparent',
             borderRadius: 'var(--radius-sm)',
             outline: 'none',
@@ -276,30 +441,35 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         />
       </td>
 
-      {/* Col G: Umumiy */}
+      {/* Magazin is deducted from final payable; it is not an advance or piecework. */}
+      <td style={{ textAlign: 'right', padding: '2px 6px', borderRight: '1px solid var(--border-subtle)',
+        backgroundColor: isSelected ? 'rgba(14, 165, 233, 0.18)' : w.magazin > 0 ? 'rgba(14, 165, 233, 0.10)' : 'transparent' }}>
+        <ManualMoneyCell workerId={w.workerId} cellId={`I${rowNum}`} value={w.magazin} ready={moneyReady}
+          disabled={!canEditManualMoney} contextKey={periodContextKey} label="Magazin" accent="#0284c7"
+          onCommit={onMagazinChange} onCellFocus={onCellFocus} onSelectRow={onSelectRow}
+          onCancelDraft={cancelMagazinDraft} />
+      </td>
+
+      {/* Col G: Net, displayed last as in the observed report. */}
       <td
         style={{
           textAlign: 'right',
           fontWeight: 700,
           paddingRight: '14px',
-          color: w.umumiy > 0 ? 'var(--text-primary)' : 'var(--text-muted)',
-          backgroundColor: isSelected
-            ? 'rgba(16, 185, 129, 0.28)'
-            : (isHovered
-              ? (w.umumiy > 0 ? 'rgba(16, 185, 129, 0.24)' : 'var(--bg-surface-hover)')
-              : (w.umumiy > 0 ? 'var(--primary-light)' : 'transparent')),
+          color: 'var(--text-primary)',
           borderRight: '1px solid var(--border-subtle)',
-          fontSize: '13.5px',
           cursor: 'pointer',
           transition: 'background-color 0.12s ease'
         }}
         onClick={() => {
-          onCellFocus(`G${rowNum}`, String(w.umumiy), `UpdateUmumiy()`);
+          onCellFocus(`C${rowNum}`, moneyReady ? String(w.sofFoyda) : 'Noma’lum', formulaC);
           onSelectRow && onSelectRow(w.workerId, false);
         }}
-        title={`Ishchining barcha modellardan yig'ilgan summasi: ${formatMoney(w.umumiy)}`}
-      >
-        {formatMoney(w.umumiy)}
+         title={`Qo'lga olinadigan summa: ${money(w.sofFoyda)}`}
+       >
+         <span className={`umumiy-net-badge ${!moneyReady ? 'unknown' : w.sofFoyda < 0 ? 'negative' : ''}`}>
+           {money(w.sofFoyda)}
+         </span>
       </td>
     </tr>
   );
@@ -310,10 +480,16 @@ export const UmumiyView: React.FC = () => {
   const models = useWorkbookStore((s) => s.models);
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const periods = useWorkbookStore((s) => s.periods);
+  const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
+  const companyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
   const updateWorker = useWorkbookStore((s) => s.updateWorker);
+  const addNotification = useWorkbookStore((s) => s.addNotification);
   const setActiveCell = useWorkbookStore((s) => s.setActiveCell);
   const setActiveSheet = useWorkbookStore((s) => s.setActiveSheet);
   const openModal = useWorkbookStore((s) => s.openModal);
+  const canEditWorkerMoney = useAuthStore((s) => s.companyId === companyId
+    && s.permissions.includes('edit:workers') && s.permissions.includes('edit:avans'));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
@@ -338,14 +514,28 @@ export const UmumiyView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const masterReport = useMemo(() => {
-    return calculateMasterPayroll(models, workers);
-  }, [models, workers]);
+  const display = useMemo(() => payrollDisplay(models, workers, payrollValuation, companyId, currentPeriod.id),
+    [models, workers, payrollValuation, companyId, currentPeriod.id]);
+  const masterReport = display.masterReport;
+  const reportModels = display.displayModels;
+  const money = (value: number) => displayedMoney(value, display.reportReady, display.incomplete);
+  const selectedPeriodOpen = periods.some((period) => period.id === currentPeriod.id && !period.isClosed)
+    && !currentPeriod.isClosed;
+  const canEditManualMoney = Boolean(companyId && canEditWorkerMoney && display.ready
+    && selectedPeriodOpen && !display.closed);
+  const canEditPayrollAdjustments = !companyId || Boolean(canEditWorkerMoney && display.ready
+    && selectedPeriodOpen && !display.closed);
+  const periodContextKey = `${companyId || 'unbound'}:${currentPeriod.id}`;
 
   // Model-level sewn quantities (from submitted tickets / hisob entries)
   const modelSewnQuantities = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const m of models) {
+    for (const m of reportModels) {
+      if (!models.some((model) => model.id === m.id)) {
+        const quantities = Object.values(m.hisobQuantities).flatMap((ops) => Object.values(ops));
+        map[m.id] = quantities.length ? Math.max(...quantities) : 0;
+        continue;
+      }
       // 1. Exact quantity from submitted tickets for this model
       const fromTickets = (submittedTickets || [])
         .filter((t) => t.modelId === m.id)
@@ -369,27 +559,28 @@ export const UmumiyView: React.FC = () => {
       }
     }
     return map;
-  }, [models, submittedTickets, workers]);
+  }, [models, reportModels, submittedTickets, workers]);
 
   const totalModelSewnQty = useMemo(() => {
-    return models.reduce((sum, m) => sum + (modelSewnQuantities[m.id] || 0), 0);
-  }, [models, modelSewnQuantities]);
+    return reportModels.reduce((sum, m) => sum + (modelSewnQuantities[m.id] || 0), 0);
+  }, [reportModels, modelSewnQuantities]);
 
   const totalModelAmount = useMemo(() => {
-    return models.reduce((sum, m) => sum + (masterReport.modelTotals[m.id] || 0), 0);
-  }, [models, masterReport.modelTotals]);
+    return reportModels.reduce((sum, m) => sum + (masterReport.modelTotals[m.id] || 0), 0);
+  }, [reportModels, masterReport.modelTotals]);
 
   const totalModelTavofut = useMemo(() => {
-    return models.reduce((sum, m) => {
+    return reportModels.reduce((sum, m) => {
       const qty = modelSewnQuantities[m.id] || 0;
       const amount = masterReport.modelTotals[m.id] || 0;
-      const modelPrice = (Array.isArray(m.operations) ? m.operations : []).reduce(
-        (s, op) => s + (Number(op?.rate) || 0),
-        0
-      );
-      return sum + ((modelPrice * qty) - amount);
+      const modelPrice = display.modelPrices[m.id];
+      return sum + (modelPrice === null ? 0 : ((modelPrice * qty) - amount));
     }, 0);
-  }, [models, modelSewnQuantities, masterReport.modelTotals]);
+  }, [reportModels, modelSewnQuantities, masterReport.modelTotals, display.modelPrices]);
+  const differenceKnown = display.reportReady && reportModels.every((m) => display.modelPrices[m.id] !== null &&
+    !workers.some((w) => m.operations.some((op) => display.unknown.has(display.key(m.id, w.id, op.name)))));
+  const modelAmountsKnown = display.reportReady && reportModels.every((m) =>
+    !workers.some((worker) => m.operations.some((op) => display.unknown.has(display.key(m.id, worker.id, op.name)))));
 
   const filteredWorkers = useMemo(() => {
     if (!searchQuery.trim()) return masterReport.workers;
@@ -408,6 +599,21 @@ export const UmumiyView: React.FC = () => {
     const num = Number(val.replace(/\s+/g, '').replace(/,/g, '')) || 0;
     return updateWorker(workerId, { jarima: num });
   }, [updateWorker]);
+
+  const parseManualTarget = (value: string) => {
+    const normalized = value.trim().replace(/[\s,]/g, '');
+    if (normalized === '') return 0;
+    if (!/^\d+$/.test(normalized)) return NaN;
+    const parsed = Number(normalized);
+    return Number.isSafeInteger(parsed) ? parsed : NaN;
+  };
+  const handleOkladChange = useCallback((workerId: number, val: string) =>
+    updateWorker(workerId, { oklad: parseManualTarget(val) }), [updateWorker]);
+  const handleMagazinChange = useCallback((workerId: number, val: string) =>
+    updateWorker(workerId, { magazin: parseManualTarget(val) }), [updateWorker]);
+  const handleCancelManualDraft = useCallback((label: string) => {
+    addNotification('warning', 'Tahrir bekor qilindi', `${label}: kompaniya yoki davr o‘zgardi; kiritilmagan qiymat saqlanmadi.`);
+  }, [addNotification]);
 
   const handleCellFocus = useCallback((cellId: string, value: string, formula?: string) => {
     setActiveCell({
@@ -442,7 +648,7 @@ export const UmumiyView: React.FC = () => {
   const virtualItems = rowVirtualizer.getVirtualItems();
   const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
   const paddingBottom = virtualItems.length > 0 ? (rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end) : 0;
-  const totalCols = 7;
+  const totalCols = 9;
   const modelSectionHeaderCellStyle: React.CSSProperties = {
     position: 'sticky',
     top: isModelSectionPinned ? 0 : COLUMN_HEADER_HEIGHT,
@@ -465,38 +671,56 @@ export const UmumiyView: React.FC = () => {
     scrollElement.addEventListener('scroll', updatePinnedSection, { passive: true });
     updatePinnedSection();
     return () => scrollElement.removeEventListener('scroll', updatePinnedSection);
-  }, [filteredWorkers.length, models.length, useVirtual]);
+  }, [filteredWorkers.length, reportModels.length, useVirtual]);
 
   return (
-    <div className="excel-grid-container" style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
+    <div className="excel-grid-container umumiy-report" style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
       {/* Top Section: KPI Stat Summary Cards */}
-      <div style={{
-        padding: '14px 18px 12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        backgroundColor: 'var(--bg-surface)',
-        borderBottom: '1px solid var(--border-subtle)',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+      <div className="umumiy-report-intro">
+        <div className="umumiy-report-heading">
+          <div>
+            <h1>
               Umumiy Oylik Hisobot
             </h1>
+            <p>Davr bo‘yicha ishchilar va modellar hisoboti</p>
+          </div>
             <button
               onClick={() => openModal({ type: 'period_manager' })}
               className="soft-btn soft-btn-secondary"
-              style={{ padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '12px' }}
               title="Oylik davrini boshqarish"
             >
               <Calendar size={13} color="var(--primary)" />
               <span>{currentPeriod.name || 'Joriy Oylik'} ({formatUzbekDate(currentPeriod.startDate)} dan)</span>
             </button>
-          </div>
+        </div>
 
-          {/* Search bar */}
-          <div style={{ position: 'relative', width: '260px' }}>
+        <p role="status" className="umumiy-report-status">{display.label}</p>
+
+        <div className="umumiy-kpi-grid">
+          <div className="kpi-card umumiy-kpi net">
+            <div className="kpi-icon-container"><Wallet size={20} /></div>
+            <div className="kpi-label">Sof To'lanadigan Foyda</div>
+            <div className="kpi-value">{money(masterReport.totalSofFoyda)} <span>so'm</span></div>
+          </div>
+          <div className="kpi-card umumiy-kpi gross">
+            <div className="kpi-icon-container"><DollarSign size={20} /></div>
+            <div className="kpi-label">Jami ish haqi (ish + Oklad)</div>
+            <div className="kpi-value">{money(masterReport.totalUmumiy)} <span>so'm</span></div>
+          </div>
+          <div className="kpi-card umumiy-kpi advance">
+            <div className="kpi-icon-container"><TrendingUp size={20} /></div>
+            <div className="kpi-label">Berilgan Avanslar</div>
+            <div className="kpi-value">{money(masterReport.totalAvans)} <span>so'm</span></div>
+          </div>
+          <div className="kpi-card umumiy-kpi tenure">
+            <div className="kpi-icon-container"><Award size={20} /></div>
+            <div className="kpi-label">Doimiy Stajlar</div>
+            <div className="kpi-value">{money(masterReport.totalStaj)} <span>so'm</span></div>
+          </div>
+        </div>
+        <div className="umumiy-report-toolbar">
+          <div className="umumiy-report-filter">Ishchilar <span>{filteredWorkers.length}</span></div>
+          <div className="umumiy-report-search">
             <Search size={14} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '10px' }} />
             <input
               type="text"
@@ -504,83 +728,30 @@ export const UmumiyView: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="soft-input"
-              style={{ paddingLeft: '32px', height: '32px', borderRadius: 'var(--radius-full)', fontSize: '12.5px' }}
+              style={{ paddingLeft: '32px', height: '38px', borderRadius: 'var(--radius-full)' }}
             />
-          </div>
-        </div>
-
-        {/* 4 Soft KPI Metric Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-          {/* Card 1: Sof Foyda */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid var(--primary)', padding: '10px 14px' }}>
-            <div className="kpi-icon-container" style={{ background: 'var(--primary-light)', width: '36px', height: '36px' }}>
-              <Wallet size={18} color="var(--primary)" />
-            </div>
-            <div>
-              <div className="kpi-label">Sof To'lanadigan Foyda</div>
-              <div className="kpi-value" style={{ color: 'var(--primary)', fontSize: '16px' }}>
-                {formatMoney(masterReport.totalSofFoyda)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Jami Ishlangan */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #818cf8', padding: '10px 14px' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(99, 102, 241, 0.15)', width: '36px', height: '36px' }}>
-              <DollarSign size={18} color="#818cf8" />
-            </div>
-            <div>
-              <div className="kpi-label">Jami Ishlangan Summa</div>
-              <div className="kpi-value" style={{ color: '#818cf8', fontSize: '16px' }}>
-                {formatMoney(masterReport.totalUmumiy)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Avans & Jarima */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', padding: '10px 14px' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(245, 158, 11, 0.15)', width: '36px', height: '36px' }}>
-              <TrendingUp size={18} color="#f59e0b" />
-            </div>
-            <div>
-              <div className="kpi-label">Berilgan Avanslar</div>
-              <div className="kpi-value" style={{ color: '#f59e0b', fontSize: '16px' }}>
-                {formatMoney(masterReport.totalAvans)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Staj & Jarima */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #a78bfa', padding: '10px 14px' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(139, 92, 246, 0.15)', width: '36px', height: '36px' }}>
-              <Award size={18} color="#a78bfa" />
-            </div>
-            <div>
-              <div className="kpi-label">Doimiy Stajlar</div>
-              <div className="kpi-value" style={{ color: '#a78bfa', fontSize: '16px' }}>
-                {formatMoney(masterReport.totalStaj)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
 
       {/* Modern Soft Table Grid */}
-      <div ref={tbodyRef} style={{ flex: 1, overflow: 'auto', position: 'relative', background: 'var(--bg-app)' }}>
+      <div ref={tbodyRef} className="umumiy-table-scroll" style={{ flex: 1, overflow: 'auto', position: 'relative', background: 'var(--bg-surface)' }}>
         <table className="excel-table" style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
           <colgroup>
             <col style={{ width: '54px' }} />
             <col style={{ width: '240px' }} />
             <col style={{ width: '150px' }} />
+            <col style={{ width: '130px' }} />
             <col style={{ width: '120px' }} />
             <col style={{ width: '130px' }} />
             <col style={{ width: '120px' }} />
+            <col style={{ width: '130px' }} />
             <col style={{ width: '150px' }} />
           </colgroup>
 
           <thead>
             {/* Header Columns */}
-            <tr style={{ height: '38px' }}>
+             <tr style={{ height: `${COLUMN_HEADER_HEIGHT}px` }}>
               <th
                 className="col-header"
                 style={{
@@ -622,7 +793,12 @@ export const UmumiyView: React.FC = () => {
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
               >
-                Sof foyda
+                Jami ish haqi (ish + Oklad)
+              </th>
+              <th className="col-header" style={{ width: '130px', textAlign: 'right', paddingRight: '12px',
+                color: '#059669', position: 'sticky', top: isModelSectionPinned ? 'auto' : 0, zIndex: 15,
+                backgroundColor: 'var(--bg-surface-subtle)' }} title="Davrga qo‘lda kiritiladigan ish haqi; jami ish haqiga qo‘shiladi">
+                Oklad
               </th>
               <th
                 className="col-header"
@@ -672,16 +848,23 @@ export const UmumiyView: React.FC = () => {
               <th
                 className="col-header"
                 style={{
-                  width: '150px',
+                  width: '130px',
                   textAlign: 'right',
-                  paddingRight: '14px',
+                  paddingRight: '12px',
+                  color: '#0284c7',
                   position: 'sticky',
                   top: isModelSectionPinned ? 'auto' : 0,
                   zIndex: 15,
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
+                title="Do‘kondan olingan mahsulot summasi; sof to‘lovdan ayriladi"
               >
-                Umumiy ish haqi
+                Magazin
+              </th>
+              <th className="col-header" style={{ width: '150px', textAlign: 'right', paddingRight: '14px',
+                position: 'sticky', top: isModelSectionPinned ? 'auto' : 0, zIndex: 15,
+                backgroundColor: 'var(--bg-surface-subtle)' }}>
+                Sof foyda
               </th>
             </tr>
           </thead>
@@ -706,9 +889,16 @@ export const UmumiyView: React.FC = () => {
                       onSelectRow={handleSelectRow}
                       onAvansChange={handleAvansChange}
                       onJarimaChange={handleJarimaChange}
+                      onOkladChange={handleOkladChange}
+                      onMagazinChange={handleMagazinChange}
+                      onCancelManualDraft={handleCancelManualDraft}
+                      canEditManualMoney={canEditManualMoney}
+                      canEditPayrollAdjustments={canEditPayrollAdjustments}
+                      periodContextKey={periodContextKey}
                       onCellFocus={handleCellFocus}
                       onOpenWorkerManager={handleOpenWorkerManager}
                       onOpenWorkerDetail={handleOpenWorkerDetail}
+                      moneyReady={display.workerMoneyReady.has(w.workerId)} moneyIncomplete={display.incomplete}
                     />
                   );
                 })}
@@ -728,11 +918,18 @@ export const UmumiyView: React.FC = () => {
                     rowNum={rowNum}
                     isSelected={selectedWorkerId === w.workerId}
                     onSelectRow={handleSelectRow}
-                    onAvansChange={handleAvansChange}
-                    onJarimaChange={handleJarimaChange}
-                    onCellFocus={handleCellFocus}
+                      onAvansChange={handleAvansChange}
+                      onJarimaChange={handleJarimaChange}
+                      onOkladChange={handleOkladChange}
+                      onMagazinChange={handleMagazinChange}
+                      onCancelManualDraft={handleCancelManualDraft}
+                      canEditManualMoney={canEditManualMoney}
+                      canEditPayrollAdjustments={canEditPayrollAdjustments}
+                      periodContextKey={periodContextKey}
+                      onCellFocus={handleCellFocus}
                     onOpenWorkerManager={handleOpenWorkerManager}
                     onOpenWorkerDetail={handleOpenWorkerDetail}
+                    moneyReady={display.workerMoneyReady.has(w.workerId)} moneyIncomplete={display.incomplete}
                   />
                 );
               })
@@ -740,11 +937,12 @@ export const UmumiyView: React.FC = () => {
 
             {/* Grand Total Row with Soft UI styling */}
             <tr
+              className={`umumiy-total-row ${isModelSectionPinned ? 'model-pinned' : ''}`}
               ref={grandTotalRowRef}
               style={{
-                backgroundColor: 'var(--primary-light)',
+                backgroundColor: 'var(--umumiy-footer-bg)',
                 fontWeight: 800,
-                height: '42px',
+                height: '60px',
                 borderTop: '2px solid var(--primary)'
               }}
             >
@@ -758,33 +956,39 @@ export const UmumiyView: React.FC = () => {
                   cursor: 'pointer',
                   position: 'sticky',
                   left: 0,
-                  zIndex: 8,
-                  backgroundColor: 'var(--bg-surface)'
+                  zIndex: 20,
+                  backgroundColor: 'var(--umumiy-footer-bg)'
                 }}
                 onClick={() => handleCellFocus(`A${workers.length + 3}`, 'ЖАМИ')}
               >
                 ЖАМИ (ИТОГО)
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 800, fontSize: '15px', paddingRight: '14px', color: 'var(--primary)', cursor: 'pointer' }} onClick={() => handleCellFocus(`C${workers.length + 3}`, String(masterReport.totalSofFoyda), `=SUM(...)`)}>
-                {formatMoney(masterReport.totalSofFoyda)}
+              <td style={{ textAlign: 'right', fontWeight: 800, fontSize: '15px', paddingRight: '14px', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => handleCellFocus(`G${workers.length + 3}`, display.reportReady ? String(masterReport.totalUmumiy) : 'Noma’lum', 'piecework + Oklad')}>
+                {money(masterReport.totalUmumiy)}
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#a78bfa', cursor: 'pointer' }} onClick={() => handleCellFocus(`D${workers.length + 3}`, String(masterReport.totalStaj), `=SUM(...)`)}>
-                {formatMoney(masterReport.totalStaj)}
+              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#059669', cursor: 'pointer' }} onClick={() => handleCellFocus(`H${workers.length + 3}`, display.reportReady ? String(masterReport.totalOklad) : 'Noma’lum', 'Davr bo‘yicha Oklad')}>
+                {money(masterReport.totalOklad)}
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#f59e0b', cursor: 'pointer' }} onClick={() => handleCellFocus(`E${workers.length + 3}`, String(masterReport.totalAvans), `=SUM(...)`)}>
-                {formatMoney(masterReport.totalAvans)}
+              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#a78bfa', cursor: 'pointer' }} onClick={() => handleCellFocus(`D${workers.length + 3}`, display.reportReady ? String(masterReport.totalStaj) : 'Noma’lum', '=SUM(...)')}>
+                {money(masterReport.totalStaj)}
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#ef4444', cursor: 'pointer' }} onClick={() => handleCellFocus(`F${workers.length + 3}`, String(masterReport.totalJarima), `=SUM(...)`)}>
-                {formatMoney(masterReport.totalJarima)}
+              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#f59e0b', cursor: 'pointer' }} onClick={() => handleCellFocus(`E${workers.length + 3}`, display.reportReady ? String(masterReport.totalAvans) : 'Noma’lum', '=SUM(...)')}>
+                {money(masterReport.totalAvans)}
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 800, fontSize: '15px', paddingRight: '14px', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => handleCellFocus(`G${workers.length + 3}`, String(masterReport.totalUmumiy), `=SUM(...)`)}>
-                {formatMoney(masterReport.totalUmumiy)}
+              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#ef4444', cursor: 'pointer' }} onClick={() => handleCellFocus(`F${workers.length + 3}`, display.reportReady ? String(masterReport.totalJarima) : 'Noma’lum', '=SUM(...)')}>
+                {money(masterReport.totalJarima)}
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', paddingRight: '12px', color: '#0284c7', cursor: 'pointer' }} onClick={() => handleCellFocus(`I${workers.length + 3}`, display.reportReady ? String(masterReport.totalMagazin) : 'Noma’lum', 'Davr bo‘yicha Magazin')}>
+                {money(masterReport.totalMagazin)}
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 800, fontSize: '15px', paddingRight: '14px', color: 'var(--primary)', cursor: 'pointer' }} onClick={() => handleCellFocus(`C${workers.length + 3}`, display.reportReady ? String(masterReport.totalSofFoyda) : 'Noma’lum', `=G${workers.length + 3}-F${workers.length + 3}-E${workers.length + 3}-D${workers.length + 3}-I${workers.length + 3}`)}>
+                {money(masterReport.totalSofFoyda)}
               </td>
             </tr>
 
             {/* Model Breakdown Section */}
             <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', height: '34px', borderTop: '2px solid var(--border-default)' }}>
-              <td colSpan={3} style={{ ...modelSectionHeaderCellStyle, fontWeight: 700, paddingLeft: '14px', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.4px', left: 0, zIndex: isModelSectionPinned ? 28 : 22 }}>
+              <td colSpan={5} style={{ ...modelSectionHeaderCellStyle, fontWeight: 700, paddingLeft: '14px', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.4px', left: 0, zIndex: isModelSectionPinned ? 28 : 22 }}>
                 Modellar kesimida jami:
               </td>
               <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
@@ -794,21 +998,19 @@ export const UmumiyView: React.FC = () => {
                 Tikilgan ish soni
               </td>
               <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                Jami summa
+                Jami ish haqi (piecework)
               </td>
               <td style={{ ...modelSectionHeaderCellStyle, textAlign: 'right', fontWeight: 700, paddingRight: '14px', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Tavofut
               </td>
             </tr>
 
-            {models.map((m, mIdx) => {
+            {reportModels.map((m, mIdx) => {
               const qty = modelSewnQuantities[m.id] || 0;
               const amount = masterReport.modelTotals[m.id] || 0;
-              const modelPrice = (Array.isArray(m.operations) ? m.operations : []).reduce(
-                (sum, op) => sum + (Number(op?.rate) || 0),
-                0
-              );
-              const tavofut = (modelPrice * qty) - amount;
+              const modelPrice = display.modelPrices[m.id];
+              const unknownAmount = workers.some((w) => m.operations.some((op) => display.unknown.has(display.key(m.id, w.id, op.name))));
+              const tavofut = modelPrice === null || unknownAmount ? null : (modelPrice * qty) - amount;
 
               return (
                 <tr key={m.id} className="fast-row" style={{ height: '32px', backgroundColor: 'var(--bg-surface)' }}>
@@ -816,9 +1018,9 @@ export const UmumiyView: React.FC = () => {
                     {mIdx + 1}
                   </td>
                   <td
-                    colSpan={2}
+                    colSpan={4}
                     style={{ paddingLeft: '20px', color: 'var(--text-primary)', fontWeight: 500, position: 'sticky', left: '54px', zIndex: 6, backgroundColor: 'var(--bg-surface)', cursor: 'pointer' }}
-                    onDoubleClick={() => setActiveSheet(m.name)}
+                    onDoubleClick={() => { if (models.some((model) => model.id === m.id)) setActiveSheet(m.name); }}
                     title="2 marta bosing: Ushbu model hisobot varag'iga o'tish"
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
@@ -839,39 +1041,39 @@ export const UmumiyView: React.FC = () => {
                     </span>
                   </td>
                   <td
-                    style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: modelPrice > 0 ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
-                    onClick={() => handleCellFocus(`D${workers.length + 4 + mIdx}`, String(modelPrice), `=SUM(Operatsiyalar)`)}
-                    title={`Model narxi: ${formatMoney(modelPrice)} so'm (barcha operatsiyalar narxi yig'indisi)`}
+                    style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: (modelPrice || 0) > 0 ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
+                    onClick={() => handleCellFocus(`F${workers.length + 4 + mIdx}`, modelPrice === null ? 'Noma’lum' : String(modelPrice), `=SUM(Operatsiyalar)`)}
+                    title="Davr tarifi: barcha operatsiyalar narxi yig'indisi"
                   >
-                    {formatMoney(modelPrice)}
+                    {modelPrice === null ? 'Noma’lum' : money(modelPrice)}
                   </td>
                   <td
                     style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: qty > 0 ? '#10b981' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
-                    onClick={() => handleCellFocus(`E${workers.length + 4 + mIdx}`, String(qty))}
+                    onClick={() => handleCellFocus(`G${workers.length + 4 + mIdx}`, String(qty))}
                     title={`Tikilgan ish soni: ${qty.toLocaleString()} dona`}
                   >
                     {qty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
                   </td>
                   <td
                     style={{ textAlign: 'right', fontWeight: 700, paddingRight: '12px', color: amount > 0 ? 'var(--primary)' : 'var(--text-muted)', fontSize: '13px', cursor: 'pointer' }}
-                    onClick={() => handleCellFocus(`F${workers.length + 4 + mIdx}`, String(amount))}
-                    title={`Jami summa: ${formatMoney(amount)} so'm`}
+                    onClick={() => handleCellFocus(`H${workers.length + 4 + mIdx}`, modelAmountsKnown ? String(amount) : 'Noma’lum')}
+                    title="Model bo‘yicha ish haqi; Oklad qo‘shilmagan"
                   >
-                    {formatMoney(amount)}
+                    {modelAmountsKnown ? money(amount) : 'Noma’lum'}
                   </td>
                   <td
                     style={{
                       textAlign: 'right',
                       fontWeight: 700,
                       paddingRight: '14px',
-                      color: tavofut > 0 ? '#10b981' : tavofut < 0 ? '#ef4444' : 'var(--text-muted)',
+                      color: (tavofut || 0) > 0 ? '#10b981' : (tavofut || 0) < 0 ? '#ef4444' : 'var(--text-muted)',
                       fontSize: '13px',
                       cursor: 'pointer'
                     }}
-                    onClick={() => handleCellFocus(`G${workers.length + 4 + mIdx}`, String(tavofut), `=D${workers.length + 4 + mIdx}*E${workers.length + 4 + mIdx}-F${workers.length + 4 + mIdx}`)}
-                    title={`Tavofut = (${formatMoney(modelPrice)} * ${qty}) - ${formatMoney(amount)} = ${formatMoney(tavofut)} so'm`}
+                    onClick={() => handleCellFocus(`I${workers.length + 4 + mIdx}`, tavofut === null ? 'Noma’lum' : String(tavofut), `=F${workers.length + 4 + mIdx}*G${workers.length + 4 + mIdx}-H${workers.length + 4 + mIdx}`)}
+                    title="Davr narxiga ko‘ra hisoblangan tafovut (taxminiy)"
                   >
-                    {tavofut > 0 ? `+${formatMoney(tavofut)}` : formatMoney(tavofut)}
+                    {tavofut === null ? 'Noma’lum' : tavofut > 0 ? `+${money(tavofut)}` : money(tavofut)}
                   </td>
                 </tr>
               );
@@ -888,7 +1090,7 @@ export const UmumiyView: React.FC = () => {
               }}
             >
               <td
-                colSpan={3}
+                colSpan={5}
                 style={{
                   textAlign: 'right',
                   paddingRight: '14px',
@@ -903,7 +1105,7 @@ export const UmumiyView: React.FC = () => {
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
               >
-                Modellar jami:
+                Modellar jami (piecework):
               </td>
               <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
                 —
@@ -912,7 +1114,7 @@ export const UmumiyView: React.FC = () => {
                 {totalModelSewnQty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 600 }}>dona</span>
               </td>
               <td style={{ textAlign: 'right', fontWeight: 800, paddingRight: '12px', color: 'var(--text-primary)', fontSize: '13px' }}>
-                {formatMoney(totalModelAmount)}
+                 {modelAmountsKnown ? money(totalModelAmount) : 'Noma’lum'}
               </td>
               <td style={{
                 textAlign: 'right',
@@ -921,7 +1123,7 @@ export const UmumiyView: React.FC = () => {
                 color: totalModelTavofut > 0 ? '#10b981' : totalModelTavofut < 0 ? '#ef4444' : 'var(--text-muted)',
                 fontSize: '13px'
               }}>
-                {totalModelTavofut > 0 ? `+${formatMoney(totalModelTavofut)}` : formatMoney(totalModelTavofut)}
+                 {!differenceKnown ? 'Noma’lum' : totalModelTavofut > 0 ? `+${money(totalModelTavofut)}` : money(totalModelTavofut)}
               </td>
             </tr>
           </tbody>

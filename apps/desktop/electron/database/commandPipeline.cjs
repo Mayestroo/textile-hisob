@@ -249,7 +249,6 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
 
   // Execute inside an ACID SQLite IMMEDIATE transaction
   const result = db.transaction(() => {
-    assertPeriodOpen(db, companyId, command.effectiveDate, submittedAt);
     // 1. Check idempotency: operationId in local_outbox
     const existingOp = getOperation(db, companyId, operationId);
     if (existingOp) {
@@ -272,6 +271,14 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
         'IDEMPOTENCY_CONFLICT',
         `Operation "${operationId}" was already executed with different semantic payload or parameters`
       );
+    }
+    assertPeriodOpen(db, companyId, command.effectiveDate, submittedAt);
+
+    if (periodId) {
+      const period = db.prepare(`SELECT id FROM periods WHERE company_id = ? AND id = ? AND is_closed = 0
+        AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)`)
+        .get(companyId, periodId, command.effectiveDate || submittedAt.slice(0, 10), command.effectiveDate || submittedAt.slice(0, 10));
+      if (!period) throw createCommandError('PERIOD_SCOPE_MISMATCH', 'Captured ticket period does not contain the work date or is not open');
     }
 
     // 2. Check duplicate ticket ID
@@ -440,6 +447,11 @@ function executeRecordAdjustmentCommand(baseUserDataPath, activeCompanyId, comma
   if (!command || typeof command !== 'object') {
     throw createCommandError('INVALID_COMMAND_PAYLOAD', 'RecordProductionAdjustmentCommand must be a valid object');
   }
+  if (['original_ticket_id', 'original_entry_id', 'original_period_id', 'original_rate_snapshot', 'attribution_status',
+    'originalPeriodId', 'originalRateSnapshot', 'attributionStatus']
+    .some((field) => Object.prototype.hasOwnProperty.call(command, field))) {
+    throw createCommandError('FORGED_ADJUSTMENT_ATTRIBUTION', 'Original period, rate and attribution aliases are not accepted');
+  }
 
   const companyId = assertNonEmptyString(command.companyId, 'companyId');
   validateCompanyContext(activeCompanyId, companyId);
@@ -495,6 +507,11 @@ function executeRecordAdjustmentCommand(baseUserDataPath, activeCompanyId, comma
     dependsOnOperationId: depOpId,
     causalSequence: causalSeq
   };
+  const sourceFields = ['originalTicketId', 'originalEntryId'];
+  if (sourceFields.some((field) => command[field] !== undefined)) {
+    normalizedPayload.originalTicketId = assertNonEmptyString(command.originalTicketId, 'originalTicketId');
+    normalizedPayload.originalEntryId = assertNonEmptyString(command.originalEntryId, 'originalEntryId');
+  }
 
   const payloadJson = canonicalStringify(normalizedPayload);
   const payloadHash = computePayloadHash(payloadJson);
@@ -544,14 +561,29 @@ function executeRecordAdjustmentCommand(baseUserDataPath, activeCompanyId, comma
       throw createCommandError('WORKER_NOT_FOUND', `Worker "${workerId}" not found for company "${companyId}"`);
     }
 
+    let source = null;
+    if (normalizedPayload.originalTicketId) {
+      source = db.prepare(`SELECT t.period_id, e.rate_snapshot FROM ticket_entries e
+        JOIN tickets t ON t.id = e.ticket_id AND t.company_id = e.company_id
+        WHERE e.company_id = ? AND t.id = ? AND e.id = ?
+          AND t.model_id = ? AND e.worker_id = ? AND e.op_name = ? AND t.status = 'CONFIRMED'`)
+        .get(companyId, normalizedPayload.originalTicketId, normalizedPayload.originalEntryId, modelId, workerId, opName);
+      if (!source) throw createCommandError('ORIGINAL_ENTRY_MISMATCH', 'Original entry must be confirmed work matching company, ticket, model, worker and operation');
+      if (source.period_id !== null && !db.prepare('SELECT id FROM periods WHERE company_id = ? AND id = ?')
+        .get(companyId, source.period_id)) {
+        throw createCommandError('ORIGINAL_PERIOD_NOT_FOUND', 'Original period does not belong to company');
+      }
+    }
+
     // 4. Insert canonical production adjustment fact
     db.prepare(`
       INSERT INTO production_adjustments (
         adjustment_id, company_id, model_id, worker_id, op_name, delta_qty,
-        reason, status, provenance, created_at, created_by, original_adjustment_id
+        reason, status, provenance, created_at, created_by, original_adjustment_id,
+        original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, null
+        ?, ?, ?, ?, ?, null, ?, ?, ?, ?, ?
       )
     `).run(
       adjustmentId,
@@ -564,7 +596,12 @@ function executeRecordAdjustmentCommand(baseUserDataPath, activeCompanyId, comma
       status,
       command.provenance || 'MANUAL_CORRECTION',
       createdAt,
-      createdBy
+      createdBy,
+      normalizedPayload.originalTicketId || null,
+      normalizedPayload.originalEntryId || null,
+      source?.period_id ?? null,
+      source?.rate_snapshot ?? null,
+      source?.period_id != null ? 'RESOLVED' : 'UNRESOLVED'
     );
 
     // Test failure hook: after fact insert, before outbox insert
@@ -627,6 +664,11 @@ function executeRecordAdjustmentCommand(baseUserDataPath, activeCompanyId, comma
 function executeReverseAdjustmentCommand(baseUserDataPath, activeCompanyId, command, options = {}) {
   if (!command || typeof command !== 'object') {
     throw createCommandError('INVALID_COMMAND_PAYLOAD', 'ReverseProductionAdjustmentCommand must be a valid object');
+  }
+  if (['originalTicketId', 'originalEntryId', 'originalPeriodId', 'originalRateSnapshot', 'attributionStatus',
+    'original_ticket_id', 'original_entry_id', 'original_period_id', 'original_rate_snapshot', 'attribution_status']
+    .some((field) => Object.prototype.hasOwnProperty.call(command, field))) {
+    throw createCommandError('FORGED_ADJUSTMENT_ATTRIBUTION', 'Reversal inherits original attribution');
   }
 
   const companyId = assertNonEmptyString(command.companyId, 'companyId');
@@ -734,10 +776,11 @@ function executeReverseAdjustmentCommand(baseUserDataPath, activeCompanyId, comm
     db.prepare(`
       INSERT INTO production_adjustments (
         adjustment_id, company_id, model_id, worker_id, op_name, delta_qty,
-        reason, status, provenance, created_at, created_by, original_adjustment_id
+        reason, status, provenance, created_at, created_by, original_adjustment_id,
+        original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
-        ?, 'APPROVED', 'REVERSAL', ?, ?, ?
+        ?, 'APPROVED', 'REVERSAL', ?, ?, ?, ?, ?, ?, ?, ?
       )
     `).run(
       reversalId,
@@ -749,7 +792,9 @@ function executeReverseAdjustmentCommand(baseUserDataPath, activeCompanyId, comm
       reason,
       createdAt,
       createdBy,
-      original.adjustment_id
+      original.adjustment_id,
+      original.original_ticket_id, original.original_entry_id, original.original_period_id,
+      original.original_rate_snapshot, original.attribution_status
     );
 
     // Test failure hook: after fact insert, before outbox insert

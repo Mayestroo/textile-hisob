@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const { buildFastifyServer } = require('./app.cjs');
 const { getServerPool, resetServerDatabase, closeServerPool } = require('./infrastructure/db.cjs');
@@ -21,6 +24,7 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
   let pool: any;
   let app: any;
   let snapshotTestHook: ((value: any) => Promise<void>) | null = null;
+  const localFixtureDirs: string[] = [];
 
   async function seedApprovedBaseline() {
     await pool.query(`
@@ -118,6 +122,8 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
   afterAll(async () => {
     if (app) await app.close();
     await closeServerPool();
+    require('../desktop/electron/database/databaseManager.cjs').closeAllCompanyDatabases();
+    for (const dir of localFixtureDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
@@ -214,6 +220,14 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
 
   it('does not lose a real mutation committed after the bootstrap snapshot boundary', async () => {
     await addBaselineImportEvidence();
+    await pool.query(`UPDATE models SET operations_json = $1 WHERE company_id = $2 AND id = 'model_1'`,
+      [JSON.stringify([{ name: 'Sew', rate: 7 }]), companyId]);
+    await pool.query(`INSERT INTO tickets (id, company_id, model_id, period_id, party_number, patta_number,
+      qty, status, is_closed, submitted_at, created_at, server_revision)
+      VALUES ('11111111-1111-4111-8111-111111111111', $1, 'model_1', 'period-current', 'feed-proof', 1, 15,
+        'CONFIRMED', 0, NOW(), NOW(), 1)`, [companyId]);
+    await pool.query(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id,
+      rate_snapshot, qty, created_at) VALUES ('feed-proof-entry', '11111111-1111-4111-8111-111111111111', $1, 'Sew', 1, NULL, 15, NOW())`, [companyId]);
     let snapshotReached!: () => void;
     let releaseSnapshot!: () => void;
     const reached = new Promise<void>((resolve) => { snapshotReached = resolve; });
@@ -242,6 +256,9 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
     releaseSnapshot();
     const bootstrapResponse = await bootstrapPromise;
     const snapshotCursor = bootstrapResponse.json().cursor;
+    expect(bootstrapResponse.json().feedBaseline).toEqual({
+      protocolVersion: 1, companyId, headCursor: snapshotCursor
+    });
     expect(bootstrapResponse.json().snapshot.workers).toHaveLength(201);
     const mutationResponse = await mutationPromise;
     expect(mutationResponse.statusCode).toBe(201);
@@ -254,6 +271,9 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
     });
     expect(changes.statusCode).toBe(200);
     expect(changes.json().items).toHaveLength(1);
+    expect(changes.json()).toMatchObject({ companyId, feedProtocolVersion: 1,
+      fromCursor: snapshotCursor, headCursor: changes.json().items[0].changeId,
+      nextCursor: changes.json().items[0].changeId, hasMore: false });
     expect(changes.json().items[0]).toMatchObject({ entityType: 'worker', entityId: '202', changeType: 'INSERT' });
     const replay = await app.inject({
       method: 'GET',
@@ -261,5 +281,28 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
       headers
     });
     expect(replay.json().items).toEqual([]);
+    expect(replay.json()).toMatchObject({ companyId, feedProtocolVersion: 1,
+      fromCursor: changes.json().nextCursor, headCursor: changes.json().nextCursor,
+      nextCursor: changes.json().nextCursor, hasMore: false });
+
+    // Actual PostgreSQL snapshot/feed handlers -> the local SQLite applier ->
+    // production payroll reader. Expected amount is independently 15 × 7 = 105.
+    const localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hisob-server-feed-proof-'));
+    localFixtureDirs.push(localDir);
+    const localDb = require('../desktop/electron/database/databaseManager.cjs')
+      .getCompanyDatabase(localDir, companyId);
+    const { applyBootstrapSnapshot } = require('../desktop/electron/sync/bootstrapApplier.cjs');
+    const { applyChangesBatch } = require('../desktop/electron/sync/changeFeedApplier.cjs');
+    const { loadPayrollValuationFromSqlite } = require('../desktop/electron/database/payrollReader.cjs');
+    applyBootstrapSnapshot(localDb, companyId, bootstrapResponse.json());
+    const beforeFeed = loadPayrollValuationFromSqlite(localDb, companyId, 'period-current');
+    expect(beforeFeed.workers.find((worker: any) => worker.workerId === 1)).toMatchObject({ gross: 105 });
+    expect(beforeFeed).toMatchObject({ syncStatus: 'CURRENT', feedEvidence: { asOfCursor: snapshotCursor } });
+    const localFeedPage = changes.json();
+    applyChangesBatch(localDb, companyId, localFeedPage.items, localFeedPage.nextCursor,
+      { feedResponse: localFeedPage });
+    const afterFeed = loadPayrollValuationFromSqlite(localDb, companyId, 'period-current');
+    expect(afterFeed.workers.find((worker: any) => worker.workerId === 1)).toMatchObject({ gross: 105 });
+    expect(afterFeed).toMatchObject({ syncStatus: 'CURRENT', feedEvidence: { asOfCursor: localFeedPage.headCursor } });
   });
 });

@@ -24,6 +24,11 @@ export interface ProductionAdjustmentFact {
   createdAt: string;
   createdBy: string;
   originalAdjustmentId?: string;
+  originalTicketId?: string | null;
+  originalEntryId?: string | null;
+  originalPeriodId?: string | null;
+  originalRateSnapshot?: number | null;
+  attributionStatus?: 'RESOLVED' | 'UNRESOLVED';
 }
 
 export interface CreateAdjustmentDraftParams {
@@ -38,6 +43,8 @@ export interface CreateAdjustmentDraftParams {
   provenance?: string;
   createdAt?: string;
   createdBy: string;
+  originalTicketId?: string;
+  originalEntryId?: string;
 }
 
 export interface CreateReversalParams {
@@ -96,6 +103,10 @@ export function createProductionAdjustmentDraft(params: CreateAdjustmentDraftPar
   if (!params.createdBy || typeof params.createdBy !== 'string') {
     throw new TypeError('createdBy must be a non-empty string');
   }
+  if ((params.originalTicketId === undefined) !== (params.originalEntryId === undefined) ||
+      (params.originalTicketId !== undefined && (!params.originalTicketId.trim() || !params.originalEntryId?.trim()))) {
+    throw new TypeError('originalTicketId and originalEntryId must be supplied together');
+  }
 
   const id = params.adjustmentId || `adj_${params.companyId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -110,7 +121,10 @@ export function createProductionAdjustmentDraft(params: CreateAdjustmentDraftPar
     status: params.status || 'PENDING_REVIEW',
     provenance: params.provenance || 'MANUAL_CORRECTION',
     createdAt: params.createdAt || new Date().toISOString(),
-    createdBy: params.createdBy
+    createdBy: params.createdBy,
+    originalTicketId: params.originalTicketId || null,
+    originalEntryId: params.originalEntryId || null,
+    attributionStatus: 'UNRESOLVED'
   };
 }
 
@@ -149,7 +163,12 @@ export function createReversalAdjustment(
     provenance: 'REVERSAL',
     createdAt: params.createdAt || new Date().toISOString(),
     createdBy: params.createdBy,
-    originalAdjustmentId: original.adjustmentId
+    originalAdjustmentId: original.adjustmentId,
+    originalTicketId: original.originalTicketId,
+    originalEntryId: original.originalEntryId,
+    originalPeriodId: original.originalPeriodId,
+    originalRateSnapshot: original.originalRateSnapshot,
+    attributionStatus: original.attributionStatus || 'UNRESOLVED'
   };
 }
 

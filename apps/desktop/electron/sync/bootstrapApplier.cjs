@@ -1,6 +1,7 @@
 'use strict';
 
 const { setLocalCursor } = require('./changeFeedApplier.cjs');
+const { recordSnapshotBaseline } = require('./feedEvidence.cjs');
 
 const BOOTSTRAP_COMPLETE_KEY = '_bootstrap_complete';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -228,10 +229,17 @@ function validateBootstrapResponse(response, companyId) {
       requireCondition(groupPartyIds.size === 2);
     }
 
+    const adjustmentIds = new Set();
     for (const adjustment of snapshot.workerAdjustments) {
       requireCondition(requireString(adjustment.id) && workerIds.has(Number(adjustment.workerId)));
-      requireCondition(['AVANS', 'JARIMA'].includes(adjustment.type) && requireNumber(adjustment.amount));
+      requireCondition(['AVANS', 'JARIMA', 'OKLAD', 'MAGAZIN'].includes(adjustment.type) && requireNumber(adjustment.amount));
       requireCondition(adjustment.periodId === null || adjustment.periodId === undefined || periodIds.has(adjustment.periodId));
+      requireCondition(!adjustmentIds.has(adjustment.id)); adjustmentIds.add(adjustment.id);
+      if (['OKLAD', 'MAGAZIN'].includes(adjustment.type)) {
+        requireCondition(typeof adjustment.periodId === 'string' && periodIds.has(adjustment.periodId));
+        requireCondition(Number.isSafeInteger(Number(adjustment.amount)) && adjustment.status === 'POSTED');
+      }
+      if (adjustment.status !== undefined) requireCondition(adjustment.status === 'POSTED');
       requireCondition(requireString(adjustment.provenance));
       requireCondition(requireOptionalTimestamp(adjustment.createdAt));
     }
@@ -436,10 +444,11 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
 
   const insertBalance = db.prepare(`INSERT INTO worker_adjustments (
     id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'POSTED', ?)`);
+  ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`);
   for (const adjustment of snapshot.workerAdjustments) {
     insertBalance.run(adjustment.id, companyId, adjustment.workerId, adjustment.periodId || null,
-      adjustment.type, adjustment.amount, adjustment.provenance, adjustment.createdAt || new Date().toISOString());
+      adjustment.type, adjustment.amount, adjustment.provenance, adjustment.status || 'POSTED',
+      adjustment.createdAt || new Date().toISOString());
   }
 
   const insertTicket = db.prepare(`INSERT INTO tickets (
@@ -463,13 +472,17 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
 
   const insertProduction = db.prepare(`INSERT INTO production_adjustments (
     adjustment_id, company_id, model_id, worker_id, op_name, delta_qty, reason, status,
-    server_revision, provenance, created_at, created_by, original_adjustment_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?, ?)`);
+    server_revision, provenance, created_at, created_by, original_adjustment_id,
+    original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const adjustment of snapshot.productionAdjustments) {
     insertProduction.run(adjustment.adjustmentId, companyId, adjustment.modelId, adjustment.workerId,
       adjustment.opName, adjustment.deltaQty, adjustment.reason || 'REMOTE_BOOTSTRAP', adjustment.status,
       adjustment.serverRevision, adjustment.createdAt || new Date().toISOString(),
-      adjustment.createdBy || 'SERVER', adjustment.originalAdjustmentId || null);
+       adjustment.createdBy || 'SERVER', adjustment.originalAdjustmentId || null,
+       adjustment.originalTicketId ?? null, adjustment.originalEntryId ?? null,
+       adjustment.originalPeriodId ?? null, adjustment.originalRateSnapshot ?? null,
+       adjustment.attributionStatus || 'UNRESOLVED');
   }
 
   if (snapshot.batchSettings.company) {
@@ -510,6 +523,7 @@ function applyBootstrapSnapshot(db, companyId, response, options = {}) {
       throw bootstrapError('BOOTSTRAP_FOREIGN_KEY_VIOLATION', 'Bootstrap rows violate canonical SQLite references');
     }
     setLocalCursor(db, validated.cursor);
+    recordSnapshotBaseline(db, companyId, response.feedBaseline, validated.cursor);
     db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, '1', ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(BOOTSTRAP_COMPLETE_KEY, new Date().toISOString());

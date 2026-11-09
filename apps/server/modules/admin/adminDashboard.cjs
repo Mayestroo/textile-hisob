@@ -1,4 +1,5 @@
 'use strict';
+const { loadPayroll } = require('../workers/payrollValuation.cjs');
 
 const crypto = require('crypto');
 const {
@@ -248,123 +249,7 @@ function createAdminDashboardService(options = {}) {
 
   async function getPayroll(filters = {}) {
     const companyId = validateCompanyId(filters.companyId);
-    const requestedPeriodId = filters.periodId === undefined || filters.periodId === null || filters.periodId === ''
-      ? null
-      : String(filters.periodId).trim();
-    if (requestedPeriodId && (requestedPeriodId.length > 128 || /[\u0000-\u001f\u007f]/.test(requestedPeriodId))) {
-      throw activationError('INVALID_PERIOD_ID', 400);
-    }
-    const periodResult = await pool.query(`
-      SELECT id, name, start_date, end_date, is_closed
-      FROM periods
-      WHERE company_id = $1 AND (($2::VARCHAR IS NOT NULL AND id = $2) OR ($2::VARCHAR IS NULL AND is_closed = 0))
-      ORDER BY start_date DESC NULLS LAST, id DESC LIMIT 1
-    `, [companyId, requestedPeriodId]);
-    const period = periodResult.rows[0] || null;
-    if (requestedPeriodId && !period) throw activationError('PERIOD_NOT_FOUND', 404);
-    const periodId = period?.id || null;
-    let startDate = dateOnly(period?.start_date);
-    const endDate = dateOnly(period?.end_date);
-
-    if (period && !startDate && !Boolean(period.is_closed)) {
-      const name = String(period?.name || '').toLowerCase();
-      const uzbekMonths = {
-        yanvar: '01', fevral: '02', mart: '03', aprel: '04', may: '05', iyun: '06',
-        iyul: '07', avgust: '08', sentabr: '09', oktabr: '10', noyabr: '11', dekabr: '12'
-      };
-      let year = String(new Date().getFullYear());
-      let month = String(new Date().getMonth() + 1).padStart(2, '0');
-      const yearMatch = name.match(/(20\d{2})/);
-      if (yearMatch) year = yearMatch[1];
-      for (const [mName, mNum] of Object.entries(uzbekMonths)) {
-        if (name.includes(mName)) {
-          month = mNum;
-          break;
-        }
-      }
-      startDate = `${year}-${month}-01`;
-    }
-
-    const payrollResult = await pool.query(`
-      WITH earnings AS (
-        SELECT entry.worker_id,
-               COALESCE(SUM(entry.qty * COALESCE(NULLIF(entry.rate_snapshot, 0), rates.rate, 0)), 0)::TEXT AS gross,
-               COALESCE(SUM(entry.qty), 0)::TEXT AS pieces
-        FROM ticket_entries entry
-        JOIN tickets ticket ON ticket.company_id = entry.company_id AND ticket.id = entry.ticket_id
-        JOIN models model ON model.company_id = ticket.company_id AND model.id = ticket.model_id
-        LEFT JOIN LATERAL (
-          SELECT CASE
-            WHEN COALESCE(operation_row.value->>'rate', '') ~ '^-?[0-9]+(\\.[0-9]+)?$'
-            THEN (operation_row.value->>'rate')::NUMERIC
-            ELSE 0::NUMERIC
-          END AS rate
-          FROM jsonb_array_elements(model.operations_json) AS operation_row(value)
-          WHERE operation_row.value->>'name' = entry.op_name
-          LIMIT 1
-        ) rates ON TRUE
-        WHERE entry.company_id = $1 AND ticket.status = 'CONFIRMED'
-          AND (
-            ($2::VARCHAR IS NULL AND ticket.is_closed = 0)
-            OR ($2::VARCHAR IS NOT NULL AND (
-              ticket.period_id = $2
-              OR (ticket.period_id IS NULL
-                AND ($3::DATE IS NULL OR ticket.submitted_at::DATE >= $3::DATE)
-                AND ($4::DATE IS NULL OR ticket.submitted_at::DATE <= $4::DATE))
-            ))
-          )
-        GROUP BY entry.worker_id
-      ), adjustments AS (
-        SELECT worker_id,
-               COALESCE(SUM(amount) FILTER (WHERE type = 'AVANS'), 0)::TEXT AS avans,
-               COALESCE(SUM(amount) FILTER (WHERE type = 'JARIMA'), 0)::TEXT AS jarima
-        FROM worker_adjustments
-        WHERE company_id = $1
-          AND (
-            ($2::VARCHAR IS NOT NULL AND period_id = $2)
-            OR (
-              period_id IS NULL
-              AND ($3::DATE IS NOT NULL OR $4::DATE IS NOT NULL)
-              AND ($3::DATE IS NULL OR created_at::DATE >= $3::DATE)
-              AND ($4::DATE IS NULL OR created_at::DATE <= $4::DATE)
-            )
-          )
-        GROUP BY worker_id
-      )
-      SELECT worker.id AS worker_id, worker.name AS worker_name, worker.staj,
-             COALESCE(earnings.gross, '0') AS gross, COALESCE(earnings.pieces, '0') AS pieces,
-             COALESCE(adjustments.avans, '0') AS avans, COALESCE(adjustments.jarima, '0') AS jarima
-      FROM workers worker
-      LEFT JOIN earnings ON earnings.worker_id = worker.id
-      LEFT JOIN adjustments ON adjustments.worker_id = worker.id
-      WHERE worker.company_id = $1 AND worker.status = 'ACTIVE'
-      ORDER BY worker.id
-    `, [companyId, periodId, startDate, endDate]);
-    return {
-      period: period ? {
-        periodId: period.id,
-        name: period.name,
-        startDate,
-        endDate,
-        isClosed: Boolean(period.is_closed)
-      } : null,
-      workers: payrollResult.rows.map((row) => {
-        const gross = normalizeNumeric(row.gross);
-        const avans = Math.max(0, normalizeNumeric(row.avans));
-        const jarima = Math.max(0, normalizeNumeric(row.jarima));
-        const staj = Math.max(0, normalizeNumeric(row.staj));
-        return {
-          workerId: Number(row.worker_id),
-          name: row.worker_name,
-          gross,
-          avans,
-          jarima,
-          staj,
-          net: gross - avans - jarima - staj,
-          pieces: normalizeNumeric(row.pieces)
-        };
-      })
-    };
+    return loadPayroll(pool, companyId, filters.periodId);
   }
 
   async function listPeriods(telegramId, companyId) {
@@ -817,7 +702,7 @@ function createAdminDashboardService(options = {}) {
       operationId, commandId, modelId, name: model.name, operations,
       pattaOpsOrder: Array.isArray(model.patta_ops_order_json) ? model.patta_ops_order_json : stored.map((operation) => operation.name),
       hisobSheetName: model.hisob_sheet_name || `${model.name}-hisob`,
-      title: model.title || `Model- ${model.name}`, party: model.party || '', color: model.color || '', size: model.size || ''
+      title: model.title || `Model- ${model.name}`, party: model.party || '', color: model.color || null, size: model.size || null
     });
   }
 

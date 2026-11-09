@@ -3,23 +3,37 @@ import { describe, expect, it, vi } from 'vitest';
 const { claimWorkerBinding, getWorkerForEnrollment, getWorkerProfile, unbindWorkerTelegramBinding } = require('./workerService.cjs');
 
 describe('worker binding credential enforcement', () => {
-  it('falls back from a zero ticket rate snapshot to the current model rate for the profile and work breakdown', async () => {
+  it('keeps captured zero distinct from unknown and marks only scoped confirmed work incomplete', async () => {
     const client = {
       query: vi.fn(async (sql: string) => {
         if (sql.includes('FROM worker_telegram_bindings b')) {
           return { rows: [{ worker_id: 180, company_id: 'comp_novda', worker_name: 'Worker 180', status: 'ACTIVE', staj: 0 }] };
         }
-        if (sql.includes('SELECT start_date, end_date, is_closed FROM periods')) {
-          return { rows: [{ start_date: '2026-10-05', end_date: null, is_closed: false }] };
+        if (sql.includes('FROM periods')) {
+          return { rows: [{ id: 'october', start_date: '2026-10-05', end_date: null, is_closed: false }] };
         }
         if (sql.includes('FROM ticket_entries e')) {
-          expect(sql.match(/NULLIF\(e\.rate_snapshot, 0\)/g)).toHaveLength(2);
-          return { rows: [{
-            model_id: 'body-long', model_name: 'BODY-LONG', operation_name: 'POYCHA RASHMA',
-            rate: '400', qty: '208', amount: '83200'
-          }] };
+          expect(sql).toContain('e.rate_snapshot::TEXT AS rate');
+          expect(sql).toContain("t.status = 'CONFIRMED'");
+          expect(sql).toContain('e.company_id = $1');
+          expect(sql).toContain('t.period_id = $2');
+          expect(sql).toContain('t.period_id IS NULL');
+          expect(sql).not.toContain('rates.rate');
+          return { rows: [
+            { worker_id: 180, period_id: 'october', model_id: 'body-long', model_name: 'BODY-LONG', op_name: 'Known', rate: '5', qty: '2' },
+            { worker_id: 180, period_id: 'october', model_id: 'body-long', model_name: 'BODY-LONG', op_name: 'Zero', rate: '0', qty: '3' },
+            { worker_id: 180, period_id: 'october', model_id: 'body-long', model_name: 'BODY-LONG', op_name: 'Unknown', rate: null, qty: '4' }
+          ] };
         }
-        if (sql.includes('FROM worker_adjustments')) return { rows: [] };
+        if (sql.includes('FROM worker_adjustments')) {
+          expect(sql).toContain('period_id = $2');
+          return { rows: [{ worker_id: 180, type: 'AVANS', total: '12' }] };
+        }
+        if (sql.includes('FROM models')) {
+          return { rows: [{ id: 'body-long', operations: [
+            { name: 'Known', rate: 5 }, { name: 'Zero', rate: 0 }
+          ] }] };
+        }
         return { rows: [] };
       }),
       release: vi.fn()
@@ -29,13 +43,25 @@ describe('worker binding credential enforcement', () => {
     await expect(getWorkerProfile(pool, {
       companyId: 'comp_novda', workerId: 180, telegramId: '8363499557'
     })).resolves.toMatchObject({
-      gross: 83200,
-      pieces: 208,
+      gross: 10, net: -2, pieces: 9, unknownEntryCount: 1, unknownQuantity: 4,
+      accountingStatus: 'INCOMPLETE', accountingReasons: ['UNKNOWN_HISTORICAL_RATE'],
       models_breakdown: {
-        'body-long': { operations: [{ rate: 400, qty: 208, amount: 83200 }] }
+        'body-long': { earnings: 10, operations: [{ rate: 5, amount: 10 }, { rate: 0, amount: 0 }, { rate: null, amount: null }] }
       }
     });
+    expect(client.query.mock.calls.filter(([sql]) => sql.includes('FROM ticket_entries e') || sql.includes('FROM worker_adjustments')).map(([, params]) => params))
+      .toEqual([['comp_novda', 'october', 180], ['comp_novda', 'october', '2026-10-05', 180, null]]);
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it.each([{ rate: '0', amount: '0' }, { rate: '5', amount: '20' }])('treats known rate $rate as complete', async ({ rate, amount }) => {
+    const client = { query: vi.fn(async (sql: string) => ({ rows: sql.includes('FROM worker_telegram_bindings b')
+      ? [{ worker_id: 180, company_id: 'comp_novda', worker_name: 'Worker', status: 'ACTIVE' }]
+      : sql.includes('FROM periods') ? [{ id: 'p', start_date: '2026-10-05', is_closed: false }]
+      : sql.includes('FROM ticket_entries e') ? [{ worker_id: 180, period_id: 'p', model_id: 'm', model_name: 'M', op_name: 'Op', rate: '5', qty: '4' }]
+      : sql.includes('FROM models') ? [{ id: 'm', operations: [{ name: 'Op', rate: Number(rate) }] }] : [] })), release: vi.fn() };
+    const result = await getWorkerProfile({ connect: async () => client }, { companyId: 'comp_novda', workerId: 180, telegramId: '123' });
+    expect(result).toMatchObject({ gross: Number(amount), accountingStatus: 'COMPLETE', accountingReasons: [], unknownEntryCount: 0, unknownQuantity: 0 });
   });
 
   it('reports the server-wide PIN-disabled enrollment policy', async () => {
@@ -57,7 +83,7 @@ describe('worker binding credential enforcement', () => {
   it('refuses to bind a worker without a configured PIN credential', async () => {
     const client = {
       query: vi.fn(async (sql: string) => {
-        if (sql.includes('SELECT telegram_id, company_id, worker_id FROM worker_telegram_bindings WHERE telegram_id')) {
+        if (sql.includes('SELECT telegram_id, company_id, worker_id, username FROM worker_telegram_bindings WHERE telegram_id')) {
           return { rows: [] };
         }
         if (sql.includes('SELECT w.id, w.company_id, w.name, w.status, credential.pin_salt')) {
@@ -84,7 +110,7 @@ describe('worker binding credential enforcement', () => {
     const client = {
       query: vi.fn(async (sql: string) => {
         statements.push(sql);
-        if (sql.includes('SELECT telegram_id, company_id, worker_id FROM worker_telegram_bindings WHERE telegram_id')) {
+        if (sql.includes('SELECT telegram_id, company_id, worker_id, username FROM worker_telegram_bindings WHERE telegram_id')) {
           return { rows: [] };
         }
         if (sql.includes('SELECT w.id, w.company_id, w.name, w.status, credential.pin_salt')) {

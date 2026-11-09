@@ -40,8 +40,9 @@ export const ConfirmModal: React.FC = () => {
   const cancelText = confirmState.cancelText || "Bekor qilish";
 
   return (
-    <div
-      onClick={() => closeConfirm(false)}
+      <div
+        className="phase-c-confirm-overlay"
+        onClick={() => closeConfirm(false)}
       style={{
         position: 'fixed',
         inset: 0,
@@ -56,6 +57,7 @@ export const ConfirmModal: React.FC = () => {
       }}
     >
       <div
+        className="phase-c-confirm-card"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',

@@ -211,7 +211,8 @@ function registerAdminDashboardRoutes(app, options = {}) {
     const assets = {
       'admin.css': { type: 'text/css; charset=utf-8', file: 'admin.css' },
       'company-admin.css': { type: 'text/css; charset=utf-8', file: 'company-admin.css' },
-      'admin.js': { type: 'application/javascript; charset=utf-8', file: 'admin.js' }
+      'admin.js': { type: 'application/javascript; charset=utf-8', file: 'admin.js' },
+      'financial-intent.js': { type: 'application/javascript; charset=utf-8', file: 'financial-intent.js' }
     };
     const asset = assets[request.params.asset];
     if (!asset) return reply.code(404).header('Cache-Control', 'no-store').send({ success: false, error: { code: 'ADMIN_WEBAPP_ASSET_NOT_FOUND' } });

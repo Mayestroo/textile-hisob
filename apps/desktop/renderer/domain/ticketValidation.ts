@@ -233,7 +233,8 @@ export function validateTicketForSubmission(
         opName,
         workerId: wId,
         workerNameSnapshot: matchedWorker.name,
-        rateSnapshot: matchedOp?.rate !== undefined ? matchedOp.rate : 0
+        ...(typeof matchedOp?.rate === 'number' && Number.isFinite(matchedOp.rate)
+          ? { rateSnapshot: matchedOp.rate } : {})
       });
     }
   }

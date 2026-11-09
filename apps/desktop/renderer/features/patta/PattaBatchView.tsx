@@ -415,10 +415,13 @@ export const PattaBatchView: React.FC = () => {
   }, [activeUnclosedParties, submittedTickets, allKnownSizes]);
 
   return (
-    <div className="excel-grid-container" style={{ padding: '16px 20px', backgroundColor: 'var(--bg-app)', overflowY: 'auto' }}>
-      
+    <div className="excel-grid-container phase-b-view phase-b-batch" style={{ padding: '16px 20px', backgroundColor: 'var(--bg-app)', overflowY: 'auto' }}>
+      <header className="e2b-batch-heading">
+        <div><h1>Pattalar pechati</h1><p>Modellar bo'yicha partiya, ish soni va razmerlarni kiriting</p></div>
+      </header>
       {/* Top Global Action Bar */}
-      <div 
+      <div
+        className="e2b-batch-toolbar"
         style={{ 
           width: '100%', 
           marginBottom: '16px',
@@ -435,7 +438,7 @@ export const PattaBatchView: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-          <div style={{
+          <div className="e2b-batch-old-title" style={{
             background: 'var(--primary-light)',
             color: 'var(--primary)',
             padding: '6px 12px',
@@ -590,7 +593,7 @@ export const PattaBatchView: React.FC = () => {
       </div>
 
       {/* Grid of All Model Cards */}
-      <div 
+      <div className="e2b-batch-cards"
         style={{ 
           width: '100%', 
           display: 'grid', 
@@ -620,7 +623,7 @@ export const PattaBatchView: React.FC = () => {
           }
 
           return (
-            <div 
+            <div className={`e2b-batch-card${totalPattaCount > 0 ? ' is-filled' : ''}`}
               key={model.id}
               style={{
                 background: 'var(--bg-surface)',
@@ -640,7 +643,7 @@ export const PattaBatchView: React.FC = () => {
               }}
             >
               {/* Card Header */}
-              <div 
+              <div className="e2b-batch-card-header"
                 style={{ 
                   padding: '10px 14px', 
                   background: isIshSoniMissing 
@@ -681,9 +684,9 @@ export const PattaBatchView: React.FC = () => {
               </div>
 
               {/* Form Controls */}
-              <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+              <div className="e2b-batch-card-body" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                 {/* 1. Ish Soni */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div className="e2b-batch-work" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: isIshSoniMissing ? '#ef4444' : 'var(--text-secondary)' }}>
                     1 patta ish:
                   </label>
@@ -709,7 +712,7 @@ export const PattaBatchView: React.FC = () => {
                 </div>
 
                 {/* 2. Party */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div className="e2b-batch-party" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: partyConflictError ? '#ef4444' : 'var(--text-secondary)' }}>
                       Partiya:
@@ -746,7 +749,7 @@ export const PattaBatchView: React.FC = () => {
                 </div>
 
                 {/* 3. Color */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div className="e2b-batch-color" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                     Rang:
                   </label>
@@ -763,7 +766,7 @@ export const PattaBatchView: React.FC = () => {
                 </div>
 
                 {/* Metric Summary Pill */}
-                <div style={{
+                <div className="e2b-batch-count" style={{
                   padding: '6px 10px',
                   borderRadius: 'var(--radius-md)',
                   backgroundColor: totalPattaCount > 0 ? 'var(--primary-light)' : 'var(--bg-surface-subtle)',
@@ -781,14 +784,14 @@ export const PattaBatchView: React.FC = () => {
                 </div>
 
                 {/* Sizes Matrix */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
+                <div className="e2b-batch-sizes" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
                   {activeSizes.map((sizeName) => {
                     const sizeVal = config.sizes ? config.sizes[sizeName] || '' : '';
                     const key = `size_${model.id}_${sizeName}`;
                     const isCustom = !isDefaultPattaSize(sizeName);
 
                     return (
-                      <div key={sizeName} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div key={sizeName} className="e2b-size-cell" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <div style={{
                           width: '60px',
                           fontSize: '11.5px',

@@ -147,6 +147,8 @@ export interface SyncWorker {
   name: string;
   avans: number;
   jarima: number;
+  oklad?: number;
+  magazin?: number;
   staj: number;
   [k: string]: any;
 }

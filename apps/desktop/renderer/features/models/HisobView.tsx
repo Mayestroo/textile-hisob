@@ -1,10 +1,90 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useWorkbookStore } from '../../store/workbookStore';
 import { ModelConfig, Worker } from '../../types/workbook';
 import { calculateModelTotals, formatMoney, formatNumber } from '../../engine/formulaEngine';
+import { displayedMoney, payrollDisplay } from '../../engine/payrollDisplay';
 import { getExcelColumnLetter } from '../../utils/excelUtils';
 import { Search, Plus, Trash2, ArrowLeft, DollarSign } from 'lucide-react';
+import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
+import { captureSessionIdentity, isSessionCurrent, type SessionIdentity } from '../../store/sessionGuard';
+
+type AdjustmentSource = { originalTicketId: string; originalEntryId: string; originalPeriodId: string | null;
+  periodName: string | null; periodStartDate: string | null; originalRateSnapshot: number | null;
+  partyNumber: string; pattaNumber: number };
+
+export function AdjustmentSourceSelection({ sources, selectedEntry, onSelect }: {
+  sources: AdjustmentSource[]; selectedEntry: string; onSelect: (entryId: string) => void
+}) {
+  if (sources.length === 0) return <p>Mos kiritilgan ish topilmadi. Tuzatish yuborilmadi.</p>;
+  return <select aria-label="Asl patta va davr" value={selectedEntry} onChange={(event) => onSelect(event.target.value)}>
+    <option value="">Manbani tanlang</option>
+    {sources.map((source) => <option key={`${source.originalTicketId}:${source.originalEntryId}`} value={source.originalEntryId}>
+      Patta {source.partyNumber}/{source.pattaNumber} · {source.periodName || source.periodStartDate || source.originalPeriodId || 'Davr noma’lum'} · saqlangan narx: {source.originalRateSnapshot == null ? 'noma’lum' : `${source.originalRateSnapshot} so‘m`}
+    </option>)}
+  </select>;
+}
+
+export async function readEnteredAdjustmentSources(
+  companyId: string, modelId: string, workerId: number, opName: string
+): Promise<AdjustmentSource[]> {
+  const result = await getElectronApi()?.AdjustmentSources?.(companyId, modelId, workerId, opName);
+  if (!result?.success || !Array.isArray(result.data)) throw new Error('Adjustment sources unavailable');
+  return result.data;
+}
+
+// Each edit owns a generation, including the runtime-mode lookup preceding the source read.
+export class SourceRequestGuard {
+  private generation = 0;
+  private active = true;
+  begin() { return ++this.generation; }
+  invalidate() { ++this.generation; }
+  dispose() { this.active = false; this.invalidate(); }
+  isCurrent(generation: number) { return this.active && generation === this.generation; }
+}
+
+export function isAdjustmentEditContextCurrent(
+  context: { companyId: string; periodId: string; session: SessionIdentity; modelId: string; workerId: number; opName: string },
+  latest: { companyId?: string | null; periodId: string; modelId: string; workerIds: number[]; operationNames: string[] }
+) {
+  return context.periodId === latest.periodId && context.modelId === latest.modelId
+    && latest.workerIds.includes(context.workerId) && latest.operationNames.includes(context.opName)
+    && isSessionCurrent(context.session, latest.companyId);
+}
+
+export async function guardedAdjustmentSources(
+  guard: SourceRequestGuard, generation: number, contextIsCurrent: () => boolean,
+  read: () => Promise<AdjustmentSource[]>, onSuccess: (sources: AdjustmentSource[]) => void,
+  onError: () => void, onDone: () => void
+) {
+  const current = () => guard.isCurrent(generation) && contextIsCurrent();
+  try {
+    const sources = await read();
+    if (current()) onSuccess(sources);
+  } catch {
+    if (current()) onError();
+  } finally {
+    if (current()) onDone();
+  }
+}
+
+export const HISTORICAL_TOTAL_WARNING = 'Asl ish davri qayd etiladi. Ochiq oyda barcha ish joriy tarifda, yopiq oyda yopilish arxivi tarifida hisoblanadi. Saqlangan patta narxi faqat tarix uchun; tasdiqlanmagan summa taxminiy.';
+
+export function AdjustmentSourceDialog({ selection, selectedEntry, selectionSaving, selectionError, currentQty, onSelect, onConfirm, onCancel }: {
+  selection: { workerId: number; opName: string; qty: number; sources: AdjustmentSource[] };
+  selectedEntry: string; selectionSaving: boolean; selectionError: string; currentQty: number;
+  onSelect: (entryId: string) => void; onConfirm: () => void; onCancel: () => void;
+}) {
+  return <div role="dialog" aria-label="Asl kiritilgan ishni tanlash" style={{ padding: 16, background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)' }}>
+    <strong>Asl kiritilgan ishni tanlang: {selection.opName}, ishchi #{selection.workerId}, o‘zgarish {selection.qty - currentQty}</strong>
+    <p>Faqat kiritilgan pattalar. Asl davr va saqlangan narxni tekshiring; noma’lum narx to‘lov hisoblanganini bildirmaydi.</p>
+    <p>{HISTORICAL_TOTAL_WARNING}</p>
+    <AdjustmentSourceSelection sources={selection.sources} selectedEntry={selectedEntry} onSelect={onSelect} />
+    {selectionError && <p role="alert">{selectionError}</p>}
+    <button type="button" disabled={!selectedEntry || selectionSaving} onClick={onConfirm}>Tuzatishni saqlash</button>
+    <button type="button" disabled={selectionSaving} onClick={onCancel}>Bekor qilish</button>
+  </div>;
+}
 
 const VIRTUAL_THRESHOLD = 30;
 const ROW_HEIGHT = 32;
@@ -101,6 +181,8 @@ const EditableNumericInput: React.FC<EditableNumericInputProps> = React.memo(({
   );
 });
 
+
+
 interface HisobViewProps {
   model: ModelConfig;
 }
@@ -117,9 +199,16 @@ interface WorkerRowProps {
   operations: ModelConfig['operations'];
   workerQtyMap: Record<string, number>;
   workerTot: number;
+  cellAmounts: Record<string, number | null>;
+  moneyReady: boolean;
+  moneyIncomplete: boolean;
+  idColumnWidth: number;
+  virtualStart?: number;
+  gridColumns?: string;
   isSelected: boolean;
   onSelectRow: (workerId: number, toggle?: boolean) => void;
   onQuantityChange: (workerId: number, opName: string, value: number) => Promise<boolean> | boolean | void;
+  quantityReset: number;
   onCellFocus: (cellId: string, value: string, formula?: string) => void;
   onOpenWorkerDetail?: (workerId: number, modelId?: string, opName?: string) => void;
 }
@@ -131,13 +220,21 @@ const WorkerRow = React.memo<WorkerRowProps>(({
   operations,
   workerQtyMap,
   workerTot,
+  cellAmounts,
+  moneyReady,
+  moneyIncomplete,
+  idColumnWidth,
+  virtualStart,
+  gridColumns,
   isSelected,
   onSelectRow,
   onQuantityChange,
+  quantityReset,
   onCellFocus,
   onOpenWorkerDetail
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const workerTotalKnown = !operations.some(op => cellAmounts[JSON.stringify([modelId, worker.id, op.name])] === null);
 
   return (
     <tr
@@ -148,6 +245,10 @@ const WorkerRow = React.memo<WorkerRowProps>(({
           ? 'rgba(59, 130, 246, 0.15)' 
           : (isHovered ? 'var(--bg-surface-hover)' : 'var(--bg-surface)'),
         height: '32px',
+        ...(virtualStart === undefined ? {} : {
+          position: 'absolute' as const, top: 0, width: '100%', display: 'grid',
+          gridTemplateColumns: gridColumns, transform: `translateY(${virtualStart}px)`
+        }),
         cursor: 'pointer',
         transition: 'background-color 0.12s ease',
         boxShadow: isSelected 
@@ -204,7 +305,7 @@ const WorkerRow = React.memo<WorkerRowProps>(({
           fontWeight: isSelected ? 700 : 600,
           paddingLeft: '12px',
           position: 'sticky',
-          left: '54px',
+          left: `${idColumnWidth}px`,
           backgroundColor: isSelected
             ? 'rgba(59, 130, 246, 0.20)'
             : (isHovered ? 'var(--bg-surface-hover)' : 'var(--bg-surface)'),
@@ -231,10 +332,11 @@ const WorkerRow = React.memo<WorkerRowProps>(({
       {/* Operations Columns */}
       {operations.map((op, i) => {
         const qty = workerQtyMap[op.name] || 0;
-        const amount = qty * op.rate;
+        const valued = cellAmounts[JSON.stringify([modelId, worker.id, op.name])];
+        const amount = valued === undefined ? qty * op.rate : valued;
         const amountColLetter = getExcelColumnLetter(2 + i * 2);
         const qtyColLetter = getExcelColumnLetter(3 + i * 2);
-        const formulaStr = `=$${amountColLetter}$2*${qty}`;
+        const formulaStr = valued === undefined ? `=$${amountColLetter}$2*${qty}` : 'Davr tarifi bo‘yicha hisob';
 
         return (
           <React.Fragment key={op.id || op.name}>
@@ -244,16 +346,16 @@ const WorkerRow = React.memo<WorkerRowProps>(({
                 textAlign: 'right',
                 fontWeight: 600,
                 paddingRight: '8px',
-                color: amount > 0 ? (isSelected ? 'var(--primary-hover)' : 'var(--primary)') : 'var(--text-muted)',
+                 color: (amount || 0) > 0 ? (isSelected ? 'var(--primary-hover)' : 'var(--primary)') : 'var(--text-muted)',
                 borderLeft: '1px solid var(--border-subtle)',
                 backgroundColor: isSelected
-                  ? (amount > 0 ? 'rgba(16, 185, 129, 0.28)' : 'rgba(59, 130, 246, 0.12)')
-                  : (amount > 0 ? 'var(--primary-light)' : (isHovered ? 'var(--bg-surface-hover)' : 'transparent')),
+                   ? ((amount || 0) > 0 ? 'rgba(16, 185, 129, 0.28)' : 'rgba(59, 130, 246, 0.12)')
+                   : ((amount || 0) > 0 ? 'var(--primary-light)' : (isHovered ? 'var(--bg-surface-hover)' : 'transparent')),
                 cursor: 'pointer',
                 transition: 'background-color 0.12s ease'
               }}
               onClick={() => {
-                onCellFocus(`${amountColLetter}${rowNum}`, String(amount), formulaStr);
+                 onCellFocus(`${amountColLetter}${rowNum}`, amount === null ? 'Noma’lum' : String(amount), formulaStr);
                 onSelectRow(worker.id, false);
               }}
               onDoubleClick={(e) => {
@@ -262,7 +364,7 @@ const WorkerRow = React.memo<WorkerRowProps>(({
               }}
               title="2 marta bosing: Qaysi pattalardan kelib tushganini ko'rish"
             >
-              {amount > 0 ? formatMoney(amount) : '—'}
+               {amount === null ? 'Noma’lum' : amount > 0 ? displayedMoney(amount, moneyReady, moneyIncomplete) : amount === 0 && qty > 0 ? displayedMoney(0, moneyReady, moneyIncomplete) : '—'}
             </td>
 
             {/* Quantity column (editable) */}
@@ -288,6 +390,7 @@ const WorkerRow = React.memo<WorkerRowProps>(({
               title="2 marta bosing: Qaysi pattalardan kelib tushganini ko'rish"
             >
               <EditableNumericInput
+                key={`${op.name}-${quantityReset}`}
                 value={qty}
                 min={0}
                 onCommit={(value) => onQuantityChange(worker.id, op.name, value)}
@@ -341,7 +444,7 @@ const WorkerRow = React.memo<WorkerRowProps>(({
               transition: 'background-color 0.12s ease'
             }}
             onClick={() => {
-              onCellFocus(`${sumColLetter}${rowNum}`, String(workerTot), `=SUM(...)`);
+               onCellFocus(`${sumColLetter}${rowNum}`, moneyReady && workerTotalKnown ? String(workerTot) : 'Noma’lum', `Davr bo‘yicha hisob`);
               onSelectRow(worker.id, false);
             }}
             onDoubleClick={(e) => {
@@ -350,7 +453,7 @@ const WorkerRow = React.memo<WorkerRowProps>(({
             }}
             title="2 marta bosing: Ushbu modeldagi barcha pattalar va ishlar"
           >
-            {formatMoney(workerTot)}
+              {displayedMoney(workerTot, moneyReady && workerTotalKnown, moneyIncomplete)}
           </td>
         );
       })()}
@@ -358,8 +461,126 @@ const WorkerRow = React.memo<WorkerRowProps>(({
   );
 });
 
+// Measure the entire canonical model, not the subset currently mounted by the row virtualizer.
+// Widths only change when model/worker data changes, never as a result of scrolling.
+function getHisobColumnWidths(model: ModelConfig, workers: Worker[], totals: ReturnType<typeof calculateModelTotals>) {
+  const canvas = typeof document === 'undefined' ? null : document.createElement('canvas');
+  const context = canvas?.getContext('2d');
+  const measure = (text: string, font: string) => {
+    if (!context) return text.length * 9;
+    context.font = font;
+    return context.measureText(text).width;
+  };
+  const money = (value: number) => measure(formatMoney(value), '700 14.5px sans-serif');
+  const id = Math.ceil(workers.reduce((width, w) => Math.max(width, measure(String(w.id), '700 12.5px sans-serif') + 32), 54));
+  const name = Math.ceil(workers.reduce((width, w) => Math.max(width, measure(w.name, '700 12.5px sans-serif') + 34), 200));
+  const widths = [id, name];
+  for (const op of model.operations) {
+    const header = measure(op.name, '700 12.5px sans-serif') + 48; // label + delete action
+    let amount = Math.max(170, money(op.rate) + 26, money(totals.operations[op.name]?.totalAmount || 0) + 28);
+    let quantity = Math.max(150, measure(formatNumber(totals.operations[op.name]?.totalQuantity || 0), '700 12.5px sans-serif') + 24);
+    for (const worker of workers) {
+      const value = model.hisobQuantities?.[worker.id]?.[op.name] || 0;
+      amount = Math.max(amount, money(value * op.rate) + 28);
+      quantity = Math.max(quantity, measure(String(value), '700 12.5px sans-serif') + 48);
+    }
+    amount = Math.ceil(amount);
+    quantity = Math.ceil(quantity);
+    widths.push(Math.max(amount, header - quantity), quantity);
+  }
+  widths.push(Math.ceil(workers.reduce((width, w) => Math.max(width, money(totals.workerTotals[w.id]?.totalEarnings || 0) + 32),
+    Math.max(140, money(totals.grandTotalAmount) + 32))));
+  return widths;
+}
+
+interface HisobTableViewportProps {
+  model: ModelConfig;
+  filteredWorkers: Worker[];
+  modelTotals: ReturnType<typeof calculateModelTotals>;
+  cellAmounts: Record<string, number | null>;
+  moneyReady: boolean;
+  moneyIncomplete: boolean;
+  columnWidths: number[];
+  selectedWorkerId: number | null;
+  quantityReset: number;
+  onSelectRow: WorkerRowProps['onSelectRow'];
+  onQuantityChange: WorkerRowProps['onQuantityChange'];
+  onCellFocus: WorkerRowProps['onCellFocus'];
+  onOpenWorkerDetail: WorkerRowProps['onOpenWorkerDetail'];
+  header: React.ReactNode;
+  footer: React.ReactNode;
+}
+
+const HisobTableViewport = React.memo(({
+  model, filteredWorkers, modelTotals, cellAmounts, moneyReady, moneyIncomplete, columnWidths, selectedWorkerId, quantityReset,
+  onSelectRow, onQuantityChange, onCellFocus, onOpenWorkerDetail, header, footer
+}: HisobTableViewportProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const useVirtual = filteredWorkers.length > VIRTUAL_THRESHOLD;
+  const rowVirtualizer = useVirtualizer({
+    count: filteredWorkers.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    getItemKey: (index) => filteredWorkers[index]?.id ?? index,
+    overscan: 8,
+    scrollMargin: ROW1_H + ROW2_H,
+    enabled: useVirtual
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const gridColumns = useMemo(() => columnWidths.map(width => `${width}px`).join(' '), [columnWidths]);
+  // Absolute virtual rows bound native sticky cells to the row; pin only their
+  // ID/name cells without invalidating the whole table on horizontal scroll.
+  const pinVirtualCells = useCallback(() => {
+    const scroll = scrollRef.current;
+    if (!scroll || !useVirtual) return;
+    const translation = `translateX(${scroll.scrollLeft}px)`;
+    for (const row of scroll.querySelectorAll<HTMLTableRowElement>('tbody:first-of-type tr.fast-row')) {
+      if (row.cells[0]) row.cells[0].style.transform = translation;
+      if (row.cells[1]) row.cells[1].style.transform = translation;
+    }
+    // Chromium does not pin the sticky header cells against horizontally scrolled
+    // absolute virtual rows; keep header/total anchored to the same scroll offset.
+    for (const row of scroll.querySelectorAll<HTMLTableRowElement>('thead tr, tbody:last-of-type tr')) {
+      if (row.cells[0]) row.cells[0].style.transform = translation;
+      if (row.cells[1] && row.closest('thead')) row.cells[1].style.transform = translation;
+    }
+  }, [useVirtual]);
+  useLayoutEffect(() => { pinVirtualCells(); }, [pinVirtualCells, virtualItems]);
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll || !useVirtual) return;
+    scroll.addEventListener('scroll', pinVirtualCells, { passive: true });
+    return () => scroll.removeEventListener('scroll', pinVirtualCells);
+  }, [pinVirtualCells, useVirtual]);
+  const renderRow = (worker: Worker, index: number, virtualStart?: number) =>
+    <WorkerRow key={worker.id} worker={worker} rowNum={3 + index} modelId={model.id}
+      hisobSheetName={model.hisobSheetName} operations={model.operations}
+      workerQtyMap={model.hisobQuantities?.[worker.id] || {}}
+      workerTot={modelTotals.workerTotals[worker.id]?.totalEarnings || 0} idColumnWidth={columnWidths[0]}
+      cellAmounts={cellAmounts} moneyReady={moneyReady} moneyIncomplete={moneyIncomplete}
+      virtualStart={virtualStart} gridColumns={useVirtual ? gridColumns : undefined}
+      isSelected={selectedWorkerId === worker.id} onSelectRow={onSelectRow}
+      onQuantityChange={onQuantityChange} quantityReset={quantityReset}
+      onCellFocus={onCellFocus} onOpenWorkerDetail={onOpenWorkerDetail} />;
+
+  return <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', background: 'var(--bg-app)' }}>
+    <table className="excel-table e2c-hisob-grid" style={{ tableLayout: 'fixed', width: `${columnWidths.reduce((a, b) => a + b, 0)}px`,
+       minWidth: useVirtual ? undefined : '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+      <colgroup>{columnWidths.map((width, index) => <col key={index} style={{ width: `${width}px` }} />)}</colgroup>
+      {header}
+       {useVirtual ? <tbody style={{ display: 'block', position: 'relative', width: `${columnWidths.reduce((a, b) => a + b, 0)}px`, height: `${rowVirtualizer.getTotalSize()}px` }}>
+        {virtualItems.map(item => renderRow(filteredWorkers[item.index], item.index, item.start - (ROW1_H + ROW2_H)))}
+      </tbody> : <tbody>{filteredWorkers.map((worker, index) => renderRow(worker, index))}</tbody>}
+      <tbody>{footer}</tbody>
+    </table>
+  </div>;
+});
+
 export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
   const workers = useWorkbookStore((s) => s.workers);
+  const activeCompanyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
+  const currentPeriodId = useWorkbookStore((s) => s.currentPeriod.id);
+  const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
   const updateHisobQuantity = useWorkbookStore((s) => s.updateHisobQuantity);
   const updateOperationRate = useWorkbookStore((s) => s.updateOperationRate);
   const setActiveCell = useWorkbookStore((s) => s.setActiveCell);
@@ -368,6 +589,36 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
+  const [quantityReset, setQuantityReset] = useState(0);
+  const [selection, setSelection] = useState<{ workerId: number; opName: string; qty: number; sources: AdjustmentSource[]; companyId: string } | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState('');
+  const [selectionError, setSelectionError] = useState('');
+  const [selectionSaving, setSelectionSaving] = useState(false);
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const sourceGuard = useRef(new SourceRequestGuard());
+  const pendingContext = useRef<{ companyId: string; periodId: string; session: SessionIdentity; modelId: string; workerId: number; opName: string } | null>(null);
+  const contextRef = useRef({ model, workers });
+  contextRef.current = { model, workers };
+  const contextIsCurrent = (context: NonNullable<typeof pendingContext.current>) => {
+    const { model: latestModel, workers: latestWorkers } = contextRef.current;
+    const state = useWorkbookStore.getState();
+    return isAdjustmentEditContextCurrent(context, {
+      companyId: state.licenseStatus?.companyId, periodId: state.currentPeriod.id,
+      modelId: latestModel.id, workerIds: latestWorkers.map((worker) => worker.id),
+      operationNames: latestModel.operations.map((op) => op.name)
+    });
+  };
+  useEffect(() => {
+    if (pendingContext.current && !contextIsCurrent(pendingContext.current)) {
+      sourceGuard.current.invalidate();
+      pendingContext.current = null;
+      setSourceLoading(false);
+      setSelection(null);
+      setSelectionError('');
+      setSelectionSaving(false);
+    }
+  }, [model, workers, activeCompanyId, currentPeriodId, payrollValuation]);
+  useEffect(() => () => { sourceGuard.current.dispose(); }, []);
 
   const handleSelectRow = useCallback((workerId: number, toggle = false) => {
     setSelectedWorkerId((prev) => {
@@ -393,9 +644,9 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const modelTotals = useMemo(() => {
-    return calculateModelTotals(model, workers);
-  }, [model, workers]);
+  const display = useMemo(() => payrollDisplay([model], workers, payrollValuation, activeCompanyId, currentPeriodId),
+    [model, workers, payrollValuation, activeCompanyId, currentPeriodId]);
+  const modelTotals = display.modelTotals[model.id];
 
   const filteredWorkers = useMemo(() => {
     if (!searchQuery.trim()) return workers;
@@ -414,30 +665,79 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
     });
   }, [model.hisobSheetName, setActiveCell]);
 
-  const handleQuantityChange = useCallback((workerId: number, opName: string, qty: number) => {
-    return updateHisobQuantity(model.id, workerId, opName, qty);
-  }, [model.id, updateHisobQuantity]);
+  const handleQuantityChange = useCallback(async (workerId: number, opName: string, qty: number) => {
+    const generation = sourceGuard.current.begin();
+    pendingContext.current = null;
+    setSelection(null);
+    setSelectionError('');
+    setSourceLoading(false);
+    setSelectionSaving(false);
+    const startCompanyId = useWorkbookStore.getState().licenseStatus?.companyId;
+    const startPeriodId = useWorkbookStore.getState().currentPeriod.id;
+    const session = captureSessionIdentity(startCompanyId);
+    const eAPI = getElectronApi();
+    const runtime = await resolveElectronRuntimeMode(eAPI);
+    if (!sourceGuard.current.isCurrent(generation)) return false;
+    if (contextRef.current.model.id !== model.id || !contextRef.current.model.operations.some((op) => op.name === opName)
+      || !contextRef.current.workers.some((worker) => worker.id === workerId)
+       || useWorkbookStore.getState().licenseStatus?.companyId !== startCompanyId
+       || useWorkbookStore.getState().currentPeriod.id !== startPeriodId
+       || !isSessionCurrent(session, startCompanyId)) return false;
+    if (runtime.mode === 'legacy') return updateHisobQuantity(model.id, workerId, opName, qty);
+    if (!runtime.success || !eAPI?.AdjustmentSources) {
+      useWorkbookStore.getState().addNotification('error', 'Manba', 'Manbalarni yuklash imkonsiz. Qayta urinib ko‘ring.');
+      return false;
+    }
+    const companyId = startCompanyId;
+    if (!companyId || !session) return false;
+    const context = { companyId, periodId: startPeriodId, session, modelId: model.id, workerId, opName };
+    if (!contextIsCurrent(context)) return false;
+    const current = Number(model.hisobQuantities?.[workerId]?.[opName] || 0);
+    if (qty === current) return true;
+    pendingContext.current = context;
+    setSourceLoading(true);
+    await guardedAdjustmentSources(sourceGuard.current, generation, () => contextIsCurrent(context),
+      () => readEnteredAdjustmentSources(companyId, model.id, workerId, opName), (sources) => {
+      setSelection({ workerId, opName, qty, sources, companyId });
+      setSelectedEntry('');
+      setSelectionError('');
+    }, () => useWorkbookStore.getState().addNotification('error', 'Manba', 'Manbalarni yuklash imkonsiz. Qayta urinib ko‘ring.'),
+    () => setSourceLoading(false));
+    return false;
+  }, [model, updateHisobQuantity]);
 
-  // Phase 2: virtualization for large worker counts
-  const useVirtual = filteredWorkers.length > VIRTUAL_THRESHOLD;
-  const tbodyRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: filteredWorkers.length,
-    getScrollElement: () => tbodyRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 8,
-    enabled: useVirtual
-  });
+  const confirmSource = async () => {
+    if (!selection || !selectedEntry || selectionSaving || !pendingContext.current || !contextIsCurrent(pendingContext.current)) return;
+    const generation = sourceGuard.current.begin();
+    const source = selection.sources.find((item) => item.originalEntryId === selectedEntry);
+    if (!source || useWorkbookStore.getState().licenseStatus?.companyId !== selection.companyId) {
+      if (sourceGuard.current.isCurrent(generation)) setSelectionError('Kompaniya yoki manba o‘zgardi. Qayta tanlang.');
+      return;
+    }
+    setSelectionSaving(true);
+    try {
+      const saved = await updateHisobQuantity(model.id, selection.workerId, selection.opName, selection.qty,
+        { originalTicketId: source.originalTicketId, originalEntryId: source.originalEntryId });
+      if (!sourceGuard.current.isCurrent(generation) || !pendingContext.current || !contextIsCurrent(pendingContext.current)) return;
+      if (saved) {
+        pendingContext.current = null;
+        setSelection(null);
+        setQuantityReset((value) => value + 1);
+      } else setSelectionError('Tuzatish saqlanmadi. Manbani tekshiring.');
+    } catch {
+      if (sourceGuard.current.isCurrent(generation) && pendingContext.current && contextIsCurrent(pendingContext.current))
+        setSelectionError('Tuzatish saqlanmadi. Qayta urinib ko‘ring.');
+    } finally {
+      if (sourceGuard.current.isCurrent(generation)) setSelectionSaving(false);
+    }
+  };
 
-  const virtualItems = rowVirtualizer.getVirtualItems();
-  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
-  const paddingBottom = virtualItems.length > 0 ? (rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end) : 0;
-  const totalCols = 2 + model.operations.length * 2 + 1;
+  const columnWidths = useMemo(() => getHisobColumnWidths(model, workers, modelTotals), [model, workers, modelTotals]);
 
   return (
-    <div className="excel-grid-container" style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
+    <div className="excel-grid-container phase-b-view phase-b-hisob" style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
       {/* Top Header Bar */}
-      <div
+      <div className="e2c-hisob-header"
         style={{
           padding: '14px 20px',
           background: 'var(--bg-surface)',
@@ -450,7 +750,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
           flexWrap: 'wrap'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="e2c-hisob-heading" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
             onClick={() => setActiveSheet(model.name)}
             className="soft-btn soft-btn-secondary"
@@ -460,7 +760,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
             <span>Pattaga qaytish ({model.name})</span>
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="e2c-hisob-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
               {model.hisobSheetName}
             </span>
@@ -470,20 +770,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Search Box */}
-          <div style={{ position: 'relative', width: '220px' }}>
-            <Search size={14} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '10px' }} />
-            <input
-              type="text"
-              placeholder="Ishchi qidirish..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="soft-input"
-              style={{ paddingLeft: '30px', height: '32px', borderRadius: 'var(--radius-full)', fontSize: '12px' }}
-            />
-          </div>
-
+        <div className="e2c-hisob-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
             onClick={() => openModal({ type: 'new_operation', modelId: model.id })}
             className="soft-btn soft-btn-secondary"
@@ -507,22 +794,45 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
             gap: '6px'
           }}>
             <DollarSign size={14} color="var(--primary)" />
-            <span>Jami: {formatMoney(modelTotals.grandTotalAmount)} so'm ({formatNumber(modelTotals.grandTotalQuantity)} dona)</span>
+            <span>Jami: {displayedMoney(modelTotals.grandTotalAmount, display.ready, display.incomplete)} so'm ({formatNumber(modelTotals.grandTotalQuantity)} dona)</span>
           </div>
         </div>
       </div>
 
+      <div className="e2c-hisob-filters">
+        <div className="e2c-hisob-search">
+          <Search size={16} color="var(--text-muted)" aria-hidden="true" />
+          <input type="text" placeholder="Ishchi qidirish..." value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)} className="soft-input" />
+        </div>
+        <span className="e2c-hisob-filter-count">{filteredWorkers.length} / {workers.length} ishchi</span>
+      </div>
+
+      <p style={{ margin: '4px 20px', fontSize: '12px', color: 'var(--text-secondary)' }}>{HISTORICAL_TOTAL_WARNING}</p>
+      <p role="status" style={{ margin: '4px 20px', fontSize: '12px' }}>{display.label}</p>
+
+      {sourceLoading && <div><p role="status">Asl ishlar yuklanmoqda...</p>
+        <button type="button" onClick={() => {
+          sourceGuard.current.invalidate();
+          pendingContext.current = null;
+          setSourceLoading(false);
+        }}>Bekor qilish</button></div>}
+      {selection && pendingContext.current && contextIsCurrent(pendingContext.current) &&
+        <AdjustmentSourceDialog selection={selection} selectedEntry={selectedEntry} selectionSaving={selectionSaving}
+          selectionError={selectionError} currentQty={Number(model.hisobQuantities?.[selection.workerId]?.[selection.opName] || 0)}
+          onSelect={setSelectedEntry} onConfirm={() => void confirmSource()} onCancel={() => {
+            sourceGuard.current.invalidate();
+            pendingContext.current = null;
+            setSelection(null);
+            setSelectionError('');
+          }} />}
+
       {/* Modern Spreadsheet Table Grid */}
-      <div ref={tbodyRef} style={{ flex: 1, overflow: 'auto', position: 'relative', background: 'var(--bg-app)' }}>
-        <table
-          className="excel-table"
-          style={{
-            width: 'max-content',
-            minWidth: '100%',
-            borderCollapse: 'separate',
-            borderSpacing: 0
-          }}
-        >
+      <HisobTableViewport model={model} filteredWorkers={filteredWorkers} modelTotals={modelTotals}
+        cellAmounts={display.cellAmounts} moneyReady={display.ready} moneyIncomplete={display.incomplete}
+        columnWidths={columnWidths} selectedWorkerId={selectedWorkerId} quantityReset={quantityReset}
+        onSelectRow={handleSelectRow} onQuantityChange={handleQuantityChange} onCellFocus={handleCellFocus}
+        onOpenWorkerDetail={handleOpenWorkerDetail} header={
           <thead>
             {/* ROW 1: Operation Names */}
             <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', height: `${ROW1_H}px` }}>
@@ -538,7 +848,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
               <td
                 style={{
                   fontWeight: 700, paddingLeft: '12px',
-                  position: 'sticky', left: '54px', top: 0,
+                   position: 'sticky', left: `${columnWidths[0]}px`, top: 0,
                   backgroundColor: 'var(--bg-surface-subtle)', zIndex: 29, cursor: 'pointer',
                   color: 'var(--text-secondary)'
                 }}
@@ -612,13 +922,15 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
               />
               <td
                 style={{
-                  position: 'sticky', left: '54px', top: `${ROW1_H}px`,
+                   position: 'sticky', left: `${columnWidths[0]}px`, top: `${ROW1_H}px`,
                   backgroundColor: 'var(--bg-surface-subtle)', zIndex: 29
                 }}
               />
               {model.operations.map((op, i) => {
                 const rateColLet = getExcelColumnLetter(2 + i * 2);
                 const qtyColLet = getExcelColumnLetter(3 + i * 2);
+                const shownRate = display.closed ? display.operationRates[model.id]?.[op.name] ?? null : op.rate;
+                const rateLabel = shownRate == null || !Number.isFinite(Number(shownRate)) ? 'Noma’lum' : String(shownRate);
                 return (
                   <React.Fragment key={op.id || op.name}>
                     <td
@@ -632,15 +944,15 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                         top: `${ROW1_H}px`,
                         zIndex: 19
                       }}
-                      title={`Operatsiya narxi: ${op.rate} so'm`}
-                      onClick={() => handleCellFocus(`${rateColLet}2`, String(op.rate))}
-                    >
-                      <EditableNumericInput
-                        value={Number(op.rate) || 0}
-                        min={0}
-                        onCommit={(rate) => updateOperationRate(model.id, op.name, rate)}
-                        onFocus={() => handleCellFocus(`${rateColLet}2`, String(op.rate))}
-                        placeholder=""
+                       title={`${display.closed ? 'Yopilish tarifi' : 'Joriy operatsiya narxi'}: ${rateLabel}${display.closed ? ' so‘m' : ' so‘m'}`}
+                       onClick={display.closed ? undefined : () => handleCellFocus(`${rateColLet}2`, rateLabel)}
+                      >
+                        {display.closed ? <span aria-label={`Yopilish tarifi: ${rateLabel}`} style={{ color: '#f59e0b' }}>{rateLabel}</span> : <EditableNumericInput
+                         value={op.rate == null || !Number.isFinite(Number(op.rate)) ? 0 : Number(op.rate)}
+                         min={0}
+                         onCommit={(rate) => updateOperationRate(model.id, op.name, rate)}
+                         onFocus={() => handleCellFocus(`${rateColLet}2`, op.rate == null ? 'Noma’lum' : String(op.rate))}
+                         placeholder={op.rate == null || !Number.isFinite(Number(op.rate)) ? 'Noma’lum' : Number(op.rate) === 0 ? '0' : ''}
                         title="Dona narxini o'zgartirish"
                         style={{
                           width: '100%',
@@ -656,7 +968,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                           fontWeight: 700,
                           color: '#f59e0b'
                         }}
-                      />
+                       />}
                     </td>
                     <td
                       style={{
@@ -686,70 +998,8 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
               />
             </tr>
           </thead>
-
-            <tbody>
-              {useVirtual ? (
-                <>
-                  {paddingTop > 0 && (
-                    <tr style={{ height: `${paddingTop}px` }}>
-                      <td colSpan={totalCols} style={{ padding: 0, border: 'none' }} />
-                    </tr>
-                  )}
-                  {virtualItems.map((virtualRow) => {
-                    const worker = filteredWorkers[virtualRow.index];
-                    const rowNum = 3 + virtualRow.index;
-                    const workerQtyMap = (model.hisobQuantities && model.hisobQuantities[worker.id]) || {};
-                    const workerTot = modelTotals.workerTotals[worker.id]?.totalEarnings || 0;
-                    return (
-                      <WorkerRow
-                        key={worker.id}
-                        worker={worker}
-                        rowNum={rowNum}
-                        modelId={model.id}
-                        hisobSheetName={model.hisobSheetName}
-                        operations={model.operations}
-                        workerQtyMap={workerQtyMap}
-                        workerTot={workerTot}
-                        isSelected={selectedWorkerId === worker.id}
-                        onSelectRow={handleSelectRow}
-                        onQuantityChange={handleQuantityChange}
-                        onCellFocus={handleCellFocus}
-                        onOpenWorkerDetail={handleOpenWorkerDetail}
-                      />
-                    );
-                  })}
-                  {paddingBottom > 0 && (
-                    <tr style={{ height: `${paddingBottom}px` }}>
-                      <td colSpan={totalCols} style={{ padding: 0, border: 'none' }} />
-                    </tr>
-                  )}
-                </>
-              ) : (
-                filteredWorkers.map((worker, wIdx) => {
-                  const rowNum = 3 + wIdx;
-                  const workerQtyMap = (model.hisobQuantities && model.hisobQuantities[worker.id]) || {};
-                  const workerTot = modelTotals.workerTotals[worker.id]?.totalEarnings || 0;
-
-                  return (
-                    <WorkerRow
-                      key={worker.id}
-                      worker={worker}
-                      rowNum={rowNum}
-                      modelId={model.id}
-                      hisobSheetName={model.hisobSheetName}
-                      operations={model.operations}
-                      workerQtyMap={workerQtyMap}
-                      workerTot={workerTot}
-                      isSelected={selectedWorkerId === worker.id}
-                      onSelectRow={handleSelectRow}
-                      onQuantityChange={handleQuantityChange}
-                      onCellFocus={handleCellFocus}
-                      onOpenWorkerDetail={handleOpenWorkerDetail}
-                    />
-                  );
-                })
-              )}
-
+        } footer={
+          <>
               {/* Grand Total Row */}
               <tr
                 style={{
@@ -793,9 +1043,11 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                           borderLeft: '1px solid var(--border-subtle)',
                           cursor: 'pointer'
                         }}
-                        onClick={() => handleCellFocus(`${amountColLetter}${workers.length + 3}`, String(opTot?.totalAmount || 0), `=SUM(...)`)}
+                        onClick={() => handleCellFocus(`${amountColLetter}${workers.length + 3}`,
+                          !display.ready || workers.some(w => display.unknown.has(display.key(model.id, w.id, op.name)))
+                            ? 'Noma’lum' : String(opTot?.totalAmount || 0), `Davr bo‘yicha hisob`)}
                       >
-                        {formatMoney(opTot?.totalAmount || 0)}
+                        {displayedMoney(opTot?.totalAmount || 0, display.ready && !workers.some(w => display.unknown.has(display.key(model.id, w.id, op.name))), display.incomplete)}
                       </td>
                       <td
                         style={{
@@ -823,14 +1075,14 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                     borderLeft: '2px solid var(--primary)',
                     cursor: 'pointer'
                   }}
-                  onClick={() => handleCellFocus(`${getExcelColumnLetter(2 + model.operations.length * 2)}${workers.length + 3}`, String(modelTotals.grandTotalAmount), `=SUM(...)`)}
+                  onClick={() => handleCellFocus(`${getExcelColumnLetter(2 + model.operations.length * 2)}${workers.length + 3}`,
+                    display.ready ? String(modelTotals.grandTotalAmount) : 'Noma’lum', `Davr bo‘yicha hisob`)}
                 >
-                  {formatMoney(modelTotals.grandTotalAmount)}
+                  {displayedMoney(modelTotals.grandTotalAmount, display.ready, display.incomplete)}
                 </td>
               </tr>
-            </tbody>
-          </table>
-      </div>
+          </>
+        } />
     </div>
   );
 };

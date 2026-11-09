@@ -312,8 +312,8 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   };
 
   return (
-    <div className="excel-grid-container" style={{ padding: '20px', background: 'var(--bg-app)' }}>
-      <div style={{
+    <div className="excel-grid-container phase-b-view phase-b-patta-entry" style={{ padding: '20px', background: 'var(--bg-app)' }}>
+      <div className="e2b-entry-card" style={{
         maxWidth: '960px',
         margin: '0 auto',
         background: 'var(--bg-surface)',
@@ -323,7 +323,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         overflow: 'hidden'
       }}>
         {/* Modern Top Header */}
-        <div style={{
+        <div className="e2b-entry-header" style={{
           padding: '16px 20px',
           background: 'var(--bg-surface)',
           borderBottom: '1px solid var(--border-subtle)',
@@ -346,7 +346,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
               <Layers size={18} color="var(--primary)" />
             </div>
             <div>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
+              <div className="e2b-entry-title" style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
                 Patta Kiritish — {model.name}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -393,8 +393,9 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
           </div>
         </div>
 
-        {/* Form Card Grid Table */}
-        <table className="excel-table" style={{ width: '100%' }}>
+        <div className="e2b-entry-progress" aria-hidden="true"><span style={{ width: `${model.pattaOpsOrder.length ? Math.round(model.pattaOpsOrder.filter(op => Boolean(form.entries?.[op])).length / model.pattaOpsOrder.length * 100) : 0}%` }} /></div>
+        {/* Existing form fields and operation-order/keyboard bindings stay in the table. */}
+        <div className="e2b-entry-scroll"><table className="excel-table e2b-entry-table" style={{ width: '100%' }}>
           <colgroup>
             <col style={{ width: '54px' }} />
             <col style={{ width: '270px' }} />
@@ -405,7 +406,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
           <tbody>
             {/* ROW 1: Model Title */}
-            <tr style={{ height: '38px', backgroundColor: 'var(--bg-surface-subtle)' }}>
+            <tr className="e2b-entry-model" style={{ height: '38px', backgroundColor: 'var(--bg-surface-subtle)' }}>
               <td></td>
               <td 
                 colSpan={4} 
@@ -426,7 +427,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             </tr>
 
             {/* ROW 2: Konveyer & Date */}
-            <tr style={{ height: '36px' }}>
+            <tr className="e2b-entry-meta" style={{ height: '36px' }}>
               <td></td>
               <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
                 Конвейер
@@ -460,7 +461,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             </tr>
 
             {/* ROW 3: Party */}
-            <tr style={{ height: '36px' }}>
+            <tr className="e2b-entry-meta" style={{ height: '36px' }}>
               <td></td>
                 <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
@@ -492,7 +493,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             </tr>
 
             {/* ROW 4: Patta, Rang, Razmer */}
-            <tr style={{ height: '36px' }}>
+            <tr className="e2b-entry-meta" style={{ height: '36px' }}>
               <td></td>
                 <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
@@ -525,7 +526,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             </tr>
 
             {/* ROW 5: Qty, Color, Size */}
-            <tr style={{ height: '38px' }}>
+            <tr className="e2b-entry-meta" style={{ height: '38px' }}>
               <td></td>
               <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
                 Иш сони
@@ -597,7 +598,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             </tr>
 
             {/* ROW 6: Column Headers */}
-            <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', fontWeight: 700, height: '36px' }}>
+            <tr className="e2b-entry-op-heading" style={{ backgroundColor: 'var(--bg-surface-subtle)', fontWeight: 700, height: '36px' }}>
               <td style={{ textAlign: 'center' }}>№</td>
               <td style={{ paddingLeft: '14px' }}>Операция номи</td>
               <td style={{ textAlign: 'center', color: 'var(--primary)' }}>Номер</td>
@@ -617,7 +618,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
               const isOver = dragOverOpIdx === idx && draggedOpIdx !== null && draggedOpIdx !== idx;
 
               return (
-                <tr
+                  <tr className={`e2b-entry-op${workerIdVal && !isInvalidWorker ? ' is-complete' : ''}`}
                   key={opName}
                   draggable={!hasBlockingError}
                   onDragStart={(e) => handleOpDragStart(e, idx)}
@@ -827,10 +828,10 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
               </tr>
             )}
           </tbody>
-        </table>
+        </table></div>
 
         {/* Footer */}
-        <div style={{
+        <div className="e2b-entry-footer" style={{
           padding: '14px 20px',
           background: 'var(--bg-surface-subtle)',
           borderTop: '1px solid var(--border-subtle)',

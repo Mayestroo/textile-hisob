@@ -1,6 +1,7 @@
 'use strict';
 
 const { getLocalCursor, applyChangesBatch } = require('./changeFeedApplier.cjs');
+const { markFeedUnavailable } = require('./feedEvidence.cjs');
 const { dispatchOutbox } = require('./outboxDispatcher.cjs');
 const { rebuildCompanyProjections } = require('../database/projectionReader.cjs');
 const {
@@ -8,6 +9,7 @@ const {
   listOutboxReconciliationCandidates,
   recoverStrandedSendingOperations,
   recoverPeriodScopeMismatchTickets,
+  recoverCapturedTicketProvenanceTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
 } = require('../database/outboxManager.cjs');
@@ -28,7 +30,33 @@ async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
     for (const candidate of candidates) {
       const result = results.get(candidate.operation_id);
       if (result?.status !== 'APPLIED' || result.payloadHash !== candidate.payload_hash) continue;
-      if (acknowledgeOutboxOperation(db, companyId, candidate.operation_id, result.payloadHash)) reconciledCount++;
+      const op = db.prepare(`SELECT command_type, entity_type, entity_id, base_revision, causal_sequence FROM local_outbox
+        WHERE company_id = ? AND operation_id = ?`).get(companyId, candidate.operation_id);
+      if (op?.entity_type === 'ticket' && ['SubmitTicket', 'UpdateTicket', 'DeleteTicket'].includes(op.command_type)
+        && Number(result.serverRevision) !== Number(op.base_revision) + 1) continue;
+      if (!op || (op.command_type === 'SubmitTicket' && result.periodId &&
+        db.prepare('SELECT period_id FROM tickets WHERE company_id = ? AND id = ?').get(companyId, op.entity_id)?.period_id !== result.periodId)) continue;
+      if (acknowledgeOutboxOperation(db, companyId, candidate.operation_id, result.payloadHash, result.serverRevision)) {
+        reconciledCount++;
+        if (op.entity_type === 'ticket' && !db.prepare(`SELECT 1 FROM local_outbox WHERE company_id = ?
+          AND entity_type = 'ticket' AND entity_id = ? AND operation_id <> ?
+          AND (base_revision > ? OR causal_sequence > ?) LIMIT 1`)
+          .get(companyId, op.entity_id, candidate.operation_id, op.base_revision, op.causal_sequence)) {
+          if (op.command_type === 'SubmitTicket') db.prepare(`UPDATE tickets SET status = 'CONFIRMED',
+            server_revision = MAX(server_revision, ?) WHERE company_id = ? AND id = ?
+            AND status = 'PENDING_SYNC'`).run(result.serverRevision, companyId, op.entity_id);
+          if (op.command_type === 'UpdateTicket') db.prepare(`UPDATE tickets SET server_revision = MAX(server_revision, ?)
+            WHERE company_id = ? AND id = ? AND status = 'CONFIRMED'`)
+            .run(result.serverRevision, companyId, op.entity_id);
+          if (op.command_type === 'DeleteTicket') db.prepare(`UPDATE tickets SET status = 'VOIDED',
+            server_revision = MAX(server_revision, ?) WHERE company_id = ? AND id = ?
+            AND status = 'PENDING_DELETE'`).run(result.serverRevision, companyId, op.entity_id);
+        }
+        if (op.command_type === 'RecordProductionAdjustment' || op.command_type === 'ReverseProductionAdjustment') {
+          db.prepare(`UPDATE production_adjustments SET server_revision = MAX(server_revision, ?)
+            WHERE company_id = ? AND adjustment_id = ?`).run(result.serverRevision, companyId, op.entity_id);
+        }
+      }
     }
   }).immediate();
   return reconciledCount;
@@ -38,13 +66,15 @@ async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) 
   if (typeof syncClient?.pullChanges !== 'function') throw new Error('SYNC_PULL_UNAVAILABLE');
   const maxPages = Number.isSafeInteger(options.maxPages) && options.maxPages > 0 ? options.maxPages : 10;
   let pulledCount = 0;
+  let proofChanged = false;
   let pages = 0;
   let hasMore = true;
   let lastPull = { items: [], nextCursor: getLocalCursor(db), hasMore: false };
 
-  while (hasMore && pages < maxPages) {
+  try { while (hasMore && pages < maxPages) {
     const currentCursor = getLocalCursor(db);
     lastPull = await syncClient.pullChanges(currentCursor, 100);
+    if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
     const items = Array.isArray(lastPull.items) ? lastPull.items : [];
     const nextCursor = lastPull.nextCursor ?? currentCursor;
     const remoteNextPatta = Number(lastPull.nextPattaNumber);
@@ -52,22 +82,30 @@ async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) 
       .get(companyId)?.next_patta_number || 1);
     const cursorChanged = String(nextCursor) !== String(currentCursor);
     const pattaSequenceChanged = Number.isSafeInteger(remoteNextPatta) && remoteNextPatta !== localNextPatta;
-    if (items.length > 0 || cursorChanged || pattaSequenceChanged) {
-      const applyOptions = pattaSequenceChanged ? { nextPattaNumber: remoteNextPatta } : {};
+    const contactState = db.prepare("SELECT value FROM local_meta WHERE key='feed_contact_state'").get()?.value;
+    const proofNeedsCommit = lastPull.feedProtocolVersion === 1
+      ? contactState !== 'VERIFIED' : contactState === 'VERIFIED';
+    if (items.length > 0 || cursorChanged || pattaSequenceChanged || proofNeedsCommit) {
+      const beforeProof = `${contactState || ''}:${String(getLocalCursor(db))}`;
+      const applyOptions = { ...(pattaSequenceChanged ? { nextPattaNumber: remoteNextPatta } : {}), feedResponse: lastPull };
       const applyResult = applyChangesBatch(db, companyId, items, nextCursor, applyOptions);
       pulledCount += applyResult.appliedCount;
+      const afterProof = `${db.prepare("SELECT value FROM local_meta WHERE key='feed_contact_state'").get()?.value || ''}:${String(getLocalCursor(db))}`;
+      if (beforeProof !== afterProof)
+        proofChanged = true;
     }
     pages += 1;
     hasMore = lastPull.hasMore === true;
     if (hasMore && items.length === 0) throw new Error('SYNC_PULL_CURSOR_DID_NOT_ADVANCE');
     if (hasMore) await new Promise((resolve) => setImmediate(resolve));
-  }
+  } } catch (error) { if (!options.isContextCurrent || options.isContextCurrent()) markFeedUnavailable(db); throw error; }
 
   return {
     success: true,
     pulledCount,
     pages,
     hasMore,
+    proofChanged,
     finalCursor: getLocalCursor(db),
     nextPattaNumber: lastPull.nextPattaNumber
   };
@@ -97,6 +135,8 @@ async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) 
 async function executeReconnectProtocol(db, companyId, syncClient, options = {}) {
   let pulledInitial = 0;
   let pulledFinal = 0;
+  const initialProofState = `${db.prepare("SELECT value FROM local_meta WHERE key='feed_contact_state'").get()?.value || ''}:${String(getLocalCursor(db))}`;
+  let proofChanged = false;
 
   // ----------------------------------------------------
   // STEP 0: Recover stranded SENDING operations to PENDING
@@ -109,30 +149,33 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // ----------------------------------------------------
   let hasMore = true;
   let voidedPattaReuseSupported = false;
-  while (hasMore) {
+  try { while (hasMore) {
     const currentCursor = getLocalCursor(db);
     const pullRes = await syncClient.pullChanges(currentCursor, 100);
+    if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
     if (pullRes.capabilities?.voidedPattaReuse === true) voidedPattaReuseSupported = true;
 
-    if (pullRes.items && pullRes.items.length > 0) {
-      const applyRes = applyChangesBatch(db, companyId, pullRes.items, pullRes.nextCursor, {
-        nextPattaNumber: pullRes.nextPattaNumber
+    const pulledItems = Array.isArray(pullRes.items) ? pullRes.items : [];
+    if (pulledItems.length > 0) {
+      const applyRes = applyChangesBatch(db, companyId, pulledItems, pullRes.nextCursor, {
+        nextPattaNumber: pullRes.nextPattaNumber, feedResponse: pullRes
       });
       pulledInitial += applyRes.appliedCount;
     } else {
-      applyChangesBatch(db, companyId, [], pullRes.nextCursor ?? String(currentCursor), {
-        nextPattaNumber: pullRes.nextPattaNumber
+      applyChangesBatch(db, companyId, pulledItems, pullRes.nextCursor ?? String(currentCursor), {
+        nextPattaNumber: pullRes.nextPattaNumber, feedResponse: pullRes
       });
     }
 
     hasMore = Boolean(pullRes.hasMore);
-  }
+  } } catch (error) { if (!options.isContextCurrent || options.isContextCurrent()) markFeedUnavailable(db); throw error; }
 
   const supersededBatchSettingsCount = supersedeBatchSettingsAlreadyApplied(db, companyId);
   const recoveredVoidedPattaDuplicateCount = voidedPattaReuseSupported
     ? recoverVoidedPattaDuplicateTickets(db, companyId)
     : 0;
   const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
+  const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
 
   // A previous process can lose the HTTP acknowledgement after the server commits.
   // Reconcile those exact operation IDs before local causal dependencies are evaluated.
@@ -153,11 +196,17 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // STEP 6: Final pull of any interleaved changes
   // ----------------------------------------------------
   const finalCursor = getLocalCursor(db);
-  const finalPullRes = await syncClient.pullChanges(finalCursor, 100);
+  let finalPullRes;
+  try { finalPullRes = await syncClient.pullChanges(finalCursor, 100);
+    if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
+  } catch (error) { if (!options.isContextCurrent || options.isContextCurrent()) markFeedUnavailable(db); throw error; }
   const finalItems = Array.isArray(finalPullRes.items) ? finalPullRes.items : [];
-  const applyRes = applyChangesBatch(db, companyId, finalItems, finalPullRes.nextCursor, {
-    nextPattaNumber: finalPullRes.nextPattaNumber
-  });
+  let applyRes;
+  try { applyRes = applyChangesBatch(db, companyId, finalItems, finalPullRes.nextCursor, {
+    nextPattaNumber: finalPullRes.nextPattaNumber, feedResponse: finalPullRes
+  }); } catch (error) { markFeedUnavailable(db); throw error; }
+  const finalProofState = `${db.prepare("SELECT value FROM local_meta WHERE key='feed_contact_state'").get()?.value || ''}:${String(getLocalCursor(db))}`;
+  proofChanged = initialProofState !== finalProofState;
   pulledFinal += applyRes.appliedCount;
 
   // ----------------------------------------------------
@@ -175,9 +224,11 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     supersededBatchSettingsCount,
     recoveredVoidedPattaDuplicateCount,
     recoveredPeriodScopeMismatchCount,
+    recoveredCapturedTicketCount,
     reconciledCount,
     pushed: pushRes,
     pulledFinal,
+    proofChanged,
     finalCursor: getLocalCursor(db),
     projections
   };

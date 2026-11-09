@@ -19,6 +19,7 @@ const workbookCommandPipeline = require('./database/workbookCommandPipeline.cjs'
 const outboxManager = require('./database/outboxManager.cjs');
 const {
   loadWorkbookProjectionFromSqlite,
+  loadAdjustmentSources,
   rebuildCompanyProjections
 } = require('./database/projectionReader.cjs');
 const { storeOperatorSession, readOperatorSession, deleteOperatorSession } = require('./security/operatorSessionStore.cjs');
@@ -323,9 +324,11 @@ ipcMain.handle('db-read', (event, targetCompanyId) => {
   if (selectedRuntimeMode === 'sync') {
     try {
       const ready = assertRuntimeReady(targetCompanyId);
+      const data = require('./database/workbookPayrollRead.cjs')
+        .readWorkbookPayrollProjection(ready.db, ready.companyId);
       return {
         success: true,
-        data: loadWorkbookProjectionFromSqlite(ready.db, ready.companyId)
+        data
       };
     } catch (error) {
       return ErrorResponse(error);
@@ -336,6 +339,31 @@ ipcMain.handle('db-read', (event, targetCompanyId) => {
     return { success: true, data: readDb(validateTargetCompanyId(targetCompanyId)) };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+});
+
+// Lightweight proof-only refresh; does not hydrate or redraw the workbook.
+ipcMain.handle('payroll-read', (event, targetCompanyId, periodId) => {
+  try {
+    if (selectedRuntimeMode !== 'sync') throw new Error('SYNC_MODE_REQUIRED');
+    const ready = assertRuntimeReady(targetCompanyId);
+    if (typeof periodId !== 'string' || !periodId) throw new Error('PERIOD_ID_REQUIRED');
+    const payrollValuation = require('./database/payrollReader.cjs')
+      .loadPayrollValuationFromSqlite(ready.db, ready.companyId, periodId);
+    return { success: true, companyId: ready.companyId, periodId, payrollValuation };
+  } catch (error) { return ErrorResponse(error, 'PAYROLL_READ_FAILED'); }
+});
+
+ipcMain.handle('adjustment-sources', (event, companyId, modelId, workerId, opName) => {
+  try {
+    const ready = assertRuntimeReady(companyId);
+    if (typeof modelId !== 'string' || !modelId.trim() || !Number.isSafeInteger(workerId) ||
+        typeof opName !== 'string' || !opName.trim()) {
+      return { success: false, code: 'INVALID_SOURCE_QUERY', error: 'Model, worker and operation are required' };
+    }
+    return { success: true, data: loadAdjustmentSources(ready.db, ready.companyId, modelId, workerId, opName) };
+  } catch (error) {
+    return ErrorResponse(error);
   }
 });
 
@@ -573,6 +601,7 @@ if (isSyncEnabled) {
   const { dispatchOutbox } = require('./sync/outboxDispatcher.cjs');
   const { executePullOnlyProtocol, executeReconnectProtocol } = require('./sync/reconnectManager.cjs');
   const { acquireAndStoreLease, consumeNextPartyNumber } = require('./sync/leaseManager.cjs');
+  const operatorSessionDir = path.join(app.getPath('userData'), 'credentials');
 
   function createSyncClient(compId, withOperator = true) {
     const deviceToken = readDeviceCredential(compId);
@@ -580,7 +609,7 @@ if (isSyncEnabled) {
     const deviceId = license.checkLicenseStatus(app.getPath('userData')).machineId;
     return new SyncClient({
       token: deviceToken,
-      operatorToken: withOperator ? readOperatorSession(compId) : '',
+      operatorToken: withOperator ? readOperatorSession(compId, { baseDir: operatorSessionDir }) : '',
       deviceId,
       clientVersion: app.getVersion(),
       baseUrl: resolveApiBaseUrl({ allowHttp: !app.isPackaged }),
@@ -592,7 +621,7 @@ if (isSyncEnabled) {
     try {
       const compId = assertRuntimeReady(args?.companyId).companyId;
       const session = await createSyncClient(compId, false).loginOperator(args?.operatorId, args?.password);
-      storeOperatorSession(compId, session.token);
+      storeOperatorSession(compId, session.token, { baseDir: operatorSessionDir });
       return { success: true, session: { operatorId: session.operatorId, companyId: session.companyId, expiresAt: session.expiresAt } };
     } catch (err) {
       return ErrorResponse(err, 'OPERATOR_LOGIN_FAILED');
@@ -603,7 +632,7 @@ if (isSyncEnabled) {
     try {
       const compId = assertRuntimeReady(targetCompanyId).companyId;
       await createSyncClient(compId).revokeOperator();
-      deleteOperatorSession(compId);
+      deleteOperatorSession(compId, { baseDir: operatorSessionDir });
       return { success: true };
     } catch (err) {
       return ErrorResponse(err, 'OPERATOR_REVOKE_FAILED');
@@ -641,7 +670,8 @@ if (isSyncEnabled) {
       const ready = assertRuntimeReady(targetCompanyId);
       const compId = ready.companyId;
       const syncClient = createSyncClient(compId, false);
-      const result = await executePullOnlyProtocol(ready.db, compId, syncClient, { maxPages: 1 });
+       const result = await executePullOnlyProtocol(ready.db, compId, syncClient, { maxPages: 1,
+         isContextCurrent: () => { try { return assertRuntimeReady(compId).db === ready.db; } catch { return false; } } });
       return { success: true, result };
     } catch (err) {
       return ErrorResponse(err, 'SYNC_PULL_FAILED');
@@ -655,7 +685,8 @@ if (isSyncEnabled) {
       const userData = app.getPath('userData');
       const db = ready.db;
       const syncClient = createSyncClient(compId);
-      const result = await executeReconnectProtocol(db, compId, syncClient, { baseUserDataPath: userData });
+      const result = await executeReconnectProtocol(db, compId, syncClient, { baseUserDataPath: userData,
+        isContextCurrent: () => { try { return assertRuntimeReady(compId).db === db; } catch { return false; } } });
       return { success: true, result };
     } catch (err) {
       return ErrorResponse(err, 'SYNC_RECONNECT_FAILED');
@@ -674,11 +705,25 @@ if (isSyncEnabled) {
       const localArchive = require('./database/projectionReader.cjs').loadPeriodArchiveFromSqlite(
         ready.db, ready.companyId, period.id
       );
-      if (localArchive?.data) return { success: true, data: localArchive.data };
-      const remoteArchive = await createSyncClient(ready.companyId, false).getPeriodArchive(period.id);
-      if (!remoteArchive || typeof remoteArchive !== 'object') throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
-      const archiveData = remoteArchive.archive_json || remoteArchive.data || remoteArchive;
-      return { success: true, data: typeof archiveData === 'string' ? JSON.parse(archiveData) : archiveData };
+      let archiveData = localArchive?.data || null;
+      if (!archiveData) {
+        const remoteArchive = await createSyncClient(ready.companyId, false).getPeriodArchive(period.id);
+        if (!remoteArchive || typeof remoteArchive !== 'object') throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
+        const rawArchive = remoteArchive.archive_json || remoteArchive.data || remoteArchive;
+        archiveData = typeof rawArchive === 'string' ? JSON.parse(rawArchive) : rawArchive;
+      }
+      if (archiveData?.period?.id && archiveData.period.id !== period.id) {
+        throw Object.assign(new Error('PERIOD_ARCHIVE_CONTEXT_MISMATCH'), { code: 'PERIOD_ARCHIVE_CONTEXT_MISMATCH' });
+      }
+      // Revalidate authorization after any remote archive request. The valuation is read
+      // for this exact closed period and uses its archive roster/tariff, never active UI state.
+      const current = assertRuntimeReady(ready.companyId);
+      if (current.db !== ready.db || current.companyId !== ready.companyId) {
+        throw Object.assign(new Error('PERIOD_ARCHIVE_CONTEXT_CHANGED'), { code: 'PERIOD_ARCHIVE_CONTEXT_CHANGED' });
+      }
+      const payrollValuation = require('./database/workbookPayrollRead.cjs')
+        .readPeriodPayrollProjection(ready.db, ready.companyId, period.id, archiveData);
+      return { success: true, data: archiveData, payrollValuation, periodId: period.id, companyId: ready.companyId };
     } catch (error) {
       return ErrorResponse(error, 'PERIOD_ARCHIVE_READ_FAILED');
     }

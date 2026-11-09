@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   getRuntimeMode: () => ipcRenderer.invoke('get-runtime-mode'),
   dbRead: (companyId) => ipcRenderer.invoke('db-read', companyId),
+  PayrollRead: (companyId, periodId) => ipcRenderer.invoke('payroll-read', companyId, periodId),
+  AdjustmentSources: (companyId, modelId, workerId, opName) => ipcRenderer.invoke('adjustment-sources', companyId, modelId, workerId, opName),
   dbWrite: (data, options) => ipcRenderer.invoke('db-write', data, options),
   dbPatch: (patches, options) => ipcRenderer.invoke('db-patch', patches, options),
   archivesList: (companyId) => ipcRenderer.invoke('archives-list', companyId),

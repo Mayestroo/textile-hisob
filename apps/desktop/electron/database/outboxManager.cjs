@@ -184,18 +184,25 @@ function listOutboxReconciliationCandidates(db, companyId, limit = 100) {
   `).all(companyId, limit);
 }
 
-function acknowledgeOutboxOperation(db, companyId, operationId, acceptedPayloadHash) {
+function acknowledgeOutboxOperation(db, companyId, operationId, acceptedPayloadHash, serverRevision, acceptedChangeId = null) {
   const op = getOperation(db, companyId, operationId);
-  if (!op || op.status === 'SYNCED') return false;
-  if (acceptedPayloadHash && op.payload_hash !== acceptedPayloadHash) return false;
-  if (!['PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER'].includes(op.status)) return false;
+  if (!op) return false;
+  if (op.status === 'SYNCED' && op.accepted_payload_hash === acceptedPayloadHash
+    && Number(op.accepted_server_revision) === Number(serverRevision)
+    && String(op.accepted_change_id || '') === String(acceptedChangeId || '')) return false;
+  if (acceptedPayloadHash !== op.payload_hash || !/^[a-f0-9]{64}$/.test(acceptedPayloadHash)
+    || !Number.isSafeInteger(Number(serverRevision)) || Number(serverRevision) < 1) return false;
+  if (!['PENDING', 'SENDING', 'SYNCED', 'CONFLICT', 'DEAD_LETTER'].includes(op.status)) return false;
 
   const now = new Date().toISOString();
   const result = db.prepare(`
     UPDATE local_outbox
-    SET status = 'SYNCED', last_error = NULL, error_message = NULL, updated_at = ?
-    WHERE company_id = ? AND operation_id = ? AND status IN ('PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER')
-  `).run(now, companyId, operationId);
+    SET status = 'SYNCED', accepted_payload_hash = ?, accepted_server_revision = ?, accepted_change_id = ?,
+      last_error = NULL, error_message = NULL, updated_at = ?
+    WHERE company_id = ? AND operation_id = ? AND payload_hash = ?
+      AND status IN ('PENDING', 'SENDING', 'SYNCED', 'CONFLICT', 'DEAD_LETTER')
+  `).run(acceptedPayloadHash, Number(serverRevision), acceptedChangeId == null ? null : String(acceptedChangeId),
+    now, companyId, operationId, acceptedPayloadHash);
   return result.changes === 1;
 }
 
@@ -448,11 +455,58 @@ function recoverPeriodScopeMismatchTickets(db, companyId) {
       const endDate = period.end_date ? String(period.end_date).slice(0, 10) : null;
       return effectiveDate >= startDate && (!endDate || effectiveDate <= endDate);
     });
-    if (!matchingPeriod || payload.periodId === matchingPeriod.id) continue;
+    // A different captured ID is an accounting conflict, not a retryable
+    // opportunity to attach this ticket to the receipt-time period.
+    if (!matchingPeriod || payload.periodId !== matchingPeriod.id) continue;
 
-    // Keep the business date immutable. Retry only when it already belongs to
-    // a locally authoritative open period, with at most two scope repairs.
+    // Retry unchanged intent only if local authority still agrees with capture.
     updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_AFTER_PERIOD_SCOPE_RECONCILIATION');
+    recovered++;
+  }
+  return recovered;
+}
+
+// Retry only batch05B's obsolete provenance refusals after verifying the exact
+// queued capture against the local fact. Closed-period intent stays visible.
+function recoverCapturedTicketProvenanceTickets(db, companyId) {
+  const operations = db.prepare(`SELECT * FROM local_outbox WHERE company_id = ?
+    AND command_type = 'SubmitTicket' AND status = 'DEAD_LETTER'`).all(companyId);
+  const openPeriods = db.prepare(`SELECT id, start_date, end_date FROM periods
+    WHERE company_id = ? AND is_closed = 0`).all(companyId);
+  const closedPeriods = db.prepare(`SELECT start_date, end_date FROM periods
+    WHERE company_id = ? AND is_closed = 1`).all(companyId);
+  let recovered = 0;
+  for (const operation of operations) {
+    let error;
+    let payload;
+    try {
+      error = JSON.parse(operation.last_error || operation.error_message || '{}');
+      payload = JSON.parse(operation.payload_json);
+    } catch { continue; }
+    if (!['TICKET_RATE_PROVENANCE_REQUIRED', 'TICKET_PERIOD_PROVENANCE_REQUIRED'].includes(error?.code)
+      || computePayloadHash(canonicalStringify(payload)) !== operation.payload_hash
+      || payload.companyId !== companyId || payload.operationId !== operation.operation_id
+      || payload.ticketId !== operation.entity_id || !Array.isArray(payload.entries) || !payload.entries.length) continue;
+    const ticket = db.prepare('SELECT period_id, status, submitted_at FROM tickets WHERE company_id = ? AND id = ?')
+      .get(companyId, payload.ticketId);
+    if (!ticket || ticket.status !== 'PENDING_SYNC' || (ticket.period_id || null) !== (payload.periodId || null)) continue;
+    const date = payload.effectiveDate || String(payload.submittedAt || ticket.submitted_at || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const match = openPeriods.filter(p => date >= String(p.start_date).slice(0, 10)
+      && (!p.end_date || date <= String(p.end_date).slice(0, 10)));
+    if (closedPeriods.some(p => date >= String(p.start_date).slice(0, 10)
+      && (!p.end_date || date <= String(p.end_date).slice(0, 10)))) continue;
+    if (openPeriods.length && (match.length !== 1 || (payload.periodId && match[0].id !== payload.periodId))) continue;
+    const localEntries = db.prepare(`SELECT id, op_name, worker_id, rate_snapshot FROM ticket_entries
+      WHERE company_id = ? AND ticket_id = ?`).all(companyId, payload.ticketId);
+    const byId = new Map(localEntries.map(entry => [entry.id, entry]));
+    if (localEntries.length !== payload.entries.length
+      || payload.entries.some((entry, index) => {
+        const local = byId.get(`entry_${payload.ticketId}_${index}_${entry.opName}_${entry.workerId}`);
+        return !local || local.op_name !== entry.opName || String(local.worker_id) !== String(entry.workerId)
+          || local.rate_snapshot !== (entry.rateSnapshot ?? null);
+      })) continue;
+    updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_CAPTURED_TICKET_UNCHANGED');
     recovered++;
   }
   return recovered;
@@ -531,5 +585,6 @@ module.exports = {
   supersedeBatchSettingsAlreadyApplied,
   recoverVoidedPattaDuplicateTickets,
   recoverPeriodScopeMismatchTickets,
+  recoverCapturedTicketProvenanceTickets,
   recoverStrandedSendingOperations
 };

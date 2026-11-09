@@ -174,35 +174,60 @@ describe(' admin dashboard PostgreSQL projections', () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [{ id: 'period-1', name: 'Current period', start_date: new Date('2026-09-01T00:00:00.000Z'), end_date: null, is_closed: 0 }] })
       .mockResolvedValueOnce({ rows: [{
-        worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0',
-        gross: '0', pieces: '0', avans: '0', jarima: '0'
-      }] });
+        worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0'
+      }] }).mockResolvedValue({ rows: [] });
 
     const result = await serviceFor(query).getPayroll({ companyId: 'comp_novda' });
 
     expect(result.period).toMatchObject({ periodId: 'period-1', name: 'Current period' });
-    expect(result.workers[0]).toMatchObject({ workerId: 200, gross: 0, avans: 0, jarima: 0, net: 0, pieces: 0 });
-    expect(query.mock.calls[1][0]).toContain('ticket_entries');
-    expect(query.mock.calls[1][0]).toContain('worker_adjustments');
-    expect(query.mock.calls[1][1]).toEqual(['comp_novda', 'period-1', '2026-09-01', null]);
+    expect(result.workers[0]).toMatchObject({ workerId: 200, gross: 0, avans: 0, jarima: 0, net: 0, pieces: 0, accountingStatus: 'COMPLETE', unknownEntryCount: 0 });
+    expect(query.mock.calls[2][0]).toContain('ticket_entries');
+    expect(query.mock.calls[3][0]).toContain('production_adjustments');
+    expect(query.mock.calls[4][0]).toContain('worker_adjustments');
+    expect(query.mock.calls[4][1]).toEqual(['comp_novda', 'period-1', '2026-09-01', null, null]);
   });
 
-  it('keeps payroll facts scoped to the selected period and date-matches only unassigned legacy facts', async () => {
+  it('scopes closed-period earnings by explicit period without date-inferred money', async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [{ id: 'period-closed', name: 'September', start_date: new Date('2026-09-01T00:00:00.000Z'), end_date: new Date('2026-09-30T00:00:00.000Z'), is_closed: 1 }] })
-      .mockResolvedValueOnce({ rows: [{
-        worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0',
-        gross: '0', pieces: '0', avans: '0', jarima: '0'
-      }] });
+      .mockResolvedValueOnce({ rows: [{ worker_id: 200, worker_name: 'Known Worker', status: 'ACTIVE', staj: '0' }] })
+      .mockResolvedValue({ rows: [] });
 
-    await serviceFor(query).getPayroll({ companyId: 'comp_novda', periodId: 'period-closed' });
+    const result = await serviceFor(query).getPayroll({ companyId: 'comp_novda', periodId: 'period-closed' });
 
-    const payrollSql = query.mock.calls[1][0] as string;
-    expect(payrollSql).toContain('ticket.period_id = $2');
-    expect(payrollSql).toContain('ticket.period_id IS NULL');
-    expect(payrollSql).toContain('period_id IS NULL');
-    expect(payrollSql).not.toContain('ticket.is_closed = 1');
-    expect(query.mock.calls[1][1]).toEqual(['comp_novda', 'period-closed', '2026-09-01', '2026-09-30']);
+    expect(result.period).toMatchObject({ isClosed: true, restated: true });
+    expect(query.mock.calls[0][1]).toEqual(['comp_novda', 'period-closed']);
+    expect(query.mock.calls[2][0]).toContain("t.status = 'CONFIRMED'");
+    expect(query.mock.calls[2][0]).not.toContain('submitted_at');
+    expect(query.mock.calls[3][0]).toContain('original.original_period_id = $2');
+    expect(query.mock.calls[3][0]).not.toContain('created_at');
+  });
+
+  it('reports worker-specific unknown counts alongside resolved subtotals and legacy DTO fields', async () => {
+    const archive = { period: { id: 'period-closed', companyId: 'company-a' }, models: [{ id: 'm', operations: [
+      { name: 'Known', rate: 5 }, { name: 'Unknown', rate: null }, { name: 'Zero', rate: 0 }
+    ] }] };
+    const { canonicalStringify, computePayloadHash } = require('../sync/canonicalPayload.cjs');
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'period-closed', name: 'September', start_date: '2026-09-01', end_date: '2026-09-30', is_closed: 1 }] })
+      .mockResolvedValueOnce({ rows: [
+        { worker_id: 1, worker_name: 'Mixed', staj: '0' },
+        { worker_id: 2, worker_name: 'Known zero', staj: '0' }
+      ] })
+      .mockResolvedValueOnce({ rows: [
+        { worker_id: 1, period_id: 'period-closed', model_id: 'm', model_name: 'M', op_name: 'Known', rate: '5', qty: '2' },
+        { worker_id: 1, period_id: 'period-closed', model_id: 'm', model_name: 'M', op_name: 'Unknown', rate: null, qty: '4' },
+        { worker_id: 2, period_id: 'period-closed', model_id: 'm', model_name: 'M', op_name: 'Zero', rate: '0', qty: '3' }
+      ] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ worker_id: 1, type: 'AVANS', total: '12' }] })
+      .mockResolvedValueOnce({ rows: [{ archive_json: archive, sha256: computePayloadHash(canonicalStringify(archive)) }] });
+    const result = await serviceFor(query).getPayroll({ companyId: 'company-a', periodId: 'period-closed' });
+    expect(result.workers).toMatchObject([
+      { gross: 10, net: -2, unknownEntryCount: 1, unknownQuantity: 4, accountingStatus: 'INCOMPLETE', accountingReasons: expect.arrayContaining(['UNKNOWN_HISTORICAL_RATE']) },
+      { gross: 0, net: 0, unknownEntryCount: 0, accountingStatus: 'INCOMPLETE', accountingReasons: ['HISTORICAL_BASELINE_UNVERIFIED'] }
+    ]);
+    expect(query.mock.calls[2][1]).toEqual(['company-a', 'period-closed', null]);
   });
 
   it('rejects an unassigned non-allowlisted company mutation after checking the company-admin grants', async () => {

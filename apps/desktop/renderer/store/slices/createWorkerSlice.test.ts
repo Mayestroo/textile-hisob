@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkerSlice } from './createWorkerSlice';
+import { useAuthStore } from '../authStore';
 
 describe(' worker mutation boundary', () => {
   beforeEach(() => {
@@ -63,6 +64,64 @@ describe(' worker mutation boundary', () => {
     }));
     expect(api.dbRead).toHaveBeenCalledWith('company-a');
     expect(api.SyncReconnect).toHaveBeenCalledWith('company-a');
+    expect(state.saveToDisk).not.toHaveBeenCalled();
+  });
+
+  it('uses persisted selected-period balances for safe Oklad/Magazin deltas and requires payroll permissions', async () => {
+    useAuthStore.setState({ companyId: 'company-a', permissions: ['edit:workers', 'edit:avans'] as any });
+    const licenseStatus = { companyId: 'company-a' };
+    const currentPeriod = { id: 'period-current', name: 'Current', startDate: '2026-09-01', isClosed: false };
+    const state: any = {
+      licenseStatus, currentPeriod, workers: [{ id: 1, name: 'Worker', oklad: 1, magazin: 1 }],
+      periods: [currentPeriod], addNotification: vi.fn(), saveToDisk: vi.fn(),
+      payrollValuation: { companyId: 'company-a', period: { periodId: 'period-current' }, workers: [] }
+    };
+    const api = {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      WorkbookCommand: vi.fn().mockResolvedValue({ success: true, result: { committed: true } }),
+      dbRead: vi.fn().mockResolvedValue({ success: true, data: {
+        companyId: 'company-a', currentPeriod,
+        workers: [{ id: 1, name: 'Worker', staj: 0, avans: 0, jarima: 0, oklad: 500000, magazin: 40000 }],
+        periods: [currentPeriod],
+        payrollValuation: { companyId: 'company-a', period: { periodId: 'period-current' },
+          workers: [{ workerId: 1, accountingReasons: [] }] }
+      } }),
+      SyncReconnect: vi.fn().mockResolvedValue({ success: false })
+    };
+    vi.stubGlobal('window', { electronAPI: api });
+    const set = vi.fn((next: any) => Object.assign(state, next));
+    const slice = createWorkerSlice(set as any, (() => state) as any, {} as any);
+    expect(await slice.updateWorker(1, { oklad: 2000000, magazin: 100000 })).toBe(true);
+    const [command] = api.WorkbookCommand.mock.calls[0];
+    expect(command.payload.balanceAdjustments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'OKLAD', amountDelta: 1500000, periodId: 'period-current' }),
+      expect.objectContaining({ type: 'MAGAZIN', amountDelta: 60000, periodId: 'period-current' })
+    ]));
+    expect(api.dbRead).toHaveBeenCalledWith('company-a');
+    expect(state.saveToDisk).not.toHaveBeenCalled();
+
+    useAuthStore.setState({ permissions: [] as any });
+    api.WorkbookCommand.mockClear();
+    expect(await slice.updateWorker(1, { oklad: 3000000 })).toBe(false);
+    expect(api.WorkbookCommand).not.toHaveBeenCalled();
+    expect(state.addNotification).toHaveBeenCalledWith('error', 'FORBIDDEN', expect.any(String));
+  });
+
+  it('rejects invalid manual money and legacy-only persistence without clamping', async () => {
+    useAuthStore.setState({ companyId: 'company-a', permissions: ['edit:workers', 'edit:avans'] as any });
+    const licenseStatus = { companyId: 'company-a' };
+    const currentPeriod = { id: 'period-current', name: 'Current', startDate: '2026-09-01', isClosed: false };
+    const state: any = { licenseStatus, currentPeriod, workers: [{ id: 1, name: 'Worker' }], periods: [currentPeriod],
+      addNotification: vi.fn(), saveToDisk: vi.fn() };
+    const api = { getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'legacy' }),
+      WorkbookCommand: vi.fn(), dbRead: vi.fn(), SyncReconnect: vi.fn() };
+    vi.stubGlobal('window', { electronAPI: api });
+    const set = vi.fn((next: any) => Object.assign(state, next));
+    const slice = createWorkerSlice(set as any, (() => state) as any, {} as any);
+    expect(await slice.updateWorker(1, { oklad: -1 })).toBe(false);
+    expect(await slice.updateWorker(1, { magazin: 10.5 })).toBe(false);
+    expect(await slice.updateWorker(1, { oklad: 100 })).toBe(false);
+    expect(api.WorkbookCommand).not.toHaveBeenCalled();
     expect(state.saveToDisk).not.toHaveBeenCalled();
   });
 

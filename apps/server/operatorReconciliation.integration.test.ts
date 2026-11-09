@@ -81,7 +81,7 @@ describe('live PostgreSQL trusted operator reconciliation authority', () => {
   it('reconciliation mutation rolls back when failure is injected before commit', async () => {
     const { processSingleOperation } = require('./modules/sync/handlers/operations.cjs');
     const payload = operation('phase2-rollback', 'CONFIRM_LEGACY_AS_ADJUSTMENT');
-    await processSingleOperation(pool, { auth: { companyId, deviceId, operator: { operatorId: 'phase2-admin', companyId, deviceId, role: 'admin', isActive: true } } }, payload, { testHookBeforeCommit: async () => { throw new Error('fixture failure'); } });
+    await expect(processSingleOperation(pool, { auth: { companyId, deviceId, operator: { operatorId: 'phase2-admin', companyId, deviceId, role: 'admin', isActive: true } } }, payload, { testHookBeforeCommit: async () => { throw new Error('fixture failure'); } })).rejects.toThrow('fixture failure');
     const resolution = await pool.query('SELECT COUNT(*) FROM migration_reconciliation_resolutions WHERE company_id = $1', [companyId]);
     const adjustment = await pool.query('SELECT COUNT(*) FROM production_adjustments WHERE company_id = $1', [companyId]);
     const log = await pool.query('SELECT COUNT(*) FROM change_log WHERE company_id = $1', [companyId]);

@@ -35,26 +35,23 @@ export const EditSubmittedTicketModal: React.FC = () => {
     return map;
   }, [workers]);
 
-  // Operations order and rate map
+  // Display the saved ticket rate, never today's tariff for old work.
   const operationsList = useMemo(() => {
     if (!model) return [];
-    const opRateMap = new Map<string, number>();
-    for (const op of model.operations) {
-      opRateMap.set(op.name, op.rate);
-    }
 
     const order = model.pattaOpsOrder && model.pattaOpsOrder.length > 0
       ? model.pattaOpsOrder
       : model.operations.map((o) => o.name);
 
     return order.map((opName) => {
-      const op = model.operations.find((o) => o.name === opName);
+      const originals = (ticket?.entries || []).filter((entry) => entry.opName === opName);
       return {
         name: opName,
-        rate: op?.rate !== undefined ? op.rate : (opRateMap.get(opName) || 0)
+        rate: originals.length === 1 ? originals[0].rateSnapshot ?? null : null,
+        entryId: originals.length === 1 ? originals[0].entryId : undefined
       };
     });
-  }, [model]);
+  }, [model, ticket]);
 
   // Form state: opName -> workerId string (e.g. "4")
   const [entriesMap, setEntriesMap] = useState<Record<string, string>>({});
@@ -94,12 +91,14 @@ export const EditSubmittedTicketModal: React.FC = () => {
   // Calculate live total sum for assigned operations
   let liveTotalAmount = 0;
   let assignedOpsCount = 0;
+  let unknownRateCount = 0;
 
   for (const op of operationsList) {
     const val = entriesMap[op.name];
     const wId = val ? parseInt(val, 10) : null;
     if (wId && workerMap.has(wId)) {
-      liveTotalAmount += op.rate * ticketQty;
+      if (op.rate !== null) liveTotalAmount += op.rate * ticketQty;
+      else unknownRateCount++;
       assignedOpsCount++;
     }
   }
@@ -114,9 +113,18 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
   const handleSave = async () => {
     setErrorMsg(null);
+    const names = (ticket.entries || []).map((entry) => entry.opName);
+    if (new Set(names).size !== names.length || new Set(operationsList.map((op) => op.name)).size !== operationsList.length) {
+      setErrorMsg('Takrorlangan operatsiyalarni bu oynada xavfsiz tahrirlab bo’lmaydi.');
+      return;
+    }
+    if (names.some((name) => !operationsList.some((op) => op.name === name))) {
+      setErrorMsg('Avvalgi operatsiya modelda topilmadi; uning tarixiy narxini taxmin qilib bo’lmaydi.');
+      return;
+    }
 
     // Validate: Check if all non-empty IDs are valid workers
-    const updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number }> = [];
+    const updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string }> = [];
 
     for (const op of operationsList) {
       const valStr = entriesMap[op.name];
@@ -133,7 +141,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
         updatedEntries.push({
           opName: op.name,
           workerId: wId,
-          rateSnapshot: op.rate
+          ...(op.entryId ? { entryId: op.entryId } : {}),
+          ...(op.rate !== null ? { rateSnapshot: op.rate } : {})
         });
       }
     }
@@ -156,7 +165,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
   return (
     <div 
-      className="modal-overlay" 
+      className="modal-overlay phase-c-dialog"
       onClick={closeModal}
       style={{
         position: 'fixed',
@@ -287,7 +296,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 const hasId = valStr !== '';
                 const isFound = wId ? workerMap.has(wId) : false;
                 const workerName = isFound && wId ? workerMap.get(wId) : '';
-                const opAmount = isFound ? op.rate * ticketQty : 0;
+                const opAmount = isFound && op.rate !== null ? op.rate * ticketQty : null;
 
                 return (
                   <tr 
@@ -310,7 +319,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
                     {/* Dona narxi */}
                     <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '12px' }}>
-                      {op.rate.toLocaleString()} so'm
+                      {op.rate === null ? 'Noma’lum' : `${op.rate.toLocaleString()} so'm`}
                     </td>
 
                     {/* Worker ID input */}
@@ -361,8 +370,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
                     </td>
 
                     {/* Subtotal */}
-                    <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: opAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {opAmount > 0 ? formatMoney(opAmount) : '—'}
+                    <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: opAmount !== null && opAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                      {opAmount === null && isFound ? 'Noma’lum' : opAmount !== null && opAmount > 0 ? formatMoney(opAmount) : '—'}
                     </td>
                   </tr>
                 );
@@ -387,7 +396,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
               Tanlangan operatsiyalar: <strong>{assignedOpsCount} ta</strong>
             </div>
             <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--primary)' }}>
-              Jami summa: {formatMoney(liveTotalAmount)} so'm
+              Jami summa: {formatMoney(liveTotalAmount)} so'm{unknownRateCount > 0 ? ` (${unknownRateCount} narx noma’lum)` : ''}
             </div>
           </div>
 

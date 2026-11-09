@@ -56,6 +56,17 @@ export const WorkerManagerModal: React.FC = () => {
     setEditingStaj('');
   };
 
+  const cancelEditing = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Escape' || editingWorkerId === null) return;
+    const row = event.currentTarget.closest('tr');
+    event.preventDefault();
+    event.stopPropagation();
+    setEditingWorkerId(null);
+    setEditingName('');
+    setEditingStaj('');
+    requestAnimationFrame(() => row?.querySelector<HTMLButtonElement>('button[title="Tahrirlash"]')?.focus());
+  };
+
   const handleDelete = async (workerId: number, name: string) => {
     const ok = await confirmAction({
       title: "Ishchini o'chirish",
@@ -75,8 +86,8 @@ export const WorkerManagerModal: React.FC = () => {
   const stajWorkersCount = workers.filter((w) => (w.staj || 0) > 0).length;
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
-      <div className="modal-card" style={{ maxWidth: '720px', width: '95%' }} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay phase-c-modal phase-c-worker-manager" onClick={closeModal}>
+      <div className="modal-card e3-manager-card" style={{ maxWidth: '720px', width: '95%' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
             <Users size={20} />
@@ -103,7 +114,7 @@ export const WorkerManagerModal: React.FC = () => {
               <Download size={14} />
               <span>Excel yuklab olish</span>
             </button>
-            <button
+            <button aria-label="Oynani yopish"
               onClick={closeModal}
               className="soft-btn soft-btn-secondary"
               style={{ width: '32px', height: '32px', padding: 0, borderRadius: 'var(--radius-full)' }}
@@ -131,7 +142,7 @@ export const WorkerManagerModal: React.FC = () => {
           </div>
 
           {/* Add Worker Form */}
-          <form onSubmit={handleAdd} style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
+          <form className="e3-manager-form" onSubmit={handleAdd} style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
             <input
               type="text"
               placeholder="Yangi ishchi F.I.O..."
@@ -176,7 +187,7 @@ export const WorkerManagerModal: React.FC = () => {
           </div>
 
           {/* Worker List Table */}
-          <div style={{
+          <div className="e3-manager-table" style={{
             maxHeight: '380px',
             overflowY: 'auto',
             overflowX: 'hidden',
@@ -229,6 +240,7 @@ export const WorkerManagerModal: React.FC = () => {
                               type="text"
                               value={editingName}
                               onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={cancelEditing}
                               autoFocus
                               className="soft-input"
                               style={{ height: '28px', fontWeight: 600 }}
@@ -259,7 +271,7 @@ export const WorkerManagerModal: React.FC = () => {
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') saveEditing(w.id);
-                                if (e.key === 'Escape') setEditingWorkerId(null);
+                                cancelEditing(e);
                               }}
                               className="soft-input"
                               style={{ height: '28px', textAlign: 'right', fontWeight: 700, color: '#7c3aed' }}

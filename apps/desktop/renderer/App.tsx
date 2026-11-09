@@ -259,6 +259,18 @@ export const App: React.FC = () => {
   };
 
   const modalType = useWorkbookStore((s) => s.modalState.type);
+  const closeModal = useWorkbookStore((s) => s.closeModal);
+
+  useEffect(() => {
+    if (!modalType) return;
+    const handleModalEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || useWorkbookStore.getState().confirmState) return;
+      event.preventDefault();
+      closeModal();
+    };
+    window.addEventListener('keydown', handleModalEscape);
+    return () => window.removeEventListener('keydown', handleModalEscape);
+  }, [modalType, closeModal]);
 
   return (
     <div className="excel-app">

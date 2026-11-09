@@ -184,15 +184,20 @@ function assertObject(value, field) {
 function normalizeWorkerAdjustment(adjustment, index) {
   assertObject(adjustment, `balanceAdjustments[${index}]`);
   const type = assertIdentifier(adjustment.type, `balanceAdjustments[${index}].type`);
-  if (type !== 'AVANS' && type !== 'JARIMA') {
-    throw createCommandError('INVALID_WORKER_ADJUSTMENT_TYPE', 'Worker balance type must be AVANS or JARIMA');
+  const allowedTypes = new Set(['AVANS', 'JARIMA', 'OKLAD', 'MAGAZIN']);
+  if (!allowedTypes.has(type)) {
+    throw createCommandError('INVALID_WORKER_ADJUSTMENT_TYPE', 'Worker balance type is not supported');
   }
   const amountDelta = assertFiniteNumber(adjustment.amountDelta, `balanceAdjustments[${index}].amountDelta`, { nonZero: true });
+  if (['OKLAD', 'MAGAZIN'].includes(type) && !Number.isSafeInteger(amountDelta)) {
+    throw createCommandError('INVALID_NUMBER', `balanceAdjustments[${index}].amountDelta must be a safe integer`);
+  }
+  const periodId = assertEntityKey(adjustment.periodId, `balanceAdjustments[${index}].periodId`);
   return {
     adjustmentId: assertIdentifier(adjustment.adjustmentId, `balanceAdjustments[${index}].adjustmentId`),
     type,
     amountDelta,
-    periodId: assertEntityKey(adjustment.periodId, `balanceAdjustments[${index}].periodId`),
+    periodId,
     description: adjustment.description === undefined ? null : assertText(String(adjustment.description), `balanceAdjustments[${index}].description`, 500)
   };
 }
@@ -206,8 +211,13 @@ function normalizeWorkerPayload(command, companyId, operationId, commandId, { de
   if (deactivate) return { commandId, operationId, companyId, workerId };
   const status = input.status === undefined ? 'ACTIVE' : assertIdentifier(input.status, 'status');
   if (status !== 'ACTIVE') throw createCommandError('FORBIDDEN_AUTHORITY_FIELD', 'Only the active worker state may be set by UpsertWorker');
-  if (input.balanceAdjustments !== undefined && (!Array.isArray(input.balanceAdjustments) || input.balanceAdjustments.length > 2)) {
-    throw createCommandError('INVALID_WORKER_ADJUSTMENTS', 'balanceAdjustments must contain at most two entries');
+  if (input.balanceAdjustments !== undefined && (!Array.isArray(input.balanceAdjustments) || input.balanceAdjustments.length > 4)) {
+    throw createCommandError('INVALID_WORKER_ADJUSTMENTS', 'balanceAdjustments must contain at most four entries');
+  }
+  const balanceAdjustments = (input.balanceAdjustments || []).map(normalizeWorkerAdjustment);
+  if (new Set(balanceAdjustments.map((item) => item.type)).size !== balanceAdjustments.length ||
+      new Set(balanceAdjustments.map((item) => item.adjustmentId)).size !== balanceAdjustments.length) {
+    throw createCommandError('DUPLICATE_WORKER_ADJUSTMENT', 'Each worker adjustment type and ID may appear only once per command');
   }
   return {
     commandId,
@@ -218,7 +228,7 @@ function normalizeWorkerPayload(command, companyId, operationId, commandId, { de
     staj: assertFiniteNumber(input.staj ?? 0, 'staj', { min: 0 }),
     role: input.role === undefined || input.role === null || input.role === '' ? null : assertText(String(input.role), 'role', 128),
     status,
-    balanceAdjustments: (input.balanceAdjustments || []).map(normalizeWorkerAdjustment)
+    balanceAdjustments
   };
 }
 
@@ -241,6 +251,9 @@ function normalizeCreateWorkerPayload(command, companyId, operationId, commandId
   if (input.status !== undefined) throw createCommandError('FORBIDDEN_AUTHORITY_FIELD', 'Worker status is set only by the server');
   if (input.balanceAdjustments !== undefined && (!Array.isArray(input.balanceAdjustments) || input.balanceAdjustments.length > 2)) {
     throw createCommandError('INVALID_WORKER_ADJUSTMENTS', 'balanceAdjustments must contain at most two entries');
+  }
+  if ((input.balanceAdjustments || []).some((adjustment) => ['OKLAD', 'MAGAZIN'].includes(adjustment?.type))) {
+    throw createCommandError('INVALID_WORKER_CREATE_REQUEST', 'Manual period payroll adjustments are only available on an existing worker');
   }
   return {
     commandId,
@@ -489,6 +502,7 @@ function normalizeCommand(command, activeCompanyId) {
         return {
           opName: assertText(entry.opName, `entries[${index}].opName`, 256),
           workerId,
+          ...(entry.entryId ? { entryId: assertEntityKey(entry.entryId, `entries[${index}].entryId`) } : {}),
           ...(entry.workerNameSnapshot ? { workerNameSnapshot: assertText(entry.workerNameSnapshot, `entries[${index}].workerNameSnapshot`, 256) } : {}),
           ...(entry.rateSnapshot === undefined || entry.rateSnapshot === null ? {} : { rateSnapshot: assertFiniteNumber(entry.rateSnapshot, `entries[${index}].rateSnapshot`) }),
           ...(entry.brak ? { brak: assertText(entry.brak, `entries[${index}].brak`, 256) } : {})
@@ -754,10 +768,9 @@ function executeUpsertWorker(db, normalized, baseRevision) {
       .run(payload.name, payload.staj, payload.role, now, normalized.companyId, payload.workerId);
   }
   for (const adjustment of payload.balanceAdjustments) {
-    if (adjustment.periodId) {
-      const period = db.prepare('SELECT id FROM periods WHERE company_id = ? AND id = ? AND is_closed = 0').get(normalized.companyId, adjustment.periodId);
-      if (!period) throw createCommandError('PERIOD_NOT_FOUND', `Period "${adjustment.periodId}" was not found`);
-    }
+    const period = db.prepare('SELECT id FROM periods WHERE company_id = ? AND id = ? AND is_closed = 0')
+      .get(normalized.companyId, adjustment.periodId);
+    if (!period) throw createCommandError('PERIOD_NOT_FOUND', `Open period "${adjustment.periodId}" was not found`);
     db.prepare(`
       INSERT INTO worker_adjustments (
         id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
@@ -804,21 +817,49 @@ function executeWorkbookMutation(db, normalized, options) {
     const previousEntries = db.prepare(`SELECT id, company_id, op_name, worker_id, worker_name_snapshot,
         rate_snapshot, brak, qty, created_at
       FROM ticket_entries WHERE company_id = ? AND ticket_id = ? ORDER BY id`).all(companyId, entityId);
+    const oldById = new Map(previousEntries.map((row) => [row.id, row]));
+    const oldByName = new Map();
+    for (const row of previousEntries) {
+      const list = oldByName.get(row.op_name) || [];
+      list.push(row);
+      oldByName.set(row.op_name, list);
+    }
+    const claimedIds = new Set();
+    const reservedIds = new Set(oldById.keys());
+    const resolved = payload.entries.map((entry, index) => {
+      const candidates = oldByName.get(entry.opName) || [];
+      const original = entry.entryId ? oldById.get(entry.entryId) : candidates.length === 1 ? candidates[0] : null;
+      if ((entry.entryId && (!original || original.op_name !== entry.opName)) ||
+          (!entry.entryId && candidates.length > 1) || (original && claimedIds.has(original.id))) {
+        throw createCommandError('AMBIGUOUS_TICKET_ENTRY', `Cannot identify original work for operation "${entry.opName}"`);
+      }
+      if (original) claimedIds.add(original.id);
+      let entryId = original?.id;
+      if (!entryId) {
+        // Each edit has a distinct operationId, so a later edit cannot reuse
+        // the identity of an entry removed in an earlier revision.
+        let candidate = index + 1;
+        while (reservedIds.has(`${entityId}_edit_${normalized.operationId}_entry_${candidate}`)) candidate++;
+        entryId = `${entityId}_edit_${normalized.operationId}_entry_${candidate}`;
+        reservedIds.add(entryId);
+      }
+      return { ...entry, entryId, rateSnapshot: original?.rate_snapshot == null ? null : Number(original.rate_snapshot), brak: original?.brak ?? null };
+    });
     db.prepare('DELETE FROM ticket_entries WHERE company_id = ? AND ticket_id = ?').run(companyId, entityId);
     const insertEntry = db.prepare(`INSERT INTO ticket_entries (
       id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, brak, qty, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const now = new Date().toISOString();
-    payload.entries.forEach((entry, index) => {
+    resolved.forEach((entry) => {
       insertEntry.run(
-        `${entityId}_entry_${index + 1}`,
+        entry.entryId,
         entityId,
         companyId,
         entry.opName,
         entry.workerId,
         entry.workerNameSnapshot || null,
         entry.rateSnapshot ?? null,
-        entry.brak || null,
+        entry.brak,
         current.qty,
         now
       );
@@ -949,11 +990,20 @@ function executeClosePeriod(db, normalized) {
     SELECT id, sizes_json, archived_patta_numbers_json
     FROM parties WHERE company_id = ? AND status != 'CLOSED' AND is_closed = 0 ORDER BY id
   `).all(companyId);
+  // Local closure is optimistic (queued submissions may not have an ACK yet).
+  // Retention below still archives all facts; deleted/rejected work is not fulfilled.
+  // Failed SubmitTicket responses leave the fact PENDING_SYNC, so consult the
+  // outbox as well before treating that optimistic fact as valid work.
   const periodTickets = db.prepare(`
     SELECT party_record_id, patta_number FROM tickets
-    WHERE company_id = ? AND is_closed = 0 AND (
+    WHERE company_id = ? AND is_closed = 0 AND status IN ('CONFIRMED', 'PENDING_SYNC') AND (
       period_id = ? OR (period_id IS NULL AND date(submitted_at) >= date(?) AND date(submitted_at) <= date(?))
-    ) ORDER BY party_record_id, patta_number
+    ) AND (status = 'CONFIRMED' OR NOT EXISTS (
+      SELECT 1 FROM local_outbox submission
+      WHERE submission.company_id = tickets.company_id AND submission.entity_id = tickets.id
+        AND submission.entity_type = 'ticket' AND submission.command_type = 'SubmitTicket'
+        AND submission.status IN ('CONFLICT', 'DEAD_LETTER', 'SUPERSEDED')
+    )) ORDER BY party_record_id, patta_number
   `).all(companyId, entityId, period.start_date, payload.endDate);
   const ticketsByParty = new Map();
   for (const ticket of periodTickets) {

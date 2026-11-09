@@ -337,10 +337,12 @@ def admin_webapp_keyboard():
 def process_update(update):
     message = update.get("message") or update.get("edited_message") or {}
     sender = message.get("from") or {}
-    chat_id = (message.get("chat") or {}).get("id")
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
     telegram_id = sender.get("id")
     text = message.get("text")
-    if not chat_id or not text:
+    if (not chat_id or not telegram_id or not text or chat.get("type") != "private"
+            or str(chat_id) != str(telegram_id)):
         return
     command = str(text).strip().split(maxsplit=1)[0].split("@", 1)[0].lower()
     if command not in ("/start", "/help"):

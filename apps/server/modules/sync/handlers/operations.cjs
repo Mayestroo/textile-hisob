@@ -21,15 +21,23 @@ async function resolveTicketPeriodForDate(client, companyId, effectiveDate, requ
   const openPeriodsResult = await client.query(`SELECT id, start_date, end_date FROM periods
     WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC, id DESC`, [companyId]);
   const openPeriods = openPeriodsResult.rows || [];
-  const matchingPeriod = openPeriods.find((period) => {
+  const matchingPeriods = openPeriods.filter((period) => {
     const startDate = dateOnly(period.start_date);
     const endDate = period.end_date ? dateOnly(period.end_date) : null;
     return effectiveDate >= startDate && (!endDate || effectiveDate <= endDate);
   });
-  if (matchingPeriod) return matchingPeriod.id;
+  if (matchingPeriods.length > 1) {
+    throw createOpError('PERIOD_SCOPE_MISMATCH', 'Work date belongs to more than one open period');
+  }
+  const matchingPeriod = matchingPeriods[0];
+  if (matchingPeriod) {
+    // Legacy commands did not capture a period. Resolve from their recorded work date.
+    if (!requestedPeriodId || requestedPeriodId === matchingPeriod.id) return matchingPeriod.id;
+    throw createOpError('PERIOD_SCOPE_MISMATCH', 'Captured ticket period differs from the open period containing the work date',
+      { effectiveDate, requestedPeriodId, openPeriodId: matchingPeriod.id });
+  }
 
-  // Keep legacy companies without periods working, but never attach a dated ticket
-  // to an unrelated or closed period.
+  // Legacy companies without periods retain an unknown period, not a fabricated one.
   if (!openPeriods.length && !requestedPeriodId) return null;
 
   const requestedPeriod = openPeriods.find((period) => period.id === requestedPeriodId);
@@ -68,8 +76,15 @@ function createOperationsHandler(pool) {
     const results = [];
 
     for (const op of operations) {
-      const opResult = await processSingleOperation(pool, req, op);
-      results.push(opResult);
+      try {
+        results.push(await processSingleOperation(pool, req, op));
+      } catch (_error) {
+        // Earlier operations may have committed. The caller must replay the identical batch.
+        return reply.code(503).send({
+          success: false,
+          error: { code: 'SYNC_RETRY_REQUIRED', message: 'Sync could not be confirmed; retry the same operations' }
+        });
+      }
     }
 
     return reply.send({
@@ -140,22 +155,52 @@ function createOperationStatusHandler(pool) {
   };
 }
 
+async function canonicalDedupEntityId(client, companyId, entityType, entityId) {
+  // Dedup stores the mutation's target ID, which can differ from a legacy request ID.
+  const aliases = {
+    model: ['model_id_aliases', 'legacy_model_id', 'canonical_model_id'],
+    party: ['party_id_aliases', 'legacy_party_id', 'canonical_party_id']
+  };
+  if (aliases[entityType]) {
+    const [table, legacy, canonical] = aliases[entityType];
+    const result = await client.query(`SELECT ${canonical} FROM ${table} WHERE company_id = $1 AND ${legacy} = $2`,
+      [companyId, entityId]);
+    return String(result.rows[0]?.[canonical] || entityId);
+  }
+  // Worker commands validate and store numeric IDs; there is no worker alias table.
+  if (entityType === 'worker' && Number.isSafeInteger(Number(entityId)) && Number(entityId) > 0) {
+    return String(Number(entityId));
+  }
+  return String(entityId);
+}
+
 /**
  * Processes a single operation inside ONE isolated PostgreSQL transaction.
  */
 async function processSingleOperation(pool, req, op, options = {}) {
   let client = null;
   let transactionStarted = false;
+  let transactionUncertain = false;
+  let discardClient = false;
   let envelope = null;
   try {
     // Envelope and tenant checks happen before acquiring a connection or mutation lock.
     envelope = validateOperationEnvelope(op);
-    validateCompanyScope(req, envelope.companyId);
+    try {
+      validateCompanyScope(req, envelope.companyId);
+    } catch (error) {
+      if (error?.code === 'AUTH_REQUIRED' || error?.code === 'COMPANY_SCOPE_MISMATCH') {
+        error[Symbol.for('hisob.sync.applicationError')] = true;
+      }
+      throw error;
+    }
     const companyId = req.auth.companyId;
 
     client = await pool.connect();
+    transactionUncertain = true;
     await client.query('BEGIN');
     transactionStarted = true;
+    transactionUncertain = false;
 
     // The same company lock fences bootstrap snapshots from uncommitted log IDs.
     await acquireCompanyChangeLock(client, req.auth.companyId);
@@ -199,12 +244,19 @@ async function processSingleOperation(pool, req, op, options = {}) {
 
     if (dedupRes.rows.length > 0) {
       const existing = dedupRes.rows[0];
-      if (existing.payload_hash === serverHash) {
+      if (existing.payload_hash === serverHash && existing.command_type === commandType &&
+          existing.entity_type === entityType &&
+          await canonicalDedupEntityId(client, companyId, entityType, existing.entity_id) ===
+          await canonicalDedupEntityId(client, companyId, entityType, entityId)) {
         // Replay: exact semantic match
+        transactionUncertain = true;
         await client.query('COMMIT');
+        transactionStarted = false;
+        transactionUncertain = false;
         return {
           operationId,
           status: 'APPLIED',
+          payloadHash: serverHash,
           serverRevision: existing.server_revision,
           cursor: existing.result_json?.cursor || null,
           ...(existing.result_json?.periodId ? { periodId: existing.result_json.periodId } : {}),
@@ -212,7 +264,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
           isReplay: true
         };
       } else {
-        // Idempotency conflict: same operationId, different payload hash
+        // An identical payload alone does not identify the command or target.
         throw createOpError(
           'IDEMPOTENCY_CONFLICT',
           `Operation "${operationId}" was previously executed with different semantic payload`
@@ -289,11 +341,15 @@ async function processSingleOperation(pool, req, op, options = {}) {
       ]
     );
 
+    transactionUncertain = true;
     await client.query('COMMIT');
+    transactionStarted = false;
+    transactionUncertain = false;
 
     return {
       operationId,
       status: 'APPLIED',
+      payloadHash: serverHash,
       serverRevision,
       cursor: String(changeId),
       ...(mutationResult.periodId ? { periodId: mutationResult.periodId } : {}),
@@ -301,13 +357,18 @@ async function processSingleOperation(pool, req, op, options = {}) {
       isReplay: false
     };
   } catch (err) {
+    let rollbackFailed = false;
     if (client && transactionStarted) {
       try {
         await client.query('ROLLBACK');
-      } catch (rbErr) {
-        // ignore rollback err
+        transactionStarted = false;
+      } catch (_rollbackError) {
+        rollbackFailed = true;
       }
     }
+
+    discardClient = transactionUncertain || rollbackFailed || !err?.[Symbol.for('hisob.sync.applicationError')];
+    if (discardClient) throw err;
 
     const code = err.code || 'OPERATION_FAILED';
     const isConflict = code === 'IDEMPOTENCY_CONFLICT' || code === 'REVISION_CONFLICT';
@@ -324,7 +385,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
     };
   } finally {
     if (client) {
-      client.release();
+      client.release(discardClient ? new Error('Sync transaction outcome uncertain') : undefined);
     }
   }
 }
@@ -361,15 +422,35 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
     try { modelOperations = JSON.parse(modelOperations); } catch { modelOperations = []; }
   }
   if (!Array.isArray(modelOperations)) modelOperations = [];
-  const operationByName = new Map(modelOperations.map((entry) => [
-    typeof entry === 'string' ? entry : entry?.name,
-    typeof entry === 'string' ? null : Number.isFinite(Number(entry?.rate)) ? Number(entry.rate) : null
-  ]));
+  const operationNames = new Set(modelOperations.map((entry) => typeof entry === 'string' ? entry : entry?.name));
   for (const entry of payload.entries) {
-    if (!operationByName.has(entry.opName)) {
+    if (!operationNames.has(entry.opName)) {
       throw createOpError('UNKNOWN_OPERATION', `Operation "${entry.opName}" is not defined in the ticket model`);
     }
   }
+
+  // Lock the existing work before replacing rows. A model's current tariff is not
+  // evidence of the rate at which this ticket's work was originally recorded.
+  const oldResult = await client.query(`SELECT id, op_name, rate_snapshot, brak FROM ticket_entries
+    WHERE company_id = $1 AND ticket_id = $2 FOR UPDATE`, [companyId, ticketId]);
+  const oldById = new Map(oldResult.rows.map((row) => [row.id, row]));
+  const oldByName = new Map();
+  for (const row of oldResult.rows) {
+    const list = oldByName.get(row.op_name) || [];
+    list.push(row);
+    oldByName.set(row.op_name, list);
+  }
+  const claimedIds = new Set();
+  const resolvedEntries = payload.entries.map((entry) => {
+    const candidates = oldByName.get(entry.opName) || [];
+    const original = entry.entryId ? oldById.get(entry.entryId) : candidates.length === 1 ? candidates[0] : null;
+    if ((entry.entryId && (!original || original.op_name !== entry.opName)) ||
+        (!entry.entryId && candidates.length > 1) || (original && claimedIds.has(original.id))) {
+      throw createOpError('AMBIGUOUS_TICKET_ENTRY', `Cannot identify original work for operation "${entry.opName}"`);
+    }
+    if (original) claimedIds.add(original.id);
+    return { entry, original };
+  });
 
   const workerIds = [...new Set(payload.entries.map((entry) => Number(entry.workerId)))];
   const workersResult = await client.query(`SELECT id, name, status FROM workers
@@ -383,16 +464,23 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
 
   const serverRevision = Number(ticket.server_revision || 0) + 1;
   const committedAt = new Date().toISOString();
-  await client.query(`DELETE FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2`, [companyId, ticketId]);
-  const entries = payload.entries.map((entry, index) => ({
-    entryId: `${ticketId}_entry_${index + 1}`,
+  const reservedIds = new Set(oldById.keys());
+  const entries = resolvedEntries.map(({ entry, original }, index) => ({
+    entryId: original?.id || (() => {
+      let candidate = index + 1;
+      while (reservedIds.has(`${ticketId}_edit_${operationId}_entry_${candidate}`)) candidate++;
+      const id = `${ticketId}_edit_${operationId}_entry_${candidate}`;
+      reservedIds.add(id);
+      return id;
+    })(),
     opName: entry.opName,
     workerId: Number(entry.workerId),
     workerNameSnapshot: workers.get(Number(entry.workerId)).name,
-    rateSnapshot: operationByName.get(entry.opName),
-    brak: null,
+    rateSnapshot: original?.rate_snapshot == null ? null : Number(original.rate_snapshot),
+    brak: original?.brak ?? null,
     qty: Number(ticket.qty)
   }));
+  await client.query(`DELETE FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2`, [companyId, ticketId]);
   for (const entry of entries) {
     await client.query(`INSERT INTO ticket_entries (
       id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,
@@ -641,15 +729,38 @@ async function executeRecordAdjustment(client, companyId, operationId, payload, 
     throw createOpError('WORKER_NOT_FOUND', `Worker "${workerId}" not found for company "${companyId}"`);
   }
 
+  let source = null;
+  if (payload.originalTicketId) {
+    const sourceRes = await client.query(
+      `SELECT t.period_id, e.rate_snapshot FROM ticket_entries e
+       JOIN tickets t ON t.company_id = e.company_id AND t.id = e.ticket_id
+       WHERE e.company_id = $1 AND t.id = $2 AND e.id = $3 AND t.model_id = $4
+         AND e.worker_id = $5 AND e.op_name = $6 AND t.status = 'CONFIRMED'
+       FOR UPDATE OF t, e`,
+      [companyId, payload.originalTicketId, payload.originalEntryId, modelId, workerId, opName]
+    );
+    if (sourceRes.rows.length !== 1) {
+      throw createOpError('ORIGINAL_ENTRY_MISMATCH', 'Original entry must be confirmed work matching company, ticket, model, worker and operation');
+    }
+    source = sourceRes.rows[0];
+    if (source.period_id !== null) {
+      const periodRes = await client.query('SELECT id FROM periods WHERE company_id = $1 AND id = $2',
+        [companyId, source.period_id]);
+      if (periodRes.rows.length !== 1) throw createOpError('ORIGINAL_PERIOD_NOT_FOUND', 'Original period does not belong to company');
+    }
+  }
+
   const serverRevision = 1;
   const authoritativeStatus = status === undefined ? 'APPROVED' : status;
   const trustedAuditActor = resolveTrustedAuditActor(req);
 
-  await client.query(
+  const inserted = await client.query(
     `INSERT INTO production_adjustments (
       adjustment_id, company_id, model_id, worker_id, op_name,
-      delta_qty, reason, status, server_revision, created_at, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)`,
+      delta_qty, reason, status, server_revision, created_at, created_by,
+      original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $11, $12, $13, $14, $15)
+    RETURNING created_at`,
     [
       adjustmentId,
       companyId,
@@ -660,7 +771,10 @@ async function executeRecordAdjustment(client, companyId, operationId, payload, 
       reason || 'MANUAL_ADJUSTMENT',
       authoritativeStatus,
       serverRevision,
-      trustedAuditActor
+      trustedAuditActor,
+      payload.originalTicketId || null, payload.originalEntryId || null,
+      source?.period_id ?? null, source?.rate_snapshot ?? null,
+       source?.period_id != null ? 'RESOLVED' : 'UNRESOLVED'
     ]
   );
 
@@ -669,7 +783,15 @@ async function executeRecordAdjustment(client, companyId, operationId, payload, 
       company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at
     ) VALUES ($1, 'production_adjustment', $2, $3, $4, 'INSERT', $5, NOW())
     RETURNING change_id, committed_at`,
-    [companyId, adjustmentId, serverRevision, operationId, canonicalJson]
+    [companyId, adjustmentId, serverRevision, operationId, canonicalStringify({
+      adjustmentId, modelId, workerId, opName, deltaQty,
+      reason: reason || 'MANUAL_ADJUSTMENT', status: authoritativeStatus,
+       createdAt: new Date(inserted.rows[0].created_at).toISOString(), createdBy: trustedAuditActor,
+       originalTicketId: payload.originalTicketId || null, originalEntryId: payload.originalEntryId || null,
+       originalPeriodId: source?.period_id ?? null,
+       originalRateSnapshot: source?.rate_snapshot === null || source?.rate_snapshot === undefined ? null : Number(source.rate_snapshot),
+        attributionStatus: source?.period_id != null ? 'RESOLVED' : 'UNRESOLVED'
+    })]
   );
 
   return {
@@ -695,7 +817,9 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
 
   // 1. Fetch original adjustment with row lock
   const origRes = await client.query(
-    `SELECT adjustment_id, model_id, worker_id, op_name, delta_qty, status, server_revision
+    `SELECT adjustment_id, model_id, worker_id, op_name, delta_qty, status, server_revision,
+       original_adjustment_id, provenance, original_ticket_id, original_entry_id,
+       original_period_id, original_rate_snapshot, attribution_status
      FROM production_adjustments
      WHERE company_id = $1 AND adjustment_id = $2
      FOR UPDATE`,
@@ -715,6 +839,9 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
       'CANNOT_REVERSE_UNAPPROVED',
       `Cannot reverse adjustment "${originalAdjustmentId}" with status "${orig.status}". Only APPROVED adjustments can be reversed.`
     );
+  }
+  if (orig.original_adjustment_id || orig.provenance === 'REVERSAL') {
+    throw createOpError('REVERSAL_OF_REVERSAL', 'Cannot reverse a reversal');
   }
 
   // 2. CAS Base Revision Check
@@ -740,11 +867,13 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
   );
 
   // 4. Insert reversal adjustment
-  await client.query(
+  const inserted = await client.query(
     `INSERT INTO production_adjustments (
       adjustment_id, company_id, model_id, worker_id, op_name,
-      delta_qty, reason, status, server_revision, created_at, created_by, original_adjustment_id, provenance
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'REVERSED', 1, NOW(), $8, $9, 'REVERSAL')`,
+       delta_qty, reason, status, server_revision, created_at, created_by, original_adjustment_id, provenance,
+       original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'REVERSED', 1, NOW(), $8, $9, 'REVERSAL', $10, $11, $12, $13, $14)
+    RETURNING created_at`,
     [
       effectiveReversalId,
       companyId,
@@ -754,7 +883,9 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
       -Number(orig.delta_qty),
       reason || `Reversal of ${originalAdjustmentId}`,
       trustedAuditActor,
-      originalAdjustmentId
+       originalAdjustmentId,
+       orig.original_ticket_id, orig.original_entry_id, orig.original_period_id,
+       orig.original_rate_snapshot, orig.attribution_status
     ]
   );
 
@@ -763,7 +894,9 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
     `INSERT INTO change_log (
       company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at
     ) VALUES ($1, 'production_adjustment', $2, $3, $4, 'UPDATE', $5, NOW())`,
-    [companyId, originalAdjustmentId, nextRevision, operationId, canonicalJson]
+    [companyId, originalAdjustmentId, nextRevision, operationId, canonicalStringify({
+      adjustmentId: originalAdjustmentId, status: 'REVERSED'
+    })]
   );
 
   // 6. Change log for the insertion of reversal
@@ -772,7 +905,16 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
       company_id, entity_type, entity_id, entity_revision, operation_id, change_type, payload_json, committed_at
     ) VALUES ($1, 'production_adjustment', $2, 1, $3, 'INSERT', $4, NOW())
     RETURNING change_id, committed_at`,
-    [companyId, effectiveReversalId, operationId, canonicalJson]
+    [companyId, effectiveReversalId, operationId, canonicalStringify({
+      adjustmentId: effectiveReversalId, originalAdjustmentId,
+      modelId: orig.model_id, workerId: Number(orig.worker_id), opName: orig.op_name,
+      deltaQty: -Number(orig.delta_qty), reason: reason || `Reversal of ${originalAdjustmentId}`,
+       status: 'REVERSED', createdAt: new Date(inserted.rows[0].created_at).toISOString(), createdBy: trustedAuditActor,
+       originalTicketId: orig.original_ticket_id, originalEntryId: orig.original_entry_id,
+       originalPeriodId: orig.original_period_id,
+       originalRateSnapshot: orig.original_rate_snapshot == null ? null : Number(orig.original_rate_snapshot),
+       attributionStatus: orig.attribution_status || 'UNRESOLVED'
+    })]
   );
 
   return {
@@ -1273,6 +1415,7 @@ async function executeResolveCandidate(client, companyId, operationId, payload, 
 
 function createOpError(code, message, details = null) {
   const err = new Error(message);
+  err[Symbol.for('hisob.sync.applicationError')] = true;
   err.code = code;
   if (details) err.details = details;
   return err;

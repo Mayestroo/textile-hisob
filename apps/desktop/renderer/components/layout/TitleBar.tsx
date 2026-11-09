@@ -65,7 +65,7 @@ export const TitleBar: React.FC = () => {
         <div className="quick-actions">
           {/* Period Button */}
           <button 
-            className="quick-btn" 
+            className="quick-btn"
             title="Oylik davrini boshqarish va oyni yopish" 
             onClick={() => openModal({ type: 'period_manager' })}
           >
@@ -75,7 +75,7 @@ export const TitleBar: React.FC = () => {
 
           {/* Workers Button */}
           <button 
-            className="quick-btn" 
+            className="quick-btn"
             title="Ishchilar ro'yxati va doimiy stajlar" 
             onClick={() => openModal({ type: 'worker_manager' })}
           >
@@ -92,7 +92,7 @@ export const TitleBar: React.FC = () => {
           </button>
 
           <button 
-            className="quick-btn" 
+            className="quick-btn titlebar-save"
             title="Diskdagi bazaga saqlash (Ctrl+S)" 
             onClick={handleSave}
             style={{ 
@@ -193,7 +193,7 @@ export const TitleBar: React.FC = () => {
             {licenseStatus?.isBlocked
               ? 'BLOKLANGAN'
               : isLicActive && !licenseStatus?.isTrial
-              ? (licenseStatus?.isLifetime ? 'Litsenziya: Faol' : `Litsenziya: ${licenseStatus?.expiry}`)
+               ? (licenseStatus?.isLifetime ? 'Litsenziya: Faol' : licenseStatus?.expiry ? `Litsenziya: ${licenseStatus.expiry}` : 'Litsenziya: Faol')
               : licenseStatus?.isTrial
               ? `Sinov: ${countdown ? countdown.formattedClock : (licenseStatus.remainingText || '24 soat')}`
               : 'Aktivatsiya kutilmoqda'}

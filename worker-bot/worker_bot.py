@@ -192,14 +192,21 @@ def main_keyboard(binding, telegram_id):
 
 def send_profile(chat_id, telegram_id, binding):
     profile = get_worker_profile_and_stats(binding["company_id"], binding["worker_id"], telegram_id)
+    unavailable = profile.get("accountingStatus") == "UNAVAILABLE"
+    incomplete = profile.get("accountingStatus") != "COMPLETE"
+    warning = ("\n⚠️ Davr mavjud emas; oylik hisoblanmagan.\n" if unavailable else
+               f"\n⚠️ Hisob to‘liq emas: {profile.get('unknownEntryCount', 0)} ta ish narxi noma’lum, "
+               f"{profile.get('unresolvedAdjustmentCount', 0)} ta tuzatish aniqlanmagan. "
+               "Ko‘rsatilgan summa faqat aniqlangan ishlar bo‘yicha oraliq hisob, yakuniy oylik emas.\n") if incomplete else ""
     text = (
         f"📊 <b>SHAXSIY HISOB-KITOB</b>\n"
         f"👤 {escape(profile['worker_name'])} (ID: #{profile['worker_id']})\n"
         f"📅 Davr: {escape(profile['period_name'])}\n\n"
-        f"💵 Jami ishlangan: {format_money(profile['gross'])}\n"
+        f"💵 {'Hisoblangan oraliq summa' if incomplete else 'Jami ishlangan'}: {format_money(profile['gross'])}\n"
         f"➖ Avans: {format_money(profile['avans'])}\n"
         f"➖ Jarima: {format_money(profile['jarima'])}\n"
-        f"✅ <b>Sof foyda: {format_money(profile['net'])}</b>\n"
+        f"✅ <b>{'Sof oraliq summa' if incomplete else 'Sof foyda'}: {format_money(profile['net'])}</b>\n"
+        f"{warning}"
         f"🏷 Bajarilgan ish: {format_number(profile['pieces'])} dona"
     )
     send_message(chat_id, text, main_keyboard(binding, telegram_id))
@@ -207,19 +214,27 @@ def send_profile(chat_id, telegram_id, binding):
 
 def send_operations(chat_id, telegram_id, binding):
     profile = get_worker_profile_and_stats(binding["company_id"], binding["worker_id"], telegram_id)
+    incomplete = profile.get("accountingStatus") != "COMPLETE"
+    if profile.get("accountingStatus") == "UNAVAILABLE":
+        send_message(chat_id, "Davr mavjud emas; ish haqi hisoblanmagan.", main_keyboard(binding, telegram_id))
+        return
     breakdown = profile.get("models_breakdown") or {}
     if not breakdown:
         send_message(chat_id, "Joriy davrda sizga operatsiyalar kiritilmagan.", main_keyboard(binding, telegram_id))
         return
     lines = ["<b>BAJARILGAN ISHLAR</b>"]
     for model in breakdown.values():
-        lines.append(f"\n👗 <b>{escape(model['name'])}</b>: {format_money(model['earnings'])}")
+        lines.append(f"\n👗 <b>{escape(model['name'])}</b>: {format_money(model['earnings'])}{' (oraliq)' if incomplete else ''}")
         for operation in model.get("operations", []):
+            rate = operation.get('rate')
             lines.append(
                 f"  • {escape(operation['name'])}: {format_number(operation['qty'])} dona × "
-                f"{format_number(operation['rate'])} so'm = <b>{format_money(operation['amount'])}</b>"
+                f"{format_number(rate)} so'm = <b>{format_money(operation['amount'])}</b>" if rate is not None else
+                f"  • {escape(operation['name'])}: {format_number(operation['qty'])} dona × narx noma’lum = <b>summa noma’lum</b>"
             )
-    lines.append(f"\nJami: <b>{format_money(profile['gross'])}</b>")
+    lines.append(f"\n{'Narxi ma’lum ishlar bo‘yicha oraliq jami' if incomplete else 'Jami'}: <b>{format_money(profile['gross'])}</b>")
+    if incomplete:
+        lines.append(f"⚠️ Hisob to‘liq emas: {profile.get('unknownEntryCount', 0)} ta ish narxi noma’lum, {profile.get('unresolvedAdjustmentCount', 0)} ta tuzatish aniqlanmagan. Yakuniy oylik emas.")
     send_message(chat_id, "\n".join(lines), main_keyboard(binding, telegram_id))
 
 
@@ -300,7 +315,13 @@ def handle_text(chat_id, user, text, message_id=None):
         begin_registration(chat_id, user)
         return
     state = USER_STATES.get(telegram_id, {})
-    binding = state.get("binding") if state.get("step") == "BOUND" else get_worker_binding(telegram_id)
+    # A cached binding is only UI state: an admin may have unbound or reassigned
+    # the account since the last update. Refresh before signing a keyboard or
+    # showing even a previously known worker name.
+    binding = get_worker_binding(telegram_id)
+    if not binding and state.get("step") == "BOUND":
+        USER_STATES.pop(telegram_id, None)
+        state = {}
     if binding:
         USER_STATES[telegram_id] = {"step": "BOUND", "binding": binding}
         lowered = text.strip().lower()
@@ -346,8 +367,16 @@ def handle_text(chat_id, user, text, message_id=None):
         return
 def process_update(update):
     message = update.get("message") or {}
-    chat_id = (message.get("chat") or {}).get("id")
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
     user = message.get("from") or {}
+    # Identity is not a response destination: group members may be bound workers.
+    # Reject before reading financial data, signing WebApp links or changing state.
+    telegram_id = str(user.get("id", ""))
+    if (chat.get("type") != "private" or user.get("is_bot")
+            or not re.fullmatch(r"[1-9][0-9]{0,23}", telegram_id)
+            or str(chat_id) != telegram_id):
+        return
     text = message.get("text")
     if chat_id and text:
         try:

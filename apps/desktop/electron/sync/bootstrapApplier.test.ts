@@ -7,6 +7,7 @@ const databaseManager = require('../database/databaseManager.cjs');
 const { applyBootstrapSnapshot, getBootstrapState, validateBootstrapResponse } = require('./bootstrapApplier.cjs');
 const { loadWorkbookProjectionFromSqlite } = require('../database/projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('../database/canonicalPayload.cjs');
+const { applyChangesBatch } = require('./changeFeedApplier.cjs');
 
 const COMPANY_ID = 'comp_novda';
 
@@ -167,6 +168,75 @@ describe(' SQLite authoritative bootstrap', () => {
   afterEach(() => {
     databaseManager.closeAllCompanyDatabases();
     fs.rmSync(userData, { recursive: true, force: true });
+  });
+
+  it.each(['APPROVED', 'PENDING_REVIEW', 'REVERSED'])('bootstrap and change feed agree on adjustment %s facts', (status) => {
+    const response = makeProductionLikeBootstrap();
+    const adjustment = {
+      adjustmentId: 'adjustment-agreement', companyId: COMPANY_ID, modelId: 'model_1', workerId: 1,
+      opName: 'Sew', deltaQty: 4, reason: 'Correction', status, serverRevision: 5,
+      createdAt: '2026-09-02T10:00:00.000Z', createdBy: 'trusted-operator',
+      originalTicketId: 'ticket-original', originalEntryId: 'entry-original',
+      originalPeriodId: 'period-archive', originalRateSnapshot: 0, attributionStatus: 'RESOLVED'
+    };
+    (response.snapshot.productionAdjustments as any[]).push(adjustment);
+    response.counts.productionAdjustments = 1;
+    applyBootstrapSnapshot(db, COMPANY_ID, response);
+    const readFact = () => db.prepare(`SELECT status, created_at, created_by, server_revision, delta_qty,
+      original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
+      FROM production_adjustments WHERE adjustment_id = ?`).get(adjustment.adjustmentId);
+    const bootstrapped = readFact();
+    db.prepare('DELETE FROM production_adjustments WHERE adjustment_id = ?').run(adjustment.adjustmentId);
+    applyChangesBatch(db, COMPANY_ID, [{ changeId: '10', entityType: 'production_adjustment',
+      entityId: adjustment.adjustmentId, entityRevision: 5, changeType: 'INSERT', payload: adjustment }], '10');
+    expect(readFact()).toEqual(bootstrapped);
+    expect(readFact()).toMatchObject({ status, created_at: adjustment.createdAt, server_revision: 5 });
+    expect(readFact()).toMatchObject({ original_period_id: 'period-archive', original_rate_snapshot: 0,
+      attribution_status: 'RESOLVED' });
+  });
+
+  it('reconciles equal-revision optimistic attribution and keeps it through old status-only events', () => {
+    const response = makeProductionLikeBootstrap();
+    const adjustment: any = { adjustmentId: 'optimistic-source', companyId: COMPANY_ID, modelId: 'model_1',
+      workerId: 1, opName: 'Sew', deltaQty: 2, reason: 'Correction', status: 'APPROVED', serverRevision: 1,
+      createdAt: '2026-09-02T10:00:00.000Z', createdBy: 'trusted', attributionStatus: 'UNRESOLVED' };
+    response.snapshot.productionAdjustments.push(adjustment);
+    response.counts.productionAdjustments = 1;
+    applyBootstrapSnapshot(db, COMPANY_ID, response);
+    applyChangesBatch(db, COMPANY_ID, [{ changeId: '1', entityType: 'production_adjustment',
+      entityId: adjustment.adjustmentId, entityRevision: 1, changeType: 'INSERT', payload: {
+        ...adjustment, originalTicketId: 'ticket-a', originalEntryId: 'entry-a',
+        originalPeriodId: 'period-archive', originalRateSnapshot: 5, attributionStatus: 'RESOLVED'
+      } }], '1');
+    applyChangesBatch(db, COMPANY_ID, [{ changeId: '2', entityType: 'production_adjustment',
+      entityId: adjustment.adjustmentId, entityRevision: 2, changeType: 'UPDATE',
+      payload: { adjustmentId: adjustment.adjustmentId, status: 'REVERSED' } }], '2');
+    expect(db.prepare(`SELECT original_ticket_id, original_period_id, original_rate_snapshot, attribution_status
+      FROM production_adjustments WHERE adjustment_id = ?`).get(adjustment.adjustmentId))
+      .toEqual({ original_ticket_id: 'ticket-a', original_period_id: 'period-archive',
+        original_rate_snapshot: 5, attribution_status: 'RESOLVED' });
+  });
+
+  it('restores authoritative historical period and 5/zero/null snapshots without tariff fallback', () => {
+    const response = makeProductionLikeBootstrap();
+    const ticketId = '00000000-0000-4000-8000-000000000079';
+    const ticket = {
+      id: ticketId, companyId: COMPANY_ID, modelId: 'model_1', periodId: 'period-archive',
+      partyNumber: '1', partyRecordId: 'party_1', pattaNumber: 1, qty: 2,
+      size: null, color: null, konveyer: null, status: 'CONFIRMED', isClosed: true,
+      submittedAt: '2026-08-20T10:00:00.000Z', createdAt: '2026-08-20T10:00:00.000Z', serverRevision: 1,
+      entries: [5, 0, null].map((rateSnapshot, index) => ({
+        id: `${ticketId}_entry_${index}`, companyId: COMPANY_ID, opName: 'Sew', workerId: index + 1,
+        workerNameSnapshot: null, rateSnapshot, brak: null, qty: 2, createdAt: '2026-08-20T10:00:00.000Z'
+      }))
+    };
+    (response.snapshot.tickets as any[]).push(ticket);
+    response.counts.tickets = 1;
+    response.counts.ticketEntries = 3;
+    applyBootstrapSnapshot(db, COMPANY_ID, response);
+    expect(db.prepare('SELECT period_id FROM tickets WHERE id = ?').get(ticketId).period_id).toBe('period-archive');
+    expect(db.prepare('SELECT rate_snapshot FROM ticket_entries WHERE ticket_id = ? ORDER BY id').all(ticketId)
+      .map((row: any) => row.rate_snapshot)).toEqual([5, 0, null]);
   });
 
   it('hydrates an empty canonical database with the exact production-like roster, references, and opening balances', () => {

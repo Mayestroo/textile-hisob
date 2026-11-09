@@ -4,6 +4,8 @@ export interface Worker {
   staj?: number;      // Doimiy Staj (Ishchilar ro'yxatida belgilanadi va har oy saqlanadi)
   avans?: number;     // Avans (Oylik davr yopilganda 0 ga qaytadi)
   jarima?: number;    // Jarima (Oylik davr yopilganda 0 ga qaytadi)
+  oklad?: number;     // Explicit-period manual salary component (read projection only in stage 1a)
+  magazin?: number;   // Explicit-period shop deduction (read projection only in stage 1a)
   role?: string;
   status?: 'ACTIVE' | 'INACTIVE';
   updatedAt?: number;
@@ -96,6 +98,7 @@ export interface SubmittedTicketRecord {
   color?: string;
   qty: number;
   entries?: Array<{
+    entryId?: string;
     opName: string;
     workerId: number;
     workerNameSnapshot?: string;
@@ -123,6 +126,28 @@ export interface PayrollPeriod {
   notes?: string;
   archiveFilename?: string;
   serverRevision?: number;
+}
+
+export interface PayrollValuation {
+  companyId: string;
+  period: { periodId: string; name: string; startDate: string | null; endDate: string | null; isClosed: boolean; restated: boolean } | null;
+  workers: Array<Record<string, any> & {
+    workerId: number;
+    pieceworkGross?: number;
+    oklad?: number;
+    magazin?: number;
+    gross?: number;
+    avans?: number;
+    jarima?: number;
+    staj?: number;
+    net?: number;
+    pieces?: number;
+  }>;
+  accountingStatus: 'COMPLETE' | 'INCOMPLETE' | 'UNAVAILABLE';
+  accountingReasons: string[];
+  syncStatus: 'CURRENT' | 'UNKNOWN' | 'UNSYNCED';
+  feedEvidence?: { asOfCursor: string; status: 'APPLIED_AS_OF' | 'STALE_AS_OF' } | null;
+  tariffs?: Array<{ id: string; operations: Array<{ name: string; rate: number | null }> }> | null;
 }
 
 export interface Notification {

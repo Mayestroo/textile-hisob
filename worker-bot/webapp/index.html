@@ -11,30 +11,26 @@
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   
-  <!-- Modern Google Font -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
   <style>
     :root {
       color-scheme: light;
-      --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      --bg-primary: #f8fafc;
+      --font-main: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-heading: 'Onest', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg-primary: #f3f6fb;
       --bg-secondary: #ffffff;
       --bg-card: #ffffff;
       --bg-card-hover: #f1f5f9;
-      --text-primary: #0f172a;
-      --text-secondary: #475569;
-      --text-muted: #94a3b8;
-      --accent: #0284c7;
-      --accent-light: #e0f2fe;
-      --accent-border: #bae6fd;
-      --accent-glow: rgba(2, 132, 199, 0.12);
-      --success: #059669;
-      --success-dark: #064e3b;
-      --success-light: #ecfdf5;
-      --success-border: #a7f3d0;
+      --text-primary: #0b1b2b;
+      --text-secondary: #5e6e80;
+      --text-muted: #78889a;
+      --accent: #047857;
+      --accent-light: #e3f8ee;
+      --accent-border: #b8e8d0;
+      --accent-glow: rgba(4, 120, 87, 0.12);
+      --success: #047857;
+      --success-dark: #065f46;
+      --success-light: #e3f8ee;
+      --success-border: #b8e8d0;
       --success-glow: rgba(5, 150, 105, 0.12);
       --warning: #d97706;
       --warning-light: #fffbeb;
@@ -45,9 +41,9 @@
       --purple: #7c3aed;
       --purple-light: #f5f3ff;
       --purple-border: #ddd6fe;
-      --border: #e2e8f0;
-      --border-accent: rgba(2, 132, 199, 0.25);
-      --card-radius: 18px;
+      --border: #e4eaf2;
+      --border-accent: rgba(4, 120, 87, 0.25);
+      --card-radius: 20px;
     }
 
     * {
@@ -64,8 +60,11 @@
       font-family: var(--font-main);
       min-height: 100vh;
       overflow-x: hidden;
-      padding-bottom: 90px;
+      padding-bottom: 100px;
       -webkit-font-smoothing: antialiased;
+      font-size: 16px;
+      line-height: 1.45;
+      font-variant-numeric: tabular-nums;
     }
 
     /* Top Glass App Bar */
@@ -77,7 +76,7 @@
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
+      padding: 14px 24px;
       box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
     }
 
@@ -187,9 +186,9 @@
 
     /* Container */
     .container {
-      max-width: 580px;
+      max-width: 900px;
       margin: 0 auto;
-      padding: 14px 16px calc(80px + env(safe-area-inset-bottom, 0px));
+      padding: 24px 28px calc(88px + env(safe-area-inset-bottom, 0px));
     }
 
     /* Period Ribbon */
@@ -199,10 +198,10 @@
       justify-content: space-between;
       background: #ffffff;
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 9px 14px;
-      margin-bottom: 14px;
-      font-size: 12px;
+      border-radius: 14px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 14px;
       color: var(--text-secondary);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     }
@@ -230,14 +229,14 @@
 
     /* Hero Net Pay Card */
     .hero-kpi-card {
-      background: linear-gradient(140deg, #ecfdf5 0%, #f0fdf4 35%, #ffffff 100%);
-      border: 1.5px solid #a7f3d0;
+      background: #ffffff;
+      border: 1px solid var(--border);
       border-radius: var(--card-radius);
-      padding: 20px 18px;
-      margin-bottom: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
       position: relative;
       overflow: hidden;
-      box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+      box-shadow: 0 1px 2px rgba(11, 27, 43, 0.05), 0 8px 24px rgba(30, 64, 120, 0.07);
     }
 
     .hero-kpi-card::after {
@@ -253,7 +252,7 @@
     }
 
     .hero-label {
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: 0.5px;
       color: #047857;
@@ -265,7 +264,8 @@
     }
 
     .hero-amount {
-      font-size: 32px;
+      font-family: var(--font-heading);
+      font-size: 34px;
       font-weight: 800;
       color: var(--success-dark);
       letter-spacing: -0.5px;
@@ -288,27 +288,28 @@
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 10px;
-      border-top: 1px solid #d1fae5;
-      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
     }
 
     .hero-grid-item {
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+      background: #f8fafc;
+      border: 1px solid #edf1f6;
+      border-radius: 14px;
+      padding: 14px;
     }
 
     .hero-grid-label {
-      font-size: 11px;
+      font-size: 13px;
       color: var(--text-secondary);
       margin-bottom: 3px;
       font-weight: 600;
     }
 
     .hero-grid-val {
-      font-size: 15px;
+      font-size: 17px;
       font-weight: 700;
       color: var(--text-primary);
     }
@@ -331,7 +332,8 @@
     }
 
     .section-title {
-      font-size: 14px;
+      font-family: var(--font-heading);
+      font-size: 18px;
       font-weight: 800;
       color: var(--text-primary);
       display: flex;
@@ -353,9 +355,9 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--card-radius);
-      padding: 14px 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(11, 27, 43, 0.05), 0 8px 24px rgba(30, 64, 120, 0.05);
       transition: all 0.2s ease;
     }
 
@@ -369,7 +371,7 @@
     }
 
     .model-title {
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 800;
       color: var(--text-primary);
       display: flex;
@@ -391,8 +393,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 9px 0;
-      font-size: 12px;
+      padding: 13px 0;
+      font-size: 14px;
       border-bottom: 1px dashed #e2e8f0;
     }
 
@@ -624,6 +626,64 @@
       line-height: 1;
       letter-spacing: 0.1px;
     }
+
+    @media (min-width: 760px) {
+      .bottom-nav { left: 50%; right: auto; width: min(560px, calc(100% - 48px)); transform: translateX(-50%); border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; }
+      .top-bar { padding-left: max(24px, calc((100vw - 900px) / 2)); padding-right: max(24px, calc((100vw - 900px) / 2)); }
+    }
+
+    @media (max-width: 560px) {
+      .top-bar { padding: 12px 16px; }
+      .container { padding: 16px 16px calc(82px + env(safe-area-inset-bottom, 0px)); }
+      .avatar-badge { width: 44px; height: 44px; border-radius: 14px; }
+      .hero-kpi-card { padding: 20px 18px; }
+      .hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .model-card { padding: 16px; }
+    }
+
+    /* E4: group the existing payroll facts into the observed mobile hierarchy. */
+    .hero-kpi-card {
+      background: #047857;
+      border: 0;
+      border-radius: 22px;
+      padding: 20px;
+      margin-bottom: 12px;
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(4, 120, 87, .32);
+    }
+    .hero-kpi-card::after { display: none; }
+    .hero-label, .hero-amount, .hero-grid-val, .hero-grid-val.gross,
+    .hero-grid-val.avans, .hero-grid-val.jarima, .hero-grid-val.staj { color: #fff; }
+    .hero-amount { letter-spacing: -.03em; line-height: 1.1; overflow-wrap: anywhere; }
+    .hero-amount.negative { color: #ffe2e2; }
+    .hero-label { font-size: 13px; letter-spacing: 0; text-transform: none; color: #d1fae5; }
+    .hero-subtitle { color: #e1f8ed; line-height: 1.5; margin-bottom: 14px; }
+    .hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 12px; border-top-color: rgba(255,255,255,.25); }
+    .hero-grid-item { min-width: 0; padding: 0; border: 0; background: transparent; }
+    .hero-grid-label { color: #d1fae5; font-size: 11px; }
+    .hero-grid-val { font-size: 14px; overflow-wrap: anywhere; }
+    .work-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
+    .work-summary-item { min-width: 0; min-height: 80px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 18px; background: #fff; box-shadow: 0 1px 2px rgba(11,27,43,.05), 0 6px 18px rgba(30,64,120,.07); }
+    .work-summary-item span { color: var(--text-secondary); font-size: 12px; }
+    .work-summary-item strong { color: var(--text-primary); font-size: 19px; line-height: 1.2; overflow-wrap: anywhere; }
+    .model-card { border-radius: 18px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.05), 0 6px 18px rgba(30,64,120,.07); }
+    .op-row { border-bottom: 1px solid #eef2f8; min-height: 54px; gap: 10px; }
+    .op-info { min-width: 0; }
+    .op-calc { flex: 0 0 auto; }
+    .ticket-item { border-radius: 18px; padding: 16px; box-shadow: 0 1px 2px rgba(11,27,43,.05), 0 6px 18px rgba(30,64,120,.07); }
+    .ticket-top { gap: 8px; align-items: flex-start; }
+    .ticket-time { text-align: right; }
+    #tabContentAbout .model-card { padding: 20px; }
+    @media (max-width: 560px) {
+      .top-bar { padding: 8px 16px; }
+      .avatar-badge { width: 38px; height: 38px; font-size: 18px; border-radius: 12px; }
+      .worker-id-pill { margin-top: 2px; }
+      .container { padding: 16px 16px calc(88px + env(safe-area-inset-bottom, 0px)); }
+      .period-strip { margin-bottom: 14px; }
+      .hero-kpi-card { padding: 20px; }
+      .bottom-nav { border-top: 1px solid var(--border); box-shadow: 0 -2px 12px rgba(11,27,43,.04); }
+      .nav-label { font-size: 11.5px; font-weight: 600; }
+    }
   </style>
 
 </head>
@@ -686,12 +746,13 @@
           <div class="hero-grid-label">Staj ushlanmasi</div>
           <div class="hero-grid-val staj" id="stajAmount">0 so'm</div>
         </div>
-        <div class="hero-grid-item">
-          <div class="hero-grid-label">Bajarilgan ish soni</div>
-          <div class="hero-grid-val pieces" id="totalPiecesCount">0 dona</div>
-        </div>
       </div>
     </section>
+
+    <div class="work-summary">
+      <div class="work-summary-item"><span>Bajarilgan ish soni</span><strong id="totalPiecesCount">0 dona</strong></div>
+      <div class="work-summary-item"><span>Modellar soni</span><strong id="modelsCountBadge">0</strong></div>
+    </div>
 
     <!-- Navigation Tabs -->
     <nav class="nav-tabs">
@@ -711,7 +772,6 @@
       <div class="section-header">
         <div class="section-title">
           Modellar va tikilgan choklar
-          <span class="badge-count" id="modelsCountBadge">0</span>
         </div>
       </div>
       <div id="modelsBreakdownList">
@@ -937,6 +997,9 @@
           jarima: Number(profile.jarima) || 0,
           staj: Number(profile.staj) || 0,
           net: Number(profile.net) || 0,
+          accountingStatus: profile.accountingStatus,
+          unknownEntryCount: Number(profile.unknownEntryCount) || 0,
+          unresolvedAdjustmentCount: Number(profile.unresolvedAdjustmentCount) || 0,
           pieces: Number(profile.pieces) || 0,
           modelsBreakdown: profile.models_breakdown || {}
         };
@@ -986,15 +1049,21 @@
 
     function renderHero() {
       const c = state.calculations;
+      const unavailable = c.accountingStatus === 'UNAVAILABLE';
+      const incomplete = c.accountingStatus !== 'COMPLETE';
       const netEl = document.getElementById('netPayAmount');
-      netEl.textContent = formatMoney(c.net);
+      netEl.textContent = `${formatMoney(c.net)}${incomplete ? ' (oraliq)' : ''}`;
+      document.getElementById('netPaySubtitle').textContent = unavailable
+        ? '⚠️ Davr mavjud emas; oylik hisoblanmagan.' : incomplete
+        ? `⚠️ Hisob to‘liq emas: ${c.unknownEntryCount} ta ish narxi noma’lum, ${c.unresolvedAdjustmentCount} ta tuzatish aniqlanmagan. Faqat aniqlangan ishlar hisoblangan; bu yakuniy oylik emas.`
+        : "Avans, jarima va staj ushlanmalari ayirilgandan so'ng qo'lga tegadigan pul";
       if (c.net < 0) {
         netEl.classList.add('negative');
       } else {
         netEl.classList.remove('negative');
       }
 
-      document.getElementById('grossPayAmount').textContent = formatMoney(c.gross);
+      document.getElementById('grossPayAmount').textContent = `${formatMoney(c.gross)}${incomplete ? ' (oraliq)' : ''}`;
       document.getElementById('avansAmount').textContent = formatMoney(c.avans);
       document.getElementById('jarimaAmount').textContent = formatMoney(c.jarima);
       document.getElementById('stajAmount').textContent = formatMoney(c.staj);
@@ -1027,11 +1096,11 @@
               <div class="op-row">
                 <div class="op-info">
                   <span class="op-name">${escapeHtml(op.name)}</span>
-                  <span class="op-rate-note">${formatNumber(op.rate)} so'm / dona</span>
+                   <span class="op-rate-note">${op.rate == null ? 'Narx noma’lum' : `${formatNumber(op.rate)} so'm / dona`}</span>
                 </div>
                 <div class="op-calc">
                   <div><span class="op-qty-tag">${formatNumber(op.qty)} dona</span></div>
-                  <div class="op-sum-val">${formatMoney(op.amount)}</div>
+                   <div class="op-sum-val">${op.amount == null ? 'Summa noma’lum' : formatMoney(op.amount)}</div>
                 </div>
               </div>
             `;
@@ -1044,7 +1113,7 @@
                   <span>👗</span>
                   <span>${escapeHtml(m.name)}</span>
                 </div>
-                <div class="model-total-badge">${formatMoney(m.earnings)}</div>
+                 <div class="model-total-badge">${formatMoney(m.earnings)}${m.operations.some(op => op.rate == null) ? ' (oraliq)' : ''}</div>
               </div>
               <div>${opsHtml}</div>
             </div>

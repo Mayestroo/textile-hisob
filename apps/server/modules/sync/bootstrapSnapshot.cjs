@@ -42,7 +42,7 @@ async function readCompanySnapshot(client, companyId) {
     color: row.color,
     size: row.size,
     pattaOpsOrder: jsonValue(row.patta_ops_order_json, []),
-    status: row.status,
+    status: row.status || 'POSTED',
     serverRevision: numberValue(row.server_revision),
     createdAt: dateValue(row.created_at),
     updatedAt: dateValue(row.updated_at)
@@ -151,7 +151,7 @@ async function readCompanySnapshot(client, companyId) {
   }));
 
   const adjustmentResult = await client.query(`
-    SELECT id, company_id, worker_id, period_id, type, amount, provenance, created_at
+    SELECT id, company_id, worker_id, period_id, type, amount, status, provenance, created_at
     FROM worker_adjustments WHERE company_id = $1 ORDER BY created_at ASC, id ASC
   `, [companyId]);
   const workerAdjustments = adjustmentResult.rows.map((row) => ({
@@ -161,6 +161,7 @@ async function readCompanySnapshot(client, companyId) {
     periodId: row.period_id,
     type: row.type,
     amount: numberValue(row.amount),
+    status: row.status,
     provenance: row.provenance,
     createdAt: dateValue(row.created_at)
   }));
@@ -219,7 +220,8 @@ async function readCompanySnapshot(client, companyId) {
 
   const productionResult = await client.query(`
     SELECT adjustment_id, company_id, model_id, worker_id, op_name, delta_qty, reason,
-      status, server_revision, created_at, created_by, original_adjustment_id, provenance
+      status, server_revision, created_at, created_by, original_adjustment_id, provenance,
+      original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
     FROM production_adjustments WHERE company_id = $1 ORDER BY created_at ASC, adjustment_id ASC
   `, [companyId]);
   const productionAdjustments = productionResult.rows.map((row) => ({
@@ -235,7 +237,12 @@ async function readCompanySnapshot(client, companyId) {
     createdAt: dateValue(row.created_at),
     createdBy: row.created_by,
     originalAdjustmentId: row.original_adjustment_id,
-    provenance: row.provenance
+    provenance: row.provenance,
+    originalTicketId: row.original_ticket_id ?? null,
+    originalEntryId: row.original_entry_id ?? null,
+    originalPeriodId: row.original_period_id ?? null,
+    originalRateSnapshot: row.original_rate_snapshot == null ? null : numberValue(row.original_rate_snapshot),
+    attributionStatus: row.attribution_status || 'UNRESOLVED'
   }));
 
   const companySettingsResult = await client.query(`

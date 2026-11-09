@@ -53,17 +53,61 @@ describe('outbox server-acceptance reconciliation', () => {
     db.transaction(() => insertPending(db, 'op-not-accepted'))();
 
     expect(listOutboxReconciliationCandidates(db, companyId)).toHaveLength(2);
-    expect(acknowledgeOutboxOperation(db, companyId, 'op-accepted', acceptedHash)).toBe(true);
-    expect(acknowledgeOutboxOperation(db, companyId, 'op-accepted', acceptedHash)).toBe(false);
-    expect(acknowledgeOutboxOperation(db, companyId, 'op-not-accepted', '0'.repeat(64))).toBe(false);
-    expect(acknowledgeOutboxOperation(db, companyId, 'missing', acceptedHash)).toBe(false);
+    expect(acknowledgeOutboxOperation(db, companyId, 'op-accepted', acceptedHash, 1, '42')).toBe(true);
+    expect(acknowledgeOutboxOperation(db, companyId, 'op-accepted', acceptedHash, 1, '42')).toBe(false);
+    expect(acknowledgeOutboxOperation(db, companyId, 'op-not-accepted', '0'.repeat(64), 1)).toBe(false);
+    expect(acknowledgeOutboxOperation(db, companyId, 'missing', acceptedHash, 1)).toBe(false);
 
-    expect(db.prepare('SELECT status FROM local_outbox WHERE company_id = ? AND operation_id = ?')
-      .get(companyId, 'op-accepted')).toEqual({ status: 'SYNCED' });
+    expect(db.prepare('SELECT status, accepted_change_id FROM local_outbox WHERE company_id = ? AND operation_id = ?')
+      .get(companyId, 'op-accepted')).toEqual({ status: 'SYNCED', accepted_change_id: '42' });
     expect(db.prepare('SELECT status FROM local_outbox WHERE company_id = ? AND operation_id = ?')
       .get(companyId, 'op-not-accepted')).toEqual({ status: 'PENDING' });
     expect(listOutboxReconciliationCandidates(db, companyId).map((row: any) => row.operation_id))
       .toEqual(['op-not-accepted']);
+  });
+
+  it('fills a missing cursor receipt from a later exact worker feed acknowledgement', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const acceptedHash = db.transaction(() => insertPending(db, 'op-feed-receipt'))();
+    expect(acknowledgeOutboxOperation(db, companyId, 'op-feed-receipt', acceptedHash, 2)).toBe(true);
+    expect(acknowledgeOutboxOperation(db, companyId, 'op-feed-receipt', acceptedHash, 2, '57')).toBe(true);
+    expect(acknowledgeOutboxOperation(db, companyId, 'op-feed-receipt', acceptedHash, 2, '57')).toBe(false);
+    expect(db.prepare('SELECT status,accepted_payload_hash,accepted_server_revision,accepted_change_id FROM local_outbox WHERE operation_id=?')
+      .get('op-feed-receipt')).toEqual({ status: 'SYNCED', accepted_payload_hash: acceptedHash,
+        accepted_server_revision: 2, accepted_change_id: '57' });
+  });
+
+  it('keeps a company pending operation through context switch and SQLite reopen, then dispatches it when restored', async () => {
+    const companyA = 'fixture_company_context_a';
+    const companyB = 'fixture_company_context_b';
+    const dbA = databaseManager.getCompanyDatabase(userData, companyA);
+    const payloadJson = canonicalStringify({ operationId: 'fixture-op-a', companyId: companyA });
+    const payloadHash = computePayloadHash(payloadJson);
+    dbA.transaction(() => insertOutboxOperation(dbA, {
+      operation_id: 'fixture-op-a', company_id: companyA, command_type: 'UpdateBatchSettings',
+      entity_type: 'batch_settings', entity_id: companyA, base_revision: 0, payload_json: payloadJson,
+      payload_hash: payloadHash, status: 'PENDING', causal_sequence: 1
+    }))();
+
+    databaseManager.closeAllCompanyDatabases();
+    const dbB = databaseManager.getCompanyDatabase(userData, companyB);
+    const bBefore = dbB.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyB);
+    expect(bBefore.count).toBe(0);
+    databaseManager.closeAllCompanyDatabases();
+
+    const restoredA = databaseManager.getCompanyDatabase(userData, companyA);
+    expect(restoredA.prepare('SELECT status, payload_json, payload_hash FROM local_outbox WHERE company_id = ? AND operation_id = ?')
+      .get(companyA, 'fixture-op-a')).toEqual({ status: 'PENDING', payload_json: payloadJson, payload_hash: payloadHash });
+    const pushed: any[] = [];
+    await dispatchOutbox(restoredA, companyA, {
+      pushOperations: async (operations: any[]) => {
+        pushed.push(...operations);
+        return { results: operations.map((operation: any) => ({ operationId: operation.operationId, status: 'APPLIED', serverRevision: 1 })) };
+      }
+    });
+    expect(pushed).toHaveLength(1);
+    expect(restoredA.prepare('SELECT status, payload_hash FROM local_outbox WHERE company_id = ? AND operation_id = ?')
+      .get(companyA, 'fixture-op-a')).toEqual({ status: 'SYNCED', payload_hash: payloadHash });
   });
 
   it('reports pending transport errors without exposing operation payloads', () => {
@@ -172,7 +216,7 @@ describe('outbox server-acceptance reconciliation', () => {
       .toEqual({ status: 'DEAD_LETTER' });
   });
 
-  it('retries a period-mismatched ticket once only when its original date belongs to a local open period', () => {
+  it('does not requeue a mismatched captured period as the current open period', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, server_revision, created_at, updated_at)
@@ -207,18 +251,18 @@ describe('outbox server-acceptance reconciliation', () => {
     insertPeriodMismatch('op-period-outside', '00000000-0000-4000-8000-000000001203', '2026-08-31', 1);
     insertPeriodMismatch('op-period-retried', '00000000-0000-4000-8000-000000001204', '2026-09-23', 3);
 
-    expect(recoverPeriodScopeMismatchTickets(db, companyId)).toBe(2);
+    expect(recoverPeriodScopeMismatchTickets(db, companyId)).toBe(0);
     expect(db.prepare('SELECT status, payload_json FROM local_outbox WHERE operation_id = ?').get('op-period-valid'))
-      .toEqual({ status: 'PENDING', payload_json: unchangedPayload });
+      .toEqual({ status: 'DEAD_LETTER', payload_json: unchangedPayload });
     expect(db.prepare('SELECT status, payload_json FROM local_outbox WHERE operation_id = ?').get('op-period-valid-retry'))
-      .toEqual({ status: 'PENDING', payload_json: retryPayload });
+      .toEqual({ status: 'DEAD_LETTER', payload_json: retryPayload });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-period-outside'))
       .toEqual({ status: 'DEAD_LETTER' });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-period-retried'))
       .toEqual({ status: 'DEAD_LETTER' });
   });
 
-  it('stores the server-authoritative period ID when a SubmitTicket is acknowledged', async () => {
+  it('keeps captured period and flags conflicting server acknowledgement', async () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     const now = new Date().toISOString();
     const ticketId = '00000000-0000-4000-8000-000000001301';
@@ -240,13 +284,16 @@ describe('outbox server-acceptance reconciliation', () => {
       status: 'PENDING'
     });
 
-    await dispatchOutbox(db, companyId, {
+    const dispatch = await dispatchOutbox(db, companyId, {
       pushOperations: async () => ({ results: [{
         operationId: 'op-period-ack', status: 'APPLIED', serverRevision: 1, periodId: 'period-current'
       }] })
     });
 
     expect(db.prepare('SELECT period_id, status FROM tickets WHERE company_id = ? AND id = ?')
-      .get(companyId, ticketId)).toEqual({ period_id: 'period-current', status: 'CONFIRMED' });
+      .get(companyId, ticketId)).toEqual({ period_id: 'period-old', status: 'PENDING_SYNC' });
+    expect(db.prepare('SELECT status, last_error FROM local_outbox WHERE operation_id = ?').get('op-period-ack'))
+      .toMatchObject({ status: 'CONFLICT', last_error: expect.stringContaining('TICKET_PERIOD_AUTHORITY_MISMATCH') });
+    expect(dispatch).toMatchObject({ synced: 0, conflict: 1 });
   });
 });

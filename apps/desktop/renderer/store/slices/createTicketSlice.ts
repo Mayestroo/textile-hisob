@@ -301,7 +301,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const initialLicenseStatus = state.licenseStatus;
     const partyRecordId = validation.partyOwner?.id ?? null;
     const effectiveDate = form.date || formatDateIso();
-    const activePeriod = state.periods?.find((period) => !period.isClosed) || null;
+    const activePeriod = state.periods?.find((period) => !period.isClosed)
+      || (state.currentPeriod?.id !== 'period_default' && !state.currentPeriod?.isClosed ? state.currentPeriod : null);
     if (activePeriod && !isTicketDateWithinPeriod(effectiveDate, activePeriod)) {
       const rejected = makeMutationResult(
         'PERIOD_SCOPE_MISMATCH',
@@ -588,7 +589,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
 
   updateSubmittedTicket: async (
     ticketId: string,
-    updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number }>
+    updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string }>
   ): Promise<boolean> => {
     const state = get();
     const initialLicenseStatus = state.licenseStatus;
@@ -620,7 +621,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       opName: string;
       workerId: number;
       workerNameSnapshot: string;
-      rateSnapshot: number;
+      rateSnapshot?: number;
+      entryId?: string;
     }> = [];
 
     for (const e of updatedEntries) {
@@ -634,12 +636,20 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
           state.addNotification('error', "Noto'g'ri operatsiya", `«${e.opName}» ushbu model operatsiyalari ro'yxatida yo'q.`);
           return false;
         }
-        const rate = e.rateSnapshot !== undefined && e.rateSnapshot > 0 ? e.rateSnapshot : (op?.rate || 0);
+        const originals = (ticket.entries || []).filter((old) => old.opName === e.opName);
+        const original = e.entryId
+          ? originals.find((old) => old.entryId === e.entryId)
+          : originals.length === 1 ? originals[0] : undefined;
+        if ((!e.entryId && originals.length > 1) || (e.entryId && !original) || (original && validEntries.some((item) => item.entryId === original.entryId && item.opName === e.opName))) {
+          state.addNotification('error', 'Operatsiya noaniq', `«${e.opName}» uchun avvalgi ishni aniqlab bo'lmadi.`);
+          return false;
+        }
         validEntries.push({
           opName: e.opName,
+          ...(original?.entryId ? { entryId: original.entryId } : {}),
           workerId: e.workerId,
           workerNameSnapshot: workerMap.get(e.workerId) || `#${e.workerId}`,
-          rateSnapshot: rate
+          ...(original?.rateSnapshot !== undefined && original.rateSnapshot !== null ? { rateSnapshot: original.rateSnapshot } : {})
         });
       }
     }

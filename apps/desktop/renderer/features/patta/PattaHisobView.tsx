@@ -1,21 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  TrendingUp,
   Layers,
-  Tag,
-  FileText,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
   Trash2,
-  CheckCircle2,
   Check,
   Search,
-  CheckCheck,
   Calendar,
   Archive,
   ArrowLeft,
-  XCircle,
   Globe
 } from 'lucide-react';
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
@@ -492,6 +486,8 @@ export const PattaHisobView: React.FC = () => {
       totalUnsubmittedIshCount: unsubIsh
     };
   }, [visiblePartyHistory, submittedTickets, activeSizes, isArchiveMode]);
+  const ticketProgress = totalPattasCount > 0 ? Math.min(100, totalSubmittedPattasCount / totalPattasCount * 100) : 0;
+  const workProgress = totalExpectedIshCount > 0 ? Math.min(100, totalActualSubmittedIshCount / totalExpectedIshCount * 100) : 0;
 
   // Combine closed periods for selection
   const closedPeriodsList = useMemo(() => {
@@ -521,7 +517,7 @@ export const PattaHisobView: React.FC = () => {
   }, [periods, archiveFiles]);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
+    <div className="phase-b-view phase-b-patta-journal" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
       {/* Top Header & Control Bar */}
       <div style={{
         padding: '16px 20px 12px',
@@ -531,24 +527,11 @@ export const PattaHisobView: React.FC = () => {
         flexDirection: 'column',
         gap: '14px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: 'var(--radius-md)',
-              background: isAllTimeMode ? 'rgba(99, 102, 241, 0.15)' : isArchiveMode ? 'rgba(99, 102, 241, 0.15)' : 'var(--primary-light)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {isAllTimeMode ? <Globe size={20} color="#6366f1" /> : isArchiveMode ? <Archive size={20} color="#818cf8" /> : <TrendingUp size={20} color="var(--primary)" />}
-            </div>
+        <div className="journal-intro">
+          <div className="journal-intro-heading">
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                  Patta-hisob • Partiyalar va Pattalar Nazorati
-                </h1>
+               <div className="journal-heading-line">
+                 <h1>Patta-hisob</h1>
                 {isAllTimeMode ? (
                   <span style={{
                     fontSize: '11px',
@@ -583,11 +566,11 @@ export const PattaHisobView: React.FC = () => {
                     padding: '2px 8px',
                     borderRadius: 'var(--radius-full)'
                   }}>
-                    🟢 Faol Oy
+                     Faol oy
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+               <p className="journal-caption">
                 {isAllTimeMode
                   ? 'Barcha yopilgan oylar va joriy oydagi partiyalar va kiritilgan pattalarning to\'liq monitoringi'
                   : isArchiveMode
@@ -598,7 +581,7 @@ export const PattaHisobView: React.FC = () => {
           </div>
 
           {/* Right Controls: Period Selector & Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+           <div className="journal-period-actions">
             {/* Modern Custom Period Dropdown */}
             <div ref={periodDropdownRef} style={{ position: 'relative' }}>
               <button
@@ -610,9 +593,10 @@ export const PattaHisobView: React.FC = () => {
                   gap: '8px',
                   background: isAllTimeMode ? 'rgba(99, 102, 241, 0.12)' : isArchiveMode ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-surface-subtle)',
                   border: isAllTimeMode ? '1.5px solid #6366f1' : isArchiveMode ? '1.5px solid #818cf8' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '5px 14px',
-                  fontSize: '12.5px',
+                   borderRadius: '12px',
+                   padding: '10px 16px',
+                   minHeight: '44px',
+                   fontSize: '14px',
                   color: 'var(--text-primary)',
                   cursor: 'pointer',
                   boxShadow: isPeriodDropdownOpen ? '0 0 0 3px var(--primary-light)' : 'var(--shadow-xs)',
@@ -1002,101 +986,28 @@ export const PattaHisobView: React.FC = () => {
         )}
 
         {/* KPI Cards Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
-          {/* 1. Jami Partiyalar */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(16, 185, 129, 0.15)' }}>
-              <Layers size={17} color="var(--primary)" />
-            </div>
-            <div>
-              <div className="kpi-label">Jami Partiyalar</div>
-              <div className="kpi-value" style={{ color: 'var(--primary)' }}>
-                {totalPartiesCount} <span style={{ fontSize: '12px', fontWeight: 500 }}>ta</span>
-              </div>
-            </div>
+        <div className="journal-kpis">
+          <div className="journal-kpi">
+            <div className="journal-kpi-label">Jami partiyalar</div>
+            <div className="journal-kpi-value">{totalPartiesCount} <small>ta</small></div>
+            <div className="journal-kpi-sub">{seriesTab === 'closed' && !isArchiveMode && !isAllTimeMode ? 'Yakunlangan partiyalar' : 'Ko‘rinayotgan davr partiyalari'}</div>
           </div>
-
-          {/* 2. Jami Pattalar */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(99, 102, 241, 0.15)' }}>
-              <Tag size={17} color="#818cf8" />
-            </div>
-            <div>
-              <div className="kpi-label">Jami Pattalar</div>
-              <div className="kpi-value" style={{ color: '#818cf8' }}>
-                {totalPattasCount} <span style={{ fontSize: '12px', fontWeight: 500 }}>ta</span>
-              </div>
-            </div>
+          <div className="journal-kpi">
+            <div className="journal-kpi-label">Kiritilgan pattalar</div>
+            <div className="journal-kpi-value">{totalSubmittedPattasCount} <small>/ {totalPattasCount} ta</small></div>
+            <div className="journal-progress" role="progressbar" aria-label="Kiritilgan pattalar" aria-valuenow={totalSubmittedPattasCount} aria-valuemax={totalPattasCount || 1}><span style={{ width: `${ticketProgress}%` }} /></div>
+            <div className="journal-kpi-sub">Kiritilmagan: {totalUnsubmittedPattasCount} ta</div>
           </div>
-
-          {/* 3. Kiritilgan Pattalar */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(16, 185, 129, 0.15)' }}>
-              <CheckCircle2 size={17} color="#10b981" />
-            </div>
-            <div>
-              <div className="kpi-label">Kiritilgan Pattalar</div>
-              <div className="kpi-value" style={{ color: '#10b981' }}>
-                {totalSubmittedPattasCount} <span style={{ fontSize: '12px', fontWeight: 500 }}>ta</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Kiritilmagan Pattalar */}
-          <div className="kpi-card" style={{ borderLeft: `4px solid ${totalUnsubmittedPattasCount > 0 ? '#ef4444' : 'var(--border-subtle)'}` }}>
-            <div className="kpi-icon-container" style={{ background: totalUnsubmittedPattasCount > 0 ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-subtle)' }}>
-              <XCircle size={17} color={totalUnsubmittedPattasCount > 0 ? '#ef4444' : 'var(--text-muted)'} />
-            </div>
-            <div>
-              <div className="kpi-label">Kiritilmagan Pattalar</div>
-              <div className="kpi-value" style={{ color: totalUnsubmittedPattasCount > 0 ? '#ef4444' : 'var(--text-muted)' }}>
-                {totalUnsubmittedPattasCount} <span style={{ fontSize: '12px', fontWeight: 500 }}>ta</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 5. Rejadagi Ish Soni */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(245, 158, 11, 0.15)' }}>
-              <FileText size={17} color="#fbbf24" />
-            </div>
-            <div>
-              <div className="kpi-label">Rejadagi Ish</div>
-              <div className="kpi-value" style={{ color: '#fbbf24', fontSize: '16px' }}>
-                {totalExpectedIshCount.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 6. Haqiqatda Kiritilgan */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #06b6d4' }}>
-            <div className="kpi-icon-container" style={{ background: 'rgba(6, 182, 212, 0.15)' }}>
-              <CheckCheck size={17} color="#38bdf8" />
-            </div>
-            <div>
-              <div className="kpi-label">Kiritilgan Ish</div>
-              <div className="kpi-value" style={{ color: '#38bdf8', fontSize: '16px' }}>
-                {totalActualSubmittedIshCount.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 7. Kiritilmagan Ish */}
-          <div className="kpi-card" style={{ borderLeft: `4px solid ${totalUnsubmittedIshCount > 0 ? '#ef4444' : 'var(--border-subtle)'}` }}>
-            <div className="kpi-icon-container" style={{ background: totalUnsubmittedIshCount > 0 ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-subtle)' }}>
-              <XCircle size={17} color={totalUnsubmittedIshCount > 0 ? '#ef4444' : 'var(--text-muted)'} />
-            </div>
-            <div>
-              <div className="kpi-label">Kiritilmagan Ish</div>
-              <div className="kpi-value" style={{ color: totalUnsubmittedIshCount > 0 ? '#ef4444' : 'var(--text-muted)', fontSize: '16px' }}>
-                {totalUnsubmittedIshCount.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
-              </div>
-            </div>
+          <div className="journal-kpi">
+            <div className="journal-kpi-label">Kiritilgan ish</div>
+            <div className="journal-kpi-value">{totalActualSubmittedIshCount.toLocaleString()} <small>/ {totalExpectedIshCount.toLocaleString()} dona</small></div>
+            <div className="journal-progress" role="progressbar" aria-label="Kiritilgan ish" aria-valuenow={totalActualSubmittedIshCount} aria-valuemax={Math.max(totalExpectedIshCount, totalActualSubmittedIshCount, 1)}><span style={{ width: `${workProgress}%` }} /></div>
+            <div className="journal-kpi-sub">Kiritilmagan: {totalUnsubmittedIshCount.toLocaleString()} dona</div>
           </div>
         </div>
 
         {!isArchiveMode && !isAllTimeMode && (
-          <div role="tablist" aria-label="Partiyalar holati" style={{ display: 'flex', gap: '8px', marginTop: '14px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="journal-tabs" role="tablist" aria-label="Partiyalar holati">
             {([
               { id: 'active', label: 'Patta hisob', count: (printedPartyHistory || []).filter((party) => !party.isClosed).length },
               { id: 'closed', label: 'Yopilgan · Yakunlangan', count: (printedPartyHistory || []).filter((party) => party.isClosed).length }
@@ -1113,16 +1024,7 @@ export const PattaHisobView: React.FC = () => {
                     setCurrentPage(1);
                     setStatusFilter('all');
                   }}
-                  style={{
-                    padding: '10px 14px',
-                    border: 'none',
-                    borderBottom: selected ? '2px solid var(--primary)' : '2px solid transparent',
-                    background: 'transparent',
-                    color: selected ? 'var(--primary)' : 'var(--text-secondary)',
-                    fontSize: '12.5px',
-                    fontWeight: selected ? 700 : 600,
-                    cursor: 'pointer'
-                  }}
+                   className={selected ? 'journal-tab selected' : 'journal-tab'}
                 >
                   {tab.label} <span style={{ opacity: 0.75 }}>({tab.count})</span>
                 </button>
@@ -1132,7 +1034,7 @@ export const PattaHisobView: React.FC = () => {
         )}
 
         {/* Filter Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <div className="journal-filters">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -1142,12 +1044,12 @@ export const PattaHisobView: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="soft-input"
-                style={{ paddingLeft: '32px', height: '32px', fontSize: '12.5px', width: '100%' }}
+                 style={{ paddingLeft: '36px', height: '42px', fontSize: '14px', width: '100%' }}
               />
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+           <div className="journal-filter-pills">
             <button
               onClick={() => setStatusFilter('all')}
               className={`soft-btn ${statusFilter === 'all' ? 'soft-btn-primary' : 'soft-btn-secondary'}`}
@@ -1181,7 +1083,7 @@ export const PattaHisobView: React.FC = () => {
       </div>
 
       {/* Main Content Area (Accordion per Model) */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+       <div className="journal-content" style={{ flex: 1, overflowY: 'auto' }}>
         {duplicatePartyNumbers.size > 0 && !isArchiveMode && (
           <div style={{
             marginBottom: '16px',
@@ -1239,12 +1141,13 @@ export const PattaHisobView: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+           <div className="journal-model-list">
+             <div className="journal-model-columns" aria-hidden="true"><span>Model</span><span>Partiyalar</span><span>Pattalar</span><span>Ish soni</span><span>Holati</span></div>
             {paginatedGroups.map(({ group, parties }) => {
               const isModelExpanded = expandedModelIds.has(group.modelId);
 
               return (
-                  <div
+                   <div className="journal-model-card"
                     key={group.modelId}
                     style={{
                       border: '1px solid var(--border-subtle)',
@@ -1255,91 +1158,31 @@ export const PattaHisobView: React.FC = () => {
                     }}
                   >
                     {/* Model Header */}
-                    <div
-                      onClick={() => toggleModelAccordion(group.modelId)}
-                      style={{
-                        background: 'var(--bg-surface-subtle)',
-                        borderBottom: isModelExpanded ? '1px solid var(--border-subtle)' : 'none',
-                        padding: '12px 18px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                        flexWrap: 'wrap',
-                        gap: '10px'
-                      }}
-                    >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                     <button type="button" className="journal-model-row" aria-expanded={isModelExpanded}
+                       onClick={() => toggleModelAccordion(group.modelId)}
+                       onKeyDown={(event) => {
+                         if (event.key === 'Enter' || event.key === ' ') {
+                           event.preventDefault();
+                           event.stopPropagation();
+                           toggleModelAccordion(group.modelId);
+                         }
+                       }}>
+                     <div className="journal-model-name">
                       {isModelExpanded ? <ChevronDown size={18} color="var(--primary)" /> : <ChevronRight size={18} color="var(--text-secondary)" />}
-                      <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                       <span className="journal-model-title">
                         Модел- {group.modelName.replace(/^(Модел-\s*|Модель-\s*|Model-\s*)+/i, '').trim()}
                       </span>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          background: 'var(--primary-light)',
-                          color: 'var(--primary)',
-                          padding: '2px 10px',
-                          borderRadius: 'var(--radius-full)',
-                          fontWeight: 700
-                        }}
-                      >
-                        {group.totalParties} ta partiya
-                      </span>
-                    </div>
-
-                    {/* Stats: Kiritilgan, Kiritilmagan, Jami patta, Kiritilgan ish, Kiritilmagan ish, Jami ish */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12.5px', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#10b981' }}>
-                        Kiritilgan: <strong>{group.submittedPattas} ta</strong>
-                      </span>
-                      <span
-                        style={{
-                          color: group.unsubmittedPattas > 0 ? '#ef4444' : 'var(--text-muted)',
-                          fontWeight: group.unsubmittedPattas > 0 ? 800 : 500,
-                          background: group.unsubmittedPattas > 0 ? 'rgba(239, 68, 68, 0.12)' : 'transparent',
-                          padding: group.unsubmittedPattas > 0 ? '2px 8px' : '0',
-                          borderRadius: 'var(--radius-full)'
-                        }}
-                      >
-                        Kiritilmagan: <strong>{group.unsubmittedPattas} ta</strong>
-                      </span>
-                      <span>Jami patta: <strong>{group.totalPattas} ta</strong></span>
-                      <span style={{ color: '#10b981' }}>
-                        Kiritilgan ish: <strong>{group.submittedIshSoni.toLocaleString()} dona</strong>
-                      </span>
-                      <span
-                        style={{
-                          color: group.unsubmittedIshSoni > 0 ? '#ef4444' : 'var(--text-muted)',
-                          fontWeight: group.unsubmittedIshSoni > 0 ? 800 : 500,
-                          background: group.unsubmittedIshSoni > 0 ? 'rgba(239, 68, 68, 0.12)' : 'transparent',
-                          padding: group.unsubmittedIshSoni > 0 ? '2px 8px' : '0',
-                          borderRadius: 'var(--radius-full)'
-                        }}
-                      >
-                        Kiritilmagan ish: <strong>{group.unsubmittedIshSoni.toLocaleString()} dona</strong>
-                      </span>
-                      <span>Jami ish: <strong>{group.totalIshSoni.toLocaleString()} dona</strong></span>
-                      <span
-                        style={{
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                          color: group.hasMismatch ? '#f87171' : (group.isComplete ? '#34d399' : '#818cf8'),
-                          background: group.hasMismatch ? 'rgba(239, 68, 68, 0.15)' : (group.isComplete ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)'),
-                          padding: '3px 12px',
-                          borderRadius: 'var(--radius-full)'
-                        }}
-                      >
-                        {group.statusLabel}
-                      </span>
-                    </div>
-                  </div>
+                     </div>
+                     <span className="journal-model-count">{group.totalParties} ta partiya</span>
+                     <span className="journal-model-metric"><strong>{group.submittedPattas} / {group.totalPattas}</strong><span className="journal-progress"><span style={{ width: `${group.totalPattas ? Math.min(100, group.submittedPattas / group.totalPattas * 100) : 0}%` }} /></span><small>Kiritilmagan: {group.unsubmittedPattas} ta</small></span>
+                     <span className="journal-model-metric"><strong>{group.submittedIshSoni.toLocaleString()} / {group.totalIshSoni.toLocaleString()}</strong><span className="journal-progress"><span style={{ width: `${group.totalIshSoni ? Math.min(100, group.submittedIshSoni / group.totalIshSoni * 100) : 0}%` }} /></span><small>Kiritilmagan: {group.unsubmittedIshSoni.toLocaleString()} dona</small></span>
+                     <span className={group.hasMismatch ? 'journal-status mismatch' : group.isComplete ? 'journal-status complete' : 'journal-status'}>{group.statusLabel}</span>
+                   </button>
 
                   {/* Parties Table */}
                   {isModelExpanded && (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="excel-table" style={{ width: '100%' }}>
+                     <div className="journal-party-wrap">
+                       <table className="excel-table journal-party-table" style={{ width: '100%' }}>
                         <thead>
                           <tr style={{ height: '34px', background: 'var(--bg-surface-subtle)' }}>
                             <th className="col-header" style={{ textAlign: 'left', paddingLeft: '16px' }}>Partiya</th>

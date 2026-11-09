@@ -93,8 +93,23 @@ export function hydrateWorkbookProjection(data: any, companyId: string) {
     deletedPartyIds: hydrated.deletedPartyIds,
     deletedWorkerIds: hydrated.deletedWorkerIds,
     deletedModelIds: hydrated.deletedModelIds,
+    payrollValuation: hydratePayrollValuation(data?.payrollValuation, companyId, hydrated.currentPeriod.id),
     companyId
   };
+}
+
+export function hydratePayrollValuation(value: any, companyId: string, periodId: string) {
+  if (!value || value.companyId !== companyId || value.period?.periodId !== periodId) {
+    return {
+      companyId,
+      period: null,
+      workers: [],
+      accountingStatus: 'UNAVAILABLE' as const,
+      accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'],
+      syncStatus: 'UNKNOWN' as const
+    };
+  }
+  return value;
 }
 
 export async function reloadWorkbookProjection(eAPI: any, companyId: string) {
@@ -132,6 +147,16 @@ export function runReconnect(eAPI: any, companyId: string): Promise<any> {
 export function runSyncPull(eAPI: any, companyId: string): Promise<any> {
   if (typeof eAPI?.SyncPull !== 'function') return Promise.resolve({ success: false, code: '_SYNC_PULL_UNAVAILABLE' });
   return enqueueCompanySync(companyId, () => eAPI.SyncPull(companyId));
+}
+
+export function stalePayrollValuation<T extends WorkbookStore['payrollValuation']>(valuation: T): T {
+  if (valuation.syncStatus !== 'CURRENT') return valuation;
+  const reason = 'SYNC_FRESHNESS_UNVERIFIED';
+  return { ...valuation, syncStatus: 'UNKNOWN', accountingStatus: 'INCOMPLETE',
+    accountingReasons: [...new Set([...(valuation.accountingReasons || []), reason])],
+    feedEvidence: valuation.feedEvidence ? { ...valuation.feedEvidence, status: 'STALE_AS_OF' } : null,
+    workers: valuation.workers.map(worker => ({ ...worker, syncStatus: 'UNKNOWN', accountingStatus: 'INCOMPLETE',
+      accountingReasons: [...new Set([...(worker.accountingReasons || []), reason])] })) } as T;
 }
 
 function isCompanySessionCurrent(get: () => WorkbookStore, session: ReturnType<typeof captureSessionIdentity>, companyId: string, initialLicenseStatus: WorkbookStore['licenseStatus']) {
@@ -212,6 +237,7 @@ export async function submitWorkbookCommand(
 
   const state = get();
   const initialLicenseStatus = state.licenseStatus;
+  const initialPeriodId = state.currentPeriod?.id;
   const licenseCompanyId = state.licenseStatus?.companyId;
   const authCompanyId = useAuthStore.getState().companyId;
   if (!command.companyId || (licenseCompanyId && licenseCompanyId !== command.companyId) || (authCompanyId && authCompanyId !== command.companyId)) {
@@ -245,7 +271,8 @@ export async function submitWorkbookCommand(
   let projectionLoaded = false;
   try {
     const projection = await reloadWorkbookProjection(eAPI, command.companyId);
-    if (isCurrent()) {
+    if (isCurrent() && (get().currentPeriod?.id === initialPeriodId ||
+      ['CreatePeriod', 'UpdatePeriod', 'ClosePeriod'].includes(command.commandType))) {
       const safeProjection = preserveWorkbookProjectionDrafts(
         projection,
         get(),
@@ -256,6 +283,8 @@ export async function submitWorkbookCommand(
     }
   } catch {
     // The command and outbox row are already committed. Reconnect/hydration can retry later.
+    if (isCurrent()) set({ payrollValuation: { companyId: command.companyId, period: null, workers: [],
+      accountingStatus: 'UNAVAILABLE', accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' } });
   }
   refreshAfterReconnect(
     eAPI,

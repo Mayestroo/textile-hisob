@@ -16,6 +16,8 @@ import {
   Edit2
 } from 'lucide-react';
 import { useWorkbookStore } from '../../store/workbookStore';
+import { useAuthStore } from '../../store/authStore';
+import { displayedMoney, payrollDisplay } from '../../engine/payrollDisplay';
 import { CustomSelect } from '../../components/ui/CustomSelect';
 import { formatDateIso, formatMoney, formatTicketDateTime, sortTicketsNewestFirst } from '../../utils/formatters';
 
@@ -23,6 +25,17 @@ export const KonveyerView: React.FC = () => {
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const models = useWorkbookStore((s) => s.models);
   const workers = useWorkbookStore((s) => s.workers);
+  const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
+  const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const licenseCompanyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
+  const authCompanyId = useAuthStore((s) => s.companyId);
+  const companyId = licenseCompanyId || authCompanyId;
+  const displayWorkers = useMemo(() => [...workers, ...payrollValuation.workers
+    .filter((item) => !workers.some((worker) => worker.id === Number(item.workerId)))
+    .map((item) => ({ id: Number(item.workerId), name: item.name || `Ishchi #${item.workerId}`,
+      staj: Number(item.staj || 0), avans: Number(item.avans || 0), jarima: Number(item.jarima || 0) }))], [workers, payrollValuation]);
+  const display = useMemo(() => payrollDisplay(models, displayWorkers, payrollValuation, companyId || undefined, currentPeriod.id),
+    [models, displayWorkers, payrollValuation, companyId, currentPeriod.id]);
   const selectedArchiveFilename = useWorkbookStore((s) => s.selectedArchiveFilename);
   const deleteSubmittedTicket = useWorkbookStore((s) => s.deleteSubmittedTicket);
   const confirmAction = useWorkbookStore((s) => s.confirmAction);
@@ -57,33 +70,32 @@ export const KonveyerView: React.FC = () => {
     return map;
   }, [models]);
 
-  // Precomputed map of modelId -> Map<opName, rate>
-  const modelOpRatesMap = useMemo(() => {
-    const map = new Map<string, Map<string, number>>();
-    for (const m of models) {
-      const opMap = new Map<string, number>();
-      for (const op of m.operations) {
-        opMap.set(op.name, op.rate);
-      }
-      map.set(m.id, opMap);
-    }
-    return map;
-  }, [models]);
-
-  // Calculate ticket earnings
+  // Per-ticket base wages use the effective period tariff. Corrections have no
+  // ticket attribution; only the period KPI can include the full shared gross.
   const calculateTicketAmount = useCallback((ticket: typeof submittedTickets[0]) => {
-    const opRateMap = modelOpRatesMap.get(ticket.modelId);
-    if (!opRateMap) return 0;
-
+    if (!display.ready || ticket.periodId !== currentPeriod.id) return null;
     let total = 0;
     for (const entry of ticket.entries || []) {
-      const rate = entry.rateSnapshot !== undefined && entry.rateSnapshot > 0
-        ? entry.rateSnapshot
-        : (opRateMap?.get(entry.opName) || 0);
+      const rate = display.operationRates[ticket.modelId]?.[entry.opName];
+      if (rate === null || rate === undefined || !display.masterReport.workers.some((w) => w.workerId === entry.workerId)) return null;
       total += rate * ticket.qty;
     }
     return total;
-  }, [modelOpRatesMap]);
+  }, [display, currentPeriod.id]);
+  const capturedTicketAmount = useCallback((ticket: typeof submittedTickets[0]) => {
+    let total = 0;
+    for (const entry of ticket.entries || []) {
+      if (typeof entry.rateSnapshot !== 'number' || !Number.isFinite(entry.rateSnapshot)) return null;
+      total += entry.rateSnapshot * ticket.qty;
+    }
+    return total;
+  }, []);
+  const periodGrossKnown = display.ready && submittedTickets.every((ticket) =>
+    ticket.periodId !== currentPeriod.id || (ticket.entries || []).every((entry) =>
+      display.masterReport.workers.some((worker) => worker.workerId === entry.workerId)))
+    && display.masterReport.workers.every((worker) =>
+    display.displayModels.every((model) => model.operations.every((op) =>
+      display.cellAmounts[display.key(model.id, worker.workerId, op.name)] !== null)));
 
   // Extract unique konveyers from submitted tickets
   const uniqueKonveyers = useMemo(() => {
@@ -114,10 +126,10 @@ export const KonveyerView: React.FC = () => {
   const matrixData = useMemo(() => {
     const data: Record<string, {
       konveyer: string;
-      modelBreakdown: Record<string, { qty: number; pattaCount: number; amount: number }>;
+      modelBreakdown: Record<string, { qty: number; pattaCount: number; amount: number | null }>;
       totalQty: number;
       totalPattas: number;
-      totalAmount: number;
+      totalAmount: number | null;
       tickets: typeof submittedTickets;
     }> = {};
 
@@ -158,11 +170,12 @@ export const KonveyerView: React.FC = () => {
       const amt = calculateTicketAmount(t);
       data[k].modelBreakdown[t.modelId].qty += t.qty;
       data[k].modelBreakdown[t.modelId].pattaCount += 1;
-      data[k].modelBreakdown[t.modelId].amount += amt;
+      const existingModelAmount = data[k].modelBreakdown[t.modelId].amount;
+      data[k].modelBreakdown[t.modelId].amount = existingModelAmount === null || amt === null ? null : existingModelAmount + amt;
 
       data[k].totalQty += t.qty;
       data[k].totalPattas += 1;
-      data[k].totalAmount += amt;
+      data[k].totalAmount = data[k].totalAmount === null || amt === null ? null : data[k].totalAmount + amt;
       data[k].tickets.push(t);
     }
 
@@ -171,7 +184,7 @@ export const KonveyerView: React.FC = () => {
 
   // Model column totals across all konveyers
   const modelTotals = useMemo(() => {
-    const totals: Record<string, { totalQty: number; totalPattas: number; totalAmount: number }> = {};
+    const totals: Record<string, { totalQty: number; totalPattas: number; totalAmount: number | null }> = {};
     for (const m of models) {
       totals[m.id] = { totalQty: 0, totalPattas: 0, totalAmount: 0 };
     }
@@ -181,7 +194,8 @@ export const KonveyerView: React.FC = () => {
         const item = row.modelBreakdown[m.id] || { qty: 0, pattaCount: 0, amount: 0 };
         totals[m.id].totalQty += item.qty;
         totals[m.id].totalPattas += item.pattaCount;
-        totals[m.id].totalAmount += item.amount;
+        const currentAmount = totals[m.id].totalAmount;
+        totals[m.id].totalAmount = currentAmount === null || item.amount === null ? null : currentAmount + item.amount;
       }
     }
     return totals;
@@ -197,12 +211,12 @@ export const KonveyerView: React.FC = () => {
   const grandTotals = useMemo(() => {
     let totalQty = 0;
     let totalPattas = 0;
-    let totalAmount = 0;
+    let totalAmount: number | null = 0;
 
     for (const row of Object.values(matrixData)) {
       totalQty += row.totalQty;
       totalPattas += row.totalPattas;
-      totalAmount += row.totalAmount;
+      totalAmount = totalAmount === null || row.totalAmount === null ? null : totalAmount + row.totalAmount;
     }
 
     return {
@@ -322,9 +336,9 @@ export const KonveyerView: React.FC = () => {
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-app)', height: '100%', overflow: 'hidden' }}>
+    <div className="phase-b-view phase-b-konveyer" style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-app)', height: '100%', overflow: 'hidden' }}>
       {/* Top Header & Metrics Bar */}
-      <div style={{ 
+      <div className="e2c-conveyor-intro" style={{
         padding: '16px 20px 12px 20px', 
         backgroundColor: 'var(--bg-surface)', 
         borderBottom: '1px solid var(--border-default)',
@@ -345,7 +359,7 @@ export const KonveyerView: React.FC = () => {
               <Factory size={22} color="#7c3aed" />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+              <h2 className="e2c-conveyor-title" style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
                 Konveyerlar va Modellar Nazorati
               </h2>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -428,7 +442,7 @@ export const KonveyerView: React.FC = () => {
         </div>
 
         {/* KPI Mini Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+        <div className="e2c-conveyor-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           <div style={{ backgroundColor: 'rgba(147, 51, 234, 0.12)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(147, 51, 234, 0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#a855f7', textTransform: 'uppercase' }}>Faol Konveyerlar</span>
@@ -461,18 +475,19 @@ export const KonveyerView: React.FC = () => {
 
           <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(34, 197, 94, 0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#22c55e', textTransform: 'uppercase' }}>Jami Ish Haqi</span>
+              <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#22c55e', textTransform: 'uppercase' }}>Davr bo‘yicha jami hisoblangan ish haqi</span>
               <TrendingUp size={16} color="#22c55e" />
             </div>
             <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>
-              {formatMoney(grandTotals.totalAmount)} so'm
+              {periodGrossKnown ? displayedMoney(display.masterReport.totalUmumiy, display.ready, display.incomplete) : 'Noma’lum'} so‘m
             </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{display.label || 'Pattalardagi summa tuzatishlardan oldingi ish haqi'}</div>
           </div>
         </div>
       </div>
 
       {/* Controls Bar */}
-      <div style={{ 
+      <div className="e2c-conveyor-toolbar" style={{
         padding: '10px 20px', 
         backgroundColor: 'var(--bg-surface)', 
         borderBottom: '1px solid var(--border-default)',
@@ -585,7 +600,7 @@ export const KonveyerView: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, overflow: 'auto', backgroundColor: 'var(--bg-surface)' }}>
+      <div className="e2c-conveyor-scroll" style={{ flex: 1, overflow: 'auto', backgroundColor: 'var(--bg-surface)' }}>
         {activeTab === 'matrix' ? (
           /* ========================================================= */
           /* PIVOT MATRIX VIEW: Rows = Konveyer, Header = Models       */
@@ -610,7 +625,7 @@ export const KonveyerView: React.FC = () => {
             </div>
           ) : (
             <table
-              className="excel-table"
+              className="excel-table e2c-conveyor-matrix"
               style={{
                 width: '100%',
                 borderCollapse: 'separate',
@@ -619,7 +634,7 @@ export const KonveyerView: React.FC = () => {
               }}
             >
               <thead>
-                <tr style={{ height: '38px', backgroundColor: 'var(--bg-surface-subtle)' }}>
+                <tr style={{ height: '56px', backgroundColor: 'var(--bg-surface-subtle)' }}>
                   {/* Sticky Column: № */}
                   <th style={{ 
                     width: '45px', 
@@ -675,6 +690,11 @@ export const KonveyerView: React.FC = () => {
                             {formatMoney(modelTotals[m.id]?.totalQty || 0)} dona
                           </div>
                         )}
+                        {hasWork && grandTotals.totalQty > 0 && <div className="e2c-model-progress" role="meter"
+                          aria-label={`${m.name} ish ulushi`} aria-valuenow={Math.round(modelTotals[m.id].totalQty / grandTotals.totalQty * 100)}
+                          aria-valuemin={0} aria-valuemax={100}>
+                          <span style={{ width: `${Math.min(100, modelTotals[m.id].totalQty / grandTotals.totalQty * 100)}%` }} />
+                        </div>}
                       </th>
                     );
                   })}
@@ -721,8 +741,8 @@ export const KonveyerView: React.FC = () => {
                   return (
                     <React.Fragment key={k}>
                       <tr 
-                        style={{ 
-                          height: '40px', 
+                         style={{
+                           height: '92px',
                           backgroundColor: isExpanded ? 'var(--bg-surface-subtle)' : 'var(--bg-surface)',
                           cursor: 'pointer',
                           transition: 'background-color 0.1s'
@@ -772,7 +792,7 @@ export const KonveyerView: React.FC = () => {
                               fontSize: '12px',
                               fontWeight: 800,
                               backgroundColor: k !== 'Noma\'lum' ? 'rgba(124, 58, 237, 0.12)' : 'var(--bg-surface-subtle)',
-                              color: k !== 'Noma\'lum' ? '#7c3aed' : 'var(--text-muted)',
+                               color: k !== 'Noma\'lum' ? 'var(--status-purple-text)' : 'var(--text-muted)',
                               border: k !== 'Noma\'lum' ? '1px solid rgba(124, 58, 237, 0.3)' : '1px solid var(--border-subtle)'
                             }}>
                               {k !== 'Noma\'lum' ? `${k}-Konveyer` : 'Noma\'lum'}
@@ -789,7 +809,8 @@ export const KonveyerView: React.FC = () => {
                           return (
                             <td 
                               key={m.id} 
-                              style={{ 
+                              className={qty > 0 ? 'e2c-conveyor-work' : undefined}
+                              style={{
                                 textAlign: 'center', 
                                 padding: '6px 8px'
                               }}
@@ -917,7 +938,7 @@ export const KonveyerView: React.FC = () => {
 
                 {/* Grand Total Row */}
                 <tr style={{ 
-                  height: '42px', 
+                   height: '60px',
                   backgroundColor: 'var(--primary-light)', 
                   fontWeight: 800,
                   position: 'sticky',
@@ -1036,7 +1057,7 @@ export const KonveyerView: React.FC = () => {
                   <th style={{ width: '100px', textAlign: 'center', position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'var(--bg-surface-subtle)' }}>Rang</th>
                   <th style={{ width: '110px', textAlign: 'right', paddingRight: '14px', position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'var(--bg-surface-subtle)' }}>Ish Soni</th>
                   <th style={{ minWidth: '220px', paddingLeft: '14px', position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'var(--bg-surface-subtle)' }}>Bajarilgan Operatsiyalar</th>
-                  <th style={{ width: '130px', textAlign: 'right', paddingRight: '16px', position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'var(--bg-surface-subtle)' }}>Jami Summa</th>
+                  <th style={{ width: '160px', textAlign: 'right', paddingRight: '16px', position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'var(--bg-surface-subtle)' }}>Patta ish haqi (tuzatishsiz)</th>
                   {!isArchiveMode && (
                     <th style={{ width: '95px', textAlign: 'center', position: 'sticky', top: 0, zIndex: 20, backgroundColor: 'var(--bg-surface-subtle)' }}>Amallar</th>
                   )}
@@ -1138,7 +1159,10 @@ export const KonveyerView: React.FC = () => {
                         </div>
                       </td>
                       <td style={{ textAlign: 'right', paddingRight: '16px', fontWeight: 800, color: 'var(--text-primary)', fontSize: '13px' }}>
-                        {formatMoney(amount)}
+                        {amount === null ? 'Noma’lum' : `${formatMoney(amount)} so‘m`}
+                        <div style={{ fontSize: '10px', fontWeight: 500, color: 'var(--text-muted)' }}>
+                          Saqlangan tarif bo‘yicha: {capturedTicketAmount(t) === null ? 'Noma’lum' : `${formatMoney(capturedTicketAmount(t)!)} so‘m`}
+                        </div>
                       </td>
                       {!isArchiveMode && (
                         <td style={{ textAlign: 'center' }}>

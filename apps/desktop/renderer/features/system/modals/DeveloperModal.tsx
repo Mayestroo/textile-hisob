@@ -10,7 +10,7 @@ export const DeveloperModal: React.FC = () => {
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay phase-c-dialog"
       style={{
         backgroundColor: 'rgba(15, 23, 42, 0.75)'
       }}
@@ -18,6 +18,7 @@ export const DeveloperModal: React.FC = () => {
     >
       <div
         className="modal-card"
+        data-phase-c="developer"
         style={{
           maxWidth: '560px',
           borderRadius: 'var(--radius-xl)'

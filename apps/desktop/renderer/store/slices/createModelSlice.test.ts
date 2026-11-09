@@ -122,6 +122,26 @@ describe(' model mutation boundary', () => {
     expect(state.models.find((item: any) => item.id === 'model-a').operations[0].rate).toBe(42);
   });
 
+  it('does not leave the old displayed wage authoritative when a committed tariff cannot reload', async () => {
+    const licenseStatus = { companyId: 'company-a' };
+    const model = { id: 'model-a', name: 'A', operations: [{ id: 's', name: 'Sew', rate: 5 }],
+      hisobQuantities: { 7: { Sew: 10 } }, pattaOpsOrder: [] };
+    const state: any = { licenseStatus, models: [model], workers: [{ id: 7 }], currentPeriod: { id: 'P' },
+      payrollValuation: { companyId: 'company-a', period: { periodId: 'P' }, workers: [{ workerId: 7, gross: 50 }], accountingStatus: 'COMPLETE' },
+      addNotification: vi.fn(), ticketForms: {}, availableSizes: [], pattaBatchConfigs: {} };
+    const set = vi.fn((next: any) => Object.assign(state, next));
+    const api = { getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      WorkbookCommand: vi.fn().mockResolvedValue({ success: true }),
+      dbRead: vi.fn().mockRejectedValue(new Error('temporary local read failure')) };
+    vi.stubGlobal('window', { electronAPI: api });
+    const slice = createModelSlice(set as any, (() => state) as any, {} as any);
+    expect(await slice.updateOperationRate('model-a', 'Sew', 7)).toBe(true);
+    expect(state.payrollValuation).toMatchObject({ period: null, accountingStatus: 'UNAVAILABLE' });
+    expect(api.WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ operations: [expect.objectContaining({ rate: 7 })] })
+    }));
+  });
+
   it('maps  hisob edits to a production-adjustment command rather than a snapshot write', async () => {
     const model = {
       id: 'model-a', name: 'Model A', hisobSheetName: 'Model A-hisob', title: 'Model A', party: '', color: 'Qora', size: 'XL',
@@ -148,5 +168,28 @@ describe(' model mutation boundary', () => {
     expect('WorkbookCommand' in api).toBe(false);
     expect(api.dbRead).toHaveBeenCalledWith('company-a');
     expect(state.saveToDisk).not.toHaveBeenCalled();
+  });
+
+  it('passes the explicitly selected original entry through the actual quantity command, without sending its displayed rate', async () => {
+    const model = { id: 'model-a', operations: [{ name: 'Cut', rate: 9 }], hisobQuantities: { 1: { Cut: 5 } } };
+    const licenseStatus = { companyId: 'company-a' };
+    const state: any = { licenseStatus, models: [model], workers: [{ id: 1 }], addNotification: vi.fn() };
+    const api = {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      RecordAdjustmentCommand: vi.fn().mockResolvedValue({ success: true }),
+      dbRead: vi.fn().mockResolvedValue({ success: true, data: {
+        companyId: 'company-a', models: [{ ...model, hisobQuantities: { 1: { Cut: 7 } } }],
+        workers: [{ id: 1 }], submittedTickets: [], periods: [], printedPartyHistory: [] } }),
+      SyncReconnect: vi.fn().mockResolvedValue({ success: true })
+    };
+    vi.stubGlobal('window', { electronAPI: api });
+    const slice = createModelSlice(((next: any) => Object.assign(state, next)) as any, (() => state) as any, {} as any);
+    expect(await slice.updateHisobQuantity('model-a', 1, 'Cut', 7,
+      { originalTicketId: 'ticket-sep', originalEntryId: 'entry-zero' })).toBe(true);
+    expect(api.RecordAdjustmentCommand).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: 'company-a', deltaQty: 2, originalTicketId: 'ticket-sep', originalEntryId: 'entry-zero'
+    }));
+    expect(api.RecordAdjustmentCommand.mock.calls[0][0]).not.toHaveProperty('originalRateSnapshot');
+    expect(api.RecordAdjustmentCommand.mock.calls[0][0]).not.toHaveProperty('originalPeriodId');
   });
 });

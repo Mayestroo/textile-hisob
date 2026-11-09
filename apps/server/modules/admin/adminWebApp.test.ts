@@ -26,7 +26,11 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain("const API = '/api/admin/webapp'");
     expect(javascript).toContain("credentials: 'same-origin'");
     expect(javascript).not.toMatch(/initDataUnsafe/i);
-    expect(javascript).not.toMatch(/localStorage|sessionStorage/i);
+    expect(javascript).toContain('NovdaFinancialIntent.create(window.localStorage, navigator.locks)');
+    expect(javascript).not.toMatch(/\bsessionStorage\b/i);
+    expect(html).toContain('<script src="/admin-app/financial-intent.js" defer></script>');
+    expect(javascript).toContain('sendFinancialIntent(scope,');
+    expect(javascript).toContain("financialScope(companyPanel.companyId, 'company-advance')");
   });
 
   it('keeps company-scoped dashboard views available while hiding global system controls', () => {
@@ -72,7 +76,7 @@ describe(' Admin WebApp static security and usability boundaries', () => {
   });
 
   it('keeps worker unbind action on mobile profit cards', () => {
-    expect(javascript).toContain('Sof foyda: ${money(worker.net || 0)}');
+    expect(javascript).toContain('Sof foyda: ${payrollAmount(worker, money(worker.net || 0))}');
     expect(javascript).toContain('unbindBtn.dataset.unbindWorker = String(worker.workerId)');
     expect(javascript).toContain('unbindWorker: workerId, companyId, telegramId, workerName');
   });

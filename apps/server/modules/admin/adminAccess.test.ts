@@ -3,6 +3,19 @@ import { describe, expect, it, vi } from 'vitest';
 const { assertCompanyAccess, requireGlobalAdmin, resolveAdminAccess, scopeCompanyFilters } = require('./adminAccess.cjs');
 
 describe('company-scoped Telegram admin access', () => {
+  it('honors an explicit authorized company for a multi-company admin without changing other filters', () => {
+    const access = { isGlobalAdmin: false, companyIds: ['company-a', 'company-b'] };
+    const filters = { companyId: ' company-b ', search: 'Fixture', periodId: 'period-b', limit: '12' };
+    expect(assertCompanyAccess(access, filters.companyId)).toBe('company-b');
+    expect(scopeCompanyFilters(access, filters)).toEqual({ ...filters, companyId: 'company-b' });
+    expect(filters.companyId).toBe(' company-b ');
+    expect(() => scopeCompanyFilters(access, {})).toThrowError(expect.objectContaining({ code: 'ADMIN_COMPANY_SELECTION_REQUIRED' }));
+    expect(() => scopeCompanyFilters(access, { companyId: ' ' })).toThrowError(expect.objectContaining({ code: 'ADMIN_COMPANY_SELECTION_REQUIRED' }));
+    expect(() => scopeCompanyFilters(access, { companyId: 'company-c' })).toThrowError(expect.objectContaining({ code: 'ADMIN_COMPANY_SCOPE_REQUIRED' }));
+    const globalFilters = { search: 'Fixture' };
+    expect(scopeCompanyFilters({ isGlobalAdmin: true }, globalFilters)).toBe(globalFilters);
+  });
+
   it('keeps configured global admins global and resolves grants for company-only admins', async () => {
     const pool = { query: vi.fn(async () => ({ rows: [{ company_id: 'comp_novda' }] })) };
     await expect(resolveAdminAccess(pool, '1526974123', new Set(['1526974123'])))

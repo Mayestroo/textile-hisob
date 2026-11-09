@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import fastify from 'fastify';
 
 const { isInternalAdminBotUrl, isInternalWorkerBotHealthUrl, registerAdminDashboardRoutes } = require('./adminDashboardRoutes.cjs');
+const { createAdminDashboardService } = require('./adminDashboard.cjs');
 
 const SECRET = 'test-session-secret-with-enough-entropy';
 const ADMIN_ID = '1526974123';
@@ -63,10 +64,11 @@ describe(' Admin WebApp routes', () => {
     app = fastify();
     const dashboard = options.dashboard || createDashboard();
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'novda-admin-webapp-'));
-    fs.writeFileSync(path.join(tempDir, 'index.html'), '<meta name="novda-admin-webapp-version" content="test">');
+    fs.writeFileSync(path.join(tempDir, 'index.html'), '<meta name="novda-admin-webapp-version" content="test"><script src="/admin-app/financial-intent.js" defer></script>');
     fs.writeFileSync(path.join(tempDir, 'admin.css'), 'body { color: black; }');
     fs.writeFileSync(path.join(tempDir, 'company-admin.css'), '.company-app { color: green; }');
     fs.writeFileSync(path.join(tempDir, 'admin.js'), 'window.test = true;');
+    fs.copyFileSync(path.join(__dirname, '..', '..', 'static', 'admin-webapp', 'financial-intent.js'), path.join(tempDir, 'financial-intent.js'));
     registerAdminDashboardRoutes(app, {
       dashboard,
       pool: options.pool || { query: async () => ({ rows: [] }) },
@@ -97,6 +99,57 @@ describe(' Admin WebApp routes', () => {
     expect(response.statusCode).toBe(401);
     expect(response.json().error.code).toBe('ADMIN_SESSION_REQUIRED');
     expect(dashboard.overview).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['overview', 'overview'], ['devices', 'listDevices'], ['workers', 'listWorkers'],
+    ['payroll', 'getPayroll'], ['activations', 'listActivations'], ['models', 'listModels'],
+    ['parties', 'listParties'], ['tickets', 'listTickets'], ['balances', 'getBalances']
+  ])('passes authorized company B through %s and rejects missing/unauthorized scope', async (route, method) => {
+    const dashboard = createDashboard();
+    const pool = { query: vi.fn(async (sql: string, params: unknown[]) => {
+      expect(sql).toContain('FROM activation_company_admins');
+      expect(sql).toContain('is_active = TRUE');
+      expect(params).toEqual(['123456789']);
+      return { rows: [{ company_id: 'company-a' }, { company_id: 'company-b' }] };
+    }) };
+    const { app: server } = startApp({ dashboard, pool });
+    const headers = { authorization: `Bearer ${createSession('123456789')}` };
+    const service = dashboard[method as keyof typeof dashboard];
+    for (const [query, error] of [['', 'ADMIN_COMPANY_SELECTION_REQUIRED'], ['?companyId=company-c', 'ADMIN_COMPANY_SCOPE_REQUIRED']]) {
+      const denied = await server.inject({ method: 'GET', url: `/api/admin/webapp/${route}${query}`, headers });
+      expect(denied.statusCode).toBe(403);
+      expect(denied.json().error.code).toBe(error);
+      expect(service).not.toHaveBeenCalled();
+    }
+    const allowed = await server.inject({ method: 'GET', url: `/api/admin/webapp/${route}?companyId=%20company-b%20&periodId=period-b&limit=12`, headers });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json().success).toBe(true);
+    expect(service).toHaveBeenCalledExactlyOnceWith({ companyId: 'company-b', periodId: 'period-b', limit: '12',
+      ...(route === 'activations' ? { includeUnassignedPending: true } : {}) });
+  });
+
+  it('carries selected B through the real worker projection SQL and response mapper (query double, not PG)', async () => {
+    const pool = { query: vi.fn(async (sql: string, params: unknown[]) => {
+      if (sql.includes('FROM activation_company_admins')) {
+        expect(params).toEqual(['123456789']);
+        return { rows: [{ company_id: 'company-a' }, { company_id: 'company-b' }] };
+      }
+      expect(sql).toContain('FROM workers w');
+      expect(sql).toContain('WHERE ($1::VARCHAR IS NULL OR w.company_id = $1)');
+      expect(params).toEqual(['company-b', '%Fixture%', 12, 0, true]);
+      return { rows: [{ worker_id: 27, company_id: 'company-b', worker_name: 'Fixture B', status: 'ACTIVE',
+        total_count: '1', telegram_id: '987654321', username: 'fixture-b', staj: '0', server_revision: 3 }] };
+    }) };
+    const dashboard = createAdminDashboardService({ pool, allowedAdminIds: new Set() });
+    const { app: server } = startApp({ pool, dashboard });
+    const response = await server.inject({ method: 'GET',
+      url: '/api/admin/webapp/workers?companyId=company-b&search=Fixture&limit=12&boundOnly=true',
+      headers: { authorization: `Bearer ${createSession('123456789')}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ success: true, total: 1, limit: 12, offset: 0,
+      workers: [{ companyId: 'company-b', workerId: 27, name: 'Fixture B', binding: { username: 'fixture-b' } }] });
+    expect(pool.query).toHaveBeenCalledTimes(2);
   });
 
   it('exchanges Telegram initData with the private bot and returns only a verified session', async () => {
@@ -386,6 +439,7 @@ describe(' Admin WebApp routes', () => {
 
     const page = await server.inject({ method: 'GET', url: '/admin-app' });
     const script = await server.inject({ method: 'GET', url: '/admin-app/admin.js' });
+    const financialIntent = await server.inject({ method: 'GET', url: '/admin-app/financial-intent.js' });
     const companyStyles = await server.inject({ method: 'GET', url: '/admin-app/company-admin.css' });
 
     expect(page.statusCode).toBe(200);
@@ -395,6 +449,11 @@ describe(' Admin WebApp routes', () => {
     expect(page.body).toContain('novda-admin-webapp-version');
     expect(script.statusCode).toBe(200);
     expect(script.headers['content-type']).toContain('javascript');
+    expect(page.body).toContain('<script src="/admin-app/financial-intent.js" defer></script>');
+    expect(financialIntent.statusCode).toBe(200);
+    expect(financialIntent.headers['content-type']).toContain('javascript');
+    expect(financialIntent.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(financialIntent.body).toContain("locks?.request");
     expect(companyStyles.statusCode).toBe(200);
     expect(companyStyles.headers['content-type']).toContain('text/css');
     expect(companyStyles.body).toContain('.company-app');
