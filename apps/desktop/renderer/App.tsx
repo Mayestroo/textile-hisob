@@ -5,10 +5,12 @@ import { PattaView } from './features/patta/PattaView';
 import { PattaBatchView } from './features/patta/PattaBatchView';
 import { HisobView } from './features/models/HisobView';
 import { UmumiyView } from './features/payroll/UmumiyView';
+import { OperationRatesView } from './features/models/OperationRatesView';
 
 // Phase 6: Code Splitting for heavy views & modals
 const PattaHisobView = React.lazy(() => import('./features/patta/PattaHisobView').then(m => ({ default: m.PattaHisobView })));
 const KonveyerView = React.lazy(() => import('./features/models/KonveyerView').then(m => ({ default: m.KonveyerView })));
+const ModellarJamiView = React.lazy(() => import('./features/models/ModellarJamiView').then(m => ({ default: m.ModellarJamiView })));
 
 import { NewOperationModal } from './features/models/modals/NewOperationModal';
 import { DeleteOperationModal } from './features/models/modals/DeleteOperationModal';
@@ -29,7 +31,8 @@ import { ConfirmModal } from './features/system/modals/ConfirmModal';
 import { useWorkbookStore } from './store/workbookStore';
 import { PermissionGuard } from './components/auth/PermissionGuard';
 import { AccessDenied } from './components/auth/AccessDenied';
-import { SYSTEM_SHEET_NAMES, DEFAULT_ACTIVE_SHEET } from './constants/sheetConstants';
+import { useAuthStore } from './store/authStore';
+import { SYSTEM_SHEETS, SYSTEM_SHEET_NAMES, DEFAULT_ACTIVE_SHEET } from './constants/sheetConstants';
 
 let initialLicenseCheckStarted = false;
 
@@ -42,7 +45,29 @@ export const App: React.FC = () => {
   const initStore = useWorkbookStore((s) => s.initStore);
   const isServerConnected = useWorkbookStore((s) => s.isServerConnected);
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const canViewWorkers = useAuthStore((s) => s.permissions.includes('view:workers') || s.role === 'admin' || s.permissions.length === 0);
+  const canViewWorkerDetail = useAuthStore((s) => s.permissions.includes('view:umumiy') || s.permissions.includes('edit:hisob') || s.role === 'admin' || s.permissions.length === 0);
   const initializedActivation = useRef<string | null>(null);
+
+  // Universally disable mouse wheel value increment/decrement on all number inputs
+  useEffect(() => {
+    const disableWheelNumberChange = (e: WheelEvent) => {
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement && active.type === 'number') {
+        active.blur();
+      }
+      const target = e.target;
+      if (target instanceof HTMLInputElement && target.type === 'number') {
+        target.blur();
+      }
+    };
+
+    window.addEventListener('wheel', disableWheelNumberChange, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('wheel', disableWheelNumberChange, { capture: true });
+    };
+  }, []);
+
 
   useEffect(() => {
     if (initialLicenseCheckStarted) return;
@@ -72,7 +97,14 @@ export const App: React.FC = () => {
       const isSystemSheet =
         (SYSTEM_SHEET_NAMES as readonly string[]).includes(activeSheet) ||
         activeSheet === 'Konveyer' ||
-        activeSheet === 'Конвейер';
+        activeSheet === 'Конвейер' ||
+        activeSheet === 'Modellar-jami' ||
+        activeSheet === 'Modellar' ||
+        activeSheet === 'Modellar kesimida jami' ||
+        activeSheet === 'Modellar kesimi jami' ||
+        activeSheet === 'Operatsiya-narxlari' ||
+        activeSheet === 'Operatsiya narxlari' ||
+        activeSheet === SYSTEM_SHEETS.OPERATSIYA_NARXLARI;
       const isModelSheet = models.some(
         (m) => m.name === activeSheet || m.id === activeSheet || m.hisobSheetName === activeSheet
       );
@@ -107,10 +139,14 @@ export const App: React.FC = () => {
       // F5 to trigger Jonatish if on patta sheet
       if (e.key === 'F5') {
         e.preventDefault();
-        if (!activeSheet.endsWith('-hisob') && activeSheet !== 'Umumiy' && activeSheet !== 'Patta' && activeSheet !== 'Patta-hisob' && activeSheet !== 'Konveyer') {
+        if (!activeSheet.endsWith('-hisob') && activeSheet !== 'Umumiy' && activeSheet !== 'Modellar-jami' && activeSheet !== 'Modellar' && activeSheet !== 'Modellar kesimida jami' && activeSheet !== 'Modellar kesimi jami' && activeSheet !== 'Patta' && activeSheet !== 'Patta-hisob' && activeSheet !== 'Konveyer' && activeSheet !== 'Operatsiya-narxlari' && activeSheet !== SYSTEM_SHEETS.OPERATSIYA_NARXLARI) {
           const targetModel = models.find((m) => m.id === activeSheet || m.name === activeSheet);
           if (targetModel) {
-            jonatish(targetModel.id);
+            void jonatish(targetModel.id).then((submitted) => {
+              if (submitted) {
+                document.querySelector<HTMLInputElement>('.phase-b-patta-entry [data-patta-konveyer-input="true"]')?.focus();
+              }
+            });
           }
         }
       }
@@ -153,6 +189,28 @@ export const App: React.FC = () => {
           }
         >
           <UmumiyView />
+        </PermissionGuard>
+      );
+    }
+
+    if (
+      activeSheet === 'Modellar-jami' ||
+      activeSheet === 'Modellar' ||
+      activeSheet === 'Modellar kesimida jami' ||
+      activeSheet === 'Modellar kesimi jami' ||
+      activeSheet === SYSTEM_SHEETS.MODELLAR_JAMI
+    ) {
+      return (
+        <PermissionGuard
+          permission="view:umumiy"
+          fallback={
+            <AccessDenied
+              requiredPermission="view:umumiy"
+              message="Modellar kesimida jami hisobotini ko'rish faqat Admin va Buxgalter uchun ruxsat etilgan."
+            />
+          }
+        >
+          <ModellarJamiView />
         </PermissionGuard>
       );
     }
@@ -201,6 +259,26 @@ export const App: React.FC = () => {
           }
         >
           <KonveyerView />
+        </PermissionGuard>
+      );
+    }
+
+    if (
+      activeSheet === 'Operatsiya-narxlari' ||
+      activeSheet === 'Operatsiya narxlari' ||
+      activeSheet === SYSTEM_SHEETS.OPERATSIYA_NARXLARI
+    ) {
+      return (
+        <PermissionGuard
+          permission="edit:hisob"
+          fallback={
+            <AccessDenied
+              requiredPermission="edit:hisob"
+              message="Operatsiya narxlarini ko'rish va tahrirlash faqat Admin va Buxgalter uchun ruxsat etilgan."
+            />
+          }
+        >
+          <OperationRatesView />
         </PermissionGuard>
       );
     }
@@ -265,12 +343,19 @@ export const App: React.FC = () => {
     if (!modalType) return;
     const handleModalEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented || useWorkbookStore.getState().confirmState) return;
+      // EditSubmittedTicketModal owns Escape so a WorkerDetail jump can restore its parent and focus.
+      if (modalType === 'edit_ticket') return;
       event.preventDefault();
       closeModal();
     };
     window.addEventListener('keydown', handleModalEscape);
     return () => window.removeEventListener('keydown', handleModalEscape);
   }, [modalType, closeModal]);
+
+  useEffect(() => {
+    if ((modalType === 'worker_manager' && !canViewWorkers)
+      || (modalType === 'worker_detail' && !canViewWorkerDetail)) closeModal();
+  }, [modalType, canViewWorkers, canViewWorkerDetail, closeModal]);
 
   return (
     <div className="excel-app">
@@ -305,8 +390,8 @@ export const App: React.FC = () => {
         {modalType === 'new_model' && <NewModelModal />}
         {modalType === 'new_operation' && <NewOperationModal />}
         {modalType === 'delete_operation' && <DeleteOperationModal />}
-        {modalType === 'worker_manager' && <WorkerManagerModal />}
-        {modalType === 'worker_detail' && <WorkerDetailModal />}
+        {modalType === 'worker_manager' && canViewWorkers && <WorkerManagerModal />}
+        {modalType === 'worker_detail' && canViewWorkerDetail && <WorkerDetailModal />}
         {modalType === 'backup_manager' && <BackupManagerModal />}
         {modalType === 'app_update' && <AppUpdateModal />}
         {modalType === 'edit_ticket' && <EditSubmittedTicketModal />}

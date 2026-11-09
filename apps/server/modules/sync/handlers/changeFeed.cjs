@@ -134,7 +134,7 @@ function createChangeFeedHandler(pool) {
       nextPattaNumber,
       // This capability is served only by releases whose ordered migration
       // set includes the VOIDED-ticket patta-key release.
-      capabilities: { voidedPattaReuse: true }
+       capabilities: { voidedPattaReuse: true, pattaLifecycleV1: true }
     });
   };
 }

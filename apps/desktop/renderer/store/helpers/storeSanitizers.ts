@@ -237,7 +237,8 @@ export function sanitizePattaBatchConfigs(
     }
     if (c && c.sizes) {
       for (const [szKey, szVal] of Object.entries(c.sizes)) {
-        if (sizesObj[szKey] === undefined && !isDeprecatedPattaSize(szKey)) {
+        const retainedCount = String(szVal ?? '').trim();
+        if (sizesObj[szKey] === undefined && (!isDeprecatedPattaSize(szKey) || (retainedCount !== '' && Number(retainedCount) > 0))) {
           sizesObj[szKey] = String(szVal || '');
         }
       }
@@ -250,8 +251,9 @@ export function sanitizePattaBatchConfigs(
       partyNumber: pNum,
       isCustomParty: isCustom,
       totalIshSoni: (c && c.totalIshSoni !== undefined) ? String(c.totalIshSoni) : '',
-      color: (c && c.color) || m.color || 'Кора',
-      sizes: sizesObj
+      color: (c && c.color !== undefined) ? String(c.color) : '',
+      sizes: sizesObj,
+      sizeNames: Array.isArray(c?.sizeNames) ? [...c.sizeNames] : (c?.sizeNames === null ? null : undefined)
     };
   }
   return cleanConfigs;

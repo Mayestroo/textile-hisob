@@ -59,6 +59,8 @@ export interface ModelPattaBatchConfig {
   totalIshSoni: string;
   color?: string;
   sizes: Record<string, string>; // size -> count
+  /** Null/absent is legacy-uninitialized; [] is an explicit empty definition. */
+  sizeNames?: string[] | null;
 }
 
 export interface PrintedPartyRecord {
@@ -76,11 +78,16 @@ export interface PrintedPartyRecord {
   ishSoni: number;              // Ushbu partiyadagi jami ish soni (masalan: 750)
   cumulativeIshSoni: number;    // Jami to'plangan ish soni (oldingi + yangi)
   sizes?: Record<string, string>; // Razmerlar bo'yicha patta soni taqsimoti
+  /** Immutable row order captured when this party was first printed. */
+  sizeOrder?: string[];
   printedAt: string;            // Qachon pechat qilingan
   archivedPattaNumbers?: number[]; // Oldingi oylarda topshirilib arxivlangan patta raqamlari
-  isClosed?: boolean;           // Partiya yakunlangan (yopilgan) holati
+  isClosed?: boolean;           // Reservation compatibility, not evidence of finish.
   isArchived?: boolean;         //  kanonik tarixdan yashirilgan holati
-  closedAt?: string;            // Qachon yakunlangan
+  closedAt?: string;            // Reservation closure time, not finish proof.
+  endedAt?: string | null;
+  endedOperationId?: string | null;
+  monthClosedPeriodId?: string | null;
   serverRevision?: number;
 }
 
@@ -90,6 +97,7 @@ export interface SubmittedTicketRecord {
   partyNumber: string;
   partyRecordId?: string | null; // NULL in  free mode: no fabricated printed party record.
   periodId?: string;
+  status?: 'CONFIRMED' | 'PENDING_SYNC' | 'PENDING_DELETE' | 'VOIDED' | 'CONFLICT';
   serverRevision?: number;
   isClosed?: boolean;           // Partiya yakunlanganda yopilgan holati
   konveyer?: string;
@@ -123,6 +131,7 @@ export interface PayrollPeriod {
   endDate?: string;
   isClosed: boolean;
   closedAt?: string;
+  closeOperationId?: string | null;
   notes?: string;
   archiveFilename?: string;
   serverRevision?: number;

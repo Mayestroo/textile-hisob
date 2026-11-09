@@ -186,6 +186,7 @@ const MIGRATIONS = [
           ish_soni REAL NOT NULL DEFAULT 0,
           cumulative_ish_soni REAL NOT NULL DEFAULT 0,
           sizes_json TEXT,
+          size_order_json TEXT,
           printed_at TEXT,
           is_closed INTEGER NOT NULL DEFAULT 0,
           closed_at TEXT,
@@ -948,6 +949,7 @@ const MIGRATIONS = [
           total_ish_soni TEXT NOT NULL DEFAULT '',
           color TEXT,
           sizes_json TEXT NOT NULL DEFAULT '{}',
+          size_names_json TEXT,
           server_revision INTEGER NOT NULL DEFAULT 0,
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (company_id, model_id)
@@ -1617,6 +1619,40 @@ const MIGRATIONS = [
     name: '022_outbox_accepted_change_cursor',
     up: (db) => {
       db.exec('ALTER TABLE local_outbox ADD COLUMN accepted_change_id TEXT;');
+    }
+  },
+  {
+    version: 23,
+    name: '023_per_model_batch_size_names',
+    up: (db) => {
+      if (!db.prepare('PRAGMA table_info(patta_batch_settings)').all().some((column) => column.name === 'size_names_json')) {
+        db.exec('ALTER TABLE patta_batch_settings ADD COLUMN size_names_json TEXT');
+      }
+    }
+  },
+  {
+    version: 24,
+    name: '024_immutable_party_size_order',
+    up: (db) => {
+      if (!db.prepare('PRAGMA table_info(parties)').all().some((column) => column.name === 'size_order_json')) {
+        db.exec('ALTER TABLE parties ADD COLUMN size_order_json TEXT');
+      }
+    }
+  },
+  {
+    version: 25,
+    name: '025_explicit_patta_lifecycle',
+    up: (db) => {
+      db.exec(`ALTER TABLE parties ADD COLUMN ended_at TEXT;
+        ALTER TABLE parties ADD COLUMN ended_operation_id TEXT;
+        ALTER TABLE parties ADD COLUMN month_closed_period_id TEXT;
+        ALTER TABLE periods ADD COLUMN close_operation_id TEXT;`);
+      db.exec(`CREATE TRIGGER patta_lifecycle_party_pair_insert BEFORE INSERT ON parties
+        WHEN (NEW.ended_at IS NULL) != (NEW.ended_operation_id IS NULL)
+        BEGIN SELECT RAISE(ABORT, 'INVALID_PARTY_FINISH_PAIR'); END;
+        CREATE TRIGGER patta_lifecycle_party_pair_update BEFORE UPDATE ON parties
+        WHEN (NEW.ended_at IS NULL) != (NEW.ended_operation_id IS NULL)
+        BEGIN SELECT RAISE(ABORT, 'INVALID_PARTY_FINISH_PAIR'); END;`);
     }
   }
 ];

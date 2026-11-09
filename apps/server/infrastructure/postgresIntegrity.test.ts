@@ -9,7 +9,7 @@ const {
   verifyPostgresReleaseState
 } = require('./postgresIntegrity.cjs');
 const { MIGRATIONS: productionMigrations } = require('../../../ops/deploy/migrateProduction.cjs');
-const { verifyFreshPostgres16TestEnvironment } = require('../../../scripts/verify/verify-pg16-test-env.cjs');
+const { verifyFreshPostgres16TestEnvironment } = require('../../../scripts/verify/database/verify-pg16-test-env.cjs');
 
 const exactMigrations = [
   'schema.sql',

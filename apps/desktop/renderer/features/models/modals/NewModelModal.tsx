@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Plus, Layers, Copy, FileText } from 'lucide-react';
+import { CustomSelect } from '../../../components/ui/CustomSelect';
 
 export const NewModelModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -145,17 +146,15 @@ export const NewModelModal: React.FC = () => {
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
                   Qaysi modeldan nusxalansin?
                 </label>
-                <select
+                <CustomSelect
                   value={cloneFromId}
-                  onChange={(e) => setCloneFromId(e.target.value)}
-                  className="soft-input"
-                >
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.operations.length} ta operatsiya)
-                    </option>
-                  ))}
-                </select>
+                  width="100%"
+                  onChange={(val) => setCloneFromId(val)}
+                  options={models.map((m) => ({
+                    value: m.id,
+                    label: `${m.name} (${m.operations.length} ta operatsiya)`
+                  }))}
+                />
               </div>
             )}
 

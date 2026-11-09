@@ -48,7 +48,7 @@ function envelope(commandType: string, payload: Record<string, unknown>, overrid
     operationId: payload.operationId,
     companyId: COMPANY,
     commandType,
-    entityType: commandType === 'SubmitTicket' || commandType === 'UpdateTicket' || commandType === 'DeleteTicket' ? 'ticket' : commandType === 'CreateParty' || commandType === 'CloseParty' ? 'party' : commandType === 'ResolveMigrationReconciliationCandidate' ? 'reconciliation_candidate' : 'production_adjustment',
+    entityType: commandType === 'SubmitTicket' || commandType === 'UpdateTicket' || commandType === 'DeleteTicket' ? 'ticket' : commandType === 'CreateParty' || commandType === 'UpdateParty' || commandType === 'CloseParty' ? 'party' : commandType === 'ResolveMigrationReconciliationCandidate' ? 'reconciliation_candidate' : 'production_adjustment',
     entityId: payload.ticketId || payload.adjustmentId || payload.reversalId || payload.partyRecordId || payload.candidateId,
     payloadHash: computePayloadHash(canonicalStringify(payload)),
     payload,
@@ -404,6 +404,7 @@ describe(' payload and authority validation', () => {
     const batch = {
       commandId: 'command-batch', operationId: 'operation-batch', companyId: COMPANY,
       batchId: 'batch-1',
+      batchSettingsBaseRevision: 0,
       parties: [
         { commandId: 'command-batch', operationId: 'operation-batch', companyId: COMPANY, partyRecordId: 'party-a', partyNumber: '12', modelId: 'model-a', pattaCount: 1, sizes: { M: 1 } },
         { commandId: 'command-batch', operationId: 'operation-batch', companyId: COMPANY, partyRecordId: 'party-b', partyNumber: '12', modelId: 'model-b', pattaCount: 1, sizes: { M: 1 } }
@@ -1034,6 +1035,19 @@ describe(' payload and authority validation', () => {
       attributionStatus: 'RESOLVED',
       createdAt: '2026-09-22T00:00:00.000Z', createdBy: 'trusted-operator'
     });
+  });
+
+  it('validates optional immutable party size order while preserving old payload omission', () => {
+    const payload = { commandId: 'cmd_order', operationId: 'op_order', companyId: COMPANY,
+      partyRecordId: 'party_order', partyNumber: '4', modelId: 'model-1', pattaCount: 2, cumulativePattaCount: 2,
+      ishSoniPerPatta: 25, totalIshSoni: 50, ishSoni: 50, cumulativeIshSoni: 50,
+      sizes: { XXL: 1, M: 1 }, sizeOrder: [' XXL ', 'M'] };
+    expect(validateCommandPayload('CreateParty', payload, context(envelope('CreateParty', payload))).sizeOrder)
+      .toEqual(['XXL', 'M']);
+    const legacy = { ...payload } as any;
+    delete legacy.sizeOrder;
+    expect(validateCommandPayload('UpdateParty', legacy, context(envelope('UpdateParty', legacy))).sizeOrder).toBeUndefined();
+    expectCode(() => validateCommandPayload('CreateParty', { ...payload, sizeOrder: ['M', ' m '] }, context(envelope('CreateParty', payload))), 'DUPLICATE_PARTY_SIZE_ORDER');
   });
 
   it('derives linked original period and saved rate under tenant/entry identity, rejecting forged inputs', async () => {

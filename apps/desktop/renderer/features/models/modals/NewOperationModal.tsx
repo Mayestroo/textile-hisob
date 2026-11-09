@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, PlusCircle, ArrowRight } from 'lucide-react';
+import { CustomSelect } from '../../../components/ui/CustomSelect';
 
 export const NewOperationModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -86,17 +87,15 @@ export const NewOperationModal: React.FC = () => {
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
                 Modelni tanlang:
               </label>
-              <select
+              <CustomSelect
                 value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-                className="soft-input"
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.hisobSheetName})
-                  </option>
-                ))}
-              </select>
+                width="100%"
+                onChange={(val) => setModelId(val)}
+                options={models.map((m) => ({
+                  value: m.id,
+                  label: `${m.name} (${m.hisobSheetName})`
+                }))}
+              />
             </div>
 
             <div>

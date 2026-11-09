@@ -22,7 +22,8 @@ describe(' workbook batch command routing', () => {
       WorkbookCommand: vi.fn().mockResolvedValue({ success: true, result: { committed: true } }),
       dbRead: vi.fn().mockResolvedValue({ success: true, data: {
         companyId: 'company-a', workers: [], models: [model], availableSizes: ['M', 'L'],
-        pattaBatchConfigs: {}, printedPartyHistory, submittedTickets, periods: [], nextPartyNumber: 51
+        batchSettingsServerRevision: 7, batchSettingsPrintRevision: 7,
+       pattaBatchConfigs: {}, printedPartyHistory, submittedTickets, periods: [], nextPartyNumber: 51
       } }),
       SyncReconnect: vi.fn().mockResolvedValue({ success: false })
     };
@@ -37,6 +38,8 @@ describe(' workbook batch command routing', () => {
       workers: [],
       models: [model],
       availableSizes: ['M', 'L'],
+      batchSettingsServerRevision: 7,
+      batchSettingsPrintRevision: 7,
       nextPartyNumber: 1,
       pattaBatchConfigs: { 'model-a': { partyNumber: '1', isCustomParty: false, totalIshSoni: '972', color: 'Qora', sizes: { M: '9', L: '' } } },
       printedPartyHistory: [],
@@ -58,6 +61,7 @@ describe(' workbook batch command routing', () => {
       WorkbookCommand: vi.fn().mockResolvedValue({ success: true, result: { committed: true } }),
       dbRead: vi.fn().mockResolvedValue({ success: true, data: {
         companyId: 'company-a', workers: [], models: [model], availableSizes: ['M', 'L'],
+        batchSettingsServerRevision: 7, batchSettingsPrintRevision: 8,
         pattaBatchConfigs: { 'model-a': { partyNumber: '', totalIshSoni: '', sizes: { M: '', L: '' } } },
         printedPartyHistory: [party], submittedTickets: [], periods: [], nextPartyNumber: 2
       } }),
@@ -75,6 +79,7 @@ describe(' workbook batch command routing', () => {
       companyId: 'company-a',
       payload: expect.objectContaining({
         batchId: expect.stringMatching(/^batch_/),
+        batchSettingsBaseRevision: 7,
         parties: [expect.objectContaining({
           id: expect.any(String), partyNumber: '1', modelId: 'model-a', pattaCount: 9,
           ishSoniPerPatta: 108, totalIshSoni: 972, ishSoni: 972, cumulativeIshSoni: 972,
@@ -88,6 +93,18 @@ describe(' workbook batch command routing', () => {
     expect(api.SyncReconnect).toHaveBeenCalledWith('company-a');
     expect(useWorkbookStore.getState().printedPartyHistory).toMatchObject([expect.objectContaining({ id: 'party-new', partyNumber: '1' })]);
     expect(useWorkbookStore.getState().saveToDisk).not.toHaveBeenCalled();
+  });
+
+  it('refuses a sync print when the canonical projection did not provide a revision', async () => {
+    const api = installApi();
+    const addNotification = vi.fn();
+    useWorkbookStore.setState({ batchSettingsPrintRevision: null, addNotification });
+    await useWorkbookStore.getState().batchPrintCompleted([{
+      modelId: 'model-a', partyNumber: '1', pattaCount: 9,
+      ...buildPartyWorkSummary(972, 9), sizes: { M: '9' }, color: 'Qora'
+    }]);
+    expect(api.WorkbookCommand).not.toHaveBeenCalled();
+    expect(addNotification).toHaveBeenCalledWith('error', '_BATCH_INVALID', expect.stringContaining('reload batch settings'));
   });
 
   it('updates controlled batch-setting input state before async runtime readiness resolves', async () => {

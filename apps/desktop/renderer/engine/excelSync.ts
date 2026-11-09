@@ -42,6 +42,7 @@ export function createPayrollWorkbook(models: ModelConfig[], workers: Worker[], 
 
   for (const wSummary of payroll.workers) {
     const workerReady = display.workerMoneyReady.has(wSummary.workerId);
+    const manualMoneyReady = display.manualMoneyReady.has(wSummary.workerId);
     const row: any[] = [
       wSummary.workerId,
       wSummary.workerName,
@@ -50,8 +51,8 @@ export function createPayrollWorkbook(models: ModelConfig[], workers: Worker[], 
       workerReady ? (wSummary.avans > 0 ? wSummary.avans : '') : 'Noma’lum',
       workerReady ? (wSummary.jarima > 0 ? wSummary.jarima : '') : 'Noma’lum',
       workerReady ? wSummary.umumiy : 'Noma’lum',
-      workerReady ? wSummary.oklad : 'Noma’lum',
-      workerReady ? wSummary.magazin : 'Noma’lum'
+      manualMoneyReady ? wSummary.oklad : 'Noma’lum',
+      manualMoneyReady ? wSummary.magazin : 'Noma’lum'
     ];
 
     for (const m of models) {

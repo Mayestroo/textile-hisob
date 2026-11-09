@@ -6,7 +6,7 @@ import * as os from 'os';
 import { execFileSync } from 'child_process';
 const { dumpDatabase, restoreDatabase, verifyRestoredDatabase } = require('./postgresBackup.cjs');
 import { resetServerDatabase, initServerDatabase, getServerPool, closeServerPool } from './db.cjs';
-const { verifyFreshPostgres16TestEnvironment } = require('../../../scripts/verify/verify-pg16-test-env.cjs');
+const { verifyFreshPostgres16TestEnvironment } = require('../../../scripts/verify/database/verify-pg16-test-env.cjs');
 
 const disposableUrl = process.env.NOVDA_DISPOSABLE_PG === '1' && !process.env.DATABASE_URL
   ? process.env.NOVDA_PG_URL

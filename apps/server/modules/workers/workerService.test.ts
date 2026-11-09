@@ -3,6 +3,23 @@ import { describe, expect, it, vi } from 'vitest';
 const { claimWorkerBinding, getWorkerForEnrollment, getWorkerProfile, unbindWorkerTelegramBinding } = require('./workerService.cjs');
 
 describe('worker binding credential enforcement', () => {
+  it('returns reducer-owned piecework, Oklad, gross, Magazin and net to the bound worker profile', async () => {
+    const client = { query: vi.fn(async (sql: string) => ({ rows: sql.includes('FROM worker_telegram_bindings b')
+      ? [{ worker_id: 180, company_id: 'comp_novda', worker_name: 'Worker 180', status: 'ACTIVE', staj: 25000 }]
+      : sql.includes('FROM periods') ? [{ id: 'P', name: 'October', start_date: '2026-10-01', is_closed: false }]
+      : sql.includes('FROM ticket_entries e') ? [{ worker_id: 180, period_id: 'P', model_id: 'm', model_name: 'M', op_name: 'Sew', rate: '50000', qty: '10' }]
+      : sql.includes('FROM worker_adjustments') ? [
+        { worker_id: 180, type: 'OKLAD', total: '2000000' }, { worker_id: 180, type: 'MAGAZIN', total: '100000' },
+        { worker_id: 180, type: 'AVANS', total: '200000' }, { worker_id: 180, type: 'JARIMA', total: '50000' }
+      ] : sql.includes('FROM models') ? [{ id: 'm', operations: [{ name: 'Sew', rate: 50000 }] }] : [] })), release: vi.fn() };
+    const profile = await getWorkerProfile({ connect: async () => client }, {
+      companyId: 'comp_novda', workerId: 180, telegramId: '8363499557', periodId: 'P'
+    });
+    expect(profile).toMatchObject({ pieceworkGross: 500000, oklad: 2000000, gross: 2500000,
+      magazin: 100000, avans: 200000, jarima: 50000, staj: 25000, net: 2125000,
+      models_breakdown: { m: { earnings: 500000 } } });
+  });
+
   it('keeps captured zero distinct from unknown and marks only scoped confirmed work incomplete', async () => {
     const client = {
       query: vi.fn(async (sql: string) => {

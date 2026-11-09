@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
-import { Printer, Plus, X, Layers, CheckCircle2, AlertCircle, TrendingUp } from 'lucide-react';
+import { Printer, Plus, X, CheckCircle2, AlertCircle, Pencil, Search } from 'lucide-react';
 import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 import { ModelConfig } from '../../types/workbook';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
@@ -26,6 +26,8 @@ export const PattaBatchView: React.FC = () => {
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const [runtimeMode, setRuntimeMode] = useState<'checking' | 'legacy' | 'sync'>('checking');
   const [sizeSystem, setSizeSystem] = useState<PattaSizeSystem>('letters');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'filled' | 'empty'>('all');
 
   useEffect(() => {
     let active = true;
@@ -39,8 +41,8 @@ export const PattaBatchView: React.FC = () => {
 
   const canUseBatchMutation = () => runtimeMode !== 'checking';
 
-  const guardedAddCustomSize = (sizeName: string) => addCustomSize(sizeName);
-  const guardedDeleteCustomSize = (sizeName: string) => deleteCustomSize(sizeName);
+  const guardedAddCustomSize = (modelId: string, sizeName: string) => addCustomSize(modelId, sizeName);
+  const guardedDeleteCustomSize = (modelId: string, sizeName: string) => deleteCustomSize(modelId, sizeName);
   const guardedUpdateBatchConfig = (modelId: string, updates: any) => {
     // Keep controlled inputs responsive while runtime readiness is checked.
     // The store applies the change locally first and resolves persistence mode
@@ -54,25 +56,24 @@ export const PattaBatchView: React.FC = () => {
     if (canUseBatchMutation()) batchPrintCompleted(printedSummary);
   };
   
-  const allKnownSizes = useMemo(() => {
-    const sizes = new Set<string>(availableSizes && availableSizes.length > 0 ? availableSizes : DEFAULT_BATCH_SIZES);
-    for (const config of Object.values(pattaBatchConfigs || {})) {
-      for (const size of Object.keys(config.sizes || {})) sizes.add(size);
-    }
-    return Array.from(sizes);
-  }, [availableSizes, pattaBatchConfigs]);
-  const activeSizes = useMemo(
-    () => getPattaSizesForSystem(allKnownSizes, sizeSystem),
-    [allKnownSizes, sizeSystem]
-  );
+  const getModelSizes = (modelId: string) => {
+    const config = pattaBatchConfigs[modelId];
+    const names = config?.sizeNames ?? [...new Set([...(availableSizes?.length ? availableSizes : DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
+    const safe = [...new Set([...names, ...Object.entries(config?.sizes || {}).filter(([, n]) => Number(n) > 0).map(([n]) => n)])];
+    return getPattaSizesForSystem(safe, sizeSystem);
+  };
+  const allKnownSizes = useMemo(() => [...new Set(models.flatMap((model) => getModelSizes(model.id)))], [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
   const getActiveSizeValues = (modelId: string) => {
     const savedSizes = pattaBatchConfigs[modelId]?.sizes || {};
-    return Object.fromEntries(activeSizes.map((size) => [size, savedSizes[size] || '']));
+    return Object.fromEntries(getModelSizes(modelId).map((size) => [size, savedSizes[size] || '']));
   };
 
   const [printBatchItems, setPrintBatchItems] = useState<PrintBatchItem[] | null>(null);
   const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
+  const [addSizeModelId, setAddSizeModelId] = useState<string | null>(null);
+  const [renameSize, setRenameSize] = useState<{ modelId: string; sizeName: string } | null>(null);
+  const [renameSizeInput, setRenameSizeInput] = useState('');
   const [isClosePartyModalOpen, setIsClosePartyModalOpen] = useState(false);
   const [isClosingParty, setIsClosingParty] = useState(false);
   const [newCustomSizeInput, setNewCustomSizeInput] = useState('');
@@ -171,7 +172,7 @@ export const PattaBatchView: React.FC = () => {
     }
 
     return { effectiveParties: parties, partyConflicts: conflicts };
-  }, [models, pattaBatchConfigs, nextPartyNumber, printedPartyHistory, activeSizes]);
+  }, [models, pattaBatchConfigs, nextPartyNumber, printedPartyHistory, availableSizes, sizeSystem]);
 
   const totalBatchPattas = useMemo(() => {
     let total = 0;
@@ -179,11 +180,23 @@ export const PattaBatchView: React.FC = () => {
       total += getTotalPattaCount(m.id);
     }
     return total;
-  }, [models, pattaBatchConfigs, activeSizes]);
+  }, [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
   const filledModelsCount = useMemo(() => {
     return models.filter((m) => getTotalPattaCount(m.id) > 0).length;
-  }, [models, pattaBatchConfigs, activeSizes]);
+  }, [models, pattaBatchConfigs, availableSizes, sizeSystem]);
+
+  const filteredModels = useMemo(() => {
+    return models.filter((model) => {
+      if (searchQuery.trim() && !model.name.toLowerCase().includes(searchQuery.toLowerCase().trim())) {
+        return false;
+      }
+      const pCount = getTotalPattaCount(model.id);
+      if (statusFilter === 'filled') return pCount > 0;
+      if (statusFilter === 'empty') return pCount === 0;
+      return true;
+    });
+  }, [models, searchQuery, statusFilter, pattaBatchConfigs, availableSizes, sizeSystem]);
 
   const missingIshSoniModels = useMemo(() => {
     return models.filter((m) => {
@@ -191,7 +204,16 @@ export const PattaBatchView: React.FC = () => {
       if (pCount === 0) return false;
       return !pattaBatchConfigs[m.id]?.totalIshSoni?.trim();
     });
-  }, [models, pattaBatchConfigs, activeSizes]);
+  }, [models, pattaBatchConfigs, availableSizes, sizeSystem]);
+
+  const missingColorModels = useMemo(() => {
+    return models.filter((m) => {
+      const pCount = getTotalPattaCount(m.id);
+      if (pCount === 0) return false;
+      const col = pattaBatchConfigs[m.id]?.color;
+      return !col || !col.trim();
+    });
+  }, [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
   const invalidPattaSizeModels = useMemo(() => {
     return models.filter((model) => {
@@ -202,7 +224,7 @@ export const PattaBatchView: React.FC = () => {
         return true;
       }
     });
-  }, [models, pattaBatchConfigs, activeSizes]);
+  }, [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
   const canAttemptBatchPrint = totalBatchPattas > 0 || invalidPattaSizeModels.length > 0;
 
@@ -227,6 +249,18 @@ export const PattaBatchView: React.FC = () => {
         addNotification('error', 'Razmer soni xato!', message);
         return;
       }
+    }
+
+    if (missingColorModels.length > 0) {
+      const firstMissing = missingColorModels[0];
+      inputRefs.current[`color_${firstMissing.id}`]?.focus();
+      inputRefs.current[`color_${firstMissing.id}`]?.select();
+      addNotification(
+        'warning',
+        'Rang kiritilishi shart!',
+        `Quyidagi model(lar) uchun "Rang" kiritilmagan: ${missingColorModels.map((m: ModelConfig) => m.name).join(', ')}`
+      );
+      return;
     }
 
     if (missingIshSoniModels.length > 0) {
@@ -277,14 +311,15 @@ export const PattaBatchView: React.FC = () => {
     const itemsToPrint: PrintBatchItem[] = models
       .filter((m) => (normalizedSizesByModelId.get(m.id)?.pattaCount || 0) > 0)
       .map((m) => {
-        const cfg = pattaBatchConfigs[m.id] || { sizes: {}, totalIshSoni: '', color: m.color || 'Кора' };
+        const cfg = pattaBatchConfigs[m.id] || { sizes: {}, totalIshSoni: '', color: '' };
         const normalizedSizes = normalizedSizesByModelId.get(m.id)!.sizes;
         return {
           model: m,
           partyNumber: effectiveParties[m.id] || '1',
           sizes: Object.fromEntries(Object.entries(normalizedSizes).map(([size, count]) => [size, String(count)])),
+          sizeOrder: getModelSizes(m.id).filter((size) => Number(normalizedSizes[size] || 0) > 0),
           ishSoniPerPatta: cfg.totalIshSoni || '',
-          color: cfg.color || m.color || 'Кора'
+          color: cfg.color?.trim() || ''
         };
       });
 
@@ -295,10 +330,9 @@ export const PattaBatchView: React.FC = () => {
 
   const getFieldOrder = (modelId: string) => {
     return [
-      `ish_soni_${modelId}`,
-      `party_${modelId}`,
       `color_${modelId}`,
-      ...activeSizes.map((size) => `size_${modelId}_${size}`)
+      `ish_soni_${modelId}`,
+      ...getModelSizes(modelId).map((size) => `size_${modelId}_${size}`)
     ];
   };
 
@@ -321,7 +355,7 @@ export const PattaBatchView: React.FC = () => {
         const modelIdx = models.findIndex((m) => m.id === model.id);
         if (modelIdx < models.length - 1) {
           const nextModel = models[modelIdx + 1];
-          const nextModelFirstKey = `ish_soni_${nextModel.id}`;
+          const nextModelFirstKey = `color_${nextModel.id}`;
           inputRefs.current[nextModelFirstKey]?.focus();
           inputRefs.current[nextModelFirstKey]?.select();
         }
@@ -341,63 +375,14 @@ export const PattaBatchView: React.FC = () => {
     if (e) e.preventDefault();
     const clean = newCustomSizeInput.trim();
     if (!clean) return;
-    await guardedAddCustomSize(clean);
-    if (useWorkbookStore.getState().availableSizes.some((size) => size.toUpperCase() === clean.toUpperCase())) {
+    if (!addSizeModelId) return;
+    await guardedAddCustomSize(addSizeModelId, clean);
+    if (useWorkbookStore.getState().pattaBatchConfigs[addSizeModelId]?.sizeNames?.some((size) => size.toUpperCase() === clean.toUpperCase())) {
       setNewCustomSizeInput('');
       setIsAddSizeModalOpen(false);
     }
   };
 
-  // Barcha modellar bo'yicha saralangan partiya, patta va ish soni statistikasi
-  const modelsSummaryList = useMemo(() => {
-    const modelMap = new Map<string, { modelId: string; modelName: string; partyCount: number; pattaCount: number; ishSoni: number }>();
-
-    for (const m of models) {
-      modelMap.set(m.id, {
-        modelId: m.id,
-        modelName: m.name,
-        partyCount: 0,
-        pattaCount: 0,
-        ishSoni: 0
-      });
-    }
-
-    for (const h of printedPartyHistory || []) {
-      const existing = modelMap.get(h.modelId);
-      const pCount = h.pattaCount || 0;
-      const ish = h.totalIshSoni || h.ishSoni || (pCount * (h.ishSoniPerPatta || 0));
-
-      if (existing) {
-        existing.partyCount += 1;
-        existing.pattaCount += pCount;
-        existing.ishSoni += ish;
-      } else {
-        modelMap.set(h.modelId, {
-          modelId: h.modelId,
-          modelName: h.modelName || h.modelId,
-          partyCount: 1,
-          pattaCount: pCount,
-          ishSoni: ish
-        });
-      }
-    }
-
-    return Array.from(modelMap.values()).sort((a, b) =>
-      a.modelName.localeCompare(b.modelName, 'uz', { numeric: true, sensitivity: 'base' })
-    );
-  }, [models, printedPartyHistory]);
-
-  const grandTotals = useMemo(() => {
-    return modelsSummaryList.reduce(
-      (acc, item) => {
-        acc.parties += item.partyCount;
-        acc.pattas += item.pattaCount;
-        acc.ishSoni += item.ishSoni;
-        return acc;
-      },
-      { parties: 0, pattas: 0, ishSoni: 0 }
-    );
-  }, [modelsSummaryList]);
 
   // Active unclosed parties and their unsubmitted pattas count for warning dialog
   const activeUnclosedParties = useMemo(() => {
@@ -415,168 +400,43 @@ export const PattaBatchView: React.FC = () => {
   }, [activeUnclosedParties, submittedTickets, allKnownSizes]);
 
   return (
-    <div className="excel-grid-container phase-b-view phase-b-batch" style={{ padding: '16px 20px', backgroundColor: 'var(--bg-app)', overflowY: 'auto' }}>
-      <header className="e2b-batch-heading">
-        <div><h1>Pattalar pechati</h1><p>Modellar bo'yicha partiya, ish soni va razmerlarni kiriting</p></div>
-      </header>
-      {/* Top Global Action Bar */}
-      <div
-        className="e2b-batch-toolbar"
-        style={{ 
-          width: '100%', 
-          marginBottom: '16px',
-          background: 'var(--bg-surface)', 
-          border: '1px solid var(--border-subtle)', 
-          borderRadius: 'var(--radius-xl)', 
-          padding: '12px 20px',
-          boxShadow: 'var(--shadow-sm)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-          <div className="e2b-batch-old-title" style={{
-            background: 'var(--primary-light)',
-            color: 'var(--primary)',
-            padding: '6px 12px',
-            borderRadius: 'var(--radius-full)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontWeight: 800,
-            fontSize: '13px'
-          }}>
-            <Layers size={16} />
-            <span>Pattalar Pechati (Partiyalar)</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Razmer turi:</span>
-            <div
-              role="group"
-              aria-label="Razmer turi"
-              title="Tanlangan turdagi razmerlar ko‘rsatiladi; boshqa turdagi qiymatlar saqlanib qoladi."
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                padding: '3px',
-                borderRadius: 'var(--radius-full)',
-                background: 'var(--bg-surface-subtle)',
-                border: '1px solid var(--border-subtle)'
-              }}
-            >
-              {([
-                { value: 'letters', label: 'Harfli (S, M, L)' },
-                { value: 'numbers', label: 'Raqamli (36, 38, 40)' }
-              ] as const).map((option) => {
-                const selected = sizeSystem === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => setSizeSystem(option.value)}
-                    style={{
-                      border: 'none',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '6px 10px',
-                      background: selected ? 'var(--primary)' : 'transparent',
-                      color: selected ? '#fff' : 'var(--text-secondary)',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <span>To'ldirilgan: <strong style={{ color: filledModelsCount > 0 ? 'var(--primary)' : 'var(--text-primary)' }}>{filledModelsCount} ta model</strong></span>
-            <span>Jami patta: <strong style={{ color: totalBatchPattas > 0 ? '#4f46e5' : 'var(--text-primary)' }}>{totalBatchPattas} ta</strong></span>
-            {totalBatchPattas > 0 && (
-              <span style={{ color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 size={15} /> ({Math.ceil(totalBatchPattas / 2)} ta A4 varaq)
-              </span>
-            )}
-            {missingIshSoniModels.length > 0 && (
-              <span style={{
-                color: '#dc2626',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: '#fee2e2',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-full)'
-              }}>
-                <AlertCircle size={14} /> {missingIshSoniModels.length} ta modelda Ish soni kiritilmagan!
-              </span>
-            )}
-          </div>
+    <div className="patta-batch-container">
+      {/* 1. Header */}
+      <div className="patta-batch-header">
+        <div>
+          <h1 className="patta-batch-title">Pattalar pechati</h1>
+          <p className="patta-batch-subtitle">
+            Partiya bo'yicha razmerlarni kiriting, keyin pattalarni chop eting
+          </p>
         </div>
 
-        {/* Global Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Partiyani yakunlash tugmasi */}
+        <div className="patta-batch-actions">
+          {/* Partiyani yakunlash */}
           <button
             type="button"
             onClick={() => setIsClosePartyModalOpen(true)}
-            className="soft-btn"
-            style={{
-              borderRadius: 'var(--radius-full)',
-              padding: '8px 18px',
-              fontSize: '13px',
-              fontWeight: 600,
-              background: 'var(--bg-surface-subtle)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '7px',
-              transition: 'all 0.15s ease'
-            }}
+            className="patta-batch-btn-secondary"
             title="Joriy partiyalar turkumini yakunlash va partiya/patta raqamini 1 dan boshlash"
           >
-            <CheckCircle2 size={16} color="#10b981" />
+            <CheckCircle2 size={16} />
             <span>Partiyani yakunlash</span>
           </button>
 
-          {/* Global Print Action Button */}
+          {/* Pechat · X ta patta */}
           <button
+            type="button"
             onClick={handleOpenBatchPrint}
             disabled={!canAttemptBatchPrint}
-            className="soft-btn soft-btn-primary"
-            style={{
-              borderRadius: 'var(--radius-full)',
-              padding: '8px 22px',
-              fontSize: '13.5px',
-              background: !canAttemptBatchPrint
-                ? 'var(--bg-surface-subtle)'
-                : invalidPattaSizeModels.length > 0 || missingIshSoniModels.length > 0
-                ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                : undefined,
-              color: canAttemptBatchPrint ? '#ffffff' : 'var(--text-muted)',
-              cursor: canAttemptBatchPrint ? 'pointer' : 'not-allowed',
-              opacity: canAttemptBatchPrint ? 1 : 0.6
-            }}
+            className="patta-batch-btn-primary"
             title={
               !canAttemptBatchPrint
-                ? 'Kamida bitta modelga razmer kiriting' 
+                ? 'Kamida bitta modelga razmer kiriting'
                 : invalidPattaSizeModels.length > 0
                 ? 'Razmer sonlarida xatolik bor!'
-                : missingIshSoniModels.length > 0 
-                ? 'Ish soni kiritilmagan modellar bor!' 
+                : missingColorModels.length > 0
+                ? 'Rang kiritilmagan modellar bor!'
+                : missingIshSoniModels.length > 0
+                ? 'Ish soni kiritilmagan modellar bor!'
                 : `Barcha to'ldirilgan modellarni chop etish (${totalBatchPattas} ta patta)`
             }
           >
@@ -584,430 +444,271 @@ export const PattaBatchView: React.FC = () => {
             <span>
               {invalidPattaSizeModels.length > 0
                 ? `Razmerlarni tekshiring (${invalidPattaSizeModels.length})`
+                : missingColorModels.length > 0
+                ? `Rangni kiriting (${missingColorModels.length})`
                 : missingIshSoniModels.length > 0
                 ? `Ish sonini kiriting (${missingIshSoniModels.length})`
-                : `Pechat (${totalBatchPattas} ta patta)`}
+                : `Pechat · ${totalBatchPattas} ta patta`}
             </span>
           </button>
         </div>
       </div>
 
-      {/* Grid of All Model Cards */}
-      <div className="e2b-batch-cards"
-        style={{ 
-          width: '100%', 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
-          gap: '12px' 
-        }}
-      >
-        {models.map((model) => {
+      {/* 2. Controls / Filter Toolbar */}
+      <div className="patta-batch-toolbar">
+        <div className="patta-batch-toolbar-left">
+          {/* Razmer turi */}
+          <div className="patta-toolbar-size-system">
+            <span className="patta-toolbar-label">Razmer turi</span>
+            <div className="patta-segmented-control" role="group" aria-label="Razmer turi">
+              <button
+                type="button"
+                className={`patta-segment-btn ${sizeSystem === 'letters' ? 'active' : ''}`}
+                onClick={() => setSizeSystem('letters')}
+              >
+                Harfli (S, M, L)
+              </button>
+              <button
+                type="button"
+                className={`patta-segment-btn ${sizeSystem === 'numbers' ? 'active' : ''}`}
+                onClick={() => setSizeSystem('numbers')}
+              >
+                Raqamli (36, 38, 40)
+              </button>
+            </div>
+          </div>
+
+          {/* Search Box */}
+          <div className="patta-search-wrapper">
+            <Search size={14} className="patta-search-icon" />
+            <input
+              type="text"
+              placeholder="Model nomi bo'yicha qidirish"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="patta-search-input"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="patta-search-clear"
+                title="Tozalash"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Status Pills */}
+          <div className="patta-filter-pills">
+            <button
+              type="button"
+              className={`patta-filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('all')}
+            >
+              Hammasi
+            </button>
+            <button
+              type="button"
+              className={`patta-filter-pill ${statusFilter === 'filled' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('filled')}
+            >
+              To'ldirilgan
+            </button>
+            <button
+              type="button"
+              className={`patta-filter-pill ${statusFilter === 'empty' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('empty')}
+            >
+              Bo'sh
+            </button>
+          </div>
+        </div>
+
+        {/* Right Stats */}
+        <div className="patta-batch-toolbar-right">
+          <div className="patta-stat-item">
+            <span className="patta-stat-label">To'ldirilgan model</span>
+            <span className="patta-stat-val-dark">{filledModelsCount} ta</span>
+          </div>
+          <div className="patta-stat-item">
+            <span className="patta-stat-label">Jami patta</span>
+            <span className="patta-stat-val-green">{totalBatchPattas} ta</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Grid of Cards */}
+      <div className="patta-cards-grid">
+        {filteredModels.map((model) => {
           const config = pattaBatchConfigs[model.id] || {
             partyNumber: '',
             isCustomParty: false,
             totalIshSoni: '',
-            color: model.color || 'Кора',
+            color: '',
             sizes: {}
           };
           const totalPattaCount = getTotalPattaCount(model.id);
           const currentParty = effectiveParties[model.id] || String(nextPartyNumber || 1);
           const partyConflictError = partyConflicts[model.id];
 
-          const ishSoniPerPatta = Number(config.totalIshSoni);
-          const isIshSoniMissing = totalPattaCount > 0 && !config.totalIshSoni?.trim();
-          let totalIshCalculated = 0;
-          if (totalPattaCount > 0 && Number.isSafeInteger(ishSoniPerPatta) && ishSoniPerPatta > 0) {
-            try {
-              totalIshCalculated = calculateBatchWorkQuantities(ishSoniPerPatta, totalPattaCount).totalIshSoni;
-            } catch {}
-          }
+          const isFilled = totalPattaCount > 0;
+          const isIshSoniMissing = isFilled && !config.totalIshSoni?.trim();
+          const isColorMissing = isFilled && (!config.color || !config.color.trim());
+          const hasError = isIshSoniMissing || isColorMissing || partyConflictError;
 
           return (
-            <div className={`e2b-batch-card${totalPattaCount > 0 ? ' is-filled' : ''}`}
+            <div
               key={model.id}
-              style={{
-                background: 'var(--bg-surface)',
-                border: partyConflictError
-                  ? '1.5px solid #ef4444'
-                  : isIshSoniMissing 
-                  ? '1.5px solid #ef4444' 
-                  : totalPattaCount > 0 
-                  ? '1.5px solid var(--primary)' 
-                  : '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: totalPattaCount > 0 ? 'var(--shadow-md)' : 'var(--shadow-xs)',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
+              className={`patta-card ${isFilled && !hasError ? 'is-filled' : ''} ${partyConflictError ? 'has-conflict' : ''} ${hasError ? 'has-error' : ''}`}
+              data-model-id={model.id}
             >
               {/* Card Header */}
-              <div className="e2b-batch-card-header"
-                style={{ 
-                  padding: '10px 14px', 
-                  background: isIshSoniMissing 
-                    ? 'rgba(239, 68, 68, 0.15)' 
-                    : totalPattaCount > 0 
-                    ? 'var(--primary-light)' 
-                    : 'var(--bg-surface-subtle)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  gap: '6px'
-                }}
-              >
-                <span 
-                  style={{ 
-                    fontWeight: 800, 
-                    fontSize: '13px', 
-                    color: isIshSoniMissing ? '#ef4444' : totalPattaCount > 0 ? 'var(--primary)' : 'var(--text-primary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title={model.title || model.name}
-                >
+              <div className="patta-card-header">
+                <span className="patta-card-title" title={model.name}>
                   {model.name}
                 </span>
-                <span style={{
-                  fontSize: '11px',
-                  color: 'var(--text-secondary)',
-                  fontWeight: 600,
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)'
-                }}>
-                  {model.operations.length} op
-                </span>
+                {isFilled ? (
+                  isColorMissing ? (
+                    <span className="patta-badge-error">Rang shart</span>
+                  ) : isIshSoniMissing ? (
+                    <span className="patta-badge-error">Ish soni yo'q</span>
+                  ) : (
+                    <span className="patta-badge-filled">To'ldirildi</span>
+                  )
+                ) : (
+                  <span className="patta-badge-op">{model.operations?.length || 0} op</span>
+                )}
               </div>
 
-              {/* Form Controls */}
-              <div className="e2b-batch-card-body" style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                {/* 1. Ish Soni */}
-                <div className="e2b-batch-work" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: isIshSoniMissing ? '#ef4444' : 'var(--text-secondary)' }}>
-                    1 patta ish:
-                  </label>
+              {/* Row 1: Partiya & Rang side by side */}
+              <div className="patta-card-row-two">
+                <div className="patta-card-field">
+                  <label className="patta-field-label">Partiya</label>
                   <input
-                    ref={(el) => { inputRefs.current[`ish_soni_${model.id}`] = el; }}
-                    type="number"
-                    min="1"
-                    value={config.totalIshSoni || ''}
-                     onChange={(e) => guardedUpdateBatchConfig(model.id, { totalIshSoni: e.target.value })}
-                    onKeyDown={(e) => handleInputKeyDown(e, model, `ish_soni_${model.id}`)}
-                    placeholder=""
-                    className="soft-input"
-                    style={{
-                      height: '28px',
-                      textAlign: 'center',
-                      fontWeight: 800,
-                      fontSize: '12px',
-                      color: isIshSoniMissing ? '#ef4444' : 'var(--primary)',
-                      borderColor: isIshSoniMissing ? '#ef4444' : undefined,
-                      backgroundColor: isIshSoniMissing ? 'rgba(239, 68, 68, 0.15)' : undefined
-                    }}
+                    type="text"
+                    value={currentParty}
+                    readOnly
+                    tabIndex={-1}
+                    className="patta-field-input patta-field-input-readonly"
+                    title="Partiya raqami avtomatik hisoblanadi (o'zgartirilmaydi)"
                   />
                 </div>
 
-                {/* 2. Party */}
-                <div className="e2b-batch-party" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: partyConflictError ? '#ef4444' : 'var(--text-secondary)' }}>
-                      Partiya:
-                    </label>
-                    <input
-                      ref={(el) => { inputRefs.current[`party_${model.id}`] = el; }}
-                      type="text"
-                      value={config.isCustomParty && config.partyNumber ? config.partyNumber : currentParty}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                         guardedUpdateBatchConfig(model.id, {
-                          partyNumber: val,
-                          isCustomParty: val.trim() !== ''
-                        });
-                      }}
-                      onKeyDown={(e) => handleInputKeyDown(e, model, `party_${model.id}`)}
-                      className="soft-input"
-                      style={{
-                        height: '28px',
-                        textAlign: 'center',
-                        fontWeight: 700,
-                        fontSize: '12px',
-                        borderColor: partyConflictError ? '#ef4444' : undefined,
-                        backgroundColor: partyConflictError ? 'rgba(239, 68, 68, 0.12)' : undefined,
-                        color: partyConflictError ? '#ef4444' : undefined
-                      }}
-                    />
-                  </div>
-                  {partyConflictError && (
-                    <div style={{ fontSize: '10.5px', color: '#ef4444', fontWeight: 700, marginLeft: '66px', marginTop: '1px' }}>
-                      ⚠️ {partyConflictError}
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Color */}
-                <div className="e2b-batch-color" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ width: '60px', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                    Rang:
+                <div className="patta-card-field">
+                  <label className="patta-field-label">
+                    Rang <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input
                     ref={(el) => { inputRefs.current[`color_${model.id}`] = el; }}
                     type="text"
-                    value={config.color !== undefined ? config.color : (model.color || 'Кора')}
+                    value={config.color !== undefined ? config.color : ''}
                     onChange={(e) => guardedUpdateBatchConfig(model.id, { color: e.target.value })}
                     onKeyDown={(e) => handleInputKeyDown(e, model, `color_${model.id}`)}
-                    placeholder=""
-                    className="soft-input"
-                    style={{ height: '28px', textAlign: 'center', fontWeight: 600, fontSize: '12px' }}
+                    className={`patta-field-input ${isColorMissing ? 'input-error' : ''}`}
+                    placeholder="Rang*"
                   />
-                </div>
-
-                {/* Metric Summary Pill */}
-                <div className="e2b-batch-count" style={{
-                  padding: '6px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: totalPattaCount > 0 ? 'var(--primary-light)' : 'var(--bg-surface-subtle)',
-                  color: totalPattaCount > 0 ? 'var(--primary)' : 'var(--text-secondary)',
-                  textAlign: 'center',
-                  fontSize: '11.5px',
-                  fontWeight: 700
-                }}>
-                  <div>Patta: <strong>{totalPattaCount} ta</strong></div>
-                  {totalIshCalculated > 0 && (
-                    <div style={{ fontSize: '10.5px', color: 'var(--text-primary)', marginTop: '2px' }}>
-                      Jami ish soni: {totalIshCalculated.toLocaleString()} dona
-                    </div>
+                  {isColorMissing && (
+                    <span className="patta-input-error-msg">⚠️ Rang shart</span>
                   )}
                 </div>
+              </div>
 
-                {/* Sizes Matrix */}
-                <div className="e2b-batch-sizes" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
-                  {activeSizes.map((sizeName) => {
-                    const sizeVal = config.sizes ? config.sizes[sizeName] || '' : '';
-                    const key = `size_${model.id}_${sizeName}`;
-                    const isCustom = !isDefaultPattaSize(sizeName);
+              {/* Row 2: Ish / patta (dona) */}
+              <div className="patta-card-field-full">
+                <label className="patta-field-label">Ish / patta (dona)</label>
+                <input
+                  ref={(el) => { inputRefs.current[`ish_soni_${model.id}`] = el; }}
+                  type="number"
+                  min="1"
+                  value={config.totalIshSoni || ''}
+                  onChange={(e) => guardedUpdateBatchConfig(model.id, { totalIshSoni: e.target.value })}
+                  onKeyDown={(e) => handleInputKeyDown(e, model, `ish_soni_${model.id}`)}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className={`patta-field-input-full ${isFilled && config.totalIshSoni ? 'input-filled' : ''} ${isIshSoniMissing ? 'input-error' : ''}`}
+                  placeholder=""
+                />
+              </div>
 
-                    return (
-                      <div key={sizeName} className="e2b-size-cell" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{
-                          width: '60px',
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                          color: isCustom ? '#818cf8' : 'var(--text-primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}>
-                          <span>{sizeName}</span>
-                          {isCustom && (
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const ok = await confirmAction({
-                                  title: "Razmerni o'chirish",
-                                  message: `«${sizeName}» razmerini o'chirmoqchimisiz?`,
-                                  confirmText: "Ha, o'chirilsin",
-                                  isDanger: true
-                                });
-                                if (ok) {
-                                   await guardedDeleteCustomSize(sizeName);
-                                }
-                              }}
-                              style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', padding: '0 2px' }}
-                              title={`«${sizeName}» razmerini o'chirish`}
-                            >
-                              <X size={11} />
-                            </button>
-                          )}
-                        </div>
-                        <input
-                          ref={(el) => { inputRefs.current[key] = el; }}
-                          type="number"
-                          min="0"
-                          value={sizeVal}
-                          onChange={(e) => guardedUpdateBatchSize(model.id, sizeName, e.target.value)}
-                          onKeyDown={(e) => handleInputKeyDown(e, model, key)}
-                          placeholder=""
-                          className="soft-input"
-                          style={{
-                            height: '26px',
-                            textAlign: 'center',
-                            fontWeight: 700,
-                            fontSize: '12px',
-                            backgroundColor: sizeVal ? 'var(--primary-light)' : 'transparent',
-                            borderColor: sizeVal ? 'var(--primary)' : 'var(--border-subtle)',
-                            color: sizeVal ? 'var(--primary)' : 'var(--text-primary)'
-                          }}
-                        />
+              {/* Row 3: Sizes Grid (4 columns) */}
+              <div className="patta-card-sizes-grid">
+                {getModelSizes(model.id).map((sizeName) => {
+                  const sizeVal = config.sizes ? config.sizes[sizeName] || '' : '';
+                  const key = `size_${model.id}_${sizeName}`;
+                  const isCustom = !isDefaultPattaSize(sizeName);
+                  const hasVal = Number(sizeVal) > 0;
+
+                  return (
+                    <div key={sizeName} className="patta-size-box">
+                      <div className="patta-size-label-row">
+                        <span className={`patta-size-label ${isCustom ? 'custom-size' : ''}`}>
+                          {sizeName}
+                        </span>
+                        {isCustom && (
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const ok = await confirmAction({
+                                title: "Razmerni o'chirish",
+                                message: `«${sizeName}» razmerini o'chirmoqchimisiz?`,
+                                confirmText: "Ha, o'chirilsin",
+                                isDanger: true
+                              });
+                              if (ok) guardedDeleteCustomSize(model.id, sizeName);
+                            }}
+                            className="patta-size-del-btn"
+                            title="O'chirish"
+                          >
+                            <X size={9} />
+                          </button>
+                        )}
                       </div>
-                    );
-                  })}
+                      <input
+                        ref={(el) => { inputRefs.current[key] = el; }}
+                        type="number"
+                        min="0"
+                        value={sizeVal}
+                        onChange={(e) => guardedUpdateBatchSize(model.id, sizeName, e.target.value)}
+                        onKeyDown={(e) => handleInputKeyDown(e, model, key)}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className={`patta-size-input ${hasVal ? 'size-input-filled' : ''}`}
+                        placeholder=""
+                      />
+                    </div>
+                  );
+                })}
+              </div>
 
-                  {/* Add Size Trigger */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewCustomSizeInput('');
-                      setIsAddSizeModalOpen(true);
-                      setTimeout(() => customSizeInputRef.current?.focus(), 50);
-                    }}
-                    style={{
-                      marginTop: '4px',
-                      padding: '5px',
-                      background: 'transparent',
-                      border: '1px dashed var(--border-default)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--primary)',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Plus size={12} />
-                    <span>Razmer qo'shish</span>
-                  </button>
-                </div>
+              {/* Row 4: Card Footer */}
+              <div className="patta-card-footer">
+                <span className="patta-card-patta-count">
+                  Patta: <strong>{totalPattaCount} ta</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCustomSizeInput('');
+                    setAddSizeModelId(model.id);
+                    setIsAddSizeModalOpen(true);
+                    setTimeout(() => customSizeInputRef.current?.focus(), 50);
+                  }}
+                  className="patta-card-add-size-btn"
+                >
+                  + Razmer
+                </button>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Barcha modellar bo'yicha partiya, patta va ish soni statistikasi */}
-      <div style={{
-        marginTop: '28px',
-        background: 'var(--bg-surface)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-md)',
-        border: '1px solid var(--border-subtle)',
-        overflow: 'hidden'
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '16px 20px',
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--primary-light)',
-              color: 'var(--primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <TrendingUp size={18} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '14px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                Barcha modellar bo'yicha partiya, patta va ish soni statistikasi
-              </h3>
-              <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: 0 }}>
-                Modellar kesimida chiqarilgan partiyalar, pattalar va jami ish soni xulosasi
-              </p>
-            </div>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '12px',
-            fontWeight: 700,
-            background: 'var(--bg-surface-subtle)',
-            padding: '6px 14px',
-            borderRadius: 'var(--radius-full)',
-            border: '1px solid var(--border-subtle)'
-          }}>
-            <span>Jami: <strong style={{ color: 'var(--text-primary)' }}>{modelsSummaryList.length} ta model</strong></span>
-            <span style={{ color: 'var(--border-subtle)' }}>•</span>
-            <span><strong style={{ color: '#818cf8' }}>{grandTotals.parties} ta</strong> partiya</span>
-            <span style={{ color: 'var(--border-subtle)' }}>•</span>
-            <span><strong style={{ color: '#10b981' }}>{grandTotals.pattas} ta</strong> patta</span>
-            <span style={{ color: 'var(--border-subtle)' }}>•</span>
-            <span><strong style={{ color: 'var(--primary)' }}>{grandTotals.ishSoni.toLocaleString()} dona</strong> ish</span>
-          </div>
+      {filteredModels.length === 0 && (
+        <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+          Mos model topilmadi
         </div>
-
-        {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table className="excel-table" style={{ width: '100%' }}>
-            <thead>
-              <tr style={{ height: '36px', background: 'var(--bg-surface-subtle)' }}>
-                <th className="col-header" style={{ width: '50px', textAlign: 'center' }}>№</th>
-                <th className="col-header" style={{ textAlign: 'left', paddingLeft: '16px' }}>Model nomi</th>
-                <th className="col-header" style={{ textAlign: 'right', width: '180px', color: '#818cf8' }}>Partiya soni</th>
-                <th className="col-header" style={{ textAlign: 'right', width: '180px', color: '#10b981' }}>Patta soni</th>
-                <th className="col-header" style={{ textAlign: 'right', width: '220px', color: 'var(--primary)' }}>Jami Ish soni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {modelsSummaryList.map((item, idx) => {
-                const hasData = item.partyCount > 0;
-
-                return (
-                  <tr
-                    key={item.modelId}
-                    style={{
-                      height: '38px',
-                      backgroundColor: idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface-subtle)',
-                      transition: 'background-color 0.15s'
-                    }}
-                  >
-                    <td style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {idx + 1}
-                    </td>
-                    <td style={{ paddingLeft: '16px', fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>
-                      {item.modelName}
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: hasData ? '#818cf8' : 'var(--text-muted)' }}>
-                      {hasData ? `${item.partyCount} ta` : '0 ta'}
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: hasData ? '#10b981' : 'var(--text-muted)' }}>
-                      {hasData ? `${item.pattaCount} ta` : '0 ta'}
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, fontSize: '13px', color: hasData ? 'var(--primary)' : 'var(--text-muted)' }}>
-                      {hasData ? `${item.ishSoni.toLocaleString()} dona` : '0 dona'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ height: '40px', background: 'var(--bg-surface-subtle)', borderTop: '2px solid var(--border-subtle)', fontWeight: 800 }}>
-                <td colSpan={2} style={{ paddingLeft: '16px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                  ЖАМИ (Барча моделлар):
-                </td>
-                <td style={{ textAlign: 'right', fontSize: '13px', color: '#818cf8' }}>
-                  {grandTotals.parties} ta
-                </td>
-                <td style={{ textAlign: 'right', fontSize: '13px', color: '#10b981' }}>
-                  {grandTotals.pattas} ta
-                </td>
-                <td style={{ textAlign: 'right', fontSize: '13.5px', color: 'var(--primary)' }}>
-                  {grandTotals.ishSoni.toLocaleString()} dona
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+      )}
 
       {/* Add Custom Size Modal */}
       {isAddSizeModalOpen && (
@@ -1039,7 +740,7 @@ export const PattaBatchView: React.FC = () => {
               </div>
 
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Ushbu razmer barcha modellarning patta jadvallariga avtomatik qo'shiladi.
+                 Ushbu razmer faqat {models.find((model) => model.id === addSizeModelId)?.name || 'tanlangan model'} jadvaliga qo'shiladi.
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
@@ -1049,6 +750,42 @@ export const PattaBatchView: React.FC = () => {
                 <button type="submit" disabled={!newCustomSizeInput.trim()} className="soft-btn soft-btn-primary">
                   Qo'shish
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {renameSize && (
+        <div className="modal-overlay" onClick={() => setRenameSize(null)}>
+          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header"><div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)' }}><Pencil size={17} /> Razmer nomini o'zgartirish</div>
+              <button type="button" aria-label="Rename dialog close" onClick={() => setRenameSize(null)}><X size={18} /></button></div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const renamed = renameSizeInput.trim().toUpperCase();
+              if (!renamed) return;
+              const config = useWorkbookStore.getState().pattaBatchConfigs[renameSize.modelId];
+              const names = getModelSizes(renameSize.modelId);
+              if (renamed.toUpperCase() !== renameSize.sizeName.toUpperCase() && names.some((name) => name.toUpperCase() === renamed.toUpperCase())) {
+                addNotification('warning', 'Mavjud razmer', `«${renamed}» razmeri ushbu modelda mavjud.`);
+                return;
+              }
+              const sizes = { ...(config?.sizes || {}) };
+              const oldKey = Object.keys(sizes).find((name) => name.toUpperCase() === renameSize.sizeName.toUpperCase());
+              if (oldKey) { sizes[renamed] = sizes[oldKey]; delete sizes[oldKey]; }
+              const owned = config?.sizeNames ?? [...new Set([...(availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
+              void guardedUpdateBatchConfig(renameSize.modelId, {
+                sizeNames: owned.map((name) => name.toUpperCase() === renameSize.sizeName.toUpperCase() ? renamed : name), sizes
+              });
+              setRenameSize(null);
+            }} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Yangi razmer nomi
+                <input autoFocus value={renameSizeInput} onChange={(e) => setRenameSizeInput(e.target.value)} className="soft-input" />
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button type="button" onClick={() => setRenameSize(null)} className="soft-btn soft-btn-secondary">Bekor qilish</button>
+                <button type="submit" disabled={!renameSizeInput.trim()} className="soft-btn soft-btn-primary">Saqlash</button>
               </div>
             </form>
           </div>

@@ -1,6 +1,6 @@
 # Admin Panel Feature Inventory
 
-Inventory covers the retired hosted Admin WebApp and Telegram bot in `admin-bot/`,
+Inventory covers the retired hosted Admin WebApp and Telegram bot in `apps/bots/admin/`,
 the current Admin WebApp/API, PostgreSQL schema and operational commands.
 
 | Feature | Legacy panel | Current implementation | API / DB support | Decision | Final status |

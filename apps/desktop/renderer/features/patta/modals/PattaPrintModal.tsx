@@ -90,7 +90,12 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
       const { item, workTickets, sizesSummary } = printableItems[itemIndex];
       const pattaStart = pattaStarts[itemIndex];
 
-      const opsList = item.model.pattaOpsOrder.map((opName) => ({
+      const rawOps = (item.model.pattaOpsOrder && item.model.pattaOpsOrder.length > 0)
+        ? item.model.pattaOpsOrder
+        : (item.model.operations && item.model.operations.length > 0)
+        ? item.model.operations.map((op) => op.name)
+        : [];
+      const opsList = rawOps.map((opName) => ({
         name: opName
       }));
 

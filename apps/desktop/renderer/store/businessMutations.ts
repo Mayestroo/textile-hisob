@@ -80,6 +80,8 @@ export function hydrateWorkbookProjection(data: any, companyId: string) {
       hisobQuantities: sourceModels.get(model.id)?.hisobQuantities || model.hisobQuantities
     })),
     availableSizes: hydrated.availableSizes,
+    batchSettingsServerRevision: hydrated.batchSettingsServerRevision,
+    batchSettingsPrintRevision: hydrated.batchSettingsPrintRevision,
     nextPartyNumber: hydrated.nextPartyNumber,
     nextPattaNumber: hydrated.nextPattaNumber,
     reusablePattaRanges: hydrated.reusablePattaRanges,

@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const { buildFastifyServer } = require('../../../server/app.cjs');
 const { getServerPool, resetServerDatabase, closeServerPool } = require('../../../server/infrastructure/db.cjs');
-const { verifyFreshPostgres16TestEnvironment } = require('../../../../scripts/verify/verify-pg16-test-env.cjs');
+const { verifyFreshPostgres16TestEnvironment } = require('../../../../scripts/verify/database/verify-pg16-test-env.cjs');
 const { getCompanyDatabase, closeAllCompanyDatabases } = require('../database/databaseManager.cjs');
 const { loadWorkbookProjectionFromSqlite } = require('../database/projectionReader.cjs');
 const { SyncClient } = require('./syncClient.cjs');

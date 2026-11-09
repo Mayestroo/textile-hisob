@@ -4,13 +4,13 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 const child_process = require('child_process');
-const license = require('./license.cjs');
-const { isAllowedUpdateUrl, resolveAllowedRedirect, blockUnverifiedUpdate } = require('./updateSecurity.cjs');
-const { configureSecureWebContents } = require('./windowSecurity.cjs');
-const { isValidCompanyId, validateRequestedCompanyId } = require('./companyAuthority.cjs');
-const { rejectRendererCompanyAssignment, rejectRendererLicenseSettings } = require('./licenseBoundary.cjs');
-const { registerLicenseIpcHandlers } = require('./licenseIpcHandlers.cjs');
-const { resolveApiBaseUrl } = require('./apiConfig.cjs');
+const license = require('./license/license.cjs');
+const { isAllowedUpdateUrl, resolveAllowedRedirect, blockUnverifiedUpdate } = require('./security/updateSecurity.cjs');
+const { configureSecureWebContents } = require('./security/windowSecurity.cjs');
+const { isValidCompanyId, validateRequestedCompanyId } = require('./auth/companyAuthority.cjs');
+const { rejectRendererCompanyAssignment, rejectRendererLicenseSettings } = require('./security/licenseBoundary.cjs');
+const { registerLicenseIpcHandlers } = require('./ipc/licenseIpcHandlers.cjs');
+const { resolveApiBaseUrl } = require('./config/apiConfig.cjs');
 const databaseManager = require('./database/databaseManager.cjs');
 const migrator = require('./database/migrator.cjs');
 const parityReporter = require('./database/parityReporter.cjs');
@@ -30,7 +30,7 @@ const {
   assertReadiness,
   loadDefaultDependencies,
   createReadinessError
-} = require('./runtimeMode.cjs');
+} = require('./runtime/runtimeMode.cjs');
 
 let mainWindow;
 const selectedRuntimeMode = resolveRuntimeMode(process.env, { packaged: app.isPackaged === true });

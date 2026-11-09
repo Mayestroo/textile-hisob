@@ -7,6 +7,7 @@ const databaseManager = require('./databaseManager.cjs');
 const workbookCommandPipeline = require('./workbookCommandPipeline.cjs');
 const outboxDispatcher = require('../sync/outboxDispatcher.cjs');
 const outboxManager = require('./outboxManager.cjs');
+const projectionReader = require('./projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 
 describe(' workbook local command pipeline', () => {
@@ -53,6 +54,69 @@ describe(' workbook local command pipeline', () => {
     `).run(modelId, companyId, modelId, now, now);
     return db;
   }
+
+  it('durably saves independent model size definitions through SQLite command, reopen, and legacy omitted-field replay', () => {
+    const db = seedModel('model_a');
+    seedModel('model_b');
+    const execute = (operationId: string, configs: any[]) => workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateBatchSettings', commandId: `cmd_${operationId}`, operationId, companyId, entityId: companyId,
+      payload: { availableSizes: ['M', 'L'], configs }
+    });
+    const config = (modelId: string, names: string[], counts: Record<string, string>) => ({
+      modelId, partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizeNames: names, sizes: counts
+    });
+    execute('op_size_defs', [config('model_a', ['M', 'XXL'], { M: '1', XXL: '2' }), config('model_b', ['M', 'L'], { L: '1' })]);
+    databaseManager.closeAllCompanyDatabases();
+    const reopened = databaseManager.getCompanyDatabase(userData, companyId);
+    expect(reopened.prepare('SELECT size_names_json, sizes_json FROM patta_batch_settings WHERE model_id = ?').get('model_a'))
+      .toEqual({ size_names_json: '["M","XXL"]', sizes_json: '{"M":"1","XXL":"2"}' });
+    expect(reopened.prepare('SELECT size_names_json, sizes_json FROM patta_batch_settings WHERE model_id = ?').get('model_b'))
+      .toEqual({ size_names_json: '["M","L"]', sizes_json: '{"L":"1"}' });
+    // A payload from an older client omits the new field; it must retain A's explicit definition.
+    const oldConfig = { ...config('model_a', [], { XXL: '2' }) };
+    delete (oldConfig as any).sizeNames;
+    execute('op_size_old_client', [oldConfig]);
+    expect(JSON.parse(reopened.prepare('SELECT size_names_json FROM patta_batch_settings WHERE model_id = ?').get('model_a').size_names_json))
+      .toEqual(['M', 'XXL']);
+    execute('op_size_empty', [config('model_a', [], {})]);
+    databaseManager.closeAllCompanyDatabases();
+    const emptyReopened = databaseManager.getCompanyDatabase(userData, companyId);
+    expect(emptyReopened.prepare('SELECT size_names_json FROM patta_batch_settings WHERE model_id = ?').get('model_a').size_names_json)
+      .toBe('[]');
+    expect(workbookCommandPipeline.normalizeCommand({
+      commandType: 'UpdateBatchSettings', commandId: 'cmd_empty', operationId: 'op_empty', companyId, entityId: companyId,
+      payload: { configs: [config('model_a', [], {})] }
+    }, companyId).payload.configs[0].sizeNames).toEqual([]);
+    void db;
+  });
+
+  it('persists new-party size order immutably through update, close, and SQLite reopen', () => {
+    seedModel('ordered_model');
+    const submit = (commandType: string, operationId: string, entityId: string, payload: Record<string, any>) =>
+      workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+        commandType, commandId: `cmd_${operationId}`, operationId, companyId, entityId, payload
+      });
+    const party = {
+      partyRecordId: 'ordered_party', partyNumber: '8', modelId: 'ordered_model', modelName: 'Ordered', color: 'Qora',
+      pattaCount: 2, cumulativePattaCount: 2, ishSoniPerPatta: 25, totalIshSoni: 50,
+      ishSoni: 50, cumulativeIshSoni: 50, sizes: { XXL: '1', M: '1' }, sizeOrder: ['XXL', 'M'], printedAt: '2026-11-07T00:00:00.000Z'
+    };
+    submit('CreateParty', 'op_order_create', 'ordered_party', party);
+    databaseManager.closeAllCompanyDatabases();
+    let db = databaseManager.getCompanyDatabase(userData, companyId);
+    expect(db.prepare('SELECT sizes_json, size_order_json FROM parties WHERE id = ?').get('ordered_party'))
+      .toEqual({ sizes_json: '{"XXL":1,"M":1}', size_order_json: '["XXL","M"]' });
+    // Old UpdateParty clients omit order. Quantity correction must not alter the print-time definition.
+    const { sizeOrder: _omitted, ...oldUpdate } = { ...party, ishSoni: 52, totalIshSoni: 52 };
+    submit('UpdateParty', 'op_order_update', 'ordered_party', oldUpdate);
+    submit('CloseParty', 'op_order_close', 'ordered_party', { partyRecordId: 'ordered_party' });
+    databaseManager.closeAllCompanyDatabases();
+    db = databaseManager.getCompanyDatabase(userData, companyId);
+    expect(projectionReader.loadWorkbookProjectionFromSqlite(db, companyId).printedPartyHistory.find((item: any) => item.id === 'ordered_party').sizeOrder)
+      .toEqual(['XXL', 'M']);
+    expect(db.prepare('SELECT status, ish_soni, sizes_json, size_order_json FROM parties WHERE id = ?').get('ordered_party'))
+      .toEqual({ status: 'CLOSED', ish_soni: 52, sizes_json: '{"XXL":1,"M":1}', size_order_json: '["XXL","M"]' });
+  });
 
   it('commits the model fact and hashed outbox operation atomically and replays idempotently', () => {
     const command = modelCommand();
@@ -484,6 +548,7 @@ describe(' workbook local command pipeline', () => {
       entityId: 'batch_1',
       payload: {
         batchId: 'batch_1',
+        batchSettingsBaseRevision: 0,
         parties: [
           { id: 'party_21', partyNumber: '21', modelId: 'model_one', modelName: 'Model One', color: 'Qora', pattaCount: 2, ishSoni: 100, totalIshSoni: 100, sizes: { M: 2 }, printedAt: '2026-09-23T10:00:00.000Z' },
           { id: 'party_22', partyNumber: '22', modelId: 'model_one', modelName: 'Model One', color: 'Ko\'k', pattaCount: 1, ishSoni: 80, totalIshSoni: 80, sizes: { L: 1 }, printedAt: '2026-09-23T10:00:00.000Z' }
@@ -517,6 +582,7 @@ describe(' workbook local command pipeline', () => {
       payload: {
         ...command.payload,
         batchId: 'batch_2',
+        batchSettingsBaseRevision: 1,
         parties: [{ id: 'party_23', partyNumber: '23', modelId: 'model_two', modelName: 'Model Two',
           pattaCount: 2, ishSoniPerPatta: 65, totalIshSoni: 130, ishSoni: 130,
           sizes: { M: 2 }, printedAt: '2026-09-24T10:00:00.000Z' }],
@@ -714,6 +780,7 @@ describe(' workbook local command pipeline', () => {
         companyId, entityId: batchId,
         payload: {
           batchId,
+          batchSettingsBaseRevision: 0,
           parties: [
             { id: firstPartyId, partyNumber: '82', modelId: 'model_one', modelName: 'Model One', color: 'Qora', pattaCount: 2, ishSoni: 10, totalIshSoni: 10, sizes: { M: 2 }, printedAt: now },
             { id: secondPartyId, partyNumber: '83', modelId: 'model_one', modelName: 'Model One', color: 'Qora', pattaCount: 2, ishSoni: 10, totalIshSoni: 10, sizes: { M: 2 }, printedAt: now }
@@ -773,6 +840,7 @@ describe(' workbook local command pipeline', () => {
     expect(db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(companyId).next_patta_number).toBe(1);
     expect(apply('CompletePattaBatch', 'op_new_series_batch', 'patta_batch', 'batch_new_series', {
       batchId: 'batch_new_series',
+      batchSettingsBaseRevision: 1,
       parties: [{ id: 'party_new_series', partyNumber: '1', modelId: 'model_one', modelName: 'Model One',
         pattaCount: 12, ishSoniPerPatta: 10, totalIshSoni: 120, ishSoni: 120, sizes: { M: '12' }, printedAt: now }],
       availableSizes: ['M'],

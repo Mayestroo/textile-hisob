@@ -586,7 +586,7 @@ function applyPeriodChange(db, companyId, entityId, changeType, payload, entityR
 
 function applyPartyChange(db, companyId, entityId, changeType, payload, entityRevision = 1) {
   const partyId = String(payload.partyRecordId || payload.id || entityId);
-  const current = db.prepare(`SELECT company_id, server_revision, status, is_closed, closed_at,
+  const current = db.prepare(`SELECT company_id, server_revision, status, is_closed, closed_at, size_order_json,
     archived_patta_numbers_json, is_archived FROM parties WHERE id = ?`).get(partyId);
   if (current && current.company_id !== companyId) throw new Error('CROSS_COMPANY_PARTY_CHANGE_REJECTED');
   if (current && Number(current.server_revision || 0) >= Number(entityRevision || 0)) return;
@@ -631,7 +631,7 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
     payload.modelName || null, payload.color || null, Number(payload.pattaCount || 0), Number(payload.cumulativePattaCount || 0),
     payload.pattaStartNumber ?? null, payload.pattaEndNumber ?? null,
     payload.ishSoniPerPatta ?? null, payload.totalIshSoni ?? null, Number(payload.ishSoni || 0),
-    Number(payload.cumulativeIshSoni || 0), JSON.stringify(payload.sizes || {}), payload.printedAt || now, 0,
+    Number(payload.cumulativeIshSoni || 0), JSON.stringify(payload.sizes || {}), payload.sizeOrder == null ? null : JSON.stringify(payload.sizeOrder), payload.printedAt || now, 0,
     JSON.stringify(payload.archivedPattaNumbers || []), 'ACTIVE', now, now, entityRevision
   ];
   if (current) {
@@ -642,11 +642,11 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
     const updateParty = preserveClosedState
       ? `UPDATE parties SET model_name = ?, color = ?, patta_count = ?, cumulative_patta_count = ?,
         patta_start_number = ?, patta_end_number = ?,
-        ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?, sizes_json = ?,
+        ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?, sizes_json = ?, size_order_json = ?,
         printed_at = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`
       : `UPDATE parties SET model_name = ?, color = ?, patta_count = ?, cumulative_patta_count = ?,
       patta_start_number = ?, patta_end_number = ?,
-      ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?, sizes_json = ?,
+      ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?, cumulative_ish_soni = ?, sizes_json = ?, size_order_json = ?,
       printed_at = ?, archived_patta_numbers_json = ?, status = ?, is_closed = ?,
       closed_at = CASE WHEN ? THEN ? ELSE closed_at END,
       is_archived = CASE WHEN ? THEN 1 ELSE is_archived END, server_revision = ?, updated_at = ?
@@ -655,7 +655,7 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
       payload.modelName || null, payload.color || null, Number(payload.pattaCount || 0), Number(payload.cumulativePattaCount || 0),
       payload.pattaStartNumber ?? null, payload.pattaEndNumber ?? null,
       payload.ishSoniPerPatta ?? null, payload.totalIshSoni ?? null, Number(payload.ishSoni || 0),
-      Number(payload.cumulativeIshSoni || 0), JSON.stringify(payload.sizes || {}), payload.printedAt || now
+      Number(payload.cumulativeIshSoni || 0), JSON.stringify(payload.sizes || {}), current ? current.size_order_json : (payload.sizeOrder == null ? null : JSON.stringify(payload.sizeOrder)), payload.printedAt || now
     ];
     if (!preserveClosedState) {
       partyValues.push(
@@ -674,15 +674,17 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
       id, company_id, party_number, physical_party_number, model_id, model_name, color, patta_count,
       cumulative_patta_count, patta_start_number, patta_end_number,
       ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni,
-      sizes_json, printed_at, is_closed, archived_patta_numbers_json, status, created_at, updated_at,
+       sizes_json, size_order_json, printed_at, is_closed, archived_patta_numbers_json, status, created_at, updated_at,
       provenance, server_revision
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_SYNC', ?)`)
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_SYNC', ?)`)
       .run(...values);
   }
   advancePattaSequence(db, companyId, payload.pattaEndNumber);
 }
 
 function applyBatchSettingsChange(db, companyId, payload, entityRevision = 1) {
+  const current = db.prepare('SELECT server_revision FROM company_batch_settings WHERE company_id = ?').get(companyId);
+  if (Number(current?.server_revision || 0) > Number(entityRevision)) return;
   const now = payload.updatedAt || new Date().toISOString();
   if (payload.availableSizes !== undefined) {
     db.prepare(`INSERT INTO company_batch_settings (company_id, available_sizes_json, server_revision, updated_at)
@@ -693,14 +695,15 @@ function applyBatchSettingsChange(db, companyId, payload, entityRevision = 1) {
   }
   for (const config of payload.configs || []) {
     db.prepare(`INSERT INTO patta_batch_settings (
-      company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, server_revision, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json, server_revision, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(company_id, model_id) DO UPDATE SET party_number = excluded.party_number,
       is_custom_party = excluded.is_custom_party, total_ish_soni = excluded.total_ish_soni,
       color = excluded.color, sizes_json = excluded.sizes_json,
+      size_names_json = COALESCE(excluded.size_names_json, patta_batch_settings.size_names_json),
       server_revision = MAX(patta_batch_settings.server_revision, excluded.server_revision), updated_at = excluded.updated_at`)
       .run(companyId, config.modelId, config.partyNumber || '', config.isCustomParty ? 1 : 0,
-        config.totalIshSoni || '', config.color || null, JSON.stringify(config.sizes || {}), entityRevision, now);
+        config.totalIshSoni || '', config.color || null, JSON.stringify(config.sizes || {}), config.sizeNames == null ? null : JSON.stringify(config.sizeNames), entityRevision, now);
   }
 }
 

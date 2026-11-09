@@ -105,7 +105,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
   // Only persisted SYNCED parents qualify, never another member of this request.
   // The indexed, tenant-scoped parent lookup is non-recursive; at most batchSize
   // payloads enter JS/memory/the network, regardless of the blocked queue size.
-  const eligible = db.prepare(`
+  const candidates = db.prepare(`
     SELECT op.* FROM local_outbox op
     WHERE op.company_id = ? AND op.status = 'PENDING'
       AND (op.depends_on_operation_id IS NULL OR TRIM(op.depends_on_operation_id) = ''
@@ -115,9 +115,23 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
             AND parent.operation_id = TRIM(op.depends_on_operation_id)
             AND parent.status = 'SYNCED'
         ))
-    ORDER BY op.causal_sequence ASC, op.created_at ASC, op.operation_id ASC
+    ORDER BY op.causal_sequence ASC, op.rowid ASC
     LIMIT ?
   `).all(companyId, batchSize);
+  const firstUnresolvedBatch = db.prepare(`SELECT operation_id FROM local_outbox
+    WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
+      AND command_type IN ('UpdateBatchSettings', 'CompletePattaBatch')
+    ORDER BY rowid ASC LIMIT 1`).get(companyId);
+  // A print's immutable CAS base may include queued settings updates. Never send
+  // two company batch mutations in one concurrent push request.
+  let batchMutationSeen = false;
+  const eligible = candidates.filter((op) => {
+    if (op.command_type !== 'UpdateBatchSettings' && op.command_type !== 'CompletePattaBatch') return true;
+    if (op.operation_id !== firstUnresolvedBatch?.operation_id) return false;
+    if (batchMutationSeen) return false;
+    batchMutationSeen = true;
+    return true;
+  });
 
   if (eligible.length === 0) {
     // Preserve bounded diagnostic sampling; do not load blocked payloads or count
@@ -326,7 +340,13 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
             .run(res.serverRevision, res.committedAt || new Date().toISOString(), companyId, res.serverRevision);
           supersedeOlderBatchSettingsConflicts(db, companyId, op);
           factsUpdated++;
-        } else if (op.command_type === 'CompletePattaBatch' || op.command_type === 'CompletePartySeries') {
+        } else if (op.command_type === 'CompletePattaBatch') {
+          const payload = JSON.parse(op.payload_json);
+          const acceptedSettingsRevision = payload.batchSettingsBaseRevision + 1;
+          db.prepare(`UPDATE company_batch_settings SET server_revision = MAX(server_revision, ?), updated_at = ?
+            WHERE company_id = ?`).run(acceptedSettingsRevision, res.committedAt || new Date().toISOString(), companyId);
+          factsUpdated++;
+        } else if (op.command_type === 'CompletePartySeries') {
           factsUpdated++;
         } else if (op.command_type === 'ReverseProductionAdjustment') {
           const payload = JSON.parse(op.payload_json);
@@ -347,6 +367,20 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
     } else if (res.status === 'CONFLICT') {
       const errJson = JSON.stringify(res.error || { code: 'CONFLICT' });
       updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', errJson);
+      if (op.command_type === 'CompletePattaBatch') {
+        // Keep exact print intent in the outbox, but discard only new,
+        // unaccepted local party facts not referenced by another operation.
+        const payload = JSON.parse(op.payload_json);
+        for (const party of payload.parties || []) {
+          db.prepare(`DELETE FROM parties WHERE company_id = ? AND id = ?
+            AND provenance = 'LOCAL_COMMAND' AND server_revision = 0
+            AND NOT EXISTS (SELECT 1 FROM tickets WHERE tickets.company_id = parties.company_id AND tickets.party_record_id = parties.id)
+            AND NOT EXISTS (SELECT 1 FROM local_outbox other WHERE other.company_id = parties.company_id
+              AND other.entity_id = parties.id AND other.operation_id <> ? AND other.status <> 'SUPERSEDED')`)
+            .run(companyId, party.partyRecordId, op.operation_id);
+        }
+        factsUpdated++;
+      }
       if (op.command_type === 'DeleteTicket') {
         db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
           .run(companyId, op.entity_id);

@@ -404,6 +404,9 @@
         const workersList = payroll.workers || [];
         const totalPieces = workersList.reduce((sum, w) => sum + Number(w.pieces || 0), 0);
         const totalGross = workersList.reduce((sum, w) => sum + Number(w.gross || 0), 0);
+        const totalPiecework = workersList.reduce((sum, w) => sum + Number(w.pieceworkGross || 0), 0);
+        const totalOklad = workersList.reduce((sum, w) => sum + Number(w.oklad || 0), 0);
+        const totalMagazin = workersList.reduce((sum, w) => sum + Number(w.magazin || 0), 0);
         const totalNet = workersList.reduce((sum, w) => sum + Number(w.net || 0), 0);
 
         // Date and timestamp
@@ -435,6 +438,12 @@
         const displayedNet = totalNet > 0 ? totalNet : totalGross;
         setText('coStatPayroll', `${displayedNet > 0 ? number(displayedNet) : '0'}${payroll.accountingStatus !== 'COMPLETE' || workersList.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
         setText('coGrossPayroll', `${money(totalGross)}${payrollWarning(workersList, payroll)}`);
+        setText('coPieceworkPayroll', `${money(totalPiecework)}${payrollWarning(workersList, payroll)}`);
+        setText('coOkladPayroll', `${money(totalOklad)}${payrollWarning(workersList, payroll)}`);
+        setText('coMagazinPayroll', `${money(totalMagazin)}${payrollWarning(workersList, payroll)}`);
+        setText('coAvansPayroll', money(workersList.reduce((sum, w) => sum + Number(w.avans || 0), 0)));
+        setText('coJarimaPayroll', money(workersList.reduce((sum, w) => sum + Number(w.jarima || 0), 0)));
+        setText('coStajPayroll', money(workersList.reduce((sum, w) => sum + Number(w.staj || 0), 0)));
         setText('coPiecesCount', `${number(totalPieces)} dona`);
 
         // 2. Partiyalar umumiy statistikasi
@@ -1121,6 +1130,8 @@
         const pw = payrollMap.get(String(w.workerId));
         return {
           ...w,
+          ...(pw ? { pieceworkGross: pw.pieceworkGross, oklad: pw.oklad, gross: pw.gross,
+            magazin: pw.magazin, avans: pw.avans, jarima: pw.jarima, staj: pw.staj } : {}),
           net: pw ? pw.net : 0,
           accountingStatus: pw?.accountingStatus,
           unknownEntryCount: pw?.unknownEntryCount
@@ -1168,7 +1179,7 @@
       card.appendChild(top);
 
       const stats = node('div', 'worker-touch-stats');
-      stats.appendChild(node('span', 'worker-net-profit', `Sof foyda: ${payrollAmount(w, money(w.net || 0))}`));
+        stats.appendChild(node('span', 'worker-net-profit', `Ishbay: ${money(w.pieceworkGross)} · Oklad: ${money(w.oklad)} · Yalpi: ${payrollAmount(w, money(w.gross))} · Magazin: ${money(w.magazin)} · Sof: ${payrollAmount(w, money(w.net))}`));
       if (w.binding) {
         stats.appendChild(node('span', 'mono muted', w.binding.username ? `@${w.binding.username}` : `ID: ${w.binding.telegramId}`));
       } else {
@@ -1837,7 +1848,7 @@
     const daily = days > 0 && gross > 0 ? Math.round(gross / days) : 0;
     setText('wsdStatDaily', daily > 0 ? `${number(daily)}` : '—');
 
-    setText('wsdPieceWorkPay', `+${payrollAmount(worker, money(worker.gross || 0))}`);
+    setText('wsdPieceWorkPay', `Ishbay: ${payrollAmount(worker, money(worker.pieceworkGross))} · Oklad: +${money(worker.oklad)} · Yalpi: ${payrollAmount(worker, money(worker.gross))} · Magazin: −${money(worker.magazin)}`);
     setText('wsdStajBonus', `+${money(worker.staj || 0)}`);
     setText('wsdPenalty', `-${money(worker.jarima || 0)}`);
     setText('wsdAdvance', `-${money(worker.avans || 0)}`);
@@ -1880,7 +1891,10 @@
       const row = node('tr');
       cell(row, `#${worker.workerId}`, 'mono');
       cell(row, worker.name);
+      cell(row, payrollAmount(worker, money(worker.pieceworkGross)));
+      cell(row, payrollAmount(worker, money(worker.oklad)));
       cell(row, payrollAmount(worker, money(worker.gross)));
+      cell(row, payrollAmount(worker, money(worker.magazin)));
       cell(row, money(worker.avans));
       cell(row, money(worker.jarima));
       cell(row, money(worker.staj));
@@ -2923,6 +2937,31 @@
   }
   function selectedPeriod() { return companyPanel.periods.find((period) => period.periodId === companyPanel.periodId) || null; }
   function payrollQuery() { return { companyId: companyPanel.companyId, ...(companyPanel.periodId ? { periodId: companyPanel.periodId } : {}) }; }
+  function companyWorkerFilterKey() {
+    return `hisob.company.worker-filter.v1:${JSON.stringify([state.sessionActorId || '', companyPanel.companyId || '', companyPanel.periodId || ''])}`;
+  }
+  function restoreCompanyWorkerFilter() {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(companyWorkerFilterKey()) || 'null');
+      if (saved && typeof saved.query === 'string' && ['all', 'positive', 'negative', 'zero'].includes(saved.filter)) {
+        companyPanel.workerQuery = saved.query;
+        companyPanel.workerFilter = saved.filter;
+      } else {
+        companyPanel.workerQuery = '';
+        companyPanel.workerFilter = 'all';
+      }
+    } catch {
+      companyPanel.workerQuery = '';
+      companyPanel.workerFilter = 'all';
+    }
+    const search = byId('companyWorkerSearch');
+    if (search) search.value = companyPanel.workerQuery;
+    byId('companyWorkerFilters')?.querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item.dataset.filter === companyPanel.workerFilter));
+  }
+  function saveCompanyWorkerFilter() {
+    try { window.sessionStorage.setItem(companyWorkerFilterKey(), JSON.stringify({ query: companyPanel.workerQuery, filter: companyPanel.workerFilter })); }
+    catch { /* Filtering remains available when session storage is blocked. */ }
+  }
   async function loadCompanyCollection(route, companyId, resultKey) {
     const limit = 100;
     const rows = [];
@@ -2960,6 +2999,7 @@
     void refreshWorkerBotStatus();
     companyPanel.periods = periods.periods || [];
     companyPanel.periodId = companyPanel.periods.find((period) => !period.isClosed)?.periodId || companyPanel.periods[0]?.periodId || '';
+    restoreCompanyWorkerFilter();
     const select = byId('companyPeriodSelect');
     select.replaceChildren();
     for (const period of companyPanel.periods) {
@@ -3006,13 +3046,21 @@
   function renderCompanyHome(payroll) {
     const workers = companyPanel.payroll;
     const gross = workers.reduce((sum, worker) => sum + Number(worker.gross || 0), 0);
+    const piecework = workers.reduce((sum, worker) => sum + Number(worker.pieceworkGross || 0), 0);
+    const oklad = workers.reduce((sum, worker) => sum + Number(worker.oklad || 0), 0);
+    const magazin = workers.reduce((sum, worker) => sum + Number(worker.magazin || 0), 0);
     const advance = workers.reduce((sum, worker) => sum + Number(worker.avans || 0), 0);
+    const fine = workers.reduce((sum, worker) => sum + Number(worker.jarima || 0), 0);
     const staj = workers.reduce((sum, worker) => sum + Number(worker.staj || 0), 0);
     const net = workers.reduce((sum, worker) => sum + Number(worker.net || 0), 0);
     const pieces = workers.reduce((sum, worker) => sum + Number(worker.pieces || 0), 0);
     setText('companyNet', `${coMoney(net)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
     setText('companyGross', `${coMoney(gross)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
+    setText('companyPiecework', `${coMoney(piecework)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
+    setText('companyOklad', `${coMoney(oklad)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
+    setText('companyMagazin', coMoney(magazin));
     setText('companyAdvance', coMoney(advance));
+    setText('companyFine', coMoney(fine));
     setText('companyWorkerCount', `${number(companyPanel.workers.length)} ta${payrollWarning(workers, payroll)}`);
     setText('companyStaj', coMoney(staj));
     const period = selectedPeriod();
@@ -3059,13 +3107,14 @@
         (companyPanel.workerFilter === 'zero' && net === 0);
       return matchesFilter && (!q || String(worker.workerId).includes(q) || String(worker.name || '').toLocaleLowerCase().includes(q));
     });
-    setText('companyWorkerCaption', `${companyPanel.workers.length} ta · ${selectedPeriod()?.name || 'Davr yo‘q'}`);
+    setText('companyWorkerCaption', `${workers.length} / ${companyPanel.workers.length} ta · ${selectedPeriod()?.name || 'Davr yo‘q'}`);
     if (!workers.length) { host.appendChild(coText('p', 'co-empty', 'Ishchilar topilmadi.')); return; }
     for (const worker of workers) {
       const row = coText('button', 'co-worker-row'); row.type = 'button';
       row.addEventListener('click', () => openCompanyWorker(worker));
       const left = coText('span', 'co-worker-left');
       left.appendChild(coText('strong', 'co-worker-name', worker.name || `Ishchi #${worker.workerId}`));
+      left.appendChild(coText('small', 'co-worker-status', `Ishbay ${coMoney(worker.pieceworkGross || 0)} + Oklad ${coMoney(worker.oklad || 0)} − Magazin ${coMoney(worker.magazin || 0)}`));
       if (payrollIncomplete(worker)) left.appendChild(coText('small', 'co-worker-status negative', 'Hisob to‘liq emas · oraliq summa'));
       else if (Number(worker.net || 0) < 0) left.appendChild(coText('small', 'co-worker-status negative', 'Manfiy'));
       else if (Number(worker.avans || 0) > 0) left.appendChild(coText('small', 'co-worker-status', 'Avansli'));
@@ -3615,10 +3664,14 @@
     );
     setText('companyDetailMonth', `Sof foyda · ${selectedPeriod()?.name || 'Davr'}${payrollWarning([worker])}`);
     setText('companyDetailNet', payrollAmount(worker, coMoney(worker.net || 0)));
+    setText('companyDetailPiecework', payrollAmount(worker, coMoney(worker.pieceworkGross || 0)));
+    setText('companyDetailOklad', payrollAmount(worker, coMoney(worker.oklad || 0)));
     setText('companyDetailGross', payrollAmount(worker, coMoney(worker.gross || 0)));
+    setText('companyDetailMagazin', payrollAmount(worker, coMoney(worker.magazin || 0)));
     setText('companyDetailPieces', `${number(worker.pieces || 0)} dona`);
     setText('companyDetailAdvanceAmount', worker.avans ? `−${coMoney(worker.avans)}` : '—');
     setText('companyDetailFine', worker.jarima ? `−${coMoney(worker.jarima)}` : '—');
+    setText('companyDetailStaj', worker.staj ? `−${coMoney(worker.staj)}` : '—');
     const tickets = companyPanel.tickets.filter((ticket) => String(ticket.workerId) === String(worker.workerId));
     setText('companyDetailTicketCount', tickets.length);
     const host = byId('companyWorkerTickets'); host.replaceChildren();
@@ -3779,11 +3832,12 @@
       else coShowScreen(target, target);
     }));
     byId('companyClose').addEventListener('click', () => { handleNavigateBack(); });
-    byId('companyPeriodSelect').addEventListener('change', async (event) => { companyPanel.periodId = event.target.value; await loadCompanyAdminData(); });
-    byId('companyWorkerSearch').addEventListener('input', (event) => { companyPanel.workerQuery = event.target.value; renderCompanyWorkers(); });
+    byId('companyPeriodSelect').addEventListener('change', async (event) => { companyPanel.periodId = event.target.value; restoreCompanyWorkerFilter(); await loadCompanyAdminData(); });
+    byId('companyWorkerSearch').addEventListener('input', (event) => { companyPanel.workerQuery = event.target.value; saveCompanyWorkerFilter(); renderCompanyWorkers(); });
     byId('companyWorkerFilters').addEventListener('click', (event) => {
       const button = event.target.closest('[data-filter]'); if (!button) return;
       companyPanel.workerFilter = button.dataset.filter;
+      saveCompanyWorkerFilter();
       byId('companyWorkerFilters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button));
       renderCompanyWorkers();
     });

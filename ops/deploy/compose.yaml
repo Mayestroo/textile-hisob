@@ -155,7 +155,7 @@ services:
   novda-admin-bot:
     build:
       context: ../..
-      dockerfile: admin-bot/Dockerfile
+      dockerfile: apps/bots/admin/Dockerfile
     image: ${NOVDA_ADMIN_BOT_IMAGE:-novda-admin-bot:production}
     container_name: novda-admin-bot
     restart: unless-stopped
@@ -205,7 +205,7 @@ services:
   novda-worker-bot:
     build:
       context: ../..
-      dockerfile: worker-bot/Dockerfile
+      dockerfile: apps/bots/worker/Dockerfile
     image: ${NOVDA_WORKER_BOT_IMAGE:-novda-worker-bot:production}
     container_name: novda-worker-bot
     restart: unless-stopped

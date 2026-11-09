@@ -69,6 +69,7 @@ function makeProductionLikeBootstrap() {
     ishSoni: 0,
     cumulativeIshSoni: 0,
     sizes: {},
+    ...(index === 0 ? { sizeOrder: ['XXL', 'M'] } : {}),
     printedAt: '2026-09-01T00:00:00.000Z',
     isClosed: false,
     closedAt: null,
@@ -261,6 +262,7 @@ describe(' SQLite authoritative bootstrap', () => {
     expect(projection.workers).toHaveLength(201);
     expect(projection.models).toHaveLength(18);
     expect(projection.printedPartyHistory).toHaveLength(42);
+    expect(projection.printedPartyHistory.find((party: any) => party.id === 'party_1').sizeOrder).toEqual(['XXL', 'M']);
     expect(projection.availableSizes).toEqual(['S', 'M', 'L']);
     expect(projection.pattaBatchConfigs.model_1).toMatchObject({ partyNumber: '42', totalIshSoni: '446' });
     expect(projection.workers.find((worker: any) => worker.id === 1)).toMatchObject({ avans: 2020000, jarima: 550000 });

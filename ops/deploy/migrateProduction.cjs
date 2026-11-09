@@ -31,7 +31,10 @@ const MIGRATIONS = [
   'deploy_worker_telegram_unbind_migration.sql',
   'deploy_production_adjustment_attribution_migration.sql',
   'deploy_activation_policy_sync_count_migration.sql',
-  'deploy_worker_adjustment_manual_payroll_types.sql'
+  'deploy_worker_adjustment_manual_payroll_types.sql',
+  'deploy_model_batch_size_names_migration.sql',
+  'deploy_party_size_order_migration.sql',
+  'deploy_patta_lifecycle_provenance_migration.sql'
 ];
 
 function requireDsn(env, name, requiredUsername) {

@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { WorkbookStore, ModelSlice } from '../types';
 import { ModelConfig } from '../../types/workbook';
 import { STANDARD_OPERATIONS } from '../../constants/operationConstants';
+import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { createWorkbookCommand, hasFocusedEditableControl, localCommitSyncNotice, preserveWorkbookProjectionDrafts, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
@@ -210,7 +211,8 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
         isCustomParty: false,
         totalIshSoni: '',
         color: options?.color || 'Кора',
-        sizes: {}
+        sizes: {},
+        sizeNames: [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES)])]
       }
     };
 
@@ -540,6 +542,44 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     triggerDebouncedSave(() => {
       get().saveToDisk({ models: updatedModels, companyId: state.licenseStatus?.companyId });
       }, 1200, 'model', () => get().licenseStatus === state.licenseStatus);
+    return true;
+  },
+
+  updateModelOperations: async (modelId: string, operations: any[]) => {
+    const state = get();
+    const cleanOps = operations.map((op, idx) => ({
+      ...op,
+      name: (op.name || '').trim(),
+      rate: Math.max(0, Number(op.rate) || 0),
+      col: 3 + idx * 2,
+      id: op.id || `op_${3 + idx * 2}`
+    }));
+
+    const updatedModels = state.models.map((m) => {
+      if (m.id === modelId) {
+        return {
+          ...m,
+          operations: cleanOps,
+          pattaOpsOrder: cleanOps.map((o) => o.name)
+        };
+      }
+      return m;
+    });
+
+    const updatedModel = updatedModels.find((model) => model.id === modelId);
+    if (!updatedModel) return false;
+
+    const sync = await tryModelMutation(state, get, set, 'UpsertModel', modelId, modelCommandPayload(updatedModel));
+    if (sync?.handled) {
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${updatedModel.name}" operatsiyalari yangilandi.`));
+      return sync.success;
+    }
+
+    set({ models: updatedModels });
+    triggerDebouncedSave(() => {
+      get().saveToDisk({ models: updatedModels, companyId: state.licenseStatus?.companyId });
+    }, 1200, 'model', () => get().licenseStatus === state.licenseStatus);
+    state.addNotification('success', 'Saqlandi', `"${updatedModel.name}" operatsiyalari muvaffaqiyatli saqlandi.`);
     return true;
   },
 

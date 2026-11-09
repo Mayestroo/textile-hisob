@@ -1028,13 +1028,13 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
       id, company_id, party_number, physical_party_number, model_id, model_name, color,
       patta_count, cumulative_patta_count, patta_start_number, patta_end_number,
       ish_soni_per_patta, total_ish_soni,
-      ish_soni, cumulative_ish_soni, sizes_json, printed_at, is_closed, status,
+       ish_soni, cumulative_ish_soni, sizes_json, size_order_json, printed_at, is_closed, status,
       server_revision, created_at, updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7,
       $8, $9, $10, $11, $12, $13,
-      $14, $15, $16, $17, 0, 'ACTIVE',
-      $18, NOW(), NOW()
+       $14, $15, $16, $17, $18, 0, 'ACTIVE',
+       $19, NOW(), NOW()
     )`,
     [
       partyRecordId,
@@ -1053,6 +1053,7 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
       payload.ishSoni ?? 0,
       payload.cumulativeIshSoni ?? 0,
       payload.sizes !== undefined ? JSON.stringify(payload.sizes) : null,
+      payload.sizeOrder !== undefined ? JSON.stringify(payload.sizeOrder) : null,
       payload.printedAt || new Date().toISOString(),
       serverRevision
     ]

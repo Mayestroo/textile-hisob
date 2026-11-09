@@ -9,11 +9,6 @@
   <meta name="supported-color-schemes" content="light" />
   <meta name="novda-admin-webapp-version" content="-20261013" />
   <title>Novda — Admin Console</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
-    rel="stylesheet">
   <link rel="stylesheet" href="/admin-app/admin.css" />
   <link rel="stylesheet" href="/admin-app/company-admin.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -66,8 +61,12 @@
           <div class="co-profit-value"><strong id="companyNet">0</strong> <small>so‘m</small></div>
         </article>
         <div class="co-stat-grid">
-          <article><span>Jami ishlangan</span><strong id="companyGross">0</strong></article>
+          <article><span>Ishbay</span><strong id="companyPiecework">0</strong></article>
+          <article><span>Oklad</span><strong id="companyOklad">0</strong></article>
+          <article><span>Yalpi</span><strong id="companyGross">0</strong></article>
+          <article><span>Magazin</span><strong id="companyMagazin">0</strong></article>
           <article><span>Berilgan avans</span><strong id="companyAdvance">0</strong></article>
+          <article><span>Jarima</span><strong id="companyFine">0</strong></article>
           <article><span>Doimiy staj</span><strong id="companyStaj">0</strong></article>
           <article><span>Ishchilar</span><strong id="companyWorkerCount">0 ta</strong></article>
         </div>
@@ -236,10 +235,14 @@
           <div class="co-profit-value"><strong id="companyDetailNet">0</strong> <small>so‘m</small></div>
         </article>
         <div class="co-stat-grid">
-          <article><span>Hisoblangan</span><strong id="companyDetailGross">0</strong></article>
+          <article><span>Ishbay</span><strong id="companyDetailPiecework">0</strong></article>
+          <article><span>Oklad</span><strong id="companyDetailOklad">0</strong></article>
+          <article><span>Yalpi</span><strong id="companyDetailGross">0</strong></article>
+          <article><span>Magazin</span><strong id="companyDetailMagazin">0</strong></article>
           <article><span>Jami ish</span><strong id="companyDetailPieces">0 dona</strong></article>
           <article><span>Avans</span><strong id="companyDetailAdvanceAmount">—</strong></article>
           <article><span>Jarima</span><strong id="companyDetailFine">—</strong></article>
+          <article><span>Staj</span><strong id="companyDetailStaj">—</strong></article>
         </div>
         <div class="co-section-row">
           <strong>OPERATSIYALAR · <span id="companyDetailTicketCount">0</span></strong>
@@ -631,11 +634,35 @@
               </div>
               <div class="co-breakdown-grid">
                 <div class="co-breakdown-cell">
-                  <span class="co-breakdown-caption">JAMI HISOBLANGAN</span>
+                  <span class="co-breakdown-caption">ISHBAY</span>
+                  <strong id="coPieceworkPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">OKLAD</span>
+                  <strong id="coOkladPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">YALPI</span>
                   <strong id="coGrossPayroll" class="co-breakdown-num">—</strong>
                 </div>
                 <div class="co-breakdown-cell">
-                  <span class="co-breakdown-caption">TIKILGAN PATTA</span>
+                  <span class="co-breakdown-caption">MAGAZIN</span>
+                  <strong id="coMagazinPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">AVANS</span>
+                  <strong id="coAvansPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">JARIMA</span>
+                  <strong id="coJarimaPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">STAJ</span>
+                  <strong id="coStajPayroll" class="co-breakdown-num">—</strong>
+                </div>
+                <div class="co-breakdown-cell">
+                  <span class="co-breakdown-caption">PATTA</span>
                   <strong id="coPiecesCount" class="co-breakdown-num mono">— dona</strong>
                 </div>
               </div>
@@ -1481,7 +1508,10 @@
                   <tr>
                     <th>ID</th>
                     <th>ISHCHI</th>
-                    <th>JAMI</th>
+                    <th>ISHBAY</th>
+                    <th>OKLAD</th>
+                    <th>YALPI</th>
+                    <th>MAGAZIN</th>
                     <th>AVANS</th>
                     <th>JARIMA</th>
                     <th>STAJ</th>
@@ -1493,7 +1523,7 @@
               </table>
             </div>
             <p id="payrollEmpty" class="empty-state" hidden>Davr yoki ish haqi ma’lumotlari mavjud emas.</p>
-            <p class="formula-note">Sof = Jami − Avans − Jarima − Staj · Har bir qiymat yozuvlaridan hisoblanadi.</p>
+            <p class="formula-note">Yalpi = Ishbay + Oklad · Sof = Yalpi − Magazin − Avans − Jarima − Staj.</p>
           </article>
         </div>
       </section>

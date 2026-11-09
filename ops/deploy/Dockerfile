@@ -7,7 +7,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY apps/server ./apps/server
 COPY packages/contracts/keys/licensePublicKey.cjs ./packages/contracts/keys/licensePublicKey.cjs
-COPY worker-bot/webapp/index.html ./worker-bot/webapp/index.html
+COPY apps/bots/worker/webapp ./apps/bots/worker/webapp
 COPY ops/deploy/migrateProduction.cjs ./ops/deploy/migrateProduction.cjs
 COPY ops/deploy/importSqliteBaseline.cjs ./ops/deploy/importSqliteBaseline.cjs
 COPY ops/deploy/verifyProductionDatabase.cjs ./ops/deploy/verifyProductionDatabase.cjs

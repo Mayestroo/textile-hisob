@@ -1,6 +1,7 @@
 import {
   Worker,
   ModelConfig,
+  Operation,
   TicketFormState,
   Notification,
   PayrollPeriod,
@@ -59,6 +60,7 @@ export interface ModelSlice {
   syncNewOperation: (modelId: string, opName: string, rate: number) => Promise<void> | void;
   syncDeleteOperation: (modelId: string, opName: string) => Promise<void> | void;
   updateOperationRate: (modelId: string, opName: string, rate: number) => Promise<boolean> | boolean;
+  updateModelOperations: (modelId: string, operations: Operation[]) => Promise<boolean> | boolean;
   updateOperationName: (modelId: string, oldOpName: string, newName: string) => Promise<void> | void;
   updateHisobQuantity: (modelId: string, workerId: number, opName: string, qty: number, source?: { originalTicketId: string; originalEntryId: string }) => Promise<boolean> | boolean;
   reorderOperations: (modelId: string, newOrder: string[]) => Promise<void> | void;
@@ -110,12 +112,14 @@ export interface PeriodSlice {
 }
 
 export interface PattaBatchSlice {
+  batchSettingsServerRevision: number;
+  batchSettingsPrintRevision: number | null;
   availableSizes: string[];
   nextPartyNumber: number;
   pattaBatchConfigs: Record<string, ModelPattaBatchConfig>;
   printedPartyHistory: PrintedPartyRecord[];
-  addCustomSize: (sizeName: string) => Promise<void> | void;
-  deleteCustomSize: (sizeName: string) => Promise<void> | void;
+  addCustomSize: (modelId: string, sizeName?: string) => Promise<void> | void;
+  deleteCustomSize: (modelId: string, sizeName?: string) => Promise<void> | void;
   incrementPartyNumber: (modelId: string, printedPartyStr: string) => Promise<void> | void;
   updatePattaBatchConfig: (modelId: string, updates: Partial<ModelPattaBatchConfig>) => Promise<void> | void;
   updatePattaBatchSize: (modelId: string, size: string, count: string) => Promise<void> | void;

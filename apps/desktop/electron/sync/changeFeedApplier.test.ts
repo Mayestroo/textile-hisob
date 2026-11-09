@@ -39,8 +39,8 @@ describe(' workbook change-feed application', () => {
       {
         changeId: '4', companyId, entityType: 'party', entityId: 'party-a', entityRevision: 1, changeType: 'INSERT',
         payload: { partyRecordId: 'party-a', partyNumber: '12', modelId: 'model-a', modelName: 'Model A', color: 'Qora',
-          pattaCount: 1, cumulativePattaCount: 1, ishSoniPerPatta: 10, totalIshSoni: 10, ishSoni: 10,
-          cumulativeIshSoni: 10, sizes: { M: 1 }, printedAt: '2026-09-23T10:00:00.000Z' }
+           pattaCount: 2, cumulativePattaCount: 2, pattaStartNumber: 1, pattaEndNumber: 2, ishSoniPerPatta: 10, totalIshSoni: 20, ishSoni: 20,
+           cumulativeIshSoni: 20, sizes: { XXL: 1, M: 1 }, sizeOrder: ['XXL', 'M'], printedAt: '2026-09-23T10:00:00.000Z' }
       },
       {
         changeId: '5', companyId, entityType: 'ticket', entityId: '00000000-0000-4000-8000-000000000501',
@@ -75,6 +75,8 @@ describe(' workbook change-feed application', () => {
     expect(db.prepare('SELECT period_id FROM tickets WHERE company_id = ?').get(companyId).period_id).toBe('period-a');
     expect(db.prepare('SELECT status FROM tickets WHERE company_id = ?').get(companyId).status).toBe('VOIDED');
     expect(db.prepare('SELECT op_name FROM ticket_entries WHERE company_id = ?').get(companyId).op_name).toBe('Sew');
+    expect(db.prepare('SELECT size_order_json FROM parties WHERE company_id = ? AND id = ?').get(companyId, 'party-a').size_order_json)
+      .toBe('["XXL","M"]');
     expect(db.prepare('SELECT id, rate_snapshot FROM ticket_entries WHERE company_id = ?').get(companyId))
       .toEqual({ id: 'edited-entry', rate_snapshot: 8 });
     expect(db.prepare('SELECT available_sizes_json FROM company_batch_settings WHERE company_id = ?').get(companyId).available_sizes_json).toBe('["M","L"]');
@@ -83,6 +85,14 @@ describe(' workbook change-feed application', () => {
     expect(replay.appliedCount).toBe(10);
     expect(db.prepare('SELECT COUNT(*) AS count FROM tickets WHERE company_id = ?').get(companyId).count).toBe(1);
     expect(db.prepare('SELECT COUNT(*) AS count FROM worker_adjustments WHERE company_id = ?').get(companyId).count).toBe(1);
+    applyChangesBatch(db, companyId, [{
+      changeId: '11', companyId, entityType: 'party', entityId: 'party-a', entityRevision: 2, changeType: 'UPDATE',
+      payload: { partyRecordId: 'party-a', partyNumber: '12', modelId: 'model-a', modelName: 'Model A', color: 'Qora',
+        pattaCount: 2, cumulativePattaCount: 2, pattaStartNumber: 1, pattaEndNumber: 2, ishSoniPerPatta: 10,
+        totalIshSoni: 20, ishSoni: 20, cumulativeIshSoni: 20, sizes: { XXL: 1, M: 1 }, printedAt: '2026-09-23T10:00:00.000Z' }
+    }], '11');
+    expect(db.prepare('SELECT size_order_json FROM parties WHERE company_id = ? AND id = ?').get(companyId, 'party-a').size_order_json)
+      .toBe('["XXL","M"]');
   });
 
   it('flags a conflicting captured period instead of replacing it on feed replay', () => {

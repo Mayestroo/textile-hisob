@@ -97,13 +97,18 @@ export function calculateBatchWorkQuantities(
 
 export function buildPattaWorkTickets(
   ishSoniPerPatta: number,
-  sizes: Record<string, string | number> | undefined
+  sizes: Record<string, string | number> | undefined,
+  sizeOrder?: string[]
 ): PattaWorkTicket[] {
   const normalizedSizes = normalizePattaSizeCounts(sizes);
   calculateBatchWorkQuantities(ishSoniPerPatta, normalizedSizes.pattaCount);
   const tickets: PattaWorkTicket[] = [];
 
-  for (const [size, count] of Object.entries(normalizedSizes.sizes)) {
+  const entries = Object.entries(normalizedSizes.sizes);
+  const byName = new Map(entries);
+  const orderedNames = sizeOrder ? [...new Set([...sizeOrder, ...entries.map(([size]) => size)])] : entries.map(([size]) => size);
+  for (const size of orderedNames) {
+    const count = byName.get(size) || 0;
     for (let index = 0; index < count; index += 1) {
       tickets.push({ size, perPatta: ishSoniPerPatta });
     }

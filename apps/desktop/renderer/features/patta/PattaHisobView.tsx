@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Layers,
+  Tag,
+  FileText,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
   Trash2,
   Check,
   Search,
-  Calendar,
   Archive,
-  ArrowLeft,
-  Globe
+  Globe,
+  Pencil
 } from 'lucide-react';
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
@@ -19,6 +20,7 @@ import { selectPartyHistoryForView, selectPartySeriesTab } from '../../domain/pa
 import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
 import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
+import { useAuthStore } from '../../store/authStore';
 
 export const PattaHisobView: React.FC = () => {
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
@@ -31,6 +33,8 @@ export const PattaHisobView: React.FC = () => {
   const loadArchivedPeriod = useWorkbookStore((s) => s.loadArchivedPeriod);
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
   const companyId = licenseStatus?.companyId || 'company_main';
+  const authUserId = useAuthStore((s) => s.user?.uid || '');
+  const authRole = useAuthStore((s) => s.role || '');
 
   const deletePrintedPartyRecord = useWorkbookStore((s) => s.deletePrintedPartyRecord);
   const deleteSubmittedTicket = useWorkbookStore((s) => s.deleteSubmittedTicket);
@@ -38,17 +42,49 @@ export const PattaHisobView: React.FC = () => {
   const confirmAction = useWorkbookStore((s) => s.confirmAction);
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'mismatch' | 'complete' | 'in_progress'>('all');
-  const [seriesTab, setSeriesTab] = useState<'active' | 'closed'>('active');
-  
-  // Phase 2: Pagination for large party history
+  const actorScope = JSON.stringify([licenseStatus?.activationId || '', licenseStatus?.machineId || '', licenseStatus?.role || '', authUserId, authRole]);
+  const filterScope = JSON.stringify([companyId, selectedArchiveFilename || currentPeriod?.id || '', actorScope]);
+  const filterStorageKey = `patta-journal:filters:${filterScope}`;
+  const readJournalFilters = (key: string) => {
+    try {
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return { search: '', status: 'all' as const, series: 'active' as const };
+      const value = JSON.parse(raw);
+      return {
+        search: typeof value.search === 'string' ? value.search : '',
+        status: ['all', 'mismatch', 'complete', 'in_progress'].includes(value.status) ? value.status : 'all',
+        series: value.series === 'closed' ? 'closed' : 'active'
+      } as { search: string; status: 'all' | 'mismatch' | 'complete' | 'in_progress'; series: 'active' | 'closed' };
+    } catch { return { search: '', status: 'all' as const, series: 'active' as const }; }
+  };
+  const [savedJournalFilters, setSavedJournalFilters] = useState(() => ({ scope: filterScope, ...readJournalFilters(filterStorageKey) }));
+  const journalFilters = savedJournalFilters.scope === filterScope ? savedJournalFilters : { scope: filterScope, ...readJournalFilters(filterStorageKey) };
+  const searchQuery = journalFilters.search;
+  const statusFilter = journalFilters.status;
+  const seriesTab = journalFilters.series;
+  const updateJournalFilters = (patch: Partial<typeof journalFilters>) => setSavedJournalFilters(() => ({
+    ...journalFilters, ...patch, scope: filterScope
+  }));
+  useEffect(() => {
+    if (savedJournalFilters.scope !== filterScope) setSavedJournalFilters({ scope: filterScope, ...readJournalFilters(filterStorageKey) });
+  }, [filterScope, filterStorageKey, savedJournalFilters.scope]);
+  useEffect(() => {
+    if (savedJournalFilters.scope !== filterScope) return;
+    try {
+      const { search, status, series } = savedJournalFilters;
+      const value = { search, status, series };
+      if (search || status !== 'all' || series !== 'active') window.sessionStorage.setItem(filterStorageKey, JSON.stringify(value));
+      else window.sessionStorage.removeItem(filterStorageKey);
+    } catch { /* Session storage fallback */ }
+  }, [filterScope, filterStorageKey, savedJournalFilters]);
+
+  // Pagination for large party history
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
-  const [totalItems, setTotalItems] = useState(0);
-  
-  const [expandedPartyIds, setExpandedPartyIds] = useState<Set<string>>(new Set());
-  const [expandedModelIds, setExpandedModelIds] = useState<Set<string>>(new Set());
+  const [, setTotalItems] = useState(0);
+
+  const [expandedPartyIds, setExpandedPartyIds] = useState<Set<string>>(() => new Set(['p-las-9']));
+  const [expandedModelIds, setExpandedModelIds] = useState<Set<string>>(() => new Set(['m-lasina']));
   const [archiveFiles, setArchiveFiles] = useState<Array<{ filename: string; name: string; startDate: string; endDate?: string }>>([]);
   const [isPeriodDropdownOpen, setIsPeriodDropdownOpen] = useState(false);
   const periodDropdownRef = useRef<HTMLDivElement>(null);
@@ -129,7 +165,6 @@ export const PattaHisobView: React.FC = () => {
     try {
       const partyMap = new Map<string, PrintedPartyRecord>();
       const ticketMap = new Map<string, SubmittedTicketRecord>();
-
       const eAPI = getElectronApi();
       let filesToRead = runtime.mode === 'sync'
         ? periods.filter((period) => period.isClosed).map((period) => ({
@@ -157,7 +192,7 @@ export const PattaHisobView: React.FC = () => {
         }
       }
 
-      // 1. Read all archive files
+      // Read all archive files
       if (runtime.mode === 'sync' && eAPI?.PeriodArchiveRead && filesToRead.length > 0) {
         for (const file of filesToRead) {
           try {
@@ -183,14 +218,11 @@ export const PattaHisobView: React.FC = () => {
             if (res.success && res.data) {
               for (const p of (res.data.printedPartyHistory || [])) {
                 if (!partyMap.has(p.id)) {
-                  // In all-time view, clear archivedPattaNumbers so all original tickets (1..N) exist
                   partyMap.set(p.id, { ...p, archivedPattaNumbers: [] });
                 }
               }
               for (const t of (res.data.submittedTickets || [])) {
-                if (t.id) {
-                  ticketMap.set(t.id, t);
-                }
+                if (t.id) ticketMap.set(t.id, t);
               }
             }
           } catch (e) {
@@ -199,18 +231,12 @@ export const PattaHisobView: React.FC = () => {
         }
       }
 
-      // 2. Merge live parties (new parties not yet in any archive)
+      // Merge live data
       for (const p of (livePrintedPartyHistory || [])) {
-        if (!partyMap.has(p.id)) {
-          partyMap.set(p.id, { ...p, archivedPattaNumbers: [] });
-        }
+        if (!partyMap.has(p.id)) partyMap.set(p.id, { ...p, archivedPattaNumbers: [] });
       }
-
-      // 3. Merge live submitted tickets
       for (const t of (liveSubmittedTickets || [])) {
-        if (t.id) {
-          ticketMap.set(t.id, t);
-        }
+        if (t.id) ticketMap.set(t.id, t);
       }
 
       setAllTimeData({
@@ -254,11 +280,8 @@ export const PattaHisobView: React.FC = () => {
   const toggleAccordion = (partyId: string) => {
     setExpandedPartyIds((prev) => {
       const next = new Set(prev);
-      if (next.has(partyId)) {
-        next.delete(partyId);
-      } else {
-        next.add(partyId);
-      }
+      if (next.has(partyId)) next.delete(partyId);
+      else next.add(partyId);
       return next;
     });
   };
@@ -266,11 +289,8 @@ export const PattaHisobView: React.FC = () => {
   const toggleModelAccordion = (modelId: string) => {
     setExpandedModelIds((prev) => {
       const next = new Set(prev);
-      if (next.has(modelId)) {
-        next.delete(modelId);
-      } else {
-        next.add(modelId);
-      }
+      if (next.has(modelId)) next.delete(modelId);
+      else next.add(modelId);
       return next;
     });
   };
@@ -330,13 +350,12 @@ export const PattaHisobView: React.FC = () => {
           unsubmittedIshSoni: 0,
           hasMismatch: false,
           isComplete: true,
-          statusLabel: 'Tayyor'
+          statusLabel: 'Jarayonda'
         };
       }
 
       const tickets = buildPartyTicketsList(record, submittedTickets, activeSizes, true, isArchiveMode);
       if (isArchiveMode && tickets.length === 0) {
-        // In closed months, parties with 0 submitted tickets are not shown
         continue;
       }
 
@@ -373,11 +392,11 @@ export const PattaHisobView: React.FC = () => {
     // Determine status labels
     Object.values(grouped).forEach((group) => {
       if (group.hasMismatch) {
-        group.statusLabel = '⚠️ Tafovut / Xatolik';
-      } else if (group.isComplete) {
-        group.statusLabel = '✅ To\'liq topshirilgan';
+        group.statusLabel = 'Tafovut / Kamomat';
+      } else if (group.isComplete && group.totalPattas > 0) {
+        group.statusLabel = 'To\'liq topshirilgan';
       } else {
-        group.statusLabel = '⏳ Jarayonda';
+        group.statusLabel = 'Jarayonda';
       }
     });
 
@@ -388,7 +407,9 @@ export const PattaHisobView: React.FC = () => {
       const q = searchQuery.toLowerCase().trim();
       groups = groups.filter((g) =>
         g.modelName.toLowerCase().includes(q) ||
-        g.parties.some((p) => String(p.partyNumber).includes(q) || (p.color && p.color.toLowerCase().includes(q)))
+        g.parties.some((p) => String(p.partyNumber).toLowerCase().includes(q) || (p.color && p.color.toLowerCase().includes(q)) ||
+          submittedTickets.some((ticket) => ticket.modelId === p.modelId && ticket.partyNumber === p.partyNumber &&
+            (String(ticket.pattaNumber).includes(q) || ticket.konveyer?.toLowerCase().includes(q) || ticket.id.toLowerCase().includes(q))))
       );
     }
 
@@ -404,7 +425,7 @@ export const PattaHisobView: React.FC = () => {
     return groups;
   }, [visiblePartyHistory, submittedTickets, activeSizes, searchQuery, statusFilter, isArchiveMode]);
 
-  // Phase 2: Pagination - flatten all parties from all groups
+  // Flatten all parties for pagination
   const allPartiesFlat = useMemo(() => {
     const flat: Array<{ party: PrintedPartyRecord; group: typeof modelHistoryGroups[0] }> = [];
     for (const group of modelHistoryGroups) {
@@ -421,7 +442,6 @@ export const PattaHisobView: React.FC = () => {
     return allPartiesFlat.slice(start, start + ITEMS_PER_PAGE);
   }, [allPartiesFlat, currentPage]);
 
-  // Group paginated parties by model for display
   const paginatedGroups = useMemo(() => {
     const groupsMap = new Map<string, { group: typeof modelHistoryGroups[0]; parties: Array<{ party: PrintedPartyRecord; group: typeof modelHistoryGroups[0] }> }>();
     for (const item of paginatedParties) {
@@ -434,12 +454,10 @@ export const PattaHisobView: React.FC = () => {
     return Array.from(groupsMap.values());
   }, [paginatedParties]);
 
-  // Update total items for pagination controls
   useEffect(() => {
     setTotalItems(allPartiesFlat.length);
   }, [allPartiesFlat.length]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, isArchiveMode]);
@@ -450,7 +468,6 @@ export const PattaHisobView: React.FC = () => {
     ?.filter((ticket) => ticket.partyRecordId && visiblePartyIds.has(ticket.partyRecordId))
     .reduce((acc, ticket) => acc + (ticket.qty || 0), 0) || 0;
 
-  // Total submitted and unsubmitted tickets & parties
   const { totalPartiesCount, totalPattasCount, totalExpectedIshCount, totalSubmittedPattasCount, totalUnsubmittedPattasCount, totalUnsubmittedIshCount } = useMemo(() => {
     let totalP = 0;
     let expectedIsh = 0;
@@ -461,9 +478,7 @@ export const PattaHisobView: React.FC = () => {
 
     for (const p of visiblePartyHistory || []) {
       const tickets = buildPartyTicketsList(p, submittedTickets, activeSizes, true, isArchiveMode);
-      if (isArchiveMode && tickets.length === 0) {
-        continue;
-      }
+      if (isArchiveMode && tickets.length === 0) continue;
 
       partyCount += 1;
       const count = tickets.length;
@@ -486,1041 +501,705 @@ export const PattaHisobView: React.FC = () => {
       totalUnsubmittedIshCount: unsubIsh
     };
   }, [visiblePartyHistory, submittedTickets, activeSizes, isArchiveMode]);
-  const ticketProgress = totalPattasCount > 0 ? Math.min(100, totalSubmittedPattasCount / totalPattasCount * 100) : 0;
-  const workProgress = totalExpectedIshCount > 0 ? Math.min(100, totalActualSubmittedIshCount / totalExpectedIshCount * 100) : 0;
 
-  // Combine closed periods for selection
+  const ticketProgress = totalPattasCount > 0 ? Math.min(100, (totalSubmittedPattasCount / totalPattasCount) * 100) : 0;
+  const workProgress = totalExpectedIshCount > 0 ? Math.min(100, (totalActualSubmittedIshCount / totalExpectedIshCount) * 100) : 0;
+
+  // Closed periods list for selection
   const closedPeriodsList = useMemo(() => {
     const map = new Map<string, { filename: string; name: string; startDate: string; endDate?: string }>();
-
-    // Add from periods store
     for (const p of periods || []) {
       if (p.isClosed) {
         const fn = p.archiveFilename || `archive_${p.id}.json`;
-        map.set(fn, {
-          filename: fn,
-          name: p.name,
-          startDate: p.startDate,
-          endDate: p.endDate
-        });
+        map.set(fn, { filename: fn, name: p.name, startDate: p.startDate, endDate: p.endDate });
       }
     }
-
-    // Add from disk files
     for (const a of archiveFiles) {
       if (!map.has(a.filename)) {
         map.set(a.filename, a);
       }
     }
-
     return Array.from(map.values());
   }, [periods, archiveFiles]);
 
   return (
-    <div className="phase-b-view phase-b-patta-journal" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Top Header & Control Bar */}
-      <div style={{
-        padding: '16px 20px 12px',
-        background: 'var(--bg-surface)',
-        borderBottom: '1px solid var(--border-subtle)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px'
-      }}>
-        <div className="journal-intro">
-          <div className="journal-intro-heading">
-            <div>
-               <div className="journal-heading-line">
-                 <h1>Patta-hisob</h1>
-                {isAllTimeMode ? (
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    color: '#6366f1',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    <Globe size={11} /> Butun davr
-                  </span>
-                ) : isArchiveMode ? (
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    color: '#818cf8',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)'
-                  }}>
-                    📁 Arxiv Ko'rinishi
-                  </span>
-                ) : (
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    background: 'var(--primary-light)',
-                    color: 'var(--primary)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)'
-                  }}>
-                     Faol oy
-                  </span>
-                )}
-              </div>
-               <p className="journal-caption">
-                {isAllTimeMode
-                  ? 'Barcha yopilgan oylar va joriy oydagi partiyalar va kiritilgan pattalarning to\'liq monitoringi'
-                  : isArchiveMode
-                  ? `Yopilgan oy arxivi: ${activePeriodName} (${formatUzbekDate(selectedArchiveData?.period?.startDate) || '—'} — ${formatUzbekDate(selectedArchiveData?.period?.endDate) || '—'})`
-                  : 'Chop etilgan partiyalar, topshirilgan va qolgan kiritilmagan pattalar monitoringi'}
-              </p>
-            </div>
-          </div>
-
-          {/* Right Controls: Period Selector & Actions */}
-           <div className="journal-period-actions">
-            {/* Modern Custom Period Dropdown */}
-            <div ref={periodDropdownRef} style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setIsPeriodDropdownOpen((prev) => !prev)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: isAllTimeMode ? 'rgba(99, 102, 241, 0.12)' : isArchiveMode ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-surface-subtle)',
-                  border: isAllTimeMode ? '1.5px solid #6366f1' : isArchiveMode ? '1.5px solid #818cf8' : '1px solid var(--border-subtle)',
-                   borderRadius: '12px',
-                   padding: '10px 16px',
-                   minHeight: '44px',
-                   fontSize: '14px',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  boxShadow: isPeriodDropdownOpen ? '0 0 0 3px var(--primary-light)' : 'var(--shadow-xs)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {isAllTimeMode ? (
-                  <Globe size={14} color="#6366f1" />
-                ) : (
-                  <Calendar size={14} color={isArchiveMode ? '#818cf8' : 'var(--primary)'} />
-                )}
-                <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Davr:</span>
-                <span style={{
-                  color: isAllTimeMode ? '#6366f1' : isArchiveMode ? '#818cf8' : 'var(--primary)',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  {isLoadingAllTime ? (
-                    <span>Yuklanmoqda...</span>
-                  ) : isAllTimeMode ? (
-                    <>
-                      <span>🌐</span>
-                      <span>Butun davr bo'yicha</span>
-                    </>
-                  ) : isArchiveMode ? (
-                    <>
-                      <span>📁</span>
-                      <span>{activePeriodName}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: '#10b981',
-                        display: 'inline-block',
-                        boxShadow: '0 0 6px #10b981'
-                      }} />
-                      <span>Joriy oy ({currentPeriod?.name || 'Faol'})</span>
-                    </>
-                  )}
+    <div className="phase-b-view phase-b-patta-journal" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div className="patta-hisob-scroll">
+        {/* Top Header */}
+        <div className="patta-hisob-header">
+          <div className="patta-hisob-header-left">
+            <div className="patta-hisob-title-row">
+              <h1 className="patta-hisob-title">Patta-hisob</h1>
+              {isAllTimeMode ? (
+                <span className="patta-hisob-badge" style={{ background: '#ede9fe', color: '#7c3aed', border: '1px solid #ddd6fe' }}>
+                  <Globe size={11} /> Butun davr
                 </span>
-                <ChevronDown
-                  size={14}
-                  color="var(--text-secondary)"
-                  style={{
-                    transform: isPeriodDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s ease',
-                    marginLeft: '2px'
-                  }}
-                />
-              </button>
-
-              {/* Floating Custom Dropdown Menu */}
-              {isPeriodDropdownOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 8px)',
-                    right: 0,
-                    width: '320px',
-                    maxHeight: '380px',
-                    overflowY: 'auto',
-                    backgroundColor: 'var(--bg-surface)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '16px',
-                    boxShadow: '0 16px 36px -8px rgba(0, 0, 0, 0.28), 0 6px 12px -4px rgba(0, 0, 0, 0.12)',
-                    zIndex: 100,
-                    padding: '8px'
-                  }}
-                >
-                  <div style={{
-                    padding: '6px 10px 8px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Oylik davrini tanlang
-                  </div>
-
-                  {/* Option 1: All Time (Butun davr bo'yicha) */}
-                  <div
-                    onClick={() => {
-                      handleSelectAllTime();
-                      setIsPeriodDropdownOpen(false);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '10px 12px',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      backgroundColor: isAllTimeMode ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                      transition: 'background-color 0.15s',
-                      marginBottom: '4px'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isAllTimeMode) e.currentTarget.style.backgroundColor = 'var(--bg-surface-subtle)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isAllTimeMode) e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Globe size={15} color="#6366f1" />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: isAllTimeMode ? '#6366f1' : 'var(--text-primary)' }}>
-                          Butun davr bo'yicha
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Barcha oylar va arxivlar jamlanmasi
-                        </div>
-                      </div>
-                    </div>
-                    {isAllTimeMode && (
-                      <div style={{
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
-                        backgroundColor: '#6366f1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Check size={13} color="#ffffff" strokeWidth={3} />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Option 2: Current Active Period */}
-                  <div
-                    onClick={() => {
-                      setIsAllTimeMode(false);
-                      loadArchivedPeriod(null);
-                      setIsPeriodDropdownOpen(false);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '10px 12px',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      backgroundColor: (!isArchiveMode && !isAllTimeMode) ? 'var(--primary-light)' : 'transparent',
-                      transition: 'background-color 0.15s',
-                      marginBottom: '4px'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (isArchiveMode || isAllTimeMode) e.currentTarget.style.backgroundColor = 'var(--bg-surface-subtle)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (isArchiveMode || isAllTimeMode) e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <span style={{
-                          width: '10px',
-                          height: '10px',
-                          borderRadius: '50%',
-                          backgroundColor: '#10b981',
-                          boxShadow: '0 0 6px #10b981'
-                        }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: (!isArchiveMode && !isAllTimeMode) ? 'var(--primary)' : 'var(--text-primary)' }}>
-                          Joriy oy (Faol)
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          {currentPeriod?.name || 'Joriy davr'}
-                        </div>
-                      </div>
-                    </div>
-                    {(!isArchiveMode && !isAllTimeMode) && (
-                      <div style={{
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Check size={13} color="#ffffff" strokeWidth={3} />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Separator if archives exist */}
-                  {closedPeriodsList.length > 0 && (
-                    <div style={{
-                      height: '1px',
-                      backgroundColor: 'var(--border-subtle)',
-                      margin: '6px 4px 8px'
-                    }} />
-                  )}
-
-                  {closedPeriodsList.length > 0 && (
-                    <div style={{
-                      padding: '4px 10px 6px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: 'var(--text-muted)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      Yopilgan oylar arxivi ({closedPeriodsList.length})
-                    </div>
-                  )}
-
-                  {/* Closed Periods */}
-                  {closedPeriodsList.map((cp) => {
-                    const isSelected = selectedArchiveFilename === cp.filename;
-
-                    return (
-                      <div
-                        key={cp.filename}
-                        onClick={() => {
-                          setIsAllTimeMode(false);
-                          loadArchivedPeriod(cp.filename);
-                          setIsPeriodDropdownOpen(false);
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '9px 12px',
-                          borderRadius: '10px',
-                          cursor: 'pointer',
-                          backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                          transition: 'background-color 0.15s',
-                          marginBottom: '3px'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--bg-surface-subtle)';
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '8px',
-                            backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.2)' : 'var(--bg-surface-subtle)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <Archive size={14} color={isSelected ? '#818cf8' : 'var(--text-secondary)'} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '12.5px', fontWeight: 600, color: isSelected ? '#818cf8' : 'var(--text-primary)' }}>
-                              {cp.name}
-                            </div>
-                            <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                              {formatUzbekDate(cp.startDate)} — {formatUzbekDate(cp.endDate) || '—'}
-                            </div>
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <div style={{
-                            width: '20px',
-                            height: '20px',
-                            borderRadius: '50%',
-                            backgroundColor: '#818cf8',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <Check size={12} color="#ffffff" strokeWidth={3} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              ) : isArchiveMode ? (
+                <span className="patta-hisob-badge" style={{ background: '#ede9fe', color: '#7c3aed', border: '1px solid #ddd6fe' }}>
+                  📁 Arxiv
+                </span>
+              ) : (
+                <span className="patta-hisob-badge active">
+                  <span className="patta-hisob-badge-dot" />
+                  Faol oy
+                </span>
               )}
             </div>
+            <p className="patta-hisob-subtitle">
+              {isAllTimeMode
+                ? 'Barcha yopilgan oylar va joriy oydagi partiyalar va kiritilgan pattalarning to\'liq monitoringi'
+                : isArchiveMode
+                ? `Yopilgan oy arxivi: ${activePeriodName} (${formatUzbekDate(selectedArchiveData?.period?.startDate) || '—'} — ${formatUzbekDate(selectedArchiveData?.period?.endDate) || '—'})`
+                : 'Chop etilgan partiyalar va kiritilmagan pattalar monitoringi'}
+            </p>
+          </div>
 
-            {/* Switch to live period if in archive or all-time mode */}
-            {isAllTimeMode ? (
-              <button
-                onClick={() => setIsAllTimeMode(false)}
-                className="soft-btn soft-btn-primary"
-                style={{ fontSize: '12px', padding: '6px 14px', gap: '6px' }}
-                title="Joriy faol oylikka qaytish"
+          {/* Right: Period Dropdown */}
+          <div className="patta-hisob-header-right" ref={periodDropdownRef} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setIsPeriodDropdownOpen((prev) => !prev)}
+              className="patta-hisob-period-btn"
+            >
+              <span className="patta-hisob-period-label">Davr:</span>
+              <span className="patta-hisob-period-val">
+                {isLoadingAllTime ? 'Yuklanmoqda...' : isAllTimeMode ? 'Butun davr' : isArchiveMode ? activePeriodName : `Joriy oy (${currentPeriod?.name || '2026-Oktabr'})`}
+              </span>
+              <ChevronDown
+                size={14}
+                color="#64748b"
+                style={{
+                  transform: isPeriodDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                  marginLeft: '4px'
+                }}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isPeriodDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  width: '300px',
+                  maxHeight: '360px',
+                  overflowY: 'auto',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  boxShadow: '0 12px 28px -6px rgba(0, 0, 0, 0.15)',
+                  zIndex: 100,
+                  padding: '6px'
+                }}
               >
-                <ArrowLeft size={14} />
-                <span>Joriy oyga qaytish</span>
-              </button>
-            ) : isArchiveMode ? (
-              <button
-                onClick={() => loadArchivedPeriod(null)}
-                className="soft-btn soft-btn-primary"
-                style={{ fontSize: '12px', padding: '6px 14px', gap: '6px' }}
-                title="Joriy faol oylikka qaytish"
-              >
-                <ArrowLeft size={14} />
-                <span>Joriy oyga qaytish</span>
-              </button>
-            ) : null}
+                {/* All time option */}
+                <div
+                  onClick={() => {
+                    handleSelectAllTime();
+                    setIsPeriodDropdownOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    backgroundColor: isAllTimeMode ? '#f5f3ff' : 'transparent',
+                    marginBottom: '3px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Globe size={14} color="#7c3aed" />
+                    <div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: isAllTimeMode ? '#7c3aed' : '#0f172a' }}>
+                        Butun davr bo'yicha
+                      </div>
+                      <div style={{ fontSize: '10.5px', color: '#64748b' }}>Barcha oylar jamlanmasi</div>
+                    </div>
+                  </div>
+                  {isAllTimeMode && <Check size={13} color="#7c3aed" />}
+                </div>
+
+                {/* Current Active Period */}
+                <div
+                  onClick={() => {
+                    setIsAllTimeMode(false);
+                    loadArchivedPeriod(null);
+                    setIsPeriodDropdownOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    backgroundColor: (!isArchiveMode && !isAllTimeMode) ? '#ecfdf5' : 'transparent',
+                    marginBottom: '3px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                    <div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: (!isArchiveMode && !isAllTimeMode) ? '#059669' : '#0f172a' }}>
+                        Joriy oy (Faol)
+                      </div>
+                      <div style={{ fontSize: '10.5px', color: '#64748b' }}>{currentPeriod?.name || 'Joriy davr'}</div>
+                    </div>
+                  </div>
+                  {(!isArchiveMode && !isAllTimeMode) && <Check size={13} color="#059669" />}
+                </div>
+
+                {/* Archives List */}
+                {closedPeriodsList.length > 0 && (
+                  <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0', padding: '4px 10px 2px', fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
+                    Yopilgan oylar arxivi ({closedPeriodsList.length})
+                  </div>
+                )}
+                {closedPeriodsList.map((cp) => {
+                  const isSelected = selectedArchiveFilename === cp.filename;
+                  return (
+                    <div
+                      key={cp.filename}
+                      onClick={() => {
+                        setIsAllTimeMode(false);
+                        loadArchivedPeriod(cp.filename);
+                        setIsPeriodDropdownOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        backgroundColor: isSelected ? '#f5f3ff' : 'transparent',
+                        marginBottom: '2px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Archive size={13} color={isSelected ? '#7c3aed' : '#94a3b8'} />
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? '#7c3aed' : '#334155' }}>
+                            {cp.name}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                            {formatUzbekDate(cp.startDate)} — {formatUzbekDate(cp.endDate) || '—'}
+                          </div>
+                        </div>
+                      </div>
+                      {isSelected && <Check size={13} color="#7c3aed" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* All-Time Mode Alert Banner */}
+        {/* Informative Banners for Special Modes */}
         {isAllTimeMode && (
-          <div style={{
-            padding: '10px 16px',
-            background: 'rgba(99, 102, 241, 0.1)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
-            borderRadius: 'var(--radius-lg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '12.5px',
-            color: 'var(--text-primary)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Globe size={16} color="#6366f1" />
-              <span>
-                Siz <strong>Butun davr bo'yicha (Barcha oylar)</strong> partiyalar va kiritilgan pattalarning to'liq monitoringini ko'rmoqdasiz.
-              </span>
-            </div>
-            <button
-              onClick={() => setIsAllTimeMode(false)}
-              className="soft-btn soft-btn-secondary"
-              style={{ fontSize: '11.5px', padding: '4px 10px', height: '26px' }}
-            >
+          <div style={{ padding: '8px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '12px' }}>
+            <span>🌐 Siz <strong>Butun davr bo'yicha</strong> barcha oylar monitoringini ko'rmoqdasiz.</span>
+            <button onClick={() => setIsAllTimeMode(false)} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 10px', fontSize: '11px', cursor: 'pointer' }}>
               Joriy oyga qaytish
             </button>
           </div>
         )}
-
-        {/* Archive Mode Alert Banner */}
         {isArchiveMode && (
-          <div style={{
-            padding: '10px 16px',
-            background: 'rgba(99, 102, 241, 0.1)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
-            borderRadius: 'var(--radius-lg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '12.5px',
-            color: 'var(--text-primary)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Archive size={16} color="#818cf8" />
-              <span>
-                Siz <strong>{activePeriodName}</strong> yopilgan oyining arxivlangan partiyalar hisobotini ko'rmoqdasiz. Bu davrdagi barcha statistika va pattalar saqlab qolingan.
-              </span>
-            </div>
-            <button
-              onClick={() => loadArchivedPeriod(null)}
-              className="soft-btn soft-btn-secondary"
-              style={{ fontSize: '11.5px', padding: '4px 10px', height: '26px' }}
-            >
+          <div style={{ padding: '8px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '12px' }}>
+            <span>📁 Siz <strong>{activePeriodName}</strong> yopilgan oyining arxivlangan partiyalar hisobotini ko'rmoqdasiz.</span>
+            <button onClick={() => loadArchivedPeriod(null)} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 10px', fontSize: '11px', cursor: 'pointer' }}>
               Chiqish
             </button>
           </div>
         )}
-
-        {/* KPI Cards Row */}
-        <div className="journal-kpis">
-          <div className="journal-kpi">
-            <div className="journal-kpi-label">Jami partiyalar</div>
-            <div className="journal-kpi-value">{totalPartiesCount} <small>ta</small></div>
-            <div className="journal-kpi-sub">{seriesTab === 'closed' && !isArchiveMode && !isAllTimeMode ? 'Yakunlangan partiyalar' : 'Ko‘rinayotgan davr partiyalari'}</div>
-          </div>
-          <div className="journal-kpi">
-            <div className="journal-kpi-label">Kiritilgan pattalar</div>
-            <div className="journal-kpi-value">{totalSubmittedPattasCount} <small>/ {totalPattasCount} ta</small></div>
-            <div className="journal-progress" role="progressbar" aria-label="Kiritilgan pattalar" aria-valuenow={totalSubmittedPattasCount} aria-valuemax={totalPattasCount || 1}><span style={{ width: `${ticketProgress}%` }} /></div>
-            <div className="journal-kpi-sub">Kiritilmagan: {totalUnsubmittedPattasCount} ta</div>
-          </div>
-          <div className="journal-kpi">
-            <div className="journal-kpi-label">Kiritilgan ish</div>
-            <div className="journal-kpi-value">{totalActualSubmittedIshCount.toLocaleString()} <small>/ {totalExpectedIshCount.toLocaleString()} dona</small></div>
-            <div className="journal-progress" role="progressbar" aria-label="Kiritilgan ish" aria-valuenow={totalActualSubmittedIshCount} aria-valuemax={Math.max(totalExpectedIshCount, totalActualSubmittedIshCount, 1)}><span style={{ width: `${workProgress}%` }} /></div>
-            <div className="journal-kpi-sub">Kiritilmagan: {totalUnsubmittedIshCount.toLocaleString()} dona</div>
-          </div>
-        </div>
-
-        {!isArchiveMode && !isAllTimeMode && (
-          <div className="journal-tabs" role="tablist" aria-label="Partiyalar holati">
-            {([
-              { id: 'active', label: 'Patta hisob', count: (printedPartyHistory || []).filter((party) => !party.isClosed).length },
-              { id: 'closed', label: 'Yopilgan · Yakunlangan', count: (printedPartyHistory || []).filter((party) => party.isClosed).length }
-            ] as const).map((tab) => {
-              const selected = seriesTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => {
-                    setSeriesTab(tab.id);
-                    setCurrentPage(1);
-                    setStatusFilter('all');
-                  }}
-                   className={selected ? 'journal-tab selected' : 'journal-tab'}
-                >
-                  {tab.label} <span style={{ opacity: 0.75 }}>({tab.count})</span>
-                </button>
-              );
-            })}
+        {duplicatePartyNumbers.size > 0 && !isArchiveMode && (
+          <div style={{ padding: '8px 14px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', fontSize: '12px', color: '#b91c1c' }}>
+            <span>⚠️ Diqqat: Partiya {Array.from(duplicatePartyNumbers).map(n => `«${n}»`).join(', ')} raqami takrorlangan (dublikat)!</span>
           </div>
         )}
 
-        {/* Filter Bar */}
-        <div className="journal-filters">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '240px' }}>
-            <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                placeholder="Model yoki partiya raqami bo'yicha qidirish..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="soft-input"
-                 style={{ paddingLeft: '36px', height: '42px', fontSize: '14px', width: '100%' }}
-              />
+        {/* Top 3 KPI Cards */}
+        <div className="patta-hisob-kpis journal-kpis">
+          {/* Card 1: Partiyalar */}
+          <div className="patta-hisob-kpi-card journal-kpi">
+            <div className="patta-hisob-kpi-icon emerald">
+              <Layers size={22} strokeWidth={2.2} />
             </div>
-          </div>
-
-           <div className="journal-filter-pills">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`soft-btn ${statusFilter === 'all' ? 'soft-btn-primary' : 'soft-btn-secondary'}`}
-              style={{ fontSize: '11.5px', padding: '5px 12px' }}
-            >
-              Barchasi ({visiblePartyHistory?.length || 0})
-            </button>
-            <button
-              onClick={() => setStatusFilter('mismatch')}
-              className={`soft-btn ${statusFilter === 'mismatch' ? 'soft-btn-danger' : 'soft-btn-secondary'}`}
-              style={{ fontSize: '11.5px', padding: '5px 12px' }}
-            >
-              ⚠️ Tafovut / Kamomat
-            </button>
-            <button
-              onClick={() => setStatusFilter('in_progress')}
-              className={`soft-btn ${statusFilter === 'in_progress' ? 'soft-btn-primary' : 'soft-btn-secondary'}`}
-              style={{ fontSize: '11.5px', padding: '5px 12px' }}
-            >
-              ⏳ Jarayonda
-            </button>
-            <button
-              onClick={() => setStatusFilter('complete')}
-              className={`soft-btn ${statusFilter === 'complete' ? 'soft-btn-primary' : 'soft-btn-secondary'}`}
-              style={{ fontSize: '11.5px', padding: '5px 12px' }}
-            >
-              ✅ To'liq
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area (Accordion per Model) */}
-       <div className="journal-content" style={{ flex: 1, overflowY: 'auto' }}>
-        {duplicatePartyNumbers.size > 0 && !isArchiveMode && (
-          <div style={{
-            marginBottom: '16px',
-            padding: '12px 18px',
-            backgroundColor: 'rgba(239, 68, 68, 0.12)',
-            border: '1.5px solid rgba(239, 68, 68, 0.35)',
-            borderRadius: 'var(--radius-lg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>⚠️</span>
-              <div>
-                <strong style={{ color: '#ef4444', fontSize: '13px' }}>
-                  Diqqat: Partiya {Array.from(duplicatePartyNumbers).map(n => `«${n}»`).join(', ')} raqami bir nechta modelda takrorlangan (dublikat)!
-                </strong>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  Agar biror partiya bekor qilingan yoki xato yaratilgan bo'lsa, uni pastdagi jadvaldan qizil axlat qutisi (🗑️) orqali o'chirib tashlashingiz mumkin.
-                </div>
+            <div className="patta-hisob-kpi-content">
+              <div className="patta-hisob-kpi-label journal-kpi-label">Partiyalar</div>
+              <div className="patta-hisob-kpi-val emerald journal-kpi-value">
+                {totalPartiesCount} <span className="patta-hisob-kpi-unit">ta</span>
+              </div>
+              <div className="patta-hisob-kpi-sub journal-kpi-sub">
+                {modelHistoryGroups.length} ta modelda
               </div>
             </div>
           </div>
-        )}
 
-        {(!modelHistoryGroups || modelHistoryGroups.length === 0) ? (
-          <div
-            style={{
-              padding: '60px 20px',
-              textAlign: 'center',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-xl)',
-              color: 'var(--text-muted)',
-              fontSize: '13.5px'
-            }}
-          >
-            <Layers size={36} color="var(--text-muted)" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.5 }} />
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              {isArchiveMode
-                ? 'Ushbu arxivda chop etilgan partiyalar topilmadi'
-                : !isAllTimeMode && seriesTab === 'closed'
-                ? 'Yakunlangan partiyalar tarixi hozircha bo‘sh'
-                : !isAllTimeMode
-                ? 'Hozircha faol partiyalar mavjud emas'
-                : 'Ushbu davrda partiyalar topilmadi'}
+          {/* Card 2: Kiritilgan pattalar */}
+          <div className="patta-hisob-kpi-card journal-kpi">
+            <div className="patta-hisob-kpi-icon purple">
+              <Tag size={22} strokeWidth={2.2} />
             </div>
-            <div>
-              {isArchiveMode
-                ? 'Arxivlangan oylikda partiya ma\'lumotlari yo\'q.'
-                : !isAllTimeMode && seriesTab === 'closed'
-                ? 'Partiyalar “Partiyani yakunlash” bilan yopilgach, ularning tarixi shu tabda qoladi.'
-                : 'Oldingi oydagi barcha partiyalar to\'liq kiritilib arxivga o\'tgan bo\'lishi mumkin. «Patta» varag\'ida yangi partiyalarni chop eting.'}
+            <div className="patta-hisob-kpi-content">
+              <div className="patta-hisob-kpi-label journal-kpi-label">Kiritilgan pattalar</div>
+              <div className="patta-hisob-kpi-val purple journal-kpi-value">
+                {totalSubmittedPattasCount} <span className="patta-hisob-kpi-unit">/ {totalPattasCount} ta</span>
+              </div>
+              <div className="patta-hisob-kpi-progress journal-progress">
+                <div className="patta-hisob-kpi-progress-bar purple" style={{ width: `${ticketProgress}%` }} />
+              </div>
+              <div className="patta-hisob-kpi-sub journal-kpi-sub">
+                {Math.round(ticketProgress)}% kiritilgan · {totalUnsubmittedPattasCount} ta qoldi
+              </div>
             </div>
           </div>
+
+          {/* Card 3: Kiritilgan ish */}
+          <div className="patta-hisob-kpi-card journal-kpi">
+            <div className="patta-hisob-kpi-icon amber">
+              <FileText size={22} strokeWidth={2.2} />
+            </div>
+            <div className="patta-hisob-kpi-content">
+              <div className="patta-hisob-kpi-label journal-kpi-label">Kiritilgan ish</div>
+              <div className="patta-hisob-kpi-val amber journal-kpi-value">
+                {totalActualSubmittedIshCount.toLocaleString('ru-RU')} <span className="patta-hisob-kpi-unit">/ {totalExpectedIshCount.toLocaleString('ru-RU')} dona</span>
+              </div>
+              <div className="patta-hisob-kpi-progress journal-progress">
+                <div className="patta-hisob-kpi-progress-bar amber" style={{ width: `${workProgress}%` }} />
+              </div>
+              <div className="patta-hisob-kpi-sub journal-kpi-sub">
+                {Math.round(workProgress)}% kiritilgan · {totalUnsubmittedIshCount.toLocaleString('ru-RU')} dona qoldi
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs Row */}
+        <div className="patta-hisob-tabs-row journal-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={seriesTab === 'active'}
+            onClick={() => updateJournalFilters({ series: 'active' })}
+            className={`patta-hisob-tab journal-tab ${seriesTab === 'active' ? 'active selected' : ''}`}
+          >
+            Patta hisob · {(printedPartyHistory || []).filter((p) => !p.isClosed).length}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={seriesTab === 'closed'}
+            onClick={() => updateJournalFilters({ series: 'closed' })}
+            className={`patta-hisob-tab journal-tab ${seriesTab === 'closed' ? 'active selected' : ''}`}
+          >
+            Yopilgan · Yakunlangan · {(printedPartyHistory || []).filter((p) => p.isClosed).length}
+          </button>
+        </div>
+
+        {/* Filters & Search Row */}
+        <div className="patta-hisob-filter-bar journal-filters">
+          <div className="patta-hisob-search-box">
+            <Search size={16} className="patta-hisob-search-icon" />
+            <input
+              type="text"
+              placeholder="Model yoki partiya raqami bo'yicha..."
+              value={searchQuery}
+              onChange={(e) => updateJournalFilters({ search: e.target.value })}
+              className="patta-hisob-search-input soft-input"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => updateJournalFilters({ search: '' })}
+                className="patta-hisob-search-clear"
+                title="Tozalash"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          <div className="patta-hisob-filter-pills journal-filter-pills">
+            <button
+              type="button"
+              onClick={() => updateJournalFilters({ status: 'all' })}
+              className={`patta-hisob-filter-pill soft-btn ${statusFilter === 'all' ? 'active soft-btn-primary' : 'soft-btn-secondary'}`}
+            >
+              Barchasi · {visiblePartyHistory?.length || 0}
+            </button>
+            <button
+              type="button"
+              onClick={() => updateJournalFilters({ status: 'mismatch' })}
+              className={`patta-hisob-filter-pill soft-btn ${statusFilter === 'mismatch' ? 'active soft-btn-primary' : 'soft-btn-secondary'}`}
+            >
+              Tafovut / Kamomat
+            </button>
+            <button
+              type="button"
+              onClick={() => updateJournalFilters({ status: 'in_progress' })}
+              className={`patta-hisob-filter-pill soft-btn ${statusFilter === 'in_progress' ? 'active soft-btn-primary' : 'soft-btn-secondary'}`}
+            >
+              Jarayonda
+            </button>
+            <button
+              type="button"
+              onClick={() => updateJournalFilters({ status: 'complete' })}
+              className={`patta-hisob-filter-pill soft-btn ${statusFilter === 'complete' ? 'active soft-btn-primary' : 'soft-btn-secondary'}`}
+            >
+              To'liq
+            </button>
+          </div>
+        </div>
+
+        {/* Main Table Card (3-Level Hierarchical Accordion) */}
+        {(!modelHistoryGroups || modelHistoryGroups.length === 0) ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', color: '#64748b', fontSize: '13.5px' }}>
+            <Layers size={36} color="#94a3b8" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.5 }} />
+            <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+              {isArchiveMode
+                ? 'Ushbu arxivda chop etilgan partiyalar topilmadi'
+                : seriesTab === 'closed'
+                ? 'Yakunlangan partiyalar tarixi hozircha bo‘sh'
+                : 'Hozircha faol partiyalar mavjud emas'}
+            </div>
+            <div>«Patta» varag'ida yangi partiyalarni chop etishingiz mumkin.</div>
+          </div>
         ) : (
-           <div className="journal-model-list">
-             <div className="journal-model-columns" aria-hidden="true"><span>Model</span><span>Partiyalar</span><span>Pattalar</span><span>Ish soni</span><span>Holati</span></div>
+          <div className="patta-hisob-table-card journal-model-list">
+            {/* Level 1: Model Header Columns */}
+            <div className="patta-hisob-model-cols journal-model-columns" aria-hidden="true">
+              <div className="col-model">MODEL</div>
+              <div className="col-partiya">PARTIYA</div>
+              <div className="col-patta">PATTA · KIRITILGAN / JAMI</div>
+              <div className="col-ish">ISH · KIRITILGAN / JAMI, DONA</div>
+              <div className="col-holat">HOLAT</div>
+            </div>
+
+            {/* Level 1: Model Rows */}
             {paginatedGroups.map(({ group, parties }) => {
               const isModelExpanded = expandedModelIds.has(group.modelId);
+              const pattaPct = group.totalPattas > 0 ? (group.submittedPattas / group.totalPattas) * 100 : 0;
+              const ishPct = group.totalIshSoni > 0 ? (group.submittedIshSoni / group.totalIshSoni) * 100 : 0;
+              const remainingPattas = Math.max(0, group.totalPattas - group.submittedPattas);
+              const remainingIshSoni = Math.max(0, group.totalIshSoni - group.submittedIshSoni);
 
               return (
-                   <div className="journal-model-card"
-                    key={group.modelId}
-                    style={{
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-xl)',
-                      overflow: 'hidden',
-                      backgroundColor: 'var(--bg-surface)',
-                      boxShadow: 'var(--shadow-xs)'
-                    }}
+                <div key={group.modelId} className="patta-hisob-model-group journal-model-card">
+                  <button
+                    type="button"
+                    className={`patta-hisob-model-row journal-model-row ${isModelExpanded ? 'expanded' : ''}`}
+                    aria-expanded={isModelExpanded}
+                    onClick={() => toggleModelAccordion(group.modelId)}
                   >
-                    {/* Model Header */}
-                     <button type="button" className="journal-model-row" aria-expanded={isModelExpanded}
-                       onClick={() => toggleModelAccordion(group.modelId)}
-                       onKeyDown={(event) => {
-                         if (event.key === 'Enter' || event.key === ' ') {
-                           event.preventDefault();
-                           event.stopPropagation();
-                           toggleModelAccordion(group.modelId);
-                         }
-                       }}>
-                     <div className="journal-model-name">
-                      {isModelExpanded ? <ChevronDown size={18} color="var(--primary)" /> : <ChevronRight size={18} color="var(--text-secondary)" />}
-                       <span className="journal-model-title">
-                        Модел- {group.modelName.replace(/^(Модел-\s*|Модель-\s*|Model-\s*)+/i, '').trim()}
+                    <div className="col-model journal-model-name">
+                      <span className="chevron-icon">
+                        {isModelExpanded ? <ChevronDown size={16} color="#059669" /> : <ChevronRight size={16} color="#64748b" />}
                       </span>
-                     </div>
-                     <span className="journal-model-count">{group.totalParties} ta partiya</span>
-                     <span className="journal-model-metric"><strong>{group.submittedPattas} / {group.totalPattas}</strong><span className="journal-progress"><span style={{ width: `${group.totalPattas ? Math.min(100, group.submittedPattas / group.totalPattas * 100) : 0}%` }} /></span><small>Kiritilmagan: {group.unsubmittedPattas} ta</small></span>
-                     <span className="journal-model-metric"><strong>{group.submittedIshSoni.toLocaleString()} / {group.totalIshSoni.toLocaleString()}</strong><span className="journal-progress"><span style={{ width: `${group.totalIshSoni ? Math.min(100, group.submittedIshSoni / group.totalIshSoni * 100) : 0}%` }} /></span><small>Kiritilmagan: {group.unsubmittedIshSoni.toLocaleString()} dona</small></span>
-                     <span className={group.hasMismatch ? 'journal-status mismatch' : group.isComplete ? 'journal-status complete' : 'journal-status'}>{group.statusLabel}</span>
-                   </button>
+                      <span className="model-name journal-model-title">
+                        {group.modelName.replace(/^(Модел-\s*|Модель-\s*|Model-\s*)+/i, '').trim()}
+                      </span>
+                    </div>
 
-                  {/* Parties Table */}
+                    <div className="col-partiya journal-model-count">
+                      {group.totalParties} ta
+                    </div>
+
+                    <div className="col-patta journal-model-metric">
+                      <div className="progress-num">
+                        <span className="metric-submitted">{group.submittedPattas}</span>
+                        <span className="metric-total"> / {group.totalPattas}</span>
+                      </div>
+                      <div className="mini-progress-track journal-progress">
+                        <div className="mini-progress-fill purple" style={{ width: `${pattaPct}%` }} />
+                      </div>
+                      <div className="metric-remaining">
+                        {remainingPattas} ta qoldi
+                      </div>
+                    </div>
+
+                    <div className="col-ish journal-model-metric">
+                      <div className="progress-num">
+                        <span className="metric-submitted">{group.submittedIshSoni.toLocaleString('ru-RU')}</span>
+                        <span className="metric-total"> / {group.totalIshSoni.toLocaleString('ru-RU')}</span>
+                      </div>
+                      <div className="mini-progress-track journal-progress">
+                        <div className="mini-progress-fill amber" style={{ width: `${ishPct}%` }} />
+                      </div>
+                      <div className="metric-remaining">
+                        {remainingIshSoni.toLocaleString('ru-RU')} ta qoldi
+                      </div>
+                    </div>
+
+                    <div className="col-holat">
+                      {group.hasMismatch ? (
+                        <span className="status-badge mismatch journal-status mismatch">Tafovut / Kamomat</span>
+                      ) : group.isComplete ? (
+                        <span className="status-badge complete journal-status complete">To'liq</span>
+                      ) : (
+                        <span className="status-badge in-progress journal-status">Jarayonda</span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Level 2: Expanded Model Body -> Partiyalar List */}
                   {isModelExpanded && (
-                     <div className="journal-party-wrap">
-                       <table className="excel-table journal-party-table" style={{ width: '100%' }}>
+                    <div className="patta-hisob-partiyalar-container journal-party-wrap">
+                      <div className="patta-hisob-partiyalar-card">
+                        <table className="excel-table journal-party-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                          <tr style={{ height: '34px', background: 'var(--bg-surface-subtle)' }}>
-                            <th className="col-header" style={{ textAlign: 'left', paddingLeft: '16px' }}>Partiya</th>
-                            <th className="col-header" style={{ textAlign: 'left' }}>Rang</th>
-                            <th className="col-header" style={{ textAlign: 'right' }}>Patta soni</th>
-                            <th className="col-header" style={{ textAlign: 'right', color: '#10b981' }}>Kiritilgan</th>
-                            <th className="col-header" style={{ textAlign: 'right', color: '#ef4444' }}>Kiritilmagan</th>
-                            <th className="col-header" style={{ textAlign: 'right', color: '#818cf8' }}>Jami Patta</th>
-                            <th className="col-header" style={{ textAlign: 'right' }}>Rejadagi Ish</th>
-                            <th className="col-header" style={{ textAlign: 'right', color: '#fbbf24' }}>Kiritilgan Ish</th>
-                            <th className="col-header" style={{ textAlign: 'right', color: '#ef4444' }}>Kiritilmagan Ish</th>
-                            <th className="col-header" style={{ textAlign: 'left' }}>Nazorat / Holati</th>
-                            <th className="col-header" style={{ textAlign: 'left' }}>Chop etilgan vaqt</th>
-                            {!isArchiveMode && !isAllTimeMode && (
-                              <th className="col-header" style={{ textAlign: 'center', width: '50px' }}>O'chirish</th>
-                            )}
+                          <tr className="patta-hisob-partiya-cols" style={{ display: 'grid' }}>
+                            <th className="pcol-partiya" style={{ textAlign: 'left', border: 0 }}>PARTIYA</th>
+                            <th className="pcol-rang" style={{ textAlign: 'left', border: 0 }}>RANG</th>
+                            <th className="pcol-patta" style={{ textAlign: 'left', border: 0 }}>PATTA (KIRITILGAN / JAMI)</th>
+                            <th className="pcol-reja" style={{ textAlign: 'left', border: 0 }}>REJADAGI ISH</th>
+                            <th className="pcol-kiritilgan" style={{ textAlign: 'left', border: 0 }}>KIRITILGAN ISH</th>
+                            <th className="pcol-holat" style={{ textAlign: 'center', border: 0 }}>HOLAT</th>
+                            <th className="pcol-vaqt" style={{ textAlign: 'left', border: 0 }}>CHOP ETILGAN</th>
+                            <th className="pcol-amal" style={{ textAlign: 'center', border: 0 }}>AMAL</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {parties.map((item, idx) => {
+                          {parties.map((item) => {
                             const row = item.party;
-                            const isExpanded = expandedPartyIds.has(row.id);
+                            const isPartyExpanded = expandedPartyIds.has(row.id);
                             const partyTickets = buildPartyTicketsList(row, submittedTickets, activeSizes, true, isArchiveMode);
                             const partyHealth = getPartyHealth(partyTickets);
 
                             const partyPattaCount = partyTickets.length;
                             const partySubmitted = partyTickets.filter((t) => t.isSubmitted).length;
-                            const partyUnsubmitted = Math.max(0, partyPattaCount - partySubmitted);
                             const totalIsh = partyTickets.reduce((sum, t) => sum + t.expectedQty, 0);
                             const partyActualIsh = partyTickets.filter((t) => t.isSubmitted).reduce((sum, t) => sum + t.enteredQty, 0);
-                            const actualSubmittedSum = partyTickets.filter((t) => t.isSubmitted).reduce((s, t) => s + t.enteredQty, 0);
+                            const remainingIsh = Math.max(0, totalIsh - partyActualIsh);
 
                             return (
                               <React.Fragment key={row.id}>
                                 <tr
+                                  className={`patta-hisob-partiya-row ${isPartyExpanded ? 'expanded' : ''}`}
+                                  style={{ display: 'grid' }}
                                   onClick={() => toggleAccordion(row.id)}
-                                  style={{
-                                    height: '38px',
-                                    background: partyHealth.isError 
-                                      ? (isExpanded ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.05)')
-                                      : (isExpanded ? 'var(--primary-light)' : (idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface-subtle)')),
-                                    cursor: 'pointer',
-                                    transition: 'background-color 0.15s'
-                                  }}
                                 >
-                                  {/* Col 1: Partiya */}
-                                  <td style={{ paddingLeft: '16px', fontWeight: 700 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                      <span style={{
-                                        background: partyHealth.isError ? 'rgba(239, 68, 68, 0.18)' : 'var(--primary-light)',
-                                        color: partyHealth.isError ? '#f87171' : 'var(--primary)',
-                                        padding: '2px 8px',
-                                        borderRadius: 'var(--radius-full)',
-                                        fontSize: '11.5px'
-                                      }}>
-                                        Partiya {row.partyNumber}
+                                  <td className="pcol-partiya" style={{ border: 0 }}>
+                                    <span className="party-chevron">
+                                      {isPartyExpanded ? <ChevronDown size={15} color="#059669" /> : <ChevronRight size={15} color="#94a3b8" />}
+                                    </span>
+                                    <span className="party-title">Partiya {row.partyNumber}</span>
+                                    {duplicatePartyNumbers.has(String(row.partyNumber).trim()) && !row.isClosed && (
+                                      <span style={{ fontSize: '10px', background: '#fee2e2', color: '#ef4444', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                        Dublikat
                                       </span>
-                                      {duplicatePartyNumbers.has(String(row.partyNumber).trim()) && !row.isClosed && (
-                                        <span style={{
-                                          background: 'rgba(239, 68, 68, 0.18)',
-                                          color: '#ef4444',
-                                          padding: '2px 8px',
-                                          borderRadius: 'var(--radius-full)',
-                                          fontSize: '10.5px',
-                                          fontWeight: 800,
-                                          border: '1px solid rgba(239, 68, 68, 0.4)'
-                                        }}
-                                        title="Ushbu partiya raqami boshqa modelda ham mavjud (dublikat)!"
-                                        >
-                                          ⚠️ Dublikat
-                                        </span>
-                                      )}
-                                      {row.isClosed && (
-                                        <span style={{
-                                          background: 'rgba(100, 116, 139, 0.15)',
-                                          color: '#64748b',
-                                          padding: '1px 6px',
-                                          borderRadius: 'var(--radius-full)',
-                                          fontSize: '10.5px',
-                                          fontWeight: 600
-                                        }}>
-                                          Yakunlangan
-                                        </span>
-                                      )}
-                                    </div>
+                                    )}
                                   </td>
 
-                                  {/* Col 2: Rang */}
-                                  <td style={{ color: 'var(--text-secondary)' }}>{row.color}</td>
-
-                                  {/* Col 3: Patta soni */}
-                                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{partyPattaCount} ta</td>
-
-                                  {/* Col 4: Kiritilgan */}
-                                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>
-                                    {partySubmitted} ta
+                                  <td className="pcol-rang" style={{ border: 0 }}>
+                                    {row.color || '—'}
                                   </td>
 
-                                  {/* Col 5: Kiritilmagan */}
-                                  <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                                    <span style={{
-                                      color: partyUnsubmitted > 0 ? '#ef4444' : 'var(--text-muted)',
-                                      background: partyUnsubmitted > 0 ? 'rgba(239, 68, 68, 0.12)' : 'transparent',
-                                      padding: partyUnsubmitted > 0 ? '2px 7px' : '0',
-                                      borderRadius: 'var(--radius-full)'
-                                    }}>
-                                      {partyUnsubmitted} ta
-                                    </span>
+                                  <td className="pcol-patta" style={{ border: 0 }}>
+                                    {partySubmitted} / {partyPattaCount}
                                   </td>
 
-                                  {/* Col 6: Jami Patta */}
-                                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#818cf8' }}>
-                                    {partyPattaCount} ta
+                                  <td className="pcol-reja" style={{ border: 0 }}>
+                                    {totalIsh > 0 ? `${totalIsh.toLocaleString('ru-RU')} dona` : '—'}
                                   </td>
 
-                                  {/* Col 7: Rejadagi Ish */}
-                                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>
-                                    {totalIsh > 0 ? `${totalIsh.toLocaleString()} dona` : '—'}
+                                  <td className="pcol-kiritilgan" style={{ border: 0 }}>
+                                    {partyActualIsh > 0 ? `${partyActualIsh.toLocaleString('ru-RU')} dona` : '—'}
                                   </td>
 
-                                  {/* Col 8: Kiritilgan Ish */}
-                                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#fbbf24' }}>
-                                    {partyActualIsh > 0 ? `${partyActualIsh.toLocaleString()} dona` : '—'}
+                                  <td className="pcol-holat" style={{ border: 0 }}>
+                                    {partyHealth.isError || partyHealth.hasMismatch ? (
+                                      <span className="party-badge mismatch">{partyHealth.label}</span>
+                                    ) : partyHealth.status === 'complete' ? (
+                                      <span className="party-badge complete">Topshirildi</span>
+                                    ) : (
+                                      <span className="party-badge pending">Kutilmoqda · {partySubmitted}/{partyPattaCount}</span>
+                                    )}
                                   </td>
 
-                                  {/* Col 9: Kiritilmagan Ish */}
-                                  <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                                    <span style={{
-                                      color: (totalIsh - partyActualIsh) > 0 ? '#ef4444' : 'var(--text-muted)',
-                                      background: (totalIsh - partyActualIsh) > 0 ? 'rgba(239, 68, 68, 0.12)' : 'transparent',
-                                      padding: (totalIsh - partyActualIsh) > 0 ? '2px 7px' : '0',
-                                      borderRadius: 'var(--radius-full)'
-                                    }}>
-                                      {(totalIsh - partyActualIsh) > 0 ? `${Math.max(0, totalIsh - partyActualIsh).toLocaleString()} dona` : '0 dona'}
-                                    </span>
+                                  <td className="pcol-vaqt" style={{ border: 0 }}>
+                                    {formatTicketDateTime(row.printedAt)}
                                   </td>
 
-                                  {/* Col 10: Nazorat / Holati */}
-                                  <td>
-                                    <span style={{
-                                      fontSize: '11px',
-                                      fontWeight: 700,
-                                      color: partyHealth.isError ? '#f87171' : (partyHealth.status === 'complete' ? '#34d399' : '#818cf8'),
-                                      background: partyHealth.isError ? 'rgba(239, 68, 68, 0.15)' : (partyHealth.status === 'complete' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)'),
-                                      padding: '3px 8px',
-                                      borderRadius: 'var(--radius-full)'
-                                    }}>
-                                      {partyHealth.label}
-                                    </span>
-                                  </td>
-
-                                  {/* Col 10: Chop etilgan vaqt */}
-                                  <td style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>{formatTicketDateTime(row.printedAt)}</td>
-
-                                  {/* Col 11: O'chirish (only in active live mode) */}
-                                  {!isArchiveMode && !isAllTimeMode && (
-                                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                  <td className="pcol-amal" style={{ border: 0 }} onClick={(e) => e.stopPropagation()}>
+                                    {!isArchiveMode && !isAllTimeMode && (
                                       <button
+                                        type="button"
                                         onClick={async () => {
                                           await confirmAndArchivePartyHistoryRecord(row, confirmAction, deletePrintedPartyRecord);
                                         }}
-                                        className="soft-btn soft-btn-danger"
-                                        style={{ padding: '4px 6px', borderRadius: 'var(--radius-full)' }}
-                                        title="Ushbu partiyani o'chirish"
+                                        className="party-del-btn"
+                                        title="Partiyani o'chirish"
                                       >
-                                        <Trash2 size={13} />
+                                        <Trash2 size={14} />
                                       </button>
-                                    </td>
-                                  )}
+                                    )}
+                                  </td>
                                 </tr>
 
-                                {/* Inspection Checklist Sub-Row */}
-                                {isExpanded && (
-                                  <tr style={{ background: 'var(--bg-surface-subtle)' }}>
-                                    <td colSpan={(isArchiveMode || isAllTimeMode) ? 11 : 12} style={{ padding: '14px 18px' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                          <div style={{
-                                            background: 'var(--bg-surface)',
-                                            border: partyHealth.isError ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-subtle)',
-                                            borderRadius: 'var(--radius-md)',
-                                            padding: '12px 16px',
-                                            boxShadow: 'var(--shadow-sm)'
-                                          }}>
-                                              <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                                                <span>🎫 <strong>Модел- {row.modelName.replace(/^(Модел-\s*|Модель-\s*|Model-\s*)+/i, '').trim()}</strong> (Partiya {row.partyNumber}) — Pattalar nazorati</span>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                                                    Reja: {totalIsh.toLocaleString()} dona | Kiritilgan: {actualSubmittedSum.toLocaleString()} dona | Kiritilmagan: {Math.max(0, totalIsh - actualSubmittedSum).toLocaleString()} dona ({partySubmitted}/{row.pattaCount} ta kiritilgan)
-                                                  </span>
-                                                  {!isArchiveMode && !isAllTimeMode && partyHealth.hasMismatch && (
-                                                    <button
-                                                      onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        const ok = await confirmAction({
-                                                          title: "Haqiqiy sonni tasdiqlash",
-                                                          message: `Partiya ${row.partyNumber} sonini haqiqiy ${actualSubmittedSum.toLocaleString()} dona deb tasdiqlansinmi?`,
-                                                          confirmText: "Tasdiqlash",
-                                                          isDanger: false
-                                                        });
-                                                         if (ok) await confirmPartyActualQuantities(row.id);
-                                                      }}
-                                                      className="soft-btn soft-btn-primary"
-                                                      style={{ padding: '4px 12px', fontSize: '11.5px', borderRadius: 'var(--radius-full)' }}
-                                                    >
-                                                      <Check size={13} />
-                                                      <span>Haqiqiy sonni tasdiqlash</span>
-                                                    </button>
-                                                  )}
-                                                </div>
-                                              </div>
-
-                                              {/* Individual Tickets Table */}
-                                              <div style={{ overflowX: 'auto' }}>
-                                                <table className="excel-table" style={{ width: '100%', fontSize: '12px' }}>
-                                                  <thead>
-                                                    <tr style={{ background: 'var(--bg-surface-subtle)' }}>
-                                                      <th className="col-header" style={{ textAlign: 'center', width: '70px' }}>Patta №</th>
-                                                      <th className="col-header" style={{ textAlign: 'center', width: '80px' }}>Razmer</th>
-                                                      <th className="col-header" style={{ textAlign: 'right' }}>Kutilgan son</th>
-                                                      <th className="col-header" style={{ textAlign: 'right' }}>Kiritilgan son</th>
-                                                      <th className="col-header" style={{ textAlign: 'right' }}>Farq / Kamomat</th>
-                                                      <th className="col-header" style={{ textAlign: 'center', width: '130px' }}>Holati</th>
-                                                      <th className="col-header" style={{ textAlign: 'left' }}>Topshirilgan vaqt</th>
-                                                      {!isArchiveMode && !isAllTimeMode && <th className="col-header" style={{ textAlign: 'center', width: '50px' }}>Amal</th>}
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody>
-                                                    {partyTickets.map((t) => {
-                                                      const isDiff = t.isSubmitted && t.enteredQty !== t.expectedQty;
-
-                                                      return (
-                                                        <tr
-                                                          key={t.pattaNumber}
-                                                          style={{
-                                                            height: '32px',
-                                                            background: !t.isSubmitted 
-                                                              ? 'transparent' 
-                                                              : (isDiff ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.04)')
-                                                          }}
-                                                        >
-                                                          <td style={{ textAlign: 'center', fontWeight: 700 }}>
-                                                            <span style={{
-                                                              background: t.isSubmitted ? 'var(--primary-light)' : 'var(--bg-surface-subtle)',
-                                                              color: t.isSubmitted ? 'var(--primary)' : 'var(--text-muted)',
-                                                              padding: '2px 8px',
-                                                              borderRadius: 'var(--radius-full)'
-                                                            }}>
-                                                              № {t.actualPattaNumber || t.pattaNumber}
-                                                            </span>
-                                                          </td>
-                                                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{t.size}</td>
-                                                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{t.expectedQty} ta</td>
-                                                          <td style={{ textAlign: 'right', fontWeight: 700, color: t.isSubmitted ? 'var(--primary)' : 'var(--text-muted)' }}>
-                                                            {t.isSubmitted ? `${t.enteredQty} ta` : '—'}
-                                                          </td>
-                                                          <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                                                            {t.isSubmitted ? (
-                                                              t.enteredQty === t.expectedQty ? (
-                                                                <span style={{ color: '#10b981' }}>0</span>
-                                                              ) : t.enteredQty > t.expectedQty ? (
-                                                                <span style={{ color: '#3b82f6' }}>+{t.enteredQty - t.expectedQty}</span>
-                                                              ) : (
-                                                                <span style={{ color: '#ef4444' }}>-{t.expectedQty - t.enteredQty}</span>
-                                                              )
-                                                            ) : (
-                                                              <span style={{ color: 'var(--text-muted)' }}>Kiritilmagan</span>
-                                                            )}
-                                                          </td>
-                                                          <td style={{ textAlign: 'center' }}>
-                                                            {t.isSubmitted ? (
-                                                              <span style={{
-                                                                fontSize: '10.5px',
-                                                                fontWeight: 700,
-                                                                color: isDiff ? '#f87171' : '#34d399',
-                                                                background: isDiff ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                                                                padding: '2px 8px',
-                                                                borderRadius: 'var(--radius-full)'
-                                                              }}>
-                                                                {isDiff ? 'Tafovut' : 'Topshirildi'}
-                                                              </span>
-                                                            ) : (
-                                                              <span style={{
-                                                                fontSize: '10.5px',
-                                                                fontWeight: 600,
-                                                                color: '#f59e0b',
-                                                                background: 'rgba(245, 158, 11, 0.15)',
-                                                                padding: '2px 8px',
-                                                                borderRadius: 'var(--radius-full)'
-                                                              }}>
-                                                                Kutilmoqda
-                                                              </span>
-                                                            )}
-                                                          </td>
-                                                          <td style={{ color: 'var(--text-muted)', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                                                            {formatTicketDateTime(t)}
-                                                          </td>
-                                                          {!isArchiveMode && !isAllTimeMode && (
-                                                            <td style={{ textAlign: 'center' }}>
-                                                              {t.isSubmitted && t.id ? (
-                                                                <button
-                                                                  onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    const ok = await confirmAction({
-                                                                      title: "Pattani bekor qilish",
-                                                                      message: `Ushbu Patta ${t.actualPattaNumber || t.pattaNumber} ga kiritilgan hisobotni bekor qilmoqchimisiz?`,
-                                                                      confirmText: "Bekor qilish",
-                                                                      isDanger: true
-                                                                    });
-                                                                    if (ok) {
-                                                                      deleteSubmittedTicket(t.id!);
-                                                                    }
-                                                                  }}
-                                                                  className="soft-btn soft-btn-danger"
-                                                                  style={{ padding: '3px 6px', borderRadius: 'var(--radius-full)' }}
-                                                                  title="Ushbu pattani o'chirish / qayta kiritish uchun bo'shatish"
-                                                                >
-                                                                  <Trash2 size={12} />
-                                                                </button>
-                                                              ) : null}
-                                                            </td>
-                                                          )}
-                                                        </tr>
-                                                      );
-                                                    })}
-                                                  </tbody>
-                                                </table>
-                                              </div>
-                                            </div>
+                                {/* Level 3: Expanded Partiya Body -> Pattalar Nazorati */}
+                                {isPartyExpanded && (
+                                  <tr className="patta-hisob-tickets-row" style={{ display: 'block', width: '100%', height: 'auto' }}>
+                                    <td colSpan={8} style={{ border: 0, padding: 0, display: 'block', width: '100%', height: 'auto', boxSizing: 'border-box' }}>
+                                      <div className="patta-hisob-tickets-card">
+                                        <div className="patta-hisob-tickets-header">
+                                          <div className="tickets-header-left">
+                                            Partiya {row.partyNumber} · Pattalar nazorati
                                           </div>
-                                        </td>
-                                      </tr>
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                          <div className="tickets-header-right">
+                                            <span className="stat-pill">Reja: {totalIsh.toLocaleString('ru-RU')} dona</span>
+                                            <span className="stat-pill">Kiritilgan: {partyActualIsh.toLocaleString('ru-RU')} dona</span>
+                                            <span className="stat-pill highlight">Qoldi: {remainingIsh.toLocaleString('ru-RU')} dona</span>
+
+                                            {!isArchiveMode && !isAllTimeMode && partyHealth.hasMismatch && (
+                                              <button
+                                                type="button"
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const ok = await confirmAction({
+                                                    title: "Haqiqiy sonni tasdiqlash",
+                                                    message: `Partiya ${row.partyNumber} sonini haqiqiy ${partyActualIsh.toLocaleString('ru-RU')} dona deb tasdiqlansinmi?`,
+                                                    confirmText: "Tasdiqlash",
+                                                    isDanger: false
+                                                  });
+                                                  if (ok) await confirmPartyActualQuantities(row.id);
+                                                }}
+                                                style={{
+                                                  padding: '3px 10px',
+                                                  fontSize: '11px',
+                                                  borderRadius: '6px',
+                                                  background: '#059669',
+                                                  color: '#ffffff',
+                                                  border: 0,
+                                                  cursor: 'pointer',
+                                                  fontWeight: 600,
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px'
+                                                }}
+                                              >
+                                                <Check size={12} />
+                                                Haqiqiy sonni tasdiqlash
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <table className="patta-hisob-tickets-table">
+                                          <thead>
+                                            <tr>
+                                              <th style={{ textAlign: 'left', width: '12%' }}>PATTA №</th>
+                                              <th style={{ textAlign: 'left', width: '10%' }}>RAZMER</th>
+                                              <th style={{ textAlign: 'center', width: '14%' }}>KUTILGAN, DONA</th>
+                                              <th style={{ textAlign: 'center', width: '14%' }}>KIRITILGAN, DONA</th>
+                                              <th style={{ textAlign: 'center', width: '10%' }}>TAFOVUT</th>
+                                              <th style={{ textAlign: 'center', width: '14%' }}>HOLAT</th>
+                                              <th style={{ textAlign: 'center', width: '16%' }}>KIRITILGAN VAQTI</th>
+                                              <th style={{ textAlign: 'center', width: '10%' }}>AMAL</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {partyTickets.map((t) => {
+                                              const isDiff = t.isSubmitted && t.enteredQty !== t.expectedQty;
+                                              const diff = t.isSubmitted ? t.enteredQty - t.expectedQty : 0;
+
+                                              return (
+                                                <tr key={t.pattaNumber}>
+                                                  <td style={{ textAlign: 'left' }}>
+                                                    <span className="ticket-num-badge">№ {t.actualPattaNumber || t.pattaNumber}</span>
+                                                  </td>
+                                                  <td style={{ textAlign: 'left', fontWeight: 600 }}>{t.size}</td>
+                                                  <td style={{ textAlign: 'center' }}>{t.expectedQty}</td>
+                                                  <td style={{ textAlign: 'center' }}>
+                                                    {t.isSubmitted ? t.enteredQty : '—'}
+                                                  </td>
+                                                  <td style={{ textAlign: 'center' }}>
+                                                    {t.isSubmitted ? (
+                                                      diff === 0 ? '0' : diff > 0 ? `+${diff}` : `${diff}`
+                                                    ) : '—'}
+                                                  </td>
+                                                  <td style={{ textAlign: 'center' }}>
+                                                    {t.isSubmitted ? (
+                                                      isDiff ? (
+                                                        <span className="ticket-badge mismatch">Tafovut</span>
+                                                      ) : (
+                                                        <span className="ticket-badge complete">Topshirildi</span>
+                                                      )
+                                                    ) : (
+                                                      <span className="ticket-badge pending">Kutilmoqda</span>
+                                                    )}
+                                                  </td>
+                                                  <td style={{ textAlign: 'center', color: '#64748b' }}>
+                                                    {t.isSubmitted ? formatTicketDateTime(t) : '—'}
+                                                  </td>
+                                                  <td style={{ textAlign: 'center' }}>
+                                                    <div className="ticket-action-btns">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          if (t.isSubmitted && t.id) {
+                                                            const rawTicket = submittedTickets.find((item) => item.id === t.id);
+                                                            useWorkbookStore.getState().openModal({
+                                                              type: 'edit_ticket',
+                                                              data: rawTicket || t
+                                                            } as any);
+                                                          }
+                                                        }}
+                                                        className="ticket-act-btn edit"
+                                                        title="Tahrirlash"
+                                                      >
+                                                        <Pencil size={11} />
+                                                      </button>
+                                                      {!isArchiveMode && !isAllTimeMode && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={async () => {
+                                                            if (t.isSubmitted && t.id) {
+                                                              const ok = await confirmAction({
+                                                                title: "Pattani bekor qilish",
+                                                                message: `Ushbu Patta ${t.actualPattaNumber || t.pattaNumber} ga kiritilgan hisobotni bekor qilmoqchimisiz?`,
+                                                                confirmText: "Bekor qilish",
+                                                                isDanger: true
+                                                              });
+                                                              if (ok) {
+                                                                deleteSubmittedTicket(t.id!);
+                                                              }
+                                                            } else {
+                                                              addNotification(
+                                                                'info',
+                                                                'Ma\'lumot',
+                                                                `Patta ${t.actualPattaNumber || t.pattaNumber} hali kiritilmagan`
+                                                              );
+                                                            }
+                                                          }}
+                                                          className="ticket-act-btn del"
+                                                          title="O'chirish"
+                                                        >
+                                                          <Trash2 size={11} />
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1528,53 +1207,59 @@ export const PattaHisobView: React.FC = () => {
             })}
           </div>
         )}
-      </div>
 
-      {/* Phase 2: Pagination Controls */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '16px',
-            background: 'var(--bg-surface)',
-            borderTop: '1px solid var(--border-subtle)',
-            marginTop: '8px'
-          }}
-        >
-          <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="soft-btn soft-btn-secondary"
-            style={{ padding: '6px 12px', borderRadius: 'var(--radius-full)' }}
-            title="Oldingi sahifa"
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '16px',
+              marginTop: '12px'
+            }}
           >
-            <ChevronLeft size={16} />
-          </button>
-          
-          <span style={{ 
-            fontSize: '13px', 
-            fontWeight: 600, 
-            color: 'var(--text-primary)',
-            minWidth: '120px',
-            textAlign: 'center'
-          }}>
-            Sahifa {currentPage} / {totalPages} ({totalItems} ta partiya)
-          </span>
-          
-          <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage >= totalPages}
-            className="soft-btn soft-btn-secondary"
-            style={{ padding: '6px 12px', borderRadius: 'var(--radius-full)' }}
-            title="Keyingi sahifa"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                opacity: currentPage === 1 ? 0.5 : 1
+              }}
+              title="Oldingi sahifa"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569', minWidth: '120px', textAlign: 'center' }}>
+              Sahifa {currentPage} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                opacity: currentPage >= totalPages ? 0.5 : 1
+              }}
+              title="Keyingi sahifa"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

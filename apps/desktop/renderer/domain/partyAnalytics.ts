@@ -61,8 +61,12 @@ export function buildPartyTicketsList(
       ? endPatta - partyRecord.pattaCount + 1
       : 1);
 
-  // Combine activeSizes with any keys in sizesObj to ensure all printed sizes are evaluated
-  const allSizes = Array.from(new Set([...activeSizes, ...Object.keys(sizesObj)]));
+  // New parties own their print-time row order. Older records retain the historic
+  // global order, then include any stored keys absent from that template.
+  const allSizes = Array.from(new Set([
+    ...(Array.isArray(partyRecord.sizeOrder) ? partyRecord.sizeOrder : activeSizes),
+    ...Object.keys(sizesObj)
+  ]));
   const slots: Array<{ actual: number; relative: number; size: string }> = [];
 
   for (const sz of allSizes) {

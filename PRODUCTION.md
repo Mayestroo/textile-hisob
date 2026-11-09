@@ -515,9 +515,9 @@ directive with NSIS `Delete`.
   APIs.
 - `packages/contracts/`: published shared contract definitions and verification keys.
 - `packages/domain/`: shared business validation and domain rules.
-- `admin-bot/`: Admin Telegram bot and signer implementation; no direct
+- `apps/bots/admin/`: Admin Telegram bot and signer implementation; no direct
   database access. It is built and run through the VPS Compose deployment.
-- `worker-bot/`: Worker Telegram bot and static WebApp; no direct database
+- `apps/bots/worker/`: Worker Telegram bot and static WebApp; no direct database
   access and no Ed25519 private key.
 - `ops/deploy/`: Docker Compose, VPS service/configuration, and operational
   scripts. Production commands require explicit, reviewed infrastructure inputs.
@@ -568,7 +568,7 @@ npm run verify:secrets
 npm run test:non-pg
 npx tsc --noEmit
 npm run build
-npx vitest run scripts/build/build-rc.test.ts scripts/verify/nsis-config.test.ts
+npx vitest run scripts/build/build-rc.test.ts scripts/verify/build/nsis-config.test.ts
 npm run dist:rc
 ```
 

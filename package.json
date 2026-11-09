@@ -14,13 +14,13 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:non-pg": "vitest run --exclude \"apps/server/**\" --exclude \"apps/desktop/electron/sync/syncIntegration.test.ts\" --exclude \"apps/desktop/electron/sync/outboxRecovery.test.ts\" --exclude \"apps/desktop/electron/sync/bootstrapIntegration.test.ts\"",
-    "test:postgres": "node scripts/verify/verify-pg16-test-env.cjs && vitest run --no-file-parallelism apps/server apps/desktop/electron/sync/syncIntegration.test.ts apps/desktop/electron/sync/outboxRecovery.test.ts apps/desktop/electron/sync/bootstrapIntegration.test.ts",
-    "verify:release-integrity": "node scripts/verify/verify-release-integrity.cjs",
+    "test:postgres": "node scripts/verify/database/verify-pg16-test-env.cjs && vitest run --no-file-parallelism apps/server apps/desktop/electron/sync/syncIntegration.test.ts apps/desktop/electron/sync/outboxRecovery.test.ts apps/desktop/electron/sync/bootstrapIntegration.test.ts",
+    "verify:release-integrity": "node scripts/verify/release/verify-release-integrity.cjs",
     "preview": "vite preview",
     "dist:local": "tsc && vite build && electron-builder --win nsis --publish never",
     "dist:rc": "node scripts/build/build-rc.cjs",
-    "verify:protected-integrity": "node scripts/verify/verify-protected-file-integrity.cjs",
-    "verify:secrets": "node scripts/verify/secret-scan.cjs",
+    "verify:protected-integrity": "node scripts/verify/security/verify-protected-file-integrity.cjs",
+    "verify:secrets": "node scripts/verify/security/secret-scan.cjs",
     "verify": "npm run verify:protected-integrity && npm run test:non-pg && npx tsc --noEmit && npm run build"
   },
   "build": {

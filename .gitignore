@@ -132,10 +132,10 @@ scratch/
 telegram_admin_config.json
 telegram_devices_db.json
 telegram_companies_db.json
-admin-bot/telegram_admin_config.json
-admin-bot/telegram_devices_db.json
-admin-bot/telegram_companies_db.json
-worker-bot/worker_bindings.json
+apps/bots/admin/telegram_admin_config.json
+apps/bots/admin/telegram_devices_db.json
+apps/bots/admin/telegram_companies_db.json
+apps/bots/worker/worker_bindings.json
 data/hisob_database.json
 data/Novda_Hisob_Oxirgi.xlsx
 data/backups/

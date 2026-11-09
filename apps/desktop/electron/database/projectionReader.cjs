@@ -252,10 +252,10 @@ function loadPartiesFromSqlite(db, companyId) {
   const rows = db.prepare(`
      SELECT p.id, p.company_id, p.party_number,
             COALESCE(a.canonical_model_id, p.model_id) AS model_id,
-            p.model_name, p.color,
+             p.model_name, p.color,
             patta_count, cumulative_patta_count, ish_soni_per_patta,
-            total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json,
-            printed_at, is_closed, closed_at, archived_patta_numbers_json,
+             total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json, size_order_json,
+             printed_at, is_closed, closed_at, ended_at, ended_operation_id, month_closed_period_id, archived_patta_numbers_json,
             status, server_revision,
             COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
             COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number
@@ -282,9 +282,13 @@ function loadPartiesFromSqlite(db, companyId) {
     ishSoni: Number(row.ish_soni || 0),
     cumulativeIshSoni: Number(row.cumulative_ish_soni || 0),
     sizes: parseJson(row.sizes_json, {}),
+    ...(row.size_order_json == null ? {} : { sizeOrder: parseJson(row.size_order_json, []) }),
     printedAt: row.printed_at || undefined,
     isClosed: Boolean(row.is_closed) || row.status === 'CLOSED',
     closedAt: row.closed_at || undefined,
+    endedAt: row.ended_at || null,
+    endedOperationId: row.ended_operation_id || null,
+    monthClosedPeriodId: row.month_closed_period_id || null,
     archivedPattaNumbers: parseJson(row.archived_patta_numbers_json, []),
     serverRevision: Number(row.server_revision || 0)
   }));
@@ -292,7 +296,7 @@ function loadPartiesFromSqlite(db, companyId) {
 
 function loadPeriodsFromSqlite(db, companyId) {
   const rows = db.prepare(`
-    SELECT id, company_id, name, start_date, end_date, is_closed, closed_at,
+     SELECT id, company_id, name, start_date, end_date, is_closed, closed_at, close_operation_id,
            notes, archive_filename, status, server_revision
     FROM periods
     WHERE company_id = ?
@@ -306,6 +310,7 @@ function loadPeriodsFromSqlite(db, companyId) {
     endDate: row.end_date || undefined,
     isClosed: Boolean(row.is_closed),
     closedAt: row.closed_at || undefined,
+    closeOperationId: row.close_operation_id || null,
     notes: row.notes || undefined,
     archiveFilename: row.archive_filename || undefined,
     serverRevision: Number(row.server_revision || 0)
@@ -314,10 +319,13 @@ function loadPeriodsFromSqlite(db, companyId) {
 
 function loadBatchSettingsFromSqlite(db, companyId, models) {
   const companySettings = db.prepare(`
-    SELECT available_sizes_json FROM company_batch_settings WHERE company_id = ?
+    SELECT available_sizes_json, server_revision FROM company_batch_settings WHERE company_id = ?
   `).get(companyId);
+  const pending = db.prepare(`SELECT COUNT(*) AS count FROM local_outbox
+    WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
+      AND command_type IN ('UpdateBatchSettings', 'CompletePattaBatch')`).get(companyId);
   const configRows = db.prepare(`
-    SELECT model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json
+    SELECT model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json
     FROM patta_batch_settings WHERE company_id = ?
   `).all(companyId);
   const configs = Object.fromEntries(configRows.map((row) => [row.model_id, {
@@ -325,7 +333,8 @@ function loadBatchSettingsFromSqlite(db, companyId, models) {
     isCustomParty: Boolean(row.is_custom_party),
     totalIshSoni: row.total_ish_soni || '',
     color: row.color || undefined,
-    sizes: parseJson(row.sizes_json, {})
+    sizes: parseJson(row.sizes_json, {}),
+    sizeNames: row.size_names_json == null ? null : parseJson(row.size_names_json, [])
   }]));
   for (const model of models) {
     if (!configs[model.id]) {
@@ -340,6 +349,8 @@ function loadBatchSettingsFromSqlite(db, companyId, models) {
   }
   return {
     availableSizes: parseJson(companySettings?.available_sizes_json, []),
+    batchSettingsServerRevision: Number(companySettings?.server_revision || 0),
+    batchSettingsPrintRevision: Number(companySettings?.server_revision || 0) + Number(pending.count),
     pattaBatchConfigs: configs
   };
 }
@@ -454,6 +465,8 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
     ticketForms: loadTicketFormsFromSqlite(db, companyId),
     pattaBatchConfigs: batchSettings.pattaBatchConfigs,
     availableSizes: batchSettings.availableSizes,
+    batchSettingsServerRevision: batchSettings.batchSettingsServerRevision,
+    batchSettingsPrintRevision: batchSettings.batchSettingsPrintRevision,
     deletedTicketIds: [],
     deletedPartyIds: [],
     deletedWorkerIds: [],

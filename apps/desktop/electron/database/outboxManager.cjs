@@ -335,7 +335,8 @@ function normalizeBatchSettingsConfigs(configs) {
       isCustomParty: config.isCustomParty === true || Number(config.is_custom_party) === 1,
       totalIshSoni: config.totalIshSoni || '',
       color: config.color || '',
-      sizes: config.sizes && typeof config.sizes === 'object' && !Array.isArray(config.sizes) ? config.sizes : {}
+      sizes: config.sizes && typeof config.sizes === 'object' && !Array.isArray(config.sizes) ? config.sizes : {},
+      ...(Object.prototype.hasOwnProperty.call(config, 'sizeNames') ? { sizeNames: config.sizeNames } : {})
     });
   }
   normalized.sort((left, right) => left.modelId.localeCompare(right.modelId));
@@ -353,7 +354,7 @@ function supersedeBatchSettingsAlreadyApplied(db, companyId) {
 
   let currentConfigs;
   try {
-    const rows = db.prepare(`SELECT model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json
+    const rows = db.prepare(`SELECT model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json
       FROM patta_batch_settings WHERE company_id = ?`).all(companyId);
     currentConfigs = normalizeBatchSettingsConfigs(rows.map((row) => ({
       modelId: row.model_id,
@@ -361,7 +362,8 @@ function supersedeBatchSettingsAlreadyApplied(db, companyId) {
       is_custom_party: row.is_custom_party,
       totalIshSoni: row.total_ish_soni,
       color: row.color,
-      sizes: JSON.parse(row.sizes_json || '{}')
+      sizes: JSON.parse(row.sizes_json || '{}'),
+      ...(row.size_names_json == null ? {} : { sizeNames: JSON.parse(row.size_names_json) })
     })));
   } catch {
     return 0;

@@ -325,6 +325,12 @@ function normalizePartyPayload(command, companyId, operationId, commandId, comma
     const normalizedSize = assertText(size, 'sizes key', 64);
     sizes[normalizedSize] = assertNonNegativeInteger(count, `sizes.${normalizedSize}`);
   }
+  let sizeOrder;
+  if (input.sizeOrder !== undefined && input.sizeOrder !== null) {
+    if (!Array.isArray(input.sizeOrder) || input.sizeOrder.length > 128) throw createCommandError('INVALID_PARTY_SIZE_ORDER', 'sizeOrder must be a bounded array');
+    sizeOrder = input.sizeOrder.map((name, index) => assertText(String(name).trim(), `sizeOrder[${index}]`, 64));
+    if (new Set(sizeOrder.map((name) => name.toLocaleUpperCase())).size !== sizeOrder.length) throw createCommandError('DUPLICATE_PARTY_SIZE_ORDER', 'sizeOrder values must be unique');
+  } else sizeOrder = input.sizeOrder;
   return {
     commandId,
     operationId,
@@ -343,6 +349,7 @@ function normalizePartyPayload(command, companyId, operationId, commandId, comma
     ishSoni: assertFiniteNumber(input.ishSoni ?? 0, 'ishSoni', { min: 0 }),
     cumulativeIshSoni: assertFiniteNumber(input.cumulativeIshSoni ?? 0, 'cumulativeIshSoni', { min: 0 }),
     sizes,
+    ...(sizeOrder !== undefined ? { sizeOrder } : {}),
     printedAt: input.printedAt === undefined ? new Date().toISOString() : assertText(input.printedAt, 'printedAt', 64)
   };
 }
@@ -369,13 +376,20 @@ function normalizeBatchSettings(command, companyId, operationId, commandId) {
       if (normalizedValue.length > 32) throw createCommandError('INVALID_BATCH_SIZE', 'Batch size text is too long');
       normalizedSizes[normalizedKey] = normalizedValue;
     }
+    let sizeNames;
+    if (config.sizeNames !== undefined && config.sizeNames !== null) {
+      if (!Array.isArray(config.sizeNames) || config.sizeNames.length > 128) throw createCommandError('INVALID_BATCH_SIZE_NAMES', 'sizeNames must be null or a bounded array');
+      sizeNames = config.sizeNames.map((name, i) => assertText(String(name).trim(), `configs[${index}].sizeNames[${i}]`, 64));
+      if (new Set(sizeNames.map((name) => name.toLocaleUpperCase())).size !== sizeNames.length) throw createCommandError('DUPLICATE_BATCH_SIZE', 'sizeNames must be unique');
+    } else sizeNames = config.sizeNames;
     return {
       modelId: assertEntityKey(config.modelId, `configs[${index}].modelId`),
       partyNumber: config.partyNumber === undefined || config.partyNumber === '' ? '' : assertText(String(config.partyNumber), `configs[${index}].partyNumber`, 64),
       isCustomParty: config.isCustomParty === true,
       totalIshSoni: config.totalIshSoni === undefined || config.totalIshSoni === '' ? '' : assertText(String(config.totalIshSoni), `configs[${index}].totalIshSoni`, 32),
       color: config.color === undefined || config.color === '' ? '' : assertText(String(config.color), `configs[${index}].color`, 128),
-      sizes: normalizedSizes
+      sizes: normalizedSizes,
+      ...(sizeNames !== undefined ? { sizeNames } : {})
     };
   });
   const availableSizes = input.availableSizes?.map((size, index) => assertText(size, `availableSizes[${index}]`, 64));
@@ -406,7 +420,9 @@ function normalizeCompleteBatch(command, companyId, operationId, commandId) {
     entityId: companyId,
     payload: { availableSizes: input.availableSizes, configs: input.configs }
   }, companyId, operationId, commandId);
-  return { commandId, operationId, companyId, batchId, parties, availableSizes: settings.availableSizes, configs: settings.configs };
+  const batchSettingsBaseRevision = input.batchSettingsBaseRevision === undefined || input.batchSettingsBaseRevision === null
+    ? null : assertRevision(input.batchSettingsBaseRevision);
+  return { commandId, operationId, companyId, batchId, parties, availableSizes: settings.availableSizes, configs: settings.configs, batchSettingsBaseRevision };
 }
 
 function getNextEntityRevision(db, companyId, entityType, entityId, currentRevision) {
@@ -416,6 +432,13 @@ function getNextEntityRevision(db, companyId, entityType, entityId, currentRevis
     WHERE company_id = ? AND entity_type = ? AND entity_id = ? AND status IN ('PENDING', 'SENDING')
   `).get(companyId, entityType, entityId);
   return Number(currentRevision || 0) + Number(pending?.count || 0);
+}
+
+function getNextBatchSettingsRevision(db, companyId, currentRevision) {
+  const pending = db.prepare(`SELECT COUNT(*) AS count FROM local_outbox
+    WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
+      AND command_type IN ('UpdateBatchSettings', 'CompletePattaBatch')`).get(companyId);
+  return Number(currentRevision || 0) + Number(pending.count);
 }
 
 function normalizeCommand(command, activeCompanyId) {
@@ -642,10 +665,10 @@ function insertPartyRecord(db, companyId, party) {
       id, company_id, party_number, physical_party_number, model_id, model_name, color,
       patta_count, cumulative_patta_count, patta_start_number, patta_end_number,
       ish_soni_per_patta, total_ish_soni,
-      ish_soni, cumulative_ish_soni, sizes_json, printed_at, is_closed,
+       ish_soni, cumulative_ish_soni, sizes_json, size_order_json, printed_at, is_closed,
       archived_patta_numbers_json, status, created_at, updated_at, provenance, server_revision
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'ACTIVE', ?, ?, 'LOCAL_COMMAND', 0
+       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'ACTIVE', ?, ?, 'LOCAL_COMMAND', 0
     )
   `).run(
     party.partyRecordId,
@@ -664,6 +687,7 @@ function insertPartyRecord(db, companyId, party) {
     party.ishSoni,
     party.cumulativeIshSoni,
     JSON.stringify(party.sizes || {}),
+    party.sizeOrder == null ? null : JSON.stringify(party.sizeOrder),
     party.printedAt || now,
     now,
     now
@@ -729,14 +753,15 @@ function writeBatchSettings(db, companyId, payload) {
     assertActiveModel(db, companyId, config.modelId);
     db.prepare(`
       INSERT INTO patta_batch_settings (
-        company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(company_id, model_id) DO UPDATE SET
         party_number = excluded.party_number,
         is_custom_party = excluded.is_custom_party,
         total_ish_soni = excluded.total_ish_soni,
         color = excluded.color,
         sizes_json = excluded.sizes_json,
+        size_names_json = COALESCE(excluded.size_names_json, patta_batch_settings.size_names_json),
         updated_at = excluded.updated_at
     `).run(
       companyId,
@@ -746,6 +771,7 @@ function writeBatchSettings(db, companyId, payload) {
       config.totalIshSoni,
       config.color || null,
       JSON.stringify(config.sizes),
+      config.sizeNames == null ? null : JSON.stringify(config.sizeNames),
       now
     );
   }
@@ -961,7 +987,7 @@ function executeWorkbookMutation(db, normalized, options) {
   }
   if (commandType === 'UpdateBatchSettings') {
     const current = db.prepare('SELECT server_revision FROM company_batch_settings WHERE company_id = ?').get(companyId);
-    const revision = getNextEntityRevision(db, companyId, 'batch_settings', companyId, current?.server_revision);
+    const revision = getNextBatchSettingsRevision(db, companyId, current?.server_revision);
     if (normalized.baseRevision !== null && normalized.baseRevision !== revision) throw createCommandError('REVISION_CONFLICT', 'Batch settings revision changed');
     writeBatchSettings(db, companyId, payload);
     return revision;
@@ -1106,6 +1132,11 @@ function executeClosePeriod(db, normalized) {
 }
 
 function executeCompletePattaBatch(db, normalized) {
+  const currentSettings = db.prepare('SELECT server_revision FROM company_batch_settings WHERE company_id = ?').get(normalized.companyId);
+  const expectedRevision = getNextBatchSettingsRevision(db, normalized.companyId, currentSettings?.server_revision);
+  if (normalized.payload.batchSettingsBaseRevision === null || expectedRevision !== normalized.payload.batchSettingsBaseRevision) {
+    throw createCommandError('REVISION_CONFLICT', `Batch settings revision changed; reload before printing (expected ${expectedRevision}, received ${normalized.payload.batchSettingsBaseRevision ?? 'missing'})`);
+  }
   const sequence = db.prepare(`
     SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?
   `).get(normalized.companyId);

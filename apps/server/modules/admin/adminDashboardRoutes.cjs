@@ -75,7 +75,7 @@ function secureHtmlHeaders(reply) {
     .header('Cache-Control', 'no-store')
     .header('Referrer-Policy', 'no-referrer')
     .header('X-Content-Type-Options', 'nosniff')
-    .header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org")
+     .header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org")
     .header('X-Novda-Admin-WebApp-Version', '1');
 }
 
@@ -212,17 +212,19 @@ function registerAdminDashboardRoutes(app, options = {}) {
       'admin.css': { type: 'text/css; charset=utf-8', file: 'admin.css' },
       'company-admin.css': { type: 'text/css; charset=utf-8', file: 'company-admin.css' },
       'admin.js': { type: 'application/javascript; charset=utf-8', file: 'admin.js' },
-      'financial-intent.js': { type: 'application/javascript; charset=utf-8', file: 'financial-intent.js' }
+      'financial-intent.js': { type: 'application/javascript; charset=utf-8', file: 'financial-intent.js' },
+      'IBMPlexSans[wdth,wght].ttf': { type: 'font/ttf', file: 'IBMPlexSans[wdth,wght].ttf', binary: true },
+      'Onest[wght].ttf': { type: 'font/ttf', file: 'Onest[wght].ttf', binary: true }
     };
     const asset = assets[request.params.asset];
     if (!asset) return reply.code(404).header('Cache-Control', 'no-store').send({ success: false, error: { code: 'ADMIN_WEBAPP_ASSET_NOT_FOUND' } });
     try {
-      const content = fs.readFileSync(path.join(adminWebAppPath, asset.file), 'utf8');
+      const content = fs.readFileSync(path.join(adminWebAppPath, asset.file), asset.binary ? undefined : 'utf8');
       return reply.type(asset.type)
         .header('Cache-Control', 'no-store')
         .header('Referrer-Policy', 'no-referrer')
         .header('X-Content-Type-Options', 'nosniff')
-        .header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org")
+        .header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org")
         .send(content);
     } catch {
       return reply.code(503).header('Cache-Control', 'no-store').send({ success: false, error: { code: 'ADMIN_WEBAPP_ASSET_UNAVAILABLE' } });

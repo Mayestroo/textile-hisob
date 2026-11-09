@@ -12,7 +12,7 @@ import { createPersistenceSlice } from './slices/createPersistenceSlice';
 import { getElectronApi, resolveElectronRuntimeMode } from './runtimeMode';
 import { cancelDebouncedSave, triggerDebouncedSave } from './helpers/debounceSave';
 import { DEFAULT_BATCH_SIZES } from '../constants/batchConstants';
-import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary, removePattaSizeFromBatchConfigs } from './pattaBatch';
+import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary } from './pattaBatch';
 import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from './businessMutations';
 import { normalizePattaSizeCounts } from '../domain/pattaQuantity';
 import { formatDateIso } from '../utils/formatters';
@@ -80,28 +80,34 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
 
   return {
     ...slices,
-    addCustomSize: async (sizeName: string) => {
+    addCustomSize: async (modelId: string, sizeName?: string) => {
+      if (sizeName === undefined) return slices.addCustomSize(modelId);
       const context = await getContext();
-      if (!context) return slices.addCustomSize(sizeName);
+      if (!context) return slices.addCustomSize(modelId, sizeName);
       if (!context.success) return;
       const clean = sizeName.trim().toUpperCase();
-      const current = get().availableSizes || DEFAULT_BATCH_SIZES;
+      const config = get().pattaBatchConfigs[modelId];
+      const current = config?.sizeNames ?? [...new Set([...(get().availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
       if (!clean) return;
       if (current.some((size) => size.toLowerCase() === clean.toLowerCase())) {
         get().addNotification('warning', 'Mavjud razmer', `«${clean}» razmeri allaqachon mavjud.`);
         return;
       }
-      set({ availableSizes: [...current, clean] });
+      set({ pattaBatchConfigs: { ...get().pattaBatchConfigs, [modelId]: { ...config, partyNumber: config?.partyNumber || '', totalIshSoni: config?.totalIshSoni || '', sizes: config?.sizes || {}, sizeNames: [...current, clean] } } });
       scheduleBatchSettings(context);
     },
-    deleteCustomSize: async (sizeName: string) => {
+    deleteCustomSize: async (modelId: string, sizeName?: string) => {
+      if (sizeName === undefined) return slices.deleteCustomSize(modelId);
       const context = await getContext();
-      if (!context) return slices.deleteCustomSize(sizeName);
+      if (!context) return slices.deleteCustomSize(modelId, sizeName);
       if (!context.success) return;
       const clean = sizeName.trim().toUpperCase();
-      const updated = (get().availableSizes || DEFAULT_BATCH_SIZES).filter((size) => size.toUpperCase() !== clean);
-      const pattaBatchConfigs = removePattaSizeFromBatchConfigs(get().pattaBatchConfigs, clean);
-      set({ availableSizes: updated, pattaBatchConfigs });
+      const config = get().pattaBatchConfigs[modelId];
+      if (Number(config?.sizes?.[sizeName] || 0) > 0) { get().addNotification('warning', 'Razmerda son bor', 'Avval ushbu razmerdagi pattalar sonini nolga tushiring.'); return; }
+      const names = config?.sizeNames ?? [...new Set([...(get().availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
+      const sizes = Object.fromEntries(Object.entries(config?.sizes || {}).filter(([size]) => size.toUpperCase() !== clean));
+      const pattaBatchConfigs = { ...get().pattaBatchConfigs, [modelId]: { ...config, partyNumber: config?.partyNumber || '', totalIshSoni: config?.totalIshSoni || '', sizes, sizeNames: names.filter((size) => size.toUpperCase() !== clean) } };
+      set({ pattaBatchConfigs });
       scheduleBatchSettings(context);
     },
     incrementPartyNumber: async (modelId: string, printedPartyStr: string) => {
@@ -115,13 +121,15 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         const current = state.pattaBatchConfigs[model.id];
         const target = model.id === modelId;
         const sizes: Record<string, string> = {};
-        for (const size of state.availableSizes || DEFAULT_BATCH_SIZES) sizes[size] = target ? '' : current?.sizes?.[size] || '';
+        const ownedNames = current?.sizeNames ?? [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(current?.sizes || {})])];
+        for (const size of ownedNames) sizes[size] = target ? '' : current?.sizes?.[size] || '';
         configs[model.id] = {
           partyNumber: target ? '' : (current?.isCustomParty ? current.partyNumber : ''),
           isCustomParty: target ? false : Boolean(current?.isCustomParty),
           totalIshSoni: target ? '' : current?.totalIshSoni || '',
-          color: current?.color || model.color || 'Кора',
-          sizes
+          color: target ? '' : (current?.color || ''),
+          sizes,
+          sizeNames: current?.sizeNames
         };
       }
       set({ nextPartyNumber, pattaBatchConfigs: configs });
@@ -162,13 +170,8 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
       const immediateState = get();
       const immediateModel = immediateState.models.find((item) => item.id === modelId);
       if (immediateModel) {
-        const current = immediateState.pattaBatchConfigs[modelId] || { partyNumber: '', totalIshSoni: '', color: immediateModel.color || 'Кора', sizes: {} };
-        const currentSizes = immediateState.availableSizes || DEFAULT_BATCH_SIZES;
-        const availableSizes = currentSizes.some((value) => value.toUpperCase() === sizeKey)
-          ? currentSizes
-          : [...currentSizes, sizeKey];
+        const current = immediateState.pattaBatchConfigs[modelId] || { partyNumber: '', totalIshSoni: '', color: '', sizes: {} };
         set({
-          availableSizes,
           pattaBatchConfigs: {
             ...immediateState.pattaBatchConfigs,
             [modelId]: { ...current, sizes: { ...(current.sizes || {}), [sizeKey]: count } }
@@ -210,7 +213,9 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
     batchPrintCompleted: async (printedItems: Parameters<WorkbookStore['batchPrintCompleted']>[0]) => {
       const context = await getContext();
       if (!context) {
-        const mutation = buildBatchPrintMutation(get(), printedItems);
+        // The legacy-only path uses this builder solely for its local sequence;
+        // it never sends a CAS revision or a canonical print command.
+        const mutation = buildBatchPrintMutation({ ...get(), batchSettingsPrintRevision: get().batchSettingsServerRevision }, printedItems);
         await slices.batchPrintCompleted(printedItems);
         set({ nextPattaNumber: mutation.nextPattaNumber });
         return;
@@ -228,6 +233,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         });
         const success = await submit(context, 'CompletePattaBatch', mutation.batchId, {
           batchId: mutation.batchId,
+          batchSettingsBaseRevision: mutation.batchSettingsBaseRevision,
           parties,
           availableSizes: mutation.settings.availableSizes,
           configs: mutation.settings.configs

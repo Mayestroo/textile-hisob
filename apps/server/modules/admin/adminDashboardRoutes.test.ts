@@ -69,6 +69,8 @@ describe(' Admin WebApp routes', () => {
     fs.writeFileSync(path.join(tempDir, 'company-admin.css'), '.company-app { color: green; }');
     fs.writeFileSync(path.join(tempDir, 'admin.js'), 'window.test = true;');
     fs.copyFileSync(path.join(__dirname, '..', '..', 'static', 'admin-webapp', 'financial-intent.js'), path.join(tempDir, 'financial-intent.js'));
+    for (const name of ['IBMPlexSans[wdth,wght].ttf', 'Onest[wght].ttf'])
+      fs.copyFileSync(path.join(__dirname, '..', '..', 'static', 'admin-webapp', name), path.join(tempDir, name));
     registerAdminDashboardRoutes(app, {
       dashboard,
       pool: options.pool || { query: async () => ({ rows: [] }) },
@@ -457,5 +459,13 @@ describe(' Admin WebApp routes', () => {
     expect(companyStyles.statusCode).toBe(200);
     expect(companyStyles.headers['content-type']).toContain('text/css');
     expect(companyStyles.body).toContain('.company-app');
+    for (const name of ['IBMPlexSans[wdth,wght].ttf', 'Onest[wght].ttf']) {
+      const font = await server.inject({ method: 'GET', url: `/admin-app/${encodeURIComponent(name)}` });
+      expect(font.statusCode).toBe(200);
+      expect(font.headers['content-type']).toContain('font/ttf');
+      expect(font.rawPayload).toEqual(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../static/admin-webapp', name)));
+      expect(font.rawPayload).toEqual(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../desktop/renderer/assets/fonts', name)));
+    }
+    expect((await server.inject({ method: 'GET', url: '/admin-app/private.txt' })).statusCode).toBe(404);
   });
 });

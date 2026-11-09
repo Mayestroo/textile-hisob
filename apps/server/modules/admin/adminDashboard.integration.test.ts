@@ -6,7 +6,7 @@ import { buildFastifyServer } from '../../app.cjs';
 import { getServerPool, resetServerDatabase, closeServerPool } from '../../infrastructure/db.cjs';
 const { canonicalActivationPayload } = require('../activation/licenseActivation.cjs');
 const { createActivationRequest } = require('../activation/activationRequests.cjs');
-const { verifyFreshPostgres16TestEnvironment } = require('../../../../scripts/verify/verify-pg16-test-env.cjs');
+const { verifyFreshPostgres16TestEnvironment } = require('../../../../scripts/verify/database/verify-pg16-test-env.cjs');
 
 const ADMIN_ID = '1526974123';
 const SESSION_SECRET = 'admin-dashboard-postgres-test-secret-32-bytes';

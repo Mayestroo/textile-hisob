@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Users, UserPlus, Trash2, Search, Edit3, Check, Award, Download } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
+import { useAuthStore } from '../../../store/authStore';
 
 export const WorkerManagerModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -13,14 +14,35 @@ export const WorkerManagerModal: React.FC = () => {
   const confirmAction = useWorkbookStore((s) => s.confirmAction);
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const exportWorkersExcel = useWorkbookStore((s) => s.exportWorkersExcel);
+  const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const authState = useAuthStore();
+  const canViewWorkers = authState.permissions.includes('view:workers');
+  const authUserId = authState.user?.uid || '';
+  const authRole = authState.role || '';
   const [newWorkerName, setNewWorkerName] = useState('');
   const [newWorkerStaj, setNewWorkerStaj] = useState('');
-  const [search, setSearch] = useState('');
+  const managerScope = JSON.stringify([licenseStatus?.companyId || '', licenseStatus?.activationId || '', licenseStatus?.machineId || '', licenseStatus?.role || '', authUserId, authRole]);
+  const managerSearchKey = `worker-manager:search:${managerScope}`;
+  const readManagerSearch = () => {
+    try { return window.sessionStorage.getItem(managerSearchKey) || ''; } catch { return ''; }
+  };
+  const [searchState, setSearchState] = useState(() => ({ scope: managerScope, value: readManagerSearch() }));
+  const search = searchState.scope === managerScope ? searchState.value : readManagerSearch();
+  useEffect(() => {
+    if (searchState.scope !== managerScope) setSearchState({ scope: managerScope, value: readManagerSearch() });
+  }, [managerScope, managerSearchKey, searchState.scope]);
+  useEffect(() => {
+    if (searchState.scope !== managerScope) return;
+    try {
+      if (searchState.value) window.sessionStorage.setItem(managerSearchKey, searchState.value);
+      else window.sessionStorage.removeItem(managerSearchKey);
+    } catch { /* The in-memory worker list remains searchable. */ }
+  }, [managerScope, managerSearchKey, searchState]);
   const [editingWorkerId, setEditingWorkerId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editingStaj, setEditingStaj] = useState('');
 
-  if (modalType !== 'worker_manager') return null;
+  if (modalType !== 'worker_manager' || !canViewWorkers) return null;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,7 +202,7 @@ export const WorkerManagerModal: React.FC = () => {
               type="text"
               placeholder="Qidirish (ID yoki ism bo'yicha)..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => setSearchState({ scope: managerScope, value: e.target.value })}
               className="soft-input"
               style={{ paddingLeft: '34px' }}
             />

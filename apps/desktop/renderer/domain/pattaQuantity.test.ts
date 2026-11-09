@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities, calculatePartyWorkQuantities, normalizePattaSizeCounts } from './pattaQuantity';
 
 describe('buildPattaWorkTickets', () => {
+  it('respects explicit size order even for integer-like size names', () => {
+    expect(buildPattaWorkTickets(25, { '2': '1', '10': '1' }, ['10', '2']).map((ticket) => ticket.size))
+      .toEqual(['10', '2']);
+  });
   it('uses the entered work count for each patta and multiplies the batch total', () => {
     const tickets = buildPattaWorkTickets(100, { XXS: '1', XS: '1', S: '1', M: '1', L: '1', XL: '1', XXL: '1', XXXL: '1', '4XL': '1', '5XL': '1' });
 

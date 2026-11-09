@@ -1,6 +1,6 @@
 'use strict';
 
-const { resolveApiBaseUrl } = require('../apiConfig.cjs');
+const { resolveApiBaseUrl } = require('../config/apiConfig.cjs');
 
 const DEFAULT_MAX_OPERATION_BATCH_BYTES = 48 * 1024;
 

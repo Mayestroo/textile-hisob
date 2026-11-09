@@ -1,30 +1,59 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Check, AlertCircle } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
 import { SubmittedTicketRecord } from '../../../types/workbook';
+import { useAuthStore } from '../../../store/authStore';
 
 export const EditSubmittedTicketModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
   const modalData = useWorkbookStore((s) => s.modalState.data) as SubmittedTicketRecord | undefined;
   const closeModal = useWorkbookStore((s) => s.closeModal);
+  const openModal = useWorkbookStore((s) => s.openModal);
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const models = useWorkbookStore((s) => s.models);
   const workers = useWorkbookStore((s) => s.workers);
   const updateSubmittedTicket = useWorkbookStore((s) => s.updateSubmittedTicket);
+  const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const selectedArchiveFilename = useWorkbookStore((s) => s.selectedArchiveFilename);
+  const payrollCompanyId = useWorkbookStore((s) => s.payrollValuation.companyId);
+  const canEditTickets = useAuthStore((s) => s.permissions.includes('edit:patta'));
+  const authUserId = useAuthStore((s) => s.user?.uid || '');
+  const authRole = useAuthStore((s) => s.role || '');
 
   const isOpen = modalType === 'edit_ticket';
+  const returnToWorkerDetail = Number((modalData as any)?.returnToWorkerDetail);
+  const closeTicketModal = useCallback(() => {
+    if (Number.isSafeInteger(returnToWorkerDetail) && returnToWorkerDetail > 0) openModal({ type: 'worker_detail', workerId: returnToWorkerDetail, data: { focusTicketId: modalData?.id } });
+    else closeModal();
+  }, [returnToWorkerDetail, openModal, closeModal]);
 
   // Find the ticket from state to ensure fresh data
   const ticket = useMemo(() => {
     if (!isOpen || !modalData) return null;
-    return submittedTickets.find((s) => s.id === modalData.id) || modalData;
+    return submittedTickets.find((s) => s.id === modalData.id) || null;
   }, [isOpen, modalData, submittedTickets]);
 
   const model = useMemo(() => {
     if (!ticket) return null;
     return models.find((m) => m.id === ticket.modelId || m.name === ticket.modelId) || null;
   }, [ticket, models]);
+  const jumpContext = (modalData as any)?.jumpContext;
+  const jumpContextInvalid = Boolean(jumpContext && (
+    jumpContext.companyId !== (licenseStatus?.companyId || useAuthStore.getState().companyId)
+    || ((ticket as any)?.companyId && (ticket as any).companyId !== jumpContext.companyId)
+    || (payrollCompanyId && jumpContext.companyId !== payrollCompanyId)
+    || jumpContext.periodId !== currentPeriod.id
+    || jumpContext.activationId !== (licenseStatus?.activationId || licenseStatus?.machineId || '')
+    || jumpContext.authUserId !== authUserId
+    || jumpContext.authRole !== authRole
+    || ticket?.periodId !== currentPeriod.id
+    || currentPeriod.isClosed || selectedArchiveFilename || !canEditTickets
+  ));
+  useEffect(() => {
+    if (isOpen && jumpContext && jumpContextInvalid) closeTicketModal();
+  }, [isOpen, jumpContext, jumpContextInvalid, closeTicketModal]);
 
   // Worker lookup map
   const workerMap = useMemo(() => {
@@ -77,14 +106,20 @@ export const EditSubmittedTicketModal: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isOpen && e.key === 'Escape') {
-        closeModal();
+        closeTicketModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, closeModal]);
+  }, [isOpen, closeTicketModal]);
 
-  if (!isOpen || !ticket || !model) return null;
+  if (!isOpen) return null;
+  if (jumpContextInvalid || !ticket || !model || !canEditTickets) return <div role="alert" className="modal-overlay phase-c-dialog" style={{ zIndex: 9999, padding: 20 }}>
+    <div className="modal-card" style={{ padding: 24, maxWidth: 520 }}>
+      <p>Patta tahrirlash ochilmadi: tanlangan patta topilmadi yoki kompaniya, davr, arxiv holati yoxud ruxsat o‘zgardi.</p>
+      <button className="soft-btn" onClick={closeTicketModal}>Yopish</button>
+    </div>
+  </div>;
 
   const ticketQty = ticket.qty || 0;
 
@@ -113,6 +148,20 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
   const handleSave = async () => {
     setErrorMsg(null);
+    const latest = useWorkbookStore.getState();
+    const actor = useAuthStore.getState();
+    if (!latest.submittedTickets.some((item) => item.id === ticket.id && item.periodId === ticket.periodId)
+      || (jumpContext && (latest.licenseStatus?.companyId !== jumpContext.companyId
+        || ((latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId && (latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId !== jumpContext.companyId)
+        || (latest.payrollValuation.companyId && latest.payrollValuation.companyId !== jumpContext.companyId)
+        || latest.currentPeriod.id !== jumpContext.periodId
+        || (latest.licenseStatus?.activationId || latest.licenseStatus?.machineId || '') !== jumpContext.activationId))
+      || (jumpContext && (actor.user?.uid || '') !== jumpContext.authUserId)
+      || (jumpContext && (actor.role || '') !== jumpContext.authRole)
+      || latest.selectedArchiveFilename || latest.currentPeriod.isClosed || !actor.permissions.includes('edit:patta')) {
+      setErrorMsg('Kontekst yoki tahrirlash ruxsati o‘zgardi. Patta qayta ochilib tekshirilishi kerak.');
+      return;
+    }
     const names = (ticket.entries || []).map((entry) => entry.opName);
     if (new Set(names).size !== names.length || new Set(operationsList.map((op) => op.name)).size !== operationsList.length) {
       setErrorMsg('Takrorlangan operatsiyalarni bu oynada xavfsiz tahrirlab bo’lmaydi.');
@@ -156,7 +205,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
     try {
       const success = await updateSubmittedTicket(ticket.id, updatedEntries);
       if (success) {
-        closeModal();
+        closeTicketModal();
       }
     } finally {
       setIsSaving(false);
@@ -166,7 +215,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
   return (
     <div 
       className="modal-overlay phase-c-dialog"
-      onClick={closeModal}
+      onClick={closeTicketModal}
       style={{
         position: 'fixed',
         top: 0,
@@ -237,7 +286,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
           </div>
 
           <button
-            onClick={closeModal}
+            onClick={closeTicketModal}
             className="soft-btn"
             style={{
               padding: '6px',
@@ -402,7 +451,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
-              onClick={closeModal}
+              onClick={closeTicketModal}
               disabled={isSaving}
               className="soft-btn"
               style={{

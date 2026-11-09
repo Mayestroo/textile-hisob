@@ -13,8 +13,8 @@ import os
 import sys
 
 root = sys.argv[1]
-sys.path.insert(0, os.path.join(root, 'worker-bot'))
-spec = importlib.util.spec_from_file_location('novda_worker_sync', os.path.join(root, 'worker-bot', 'worker_bot.py'))
+sys.path.insert(0, os.path.join(root, 'apps', 'bots', 'worker'))
+spec = importlib.util.spec_from_file_location('novda_worker_sync', os.path.join(root, 'apps', 'bots', 'worker', 'worker_bot.py'))
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 expires = int(sys.argv[2])
@@ -27,8 +27,8 @@ import os
 import sys
 
 root = sys.argv[1]
-sys.path.insert(0, os.path.join(root, 'worker-bot'))
-spec = importlib.util.spec_from_file_location('novda_worker_sync', os.path.join(root, 'worker-bot', 'worker_bot.py'))
+sys.path.insert(0, os.path.join(root, 'apps', 'bots', 'worker'))
+spec = importlib.util.spec_from_file_location('novda_worker_sync', os.path.join(root, 'apps', 'bots', 'worker', 'worker_bot.py'))
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 module.get_worker_id_binding = lambda _company_id, _worker_id: None
@@ -74,7 +74,7 @@ describe('worker web authentication compatibility', () => {
   });
 
   it('displays the staj deduction used by the  payroll projection', () => {
-    const webApp = fs.readFileSync(path.join(ROOT, 'worker-bot', 'webapp', 'index.html'), 'utf8');
+    const webApp = fs.readFileSync(path.join(ROOT, 'apps', 'bots', 'worker', 'webapp', 'index.html'), 'utf8');
 
     expect(webApp).toContain('id="stajAmount"');
     expect(webApp).toContain('Sof = Jami - Avans - Jarima - Staj');
@@ -83,8 +83,8 @@ describe('worker web authentication compatibility', () => {
   });
 
   it('keeps Firebase and IELTS out of the VPS worker runtime', () => {
-    const source = fs.readFileSync(path.join(ROOT, 'worker-bot', 'worker_bot.py'), 'utf8');
-    const webApp = fs.readFileSync(path.join(ROOT, 'worker-bot', 'webapp', 'index.html'), 'utf8');
+    const source = fs.readFileSync(path.join(ROOT, 'apps', 'bots', 'worker', 'worker_bot.py'), 'utf8');
+    const webApp = fs.readFileSync(path.join(ROOT, 'apps', 'bots', 'worker', 'webapp', 'index.html'), 'utf8');
     expect(source).not.toMatch(/firebase|render\.com|onrender|ielts/i);
     expect(webApp).not.toMatch(/firebase|render\.com|onrender|ielts|hisobQuantities/i);
     expect(webApp).toContain('/api/worker/profile');

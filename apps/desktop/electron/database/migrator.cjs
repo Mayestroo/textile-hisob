@@ -662,9 +662,9 @@ function migrateLegacyData(baseUserDataPath, companyId, options = {}) {
       INSERT INTO parties (
         id, company_id, party_number, physical_party_number, model_id, model_name, color,
         patta_count, cumulative_patta_count, ish_soni_per_patta, total_ish_soni,
-        ish_soni, cumulative_ish_soni, sizes_json, printed_at, is_closed, closed_at,
+        ish_soni, cumulative_ish_soni, sizes_json, size_order_json, printed_at, is_closed, closed_at,
         archived_patta_numbers_json, status, created_at, updated_at, provenance
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertPartyQuarantine = hasExtendedQuarCols
@@ -739,6 +739,7 @@ function migrateLegacyData(baseUserDataPath, companyId, options = {}) {
               Number(p.ishSoni || 0),
               Number(p.cumulativeIshSoni || 0),
               JSON.stringify(p.sizes || {}),
+              Array.isArray(p.sizeOrder) ? JSON.stringify(p.sizeOrder) : null,
               p.printedAt || null,
               1, // is_closed = 1
               ps.sourceClosedAt, // source closed_at preserved as null if unknown; NOT fabricated
@@ -880,6 +881,7 @@ function migrateLegacyData(baseUserDataPath, companyId, options = {}) {
             Number(p.ishSoni || 0),
             Number(p.cumulativeIshSoni || 0),
             JSON.stringify(p.sizes || {}),
+            Array.isArray(p.sizeOrder) ? JSON.stringify(p.sizeOrder) : null,
             p.printedAt || null,
             0, // is_closed = 0
             null, // closed_at = null
@@ -992,6 +994,7 @@ function migrateLegacyData(baseUserDataPath, companyId, options = {}) {
             Number(p.ishSoni || 0),
             Number(p.cumulativeIshSoni || 0),
             JSON.stringify(p.sizes || {}),
+            Array.isArray(p.sizeOrder) ? JSON.stringify(p.sizeOrder) : null,
             p.printedAt || null,
             isPartyClosed ? 1 : 0,
             ps.sourceClosedAt,

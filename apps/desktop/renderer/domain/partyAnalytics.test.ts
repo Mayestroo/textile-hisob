@@ -99,4 +99,14 @@ describe('party printed/legacy number namespaces', () => {
     const duplicate = buildPartyTicketsList(party, [ticket(2), ticket(3, { id: 'ticket-2' })], []);
     expect(duplicate.filter(r => r.isSubmitted)).toHaveLength(1);
   });
+  it('uses immutable print-time size order for exact ticket slots despite a changed global template', () => {
+    const ordered = { ...party, pattaStartNumber: 11, pattaEndNumber: 12, sizeOrder: ['XXL', 'M'], sizes: { XXL: '1', M: '1' } };
+    const rows = buildPartyTicketsList(ordered, [ticket(12, { id: 'historical-ticket-m', size: 'M', qty: 37 })], ['M', 'L', 'XXL']);
+    expect(rows.map((row) => [row.pattaNumber, row.size, row.id, row.enteredQty]))
+      .toEqual([[11, 'XXL', undefined, 0], [12, 'M', 'historical-ticket-m', 37]]);
+  });
+  it('keeps legacy parties on the old global order then appends stored keys absent from that template', () => {
+    const legacy = { ...party, sizes: { M: '1', XXL: '1' } };
+    expect(buildPartyTicketsList(legacy, [], ['L', 'M']).map((row) => row.size)).toEqual(['M', 'XXL']);
+  });
 });

@@ -16,6 +16,7 @@ describe(' patta batch command payloads', () => {
       nextPartyNumber: 1,
       nextPattaNumber: 1,
       availableSizes: ['M', 'L'],
+      batchSettingsPrintRevision: 4,
       pattaBatchConfigs: {
         'model-a': { partyNumber: '1', isCustomParty: false, totalIshSoni: '972', color: 'Qora', sizes: { M: '9', L: '' } },
         'model-b': { partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Ko\'k', sizes: { M: '' } }
@@ -30,6 +31,7 @@ describe(' patta batch command payloads', () => {
     }], new Date('2026-09-23T10:00:00.000Z'));
 
     expect(result.batchId).toMatch(/^batch_/);
+    expect(result.batchSettingsBaseRevision).toBe(4);
     expect(result.parties).toHaveLength(1);
     expect(result.parties[0]).toMatchObject({
       id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
@@ -54,6 +56,7 @@ describe(' patta batch command payloads', () => {
       nextPartyNumber: 1,
       nextPattaNumber: 1,
       availableSizes: ['M'],
+      batchSettingsPrintRevision: 0,
       pattaBatchConfigs: { 'model-a': { partyNumber: '2', isCustomParty: true, totalIshSoni: '25', sizes: { M: '1' } } },
       printedPartyHistory: [],
       submittedTickets: [],
@@ -73,6 +76,7 @@ describe(' patta batch command payloads', () => {
     const state: any = {
       models, workers: [], nextPartyNumber: 2, nextPattaNumber: 13,
       availableSizes: ['M'],
+      batchSettingsPrintRevision: 0,
       pattaBatchConfigs: { 'model-b': { partyNumber: '2', isCustomParty: false, totalIshSoni: '100', color: 'Qora', sizes: { M: '12' } } },
       printedPartyHistory: history, submittedTickets: [], deletedPartyIds: []
     };
@@ -99,6 +103,7 @@ describe(' patta batch command payloads', () => {
     const state: any = {
       models, workers: [], nextPartyNumber: 1, nextPattaNumber: 13,
       availableSizes: ['M'],
+      batchSettingsPrintRevision: 0,
       pattaBatchConfigs: {},
       printedPartyHistory: history, submittedTickets: [], deletedPartyIds: [], reusablePattaRanges: [{ start: 1, end: 12 }]
     };

@@ -487,7 +487,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     const exactB = 'rec_1788930871307_cg1iv';
     const jsonPath = createSampleLegacyJson('another-company', {
       printedPartyHistory: [
-        { id: exactA, partyNumber: '2', modelId: 'model_101', isClosed: false },
+        { id: exactA, partyNumber: '2', modelId: 'model_101', isClosed: false, sizeOrder: ['XXL', 'M'] },
         { id: exactB, partyNumber: '2', modelId: 'model_101', isClosed: false }
       ],
       submittedTickets: []
@@ -506,6 +506,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     try {
       expect(db.prepare("SELECT COUNT(*) AS count FROM parties WHERE party_number = '2'").get().count).toBe(2);
       expect(db.prepare("SELECT COUNT(*) AS count FROM legacy_party_collision_exceptions WHERE party_number = '2' AND status = 'ACTIVE'").get().count).toBe(2);
+      expect(db.prepare('SELECT size_order_json FROM parties WHERE id = ?').get(exactA).size_order_json).toBe('["XXL","M"]');
     } finally {
       databaseManager.closeCompanyDatabase('another-company');
     }
@@ -536,6 +537,20 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     } finally {
       databaseManager.closeCompanyDatabase(companyId);
     }
+  });
+
+  it('upgrades a legacy party table to sizeOrder without changing existing party facts', () => {
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyId);
+    db.prepare(`INSERT INTO parties(id,company_id,party_number,physical_party_number,model_id,sizes_json,status,created_at,updated_at)
+      VALUES ('legacy-order-party', ?, '7', '7', 'legacy-model', '{"M":2}', 'ACTIVE', '2026-01-01', '2026-01-01')`).run(companyId);
+    db.exec('ALTER TABLE parties DROP COLUMN size_order_json');
+    db.prepare('DELETE FROM schema_meta WHERE version = 24').run();
+    db.pragma('user_version = 23');
+    expect(db.prepare("SELECT name FROM pragma_table_info('parties') WHERE name='size_order_json'").get()).toBeUndefined();
+
+    expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 23, currentVersion: 24, appliedCount: 1 });
+    expect(db.prepare('SELECT sizes_json,size_order_json,status FROM parties WHERE id=?').get('legacy-order-party'))
+      .toEqual({ sizes_json: '{"M":2}', size_order_json: null, status: 'ACTIVE' });
   });
 
   it('migration 016 creates one canonical refresh operation for previously rejected model snapshots', () => {
@@ -612,7 +627,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       db.prepare(`INSERT INTO production_adjustments (adjustment_id, company_id, model_id, worker_id, op_name,
         delta_qty, reason, status, created_at, created_by) VALUES ('legacy-adjustment', ?, 'model-old', 1,
         'Sew', 2, 'Legacy', 'APPROVED', datetime('now'), 'operator')`).run(companyId);
-      expect(migrationRunner.applyMigrations(db).currentVersion).toBe(22);
+      expect(migrationRunner.applyMigrations(db).currentVersion).toBe(MIGRATIONS.length);
       expect(db.prepare(`SELECT original_ticket_id, original_entry_id, original_period_id,
         original_rate_snapshot, attribution_status FROM production_adjustments WHERE adjustment_id = 'legacy-adjustment'`).get())
         .toEqual({ original_ticket_id: null, original_entry_id: null, original_period_id: null,
@@ -685,7 +700,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       expect(db.prepare("SELECT COUNT(*) AS count FROM pragma_table_info('local_outbox') WHERE name IN ('accepted_payload_hash','accepted_server_revision','accepted_change_id')").get().count).toBe(0);
       expect(db.prepare(`SELECT operation_id, payload_json, payload_hash, status FROM local_outbox ORDER BY operation_id`).all())
         .toEqual(outboxBefore.map(({ operation_id, payload_json, payload_hash, status }: any) => ({ operation_id, payload_json, payload_hash, status })));
-      expect(migrationRunner.applyMigrations(db).currentVersion).toBe(22);
+      expect(migrationRunner.applyMigrations(db).currentVersion).toBe(MIGRATIONS.length);
       expect(db.prepare(`SELECT operation_id, company_id, command_type, entity_type, entity_id, base_revision,
         payload_json, payload_hash, status, accepted_payload_hash, accepted_server_revision, accepted_change_id
         FROM local_outbox ORDER BY operation_id`).all()).toEqual(outboxBefore.map((row: any) => ({
@@ -697,12 +712,12 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       expect(db.prepare('SELECT * FROM ticket_entries').all()).toEqual(entriesBefore);
       expect(db.prepare('SELECT * FROM production_adjustments').all()).toEqual(correctionsBefore);
       expect(db.prepare('SELECT * FROM period_archives').all()).toEqual(archivesBefore);
-      expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 22, currentVersion: 22, appliedCount: 0 });
+      expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 24, currentVersion: 24, appliedCount: 0 });
     } finally { db.close(); }
 
     const reopened = new Database(dbPath);
     try {
-      expect(migrationRunner.verifySchemaVersionConsistency(reopened)).toBe(22);
+      expect(migrationRunner.verifySchemaVersionConsistency(reopened)).toBe(MIGRATIONS.length);
       expect(reopened.prepare(`SELECT operation_id, payload_json, payload_hash, status,
         accepted_payload_hash, accepted_server_revision, accepted_change_id FROM local_outbox ORDER BY operation_id`).all()).toEqual([
         { operation_id: 'old-ack', payload_json: payloads[1][2], payload_hash: payloads[1][3], status: 'SYNCED', accepted_payload_hash: null, accepted_server_revision: null, accepted_change_id: null },

@@ -17,13 +17,13 @@ describe('workbook store  patta boundary', () => {
     const previousState = useWorkbookStore.getState();
     useWorkbookStore.setState({ availableSizes: ['S'] });
 
-    await useWorkbookStore.getState().addCustomSize('XL');
+    await useWorkbookStore.getState().addCustomSize('model-a', 'XL');
 
     expect(useWorkbookStore.getState().availableSizes).toEqual(['S']);
     useWorkbookStore.setState(previousState, true);
   });
 
-  it('keeps a selected numeric size in the shared catalog and batch config', async () => {
+  it('keeps an entered numeric size in only its model definition and draft', async () => {
     vi.stubGlobal('window', {
       electronAPI: {
         getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' })
@@ -39,33 +39,37 @@ describe('workbook store  patta boundary', () => {
 
     await useWorkbookStore.getState().updatePattaBatchSize('model-a', '42', '3');
 
-    expect(useWorkbookStore.getState().availableSizes).toEqual(['S', 'M', '42']);
+    expect(useWorkbookStore.getState().availableSizes).toEqual(['S', 'M']);
     expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizes).toMatchObject({ '42': '3' });
     useWorkbookStore.setState(previousState, true);
   });
 
-  it('deletes custom size labels from the catalog and every model config, then allows them to be added again', async () => {
+  it('blocks removal of a positive count and keeps add/remove scoped to the chosen model', async () => {
     vi.stubGlobal('window', {
       electronAPI: { getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'legacy' }) }
     });
     const previousState = useWorkbookStore.getState();
     const saveToDisk = vi.fn().mockResolvedValue(true);
     useWorkbookStore.setState({
-      models: [{ id: 'model-a', name: 'Model A', color: 'Qora' } as any],
+      models: [{ id: 'model-a', name: 'Model A', color: 'Qora' }, { id: 'model-b', name: 'Model B', color: 'Qora' }] as any,
       availableSizes: ['S', '40-42'],
       pattaBatchConfigs: {
-        'model-a': { partyNumber: '', totalIshSoni: '', color: 'Qora', sizes: { '40-42': '3', S: '2' } }
+        'model-a': { partyNumber: '', totalIshSoni: '', color: 'Qora', sizes: { '40-42': '3', S: '2' }, sizeNames: ['S', '40-42'] },
+        'model-b': { partyNumber: '', totalIshSoni: '', color: 'Qora', sizes: { S: '1' }, sizeNames: ['S'] }
       },
       saveToDisk
     } as any);
 
     try {
-      await useWorkbookStore.getState().deleteCustomSize('40-42');
-      expect(useWorkbookStore.getState().availableSizes).toEqual(['S']);
-      expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizes).toEqual({ S: '2' });
-
-      await useWorkbookStore.getState().addCustomSize('40-42');
-      expect(useWorkbookStore.getState().availableSizes).toEqual(['S', '40-42']);
+      await useWorkbookStore.getState().deleteCustomSize('model-a', '40-42');
+      expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizeNames).toEqual(['S', '40-42']);
+      expect(useWorkbookStore.getState().pattaBatchConfigs['model-b']).toMatchObject({ sizes: { S: '1' }, sizeNames: ['S'] });
+      useWorkbookStore.setState((state) => ({ pattaBatchConfigs: { ...state.pattaBatchConfigs, 'model-a': { ...state.pattaBatchConfigs['model-a'], sizes: { ...state.pattaBatchConfigs['model-a'].sizes, '40-42': '0' } } } }));
+      await useWorkbookStore.getState().deleteCustomSize('model-a', '40-42');
+      expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizeNames).toEqual(['S']);
+      await useWorkbookStore.getState().addCustomSize('model-a', 'XXL');
+      expect(useWorkbookStore.getState().pattaBatchConfigs['model-a'].sizeNames).toEqual(['S', 'XXL']);
+      expect(useWorkbookStore.getState().pattaBatchConfigs['model-b'].sizeNames).toEqual(['S']);
       expect(saveToDisk).toHaveBeenCalled();
     } finally {
       useWorkbookStore.setState(previousState, true);

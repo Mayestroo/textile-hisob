@@ -1,4 +1,6 @@
 import { expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const Fastify = require('fastify');
 const { registerWorkerRoutes } = require('./workerRoutes.cjs');
@@ -18,6 +20,14 @@ it('serves the packaged worker Telegram WebApp from the repository-root asset pa
     expect(response.headers['content-type']).toContain('text/html');
     expect(response.body).toContain('Telegram WebApp SDK');
     expect(response.body).toContain('/api/worker/profile');
+    for (const name of ['IBMPlexSans[wdth,wght].ttf', 'Onest[wght].ttf']) {
+      const font = await app.inject({ method: 'GET', url: `/worker-app-font/${encodeURIComponent(name)}` });
+      expect(font.statusCode).toBe(200);
+      expect(font.headers['content-type']).toContain('font/ttf');
+      expect(font.rawPayload).toEqual(readFileSync(join(__dirname, '../../../bots/worker/webapp', name)));
+      expect(font.rawPayload).toEqual(readFileSync(join(__dirname, '../../../desktop/renderer/assets/fonts', name)));
+    }
+    expect((await app.inject({ method: 'GET', url: '/worker-app-font/private.txt' })).statusCode).toBe(404);
   } finally {
     await app.close();
   }

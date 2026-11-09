@@ -27,7 +27,9 @@ describe(' Admin WebApp static security and usability boundaries', () => {
     expect(javascript).toContain("credentials: 'same-origin'");
     expect(javascript).not.toMatch(/initDataUnsafe/i);
     expect(javascript).toContain('NovdaFinancialIntent.create(window.localStorage, navigator.locks)');
-    expect(javascript).not.toMatch(/\bsessionStorage\b/i);
+    expect(javascript).toContain('hisob.company.worker-filter.v1:');
+    expect(javascript).toContain('JSON.stringify([state.sessionActorId || \'\', companyPanel.companyId || \'\', companyPanel.periodId || \'\'])');
+    expect(javascript).not.toMatch(/sessionStorage\.(?:setItem|getItem)\(['"](?:session|token|auth)/i);
     expect(html).toContain('<script src="/admin-app/financial-intent.js" defer></script>');
     expect(javascript).toContain('sendFinancialIntent(scope,');
     expect(javascript).toContain("financialScope(companyPanel.companyId, 'company-advance')");
