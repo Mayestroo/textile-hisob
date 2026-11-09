@@ -1643,14 +1643,14 @@ const MIGRATIONS = [
     version: 25,
     name: '025_explicit_patta_lifecycle',
     up: (db) => {
-      db.exec(`ALTER TABLE parties ADD COLUMN ended_at TEXT;
-        ALTER TABLE parties ADD COLUMN ended_operation_id TEXT;
-        ALTER TABLE parties ADD COLUMN month_closed_period_id TEXT;
-        ALTER TABLE periods ADD COLUMN close_operation_id TEXT;`);
-      db.exec(`CREATE TRIGGER patta_lifecycle_party_pair_insert BEFORE INSERT ON parties
+      for (const [table, columns] of Object.entries({ parties: ['ended_at', 'ended_operation_id', 'month_closed_period_id'], periods: ['close_operation_id'] })) {
+        const existing = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+        for (const column of columns) if (!existing.has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+      }
+      db.exec(`CREATE TRIGGER IF NOT EXISTS patta_lifecycle_party_pair_insert BEFORE INSERT ON parties
         WHEN (NEW.ended_at IS NULL) != (NEW.ended_operation_id IS NULL)
         BEGIN SELECT RAISE(ABORT, 'INVALID_PARTY_FINISH_PAIR'); END;
-        CREATE TRIGGER patta_lifecycle_party_pair_update BEFORE UPDATE ON parties
+        CREATE TRIGGER IF NOT EXISTS patta_lifecycle_party_pair_update BEFORE UPDATE ON parties
         WHEN (NEW.ended_at IS NULL) != (NEW.ended_operation_id IS NULL)
         BEGIN SELECT RAISE(ABORT, 'INVALID_PARTY_FINISH_PAIR'); END;`);
     }

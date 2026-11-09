@@ -2917,6 +2917,8 @@
     const isSubscreen = name === 'models' || name === 'worker-detail' || name === 'tickets';
     const bottomNav = document.querySelector('.co-bottom-nav');
     if (bottomNav) bottomNav.hidden = isSubscreen;
+    const app = document.querySelector('.company-app');
+    if (app) app.classList.toggle('co-subscreen-view', isSubscreen);
     const backBtn = byId('companyClose');
     if (backBtn) {
       backBtn.classList.toggle('is-hidden', !isSubscreen);
@@ -3097,7 +3099,8 @@
   }
 
   function renderCompanyWorkers() {
-    const host = byId('companyWorkers'); host.replaceChildren();
+    const host = byId('companyWorkers');
+    host.replaceChildren();
     const q = companyPanel.workerQuery.trim().toLocaleLowerCase();
     const workers = companyPanel.workers.filter((worker) => {
       const net = Number(worker.net || 0);
@@ -3108,20 +3111,42 @@
       return matchesFilter && (!q || String(worker.workerId).includes(q) || String(worker.name || '').toLocaleLowerCase().includes(q));
     });
     setText('companyWorkerCaption', `${workers.length} / ${companyPanel.workers.length} ta · ${selectedPeriod()?.name || 'Davr yo‘q'}`);
-    if (!workers.length) { host.appendChild(coText('p', 'co-empty', 'Ishchilar topilmadi.')); return; }
+    if (!workers.length) {
+      host.appendChild(coText('p', 'co-empty', 'Ishchilar topilmadi.'));
+      return;
+    }
     for (const worker of workers) {
-      const row = coText('button', 'co-worker-row'); row.type = 'button';
+      const row = coText('button', 'co-worker-row');
+      row.type = 'button';
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-label', `${worker.name || `Ishchi #${worker.workerId}`} hisoboti`);
       row.addEventListener('click', () => openCompanyWorker(worker));
+
       const left = coText('span', 'co-worker-left');
       left.appendChild(coText('strong', 'co-worker-name', worker.name || `Ishchi #${worker.workerId}`));
-      left.appendChild(coText('small', 'co-worker-status', `Ishbay ${coMoney(worker.pieceworkGross || 0)} + Oklad ${coMoney(worker.oklad || 0)} − Magazin ${coMoney(worker.magazin || 0)}`));
-      if (payrollIncomplete(worker)) left.appendChild(coText('small', 'co-worker-status negative', 'Hisob to‘liq emas · oraliq summa'));
-      else if (Number(worker.net || 0) < 0) left.appendChild(coText('small', 'co-worker-status negative', 'Manfiy'));
-      else if (Number(worker.avans || 0) > 0) left.appendChild(coText('small', 'co-worker-status', 'Avansli'));
-      else if (Number(worker.staj || 0) > 0) left.appendChild(coText('small', 'co-worker-status', 'Staj'));
+
+      const net = Number(worker.net || 0);
+      const staj = Number(worker.staj || 0);
+      const avans = Number(worker.avans || 0);
+
+      if (payrollIncomplete(worker)) {
+        left.appendChild(coText('span', 'co-worker-badge co-worker-status warning', 'Hisob to‘liq emas · oraliq summa'));
+      } else if (net < 0) {
+        left.appendChild(coText('span', 'co-worker-badge co-worker-status negative', 'Manfiy'));
+      } else if (staj > 0) {
+        left.appendChild(coText('span', 'co-worker-badge co-worker-status staj', 'Staj'));
+      } else if (avans > 0) {
+        left.appendChild(coText('span', 'co-worker-badge co-worker-status avans', 'Avansli'));
+      }
+
       row.appendChild(left);
-      const amount = coText('strong', `co-worker-amount${Number(worker.net || 0) < 0 ? ' negative' : ''}`, payrollAmount(worker, `${Number(worker.net || 0) < 0 ? '−' : ''}${coMoney(Math.abs(Number(worker.net || 0)))}`));
-      row.appendChild(amount); host.appendChild(row);
+
+      const sign = net < 0 ? '−' : '';
+      const amountStr = `${sign}${coMoney(Math.abs(net))}`;
+      const amountClass = `co-worker-amount${net < 0 ? ' negative' : net === 0 ? ' zero' : ''}`;
+      row.appendChild(coText('strong', amountClass, amountStr));
+
+      host.appendChild(row);
     }
   }
 
@@ -3170,14 +3195,19 @@
   }
 
   function renderCompanyParties() {
-    const host = byId('companyParties'); host.replaceChildren();
+    const host = byId('companyParties');
+    const homeHost = byId('companyHomeParties');
+    if (host) host.replaceChildren();
+    if (homeHost) homeHost.replaceChildren();
     const active = companyPanel.parties.filter((party) => !isPartyClosed(party));
     const closed = companyPanel.parties.filter((party) => isPartyClosed(party));
     const chips = byId('companyPartyFilters');
-    const activeButton = chips.querySelector('[data-filter="active"]');
-    const closedButton = chips.querySelector('[data-filter="closed"]');
-    activeButton.textContent = `Patta hisob · ${active.length}`;
-    closedButton.textContent = `Yopilgan · ${closed.length}`;
+    if (chips) {
+      const activeButton = chips.querySelector('[data-filter="active"]');
+      const closedButton = chips.querySelector('[data-filter="closed"]');
+      if (activeButton) activeButton.textContent = `Patta hisob · ${active.length}`;
+      if (closedButton) closedButton.textContent = `Yopilgan · ${closed.length}`;
+    }
     const isClosedFilter = companyPanel.partyFilter === 'closed';
     const list = isClosedFilter ? closed : active;
 
@@ -3204,22 +3234,23 @@
       );
     }
 
-    const grouped = new Map();
-    for (const party of list) {
-      const key = party.modelId || party.modelName || party.partyRecordId;
-      const group = grouped.get(key) || {
-        modelId: party.modelId,
-        modelName: party.modelName,
-        partyNumber: party.partyNumber,
-        parties: []
-      };
-      group.parties.push(party);
-      grouped.set(key, group);
+    function groupPartiesList(partiesList) {
+      const grouped = new Map();
+      for (const party of partiesList) {
+        const key = party.modelId || party.modelName || party.partyRecordId;
+        const group = grouped.get(key) || {
+          modelId: party.modelId,
+          modelName: party.modelName,
+          partyNumber: party.partyNumber,
+          parties: []
+        };
+        group.parties.push(party);
+        grouped.set(key, group);
+      }
+      return grouped;
     }
-    const selected = [...grouped.values()].slice(0, 100);
-    if (!selected.length) { host.appendChild(coText('p', 'co-empty', 'Partiyalar topilmadi.')); return; }
-    for (const group of selected) {
-      const metrics = getPartiesTicketMetrics(group.parties, isClosedFilter);
+
+    function createPartyCard(group, metrics, isClosed) {
       const card = coText('article', 'co-party-row');
       card.style.cursor = 'pointer';
       card.setAttribute('role', 'button');
@@ -3236,17 +3267,60 @@
       });
 
       const head = coText('div', 'co-party-head');
-      head.appendChild(coText('strong', '', group.modelName || group.modelId || `№ ${group.partyNumber}`));
+      const titleWrap = coText('div', 'co-party-title-wrap');
+      titleWrap.appendChild(coText('strong', 'co-party-name', group.modelName || group.modelId || `№ ${group.partyNumber}`));
+
+      const modelKey = group.modelId || group.modelName;
+      const model = companyPanel.models.find((m) =>
+        (m.modelId && String(m.modelId).toLowerCase() === String(modelKey).toLowerCase()) ||
+        (m.name && m.name.trim().toLowerCase() === String(group.modelName || modelKey).trim().toLowerCase())
+      );
+      const modelStats = model ? getModelMonthStats(model) : null;
+      const modelPrice = modelStats?.modelPrice || (Array.isArray(model?.operations) ? model.operations.reduce((sum, op) => sum + (Number(op?.rate) || 0), 0) : 0);
+      if (modelPrice > 0) {
+        titleWrap.appendChild(coText('span', 'co-party-rate', `(${number(modelPrice)} so‘m)`));
+      }
+      head.appendChild(titleWrap);
       head.appendChild(coText('span', 'co-party-count', `${number(group.parties.length)} partiya`));
       card.appendChild(head);
+
       const meta = coText('div', 'co-party-meta');
       meta.appendChild(coText('span', '', `Patta ${number(metrics.enteredPatta)} / ${number(metrics.totalPatta)}`));
       meta.appendChild(coText('span', '', `Ish ${number(metrics.enteredWork)} / ${number(metrics.totalWork)} dona`));
       card.appendChild(meta);
+
       const progress = coText('div', 'co-progress'); const fill = coText('i');
       const pct = metrics.totalPatta > 0 ? Math.min(100, Math.round((metrics.enteredPatta / metrics.totalPatta) * 100)) : 0;
-      fill.style.width = isClosedFilter ? '100%' : `${pct}%`;
-      progress.appendChild(fill); card.appendChild(progress); host.appendChild(card);
+      fill.style.width = isClosed ? '100%' : `${pct}%`;
+      progress.appendChild(fill); card.appendChild(progress);
+
+      return card;
+    }
+
+    if (host) {
+      const grouped = groupPartiesList(list);
+      const selected = [...grouped.values()].slice(0, 100);
+      if (!selected.length) {
+        host.appendChild(coText('p', 'co-empty', 'Partiyalar topilmadi.'));
+      } else {
+        for (const group of selected) {
+          const metrics = getPartiesTicketMetrics(group.parties, isClosedFilter);
+          host.appendChild(createPartyCard(group, metrics, isClosedFilter));
+        }
+      }
+    }
+
+    if (homeHost) {
+      const activeGrouped = groupPartiesList(active);
+      const activeSelected = [...activeGrouped.values()].slice(0, 100);
+      if (!activeSelected.length) {
+        homeHost.appendChild(coText('p', 'co-empty', 'Faol partiyalar topilmadi.'));
+      } else {
+        for (const group of activeSelected) {
+          const metrics = getPartiesTicketMetrics(group.parties, false);
+          homeHost.appendChild(createPartyCard(group, metrics, false));
+        }
+      }
     }
   }
 
@@ -3655,6 +3729,7 @@
   }
 
   function openCompanyWorker(worker) {
+    if (!worker) return;
     companyPanel.selectedWorker = worker;
     setText('companyDetailName', worker.name || `Ishchi #${worker.workerId}`);
     const badgeHost = byId('companyDetailBadges');
@@ -3662,16 +3737,23 @@
       coText('span', 'co-badge co-badge-id', `ID ${worker.workerId}`),
       coText('span', `co-badge co-badge-status ${worker.status === 'ACTIVE' ? 'active' : ''}`, worker.status === 'ACTIVE' ? 'Faol' : 'Nofaol')
     );
-    setText('companyDetailMonth', `Sof foyda · ${selectedPeriod()?.name || 'Davr'}${payrollWarning([worker])}`);
+    setText('companyDetailMonth', `Sof foyda · ${selectedPeriod()?.name || 'Davr'}`);
     setText('companyDetailNet', payrollAmount(worker, coMoney(worker.net || 0)));
     setText('companyDetailPiecework', payrollAmount(worker, coMoney(worker.pieceworkGross || 0)));
     setText('companyDetailOklad', payrollAmount(worker, coMoney(worker.oklad || 0)));
     setText('companyDetailGross', payrollAmount(worker, coMoney(worker.gross || 0)));
     setText('companyDetailMagazin', payrollAmount(worker, coMoney(worker.magazin || 0)));
     setText('companyDetailPieces', `${number(worker.pieces || 0)} dona`);
-    setText('companyDetailAdvanceAmount', worker.avans ? `−${coMoney(worker.avans)}` : '—');
-    setText('companyDetailFine', worker.jarima ? `−${coMoney(worker.jarima)}` : '—');
-    setText('companyDetailStaj', worker.staj ? `−${coMoney(worker.staj)}` : '—');
+    const advVal = Number(worker.avans || 0) > 0 ? `−${coMoney(worker.avans)}` : '—';
+    const fineVal = Number(worker.jarima || 0) > 0 ? `−${coMoney(worker.jarima)}` : '—';
+    const stajVal = Number(worker.staj || 0) > 0 ? `−${coMoney(worker.staj)}` : '—';
+    setText('companyDetailAdvanceAmount', advVal);
+    setText('companyDetailFine', fineVal);
+    setText('companyDetailStaj', stajVal);
+    const advEl = byId('companyDetailAdvanceAmount');
+    if (advEl) advEl.classList.toggle('co-muted-dash', advVal === '—');
+    const fineEl = byId('companyDetailFine');
+    if (fineEl) fineEl.classList.toggle('co-muted-dash', fineVal === '—');
     const tickets = companyPanel.tickets.filter((ticket) => String(ticket.workerId) === String(worker.workerId));
     setText('companyDetailTicketCount', tickets.length);
     const host = byId('companyWorkerTickets'); host.replaceChildren();
@@ -3701,7 +3783,8 @@
 
     const right = coText('div', 'co-ticket-right');
     const total = ticket.rate == null ? null : Number(ticket.rate) * Number(ticket.quantity || 0);
-    right.appendChild(coText('strong', 'co-ticket-sum', total == null ? 'Narx noma’lum' : `${coMoney(total)} so‘m`));
+    const isUnknown = total == null;
+    right.appendChild(coText('strong', `co-ticket-sum${isUnknown ? ' unknown' : ''}`, isUnknown ? 'Narx noma’lum' : `${coMoney(total)} so‘m`));
     right.appendChild(coText('small', 'co-ticket-qty', `${coMoney(ticket.quantity || 0)} dona`));
     row.appendChild(right);
     return row;

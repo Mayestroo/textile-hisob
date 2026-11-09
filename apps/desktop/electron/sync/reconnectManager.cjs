@@ -154,6 +154,9 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     const pullRes = await syncClient.pullChanges(currentCursor, 100);
     if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
     if (pullRes.capabilities?.voidedPattaReuse === true) voidedPattaReuseSupported = true;
+    db.prepare(`INSERT INTO local_meta(key, value, updated_at) VALUES('patta_lifecycle_v1', ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+      .run(pullRes.capabilities?.pattaLifecycleV1 === true ? '1' : '0', new Date().toISOString());
 
     const pulledItems = Array.isArray(pullRes.items) ? pullRes.items : [];
     if (pulledItems.length > 0) {
@@ -205,6 +208,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   try { applyRes = applyChangesBatch(db, companyId, finalItems, finalPullRes.nextCursor, {
     nextPattaNumber: finalPullRes.nextPattaNumber, feedResponse: finalPullRes
   }); } catch (error) { markFeedUnavailable(db); throw error; }
+  await require('./lifecycleArchiveReconcile.cjs').reconcileLifecycleArchives(db, companyId, syncClient);
   const finalProofState = `${db.prepare("SELECT value FROM local_meta WHERE key='feed_contact_state'").get()?.value || ''}:${String(getLocalCursor(db))}`;
   proofChanged = initialProofState !== finalProofState;
   pulledFinal += applyRes.appliedCount;

@@ -8,6 +8,10 @@ const { rebuildCompanyProjections } = require('./projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.cjs');
 const { validateCausalOrdering } = require('./commandPipeline.cjs');
 const { findAvailablePattaStart } = require('../../../../packages/domain/pattaSequence.cjs');
+const { finishScopeHash } = require('../../../../packages/domain/pattaFinishScope.cjs');
+
+const LIFECYCLE_AUTHORITY_FIELDS = ['endedAt', 'endedOperationId', 'monthClosedPeriodId', 'closeOperationId',
+  'ended_at', 'ended_operation_id', 'month_closed_period_id', 'close_operation_id'];
 
 const COMMAND_ENTITY_TYPES = Object.freeze({
   UpsertModel: 'model',
@@ -446,6 +450,11 @@ function normalizeCommand(command, activeCompanyId) {
     throw createCommandError('INVALID_COMMAND_PAYLOAD', 'Workbook command must be an object');
   }
   const commandType = assertIdentifier(command.commandType, 'commandType');
+  if (LIFECYCLE_AUTHORITY_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(command.payload || {}, field)
+    || Object.prototype.hasOwnProperty.call(command, field)
+    || (Array.isArray(command.payload?.parties) && command.payload.parties.some((party) => Object.prototype.hasOwnProperty.call(party, field))))) {
+    throw createCommandError('FORBIDDEN_AUTHORITY_FIELD', 'Lifecycle authority is written by accepted commands only');
+  }
   const entityType = COMMAND_ENTITY_TYPES[commandType];
   if (!entityType) throw createCommandError('UNKNOWN_COMMAND', `Unsupported workbook command: ${commandType}`);
   const companyId = assertText(command.companyId, 'companyId', 64);
@@ -1100,6 +1109,14 @@ function executeClosePeriod(db, normalized) {
     const result = completeParty.run(now, JSON.stringify(allArchived), now, companyId, partyId);
     if (result.changes !== 1) throw createCommandError('PARTY_NOT_FOUND', `Completed party "${partyId}" was not found or is closed`);
   }
+  if (normalized.localArchiveJson) {
+    const effects = JSON.parse(normalized.localArchiveJson);
+    if (effects.kind === 'period-close-effects') {
+      effects.effects = { completedPartyIds, rolledOverParties, appliedAt: now };
+      normalized.localArchiveJson = JSON.stringify(effects);
+      if (Buffer.byteLength(normalized.localArchiveJson) > 8 * 1024 * 1024) throw createCommandError('PERIOD_EFFECTS_TOO_LARGE', 'Period effects exceed 8 MiB');
+    }
+  }
   const rolloverParty = db.prepare(`
     UPDATE parties SET archived_patta_numbers_json = ?, updated_at = ?
     WHERE company_id = ? AND id = ? AND status != 'CLOSED'
@@ -1116,12 +1133,15 @@ function executeClosePeriod(db, normalized) {
   `).run(companyId, entityId, period.start_date, payload.endDate);
   db.prepare('DELETE FROM local_ticket_forms WHERE company_id = ?').run(companyId);
 
-  if (normalized.localArchiveJson) {
-    const archive = JSON.parse(normalized.localArchiveJson);
+  if (normalized.periodArchiveForWrite) {
+    const archive = normalized.periodArchiveForWrite;
     archive.completedPartiesCount = completedPartyIds.length;
     archive.rolledOverPartiesCount = rolledOverParties.length;
     const localArchiveJson = JSON.stringify(archive);
     const sha256 = computePayloadHash(canonicalStringify(archive));
+    const record = JSON.parse(normalized.localArchiveJson);
+    record.effects.provisionalArchiveSha256 = sha256;
+    normalized.localArchiveJson = JSON.stringify(record);
     db.prepare(`
       INSERT INTO period_archives (company_id, period_id, archive_json, sha256, archived_at)
       VALUES (?, ?, ?, ?, ?)
@@ -1196,10 +1216,12 @@ function executeCompletePartySeries(db, normalized) {
   if (normalized.payload.endDate < period.start_date || (period.end_date && normalized.payload.endDate > period.end_date)) {
     throw createCommandError('INVALID_PERIOD_RANGE', 'Party series close date is outside the open period');
   }
-  db.prepare(`
-    UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = ?, updated_at = ?
-    WHERE company_id = ? AND status != 'CLOSED'
-  `).run(now, now, normalized.companyId);
+  if (normalized.finishParties.length === 0) return 0;
+  for (const party of normalized.finishParties) {
+    db.prepare(`UPDATE parties SET status = 'CLOSED', is_closed = 1,
+      closed_at = COALESCE(closed_at, ?), updated_at = ? WHERE company_id = ? AND id = ?`)
+      .run(now, now, normalized.companyId, party.id);
+  }
   db.prepare(`UPDATE tickets SET is_closed = 1 WHERE company_id = ? AND (
     period_id = ? OR (period_id IS NULL AND date(submitted_at) >= date(?) AND date(submitted_at) <= date(?))
   )`).run(normalized.companyId, normalized.payload.periodId, period.start_date, normalized.payload.endDate);
@@ -1211,6 +1233,9 @@ function executeCompletePartySeries(db, normalized) {
     VALUES (?, 1, ?)
     ON CONFLICT(company_id) DO UPDATE SET next_patta_number = 1, updated_at = excluded.updated_at
   `).run(normalized.companyId, now);
+  const effectRecord = JSON.parse(normalized.localArchiveJson);
+  effectRecord.effects.appliedAt = now;
+  normalized.localArchiveJson = JSON.stringify(effectRecord);
   return 0;
 }
 
@@ -1260,17 +1285,61 @@ function saveTicketDraft(baseUserDataPath, activeCompanyId, companyId, modelId, 
 
 function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, options = {}) {
   const normalized = normalizeCommand(command, activeCompanyId);
-  const payloadJson = canonicalStringify({
-    ...normalized.payload,
-    dependsOnOperationId: normalized.dependsOnOperationId,
-    causalSequence: normalized.causalSequence
-  });
-  if (Buffer.byteLength(payloadJson, 'utf8') > 64 * 1024) {
-    throw createCommandError('PAYLOAD_TOO_LARGE', 'Workbook command exceeds the 64 KiB  operation limit');
-  }
-  const payloadHash = computePayloadHash(payloadJson);
   const db = getCompanyDatabase(baseUserDataPath, normalized.companyId);
   const result = db.transaction(() => {
+    const previous = getOperation(db, normalized.companyId, normalized.operationId);
+    if (normalized.commandType === 'CompletePartySeries') {
+      if (previous) {
+        const saved = JSON.parse(previous.payload_json);
+        normalized.payload.finishScopeHash = saved.finishScopeHash;
+        if (!normalized.dependsOnOperationId) normalized.dependsOnOperationId = saved.dependsOnOperationId || null;
+      }
+      else {
+        const pendingClose = db.prepare(`SELECT operation_id FROM local_outbox WHERE company_id = ? AND command_type = 'ClosePeriod'
+          AND status IN ('PENDING','SENDING') ORDER BY rowid DESC LIMIT 1`).get(normalized.companyId);
+        if (pendingClose && !normalized.dependsOnOperationId) normalized.dependsOnOperationId = pendingClose.operation_id;
+        const pendingCompleted = new Set(db.prepare(`SELECT local_archive_json FROM local_outbox WHERE company_id = ?
+          AND command_type = 'ClosePeriod' AND status IN ('PENDING','SENDING') AND local_archive_json IS NOT NULL`)
+          .all(normalized.companyId).flatMap((row) => {
+            const effects = JSON.parse(row.local_archive_json);
+            return effects.kind === 'period-close-effects' ? effects.effects?.completedPartyIds || [] : [];
+          }));
+        const parties = db.prepare(`SELECT p.* FROM parties p WHERE p.company_id = ? AND p.is_archived = 0 AND p.ended_at IS NULL
+          AND ((p.status != 'CLOSED' AND p.is_closed = 0) OR EXISTS (SELECT 1 FROM periods closed
+            WHERE closed.company_id = p.company_id AND closed.id = p.month_closed_period_id
+              AND closed.is_closed = 1 AND closed.close_operation_id IS NOT NULL)) ORDER BY p.id`).all(normalized.companyId)
+          .concat([...pendingCompleted].map((id) => db.prepare('SELECT * FROM parties WHERE company_id = ? AND id = ? AND ended_at IS NULL AND is_archived = 0').get(normalized.companyId, id)).filter(Boolean))
+          .filter((party, index, all) => all.findIndex((other) => other.id === party.id) === index)
+          .sort((a, b) => a.id.localeCompare(b.id));
+        normalized.finishParties = parties;
+        normalized.payload.finishScopeHash = finishScopeHash({ companyId: normalized.companyId, periodId: normalized.payload.periodId,
+          parties: parties.map((party) => ({ id: party.id, expectedRevision: getNextEntityRevision(db, normalized.companyId, 'party', party.id, party.server_revision)
+            + (pendingCompleted.has(party.id) ? 1 : 0) })),
+          batchSettingsRevision: getNextBatchSettingsRevision(db, normalized.companyId,
+            db.prepare('SELECT server_revision FROM company_batch_settings WHERE company_id = ?').get(normalized.companyId)?.server_revision),
+          nextPattaNumber: db.prepare('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?').get(normalized.companyId)?.next_patta_number || 1 });
+        normalized.localArchiveJson = JSON.stringify({ version: 1, kind: 'series-finish-effects', operationId: normalized.operationId,
+          before: { parties, settings: db.prepare('SELECT * FROM patta_batch_settings WHERE company_id = ?').all(normalized.companyId),
+            sequence: db.prepare('SELECT * FROM company_patta_sequences WHERE company_id = ?').get(normalized.companyId) || null,
+            tickets: db.prepare('SELECT id, is_closed, server_revision FROM tickets WHERE company_id = ? AND period_id = ?')
+              .all(normalized.companyId, normalized.payload.periodId) },
+          effects: { partyIds: parties.map((party) => party.id) } });
+        if (Buffer.byteLength(normalized.localArchiveJson) > 8 * 1024 * 1024) throw createCommandError('SERIES_EFFECTS_TOO_LARGE', 'Series effects exceed 8 MiB');
+      }
+    }
+    if (!previous && normalized.commandType === 'ClosePeriod') {
+      normalized.periodArchiveForWrite = normalized.localArchiveJson ? JSON.parse(normalized.localArchiveJson) : null;
+      normalized.localArchiveJson = JSON.stringify({ version: 1, kind: 'period-close-effects', operationId: normalized.operationId,
+        periodArchive: normalized.periodArchiveForWrite,
+        before: { period: db.prepare('SELECT * FROM periods WHERE company_id = ? AND id = ?').get(normalized.companyId, normalized.entityId),
+          parties: db.prepare(`SELECT * FROM parties WHERE company_id = ? AND status != 'CLOSED' AND is_closed = 0`).all(normalized.companyId),
+          tickets: db.prepare(`SELECT id, is_closed, server_revision FROM tickets WHERE company_id = ? AND period_id = ?`).all(normalized.companyId, normalized.entityId) } });
+      if (Buffer.byteLength(normalized.localArchiveJson) > 8 * 1024 * 1024) throw createCommandError('PERIOD_EFFECTS_TOO_LARGE', 'Period effects exceed 8 MiB');
+    }
+    const payloadJson = canonicalStringify({ ...normalized.payload,
+      dependsOnOperationId: normalized.dependsOnOperationId, causalSequence: normalized.causalSequence });
+    if (Buffer.byteLength(payloadJson, 'utf8') > 64 * 1024) throw createCommandError('PAYLOAD_TOO_LARGE', 'Workbook command exceeds 64 KiB');
+    const payloadHash = computePayloadHash(payloadJson);
     const existingOperation = getOperation(db, normalized.companyId, normalized.operationId);
     if (existingOperation) {
       if (

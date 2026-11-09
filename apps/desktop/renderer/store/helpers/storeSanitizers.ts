@@ -264,6 +264,9 @@ export function sanitizePrintedPartyHistory(history: any[]): any[] {
 
   // 1. Deduplication and normalization by unique record ID
   const idMap = new Map<string, any>();
+  const acceptedFinish = (record: any) => record && typeof record.endedAt === 'string'
+    && Number.isFinite(Date.parse(record.endedAt)) && /^[A-Za-z0-9_-]{1,128}$/.test(record.endedOperationId)
+    ? { endedAt: record.endedAt, endedOperationId: record.endedOperationId } : null;
   for (const r of history) {
     if (!r) continue;
     const cleanId = String(r.id || '').trim();
@@ -271,7 +274,8 @@ export function sanitizePrintedPartyHistory(history: any[]): any[] {
 
     const existing = idMap.get(cleanId);
     if (!existing) {
-      idMap.set(cleanId, { ...r, id: cleanId });
+      idMap.set(cleanId, { ...r, id: cleanId,
+        endedAt: acceptedFinish(r)?.endedAt ?? null, endedOperationId: acceptedFinish(r)?.endedOperationId ?? null });
     } else {
       const merged = {
         ...existing,
@@ -279,6 +283,8 @@ export function sanitizePrintedPartyHistory(history: any[]): any[] {
         id: cleanId,
         isClosed: Boolean(existing.isClosed || r.isClosed),
         closedAt: r.closedAt || existing.closedAt,
+        ...(acceptedFinish(existing) || acceptedFinish(r) || { endedAt: null, endedOperationId: null }),
+        monthClosedPeriodId: existing.monthClosedPeriodId || r.monthClosedPeriodId || null,
         cumulativePattaCount: existing.cumulativePattaCount || r.cumulativePattaCount,
         cumulativeIshSoni: existing.cumulativeIshSoni || r.cumulativeIshSoni
       };
@@ -403,4 +409,3 @@ export function reconcileModelHisobQuantities(
     };
   });
 }
-

@@ -544,11 +544,13 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
     db.prepare(`INSERT INTO parties(id,company_id,party_number,physical_party_number,model_id,sizes_json,status,created_at,updated_at)
       VALUES ('legacy-order-party', ?, '7', '7', 'legacy-model', '{"M":2}', 'ACTIVE', '2026-01-01', '2026-01-01')`).run(companyId);
     db.exec('ALTER TABLE parties DROP COLUMN size_order_json');
-    db.prepare('DELETE FROM schema_meta WHERE version = 24').run();
+    db.prepare('DELETE FROM schema_meta WHERE version IN (24, 25)').run();
     db.pragma('user_version = 23');
     expect(db.prepare("SELECT name FROM pragma_table_info('parties') WHERE name='size_order_json'").get()).toBeUndefined();
 
-    expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 23, currentVersion: 24, appliedCount: 1 });
+    // The isolated fixture retains nullable v25 columns; the additive migration
+    // is replay-safe when upgrading metadata after an interrupted fixture.
+    expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 23, currentVersion: 25, appliedCount: 2 });
     expect(db.prepare('SELECT sizes_json,size_order_json,status FROM parties WHERE id=?').get('legacy-order-party'))
       .toEqual({ sizes_json: '{"M":2}', size_order_json: null, status: 'ACTIVE' });
   });
@@ -712,7 +714,7 @@ describe('Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation', () =
       expect(db.prepare('SELECT * FROM ticket_entries').all()).toEqual(entriesBefore);
       expect(db.prepare('SELECT * FROM production_adjustments').all()).toEqual(correctionsBefore);
       expect(db.prepare('SELECT * FROM period_archives').all()).toEqual(archivesBefore);
-      expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 24, currentVersion: 24, appliedCount: 0 });
+      expect(migrationRunner.applyMigrations(db)).toMatchObject({ previousVersion: 25, currentVersion: 25, appliedCount: 0 });
     } finally { db.close(); }
 
     const reopened = new Database(dbPath);

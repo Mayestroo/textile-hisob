@@ -270,7 +270,7 @@ describe('server ClosePeriod completion/query contract (NOT PostgreSQL runtime v
       if (sql.startsWith("UPDATE parties SET status = 'CLOSED'")) {
         expect(values[0]).toEqual(expect.any(String));
         expect(JSON.parse(values[1])).toEqual(complete ? [1] : []);
-        expect(values.slice(2)).toEqual([companyId, 'party-a']);
+        expect(values.slice(2)).toEqual([companyId, 'party-a', 'period-a']);
         partyClosed = true; return { rows: [{ server_revision: 2 }] };
       }
       if (sql.startsWith('UPDATE tickets SET is_closed')) {

@@ -42,7 +42,7 @@
         <span>Ortga</span>
       </button>
       <div class="co-brand">
-        <strong id="companyBrandName">—</strong>
+        <strong id="companyBrandName">comp_novda</strong>
         <span id="companyBrandRole">Company admin</span>
       </div>
       <span id="companyAvatar" class="co-avatar" aria-hidden="true"></span>
@@ -53,7 +53,7 @@
           <h1>Umumiy hisobot</h1>
           <div class="co-period-badge">
             <select id="companyPeriodSelect" class="co-period" aria-label="Hisobot davri"></select>
-            <svg class="co-period-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <svg class="co-period-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#26384A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
           </div>
         </div>
         <article class="co-profit">
@@ -61,15 +61,18 @@
           <div class="co-profit-value"><strong id="companyNet">0</strong> <small>so‘m</small></div>
         </article>
         <div class="co-stat-grid">
-          <article><span>Ishbay</span><strong id="companyPiecework">0</strong></article>
-          <article><span>Oklad</span><strong id="companyOklad">0</strong></article>
-          <article><span>Yalpi</span><strong id="companyGross">0</strong></article>
-          <article><span>Magazin</span><strong id="companyMagazin">0</strong></article>
+          <article><span>Jami ishlangan</span><strong id="companyGross">0</strong></article>
           <article><span>Berilgan avans</span><strong id="companyAdvance">0</strong></article>
-          <article><span>Jarima</span><strong id="companyFine">0</strong></article>
           <article><span>Doimiy staj</span><strong id="companyStaj">0</strong></article>
           <article><span>Ishchilar</span><strong id="companyWorkerCount">0 ta</strong></article>
         </div>
+        <div class="co-hidden-metrics" hidden aria-hidden="true">
+          <span id="companyPiecework">0</span>
+          <span id="companyOklad">0</span>
+          <span id="companyMagazin">0</span>
+          <span id="companyFine">0</span>
+        </div>
+        <div id="companyHomeParties" class="co-parties-container"></div>
         <div id="companyPriceWarning" class="co-warning" hidden>
           <span class="co-warning-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -80,7 +83,7 @@
           </div>
           <button id="companyWarningAction" data-co-go="models" type="button">Qo‘yish</button>
         </div>
-        <div class="co-actions">
+        <div class="co-actions" hidden>
           <button data-co-go="parties" type="button">
             <b class="co-action-icon green">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
@@ -235,14 +238,16 @@
           <div class="co-profit-value"><strong id="companyDetailNet">0</strong> <small>so‘m</small></div>
         </article>
         <div class="co-stat-grid">
-          <article><span>Ishbay</span><strong id="companyDetailPiecework">0</strong></article>
-          <article><span>Oklad</span><strong id="companyDetailOklad">0</strong></article>
-          <article><span>Yalpi</span><strong id="companyDetailGross">0</strong></article>
-          <article><span>Magazin</span><strong id="companyDetailMagazin">0</strong></article>
+          <article><span>Hisoblangan</span><strong id="companyDetailGross">0</strong></article>
           <article><span>Jami ish</span><strong id="companyDetailPieces">0 dona</strong></article>
           <article><span>Avans</span><strong id="companyDetailAdvanceAmount">—</strong></article>
           <article><span>Jarima</span><strong id="companyDetailFine">—</strong></article>
-          <article><span>Staj</span><strong id="companyDetailStaj">—</strong></article>
+        </div>
+        <div class="co-hidden-metrics" hidden aria-hidden="true">
+          <span id="companyDetailPiecework">0</span>
+          <span id="companyDetailOklad">0</span>
+          <span id="companyDetailMagazin">0</span>
+          <span id="companyDetailStaj">—</span>
         </div>
         <div class="co-section-row">
           <strong>OPERATSIYALAR · <span id="companyDetailTicketCount">0</span></strong>

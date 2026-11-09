@@ -102,6 +102,10 @@ function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
     for (const item of items) {
       const { entityType, changeType } = item;
       if (!item.payload) continue;
+      if (item.payload.endedOperationId !== undefined &&
+          (entityType !== 'party' || item.payload.endedOperationId !== item.operationId)) throw new Error('FINISH_EVENT_ID_MISMATCH');
+      if (item.payload.closeOperationId !== undefined &&
+          (entityType !== 'period' || item.payload.closeOperationId !== item.operationId)) throw new Error('PERIOD_EVENT_ID_MISMATCH');
       let entityId = item.entityId;
       const payload = { ...item.payload };
       if (entityType === 'model' || payload.modelId) {
@@ -546,16 +550,27 @@ function applyWorkerBalanceFacts(db, companyId, workerId, adjustments, committed
 
 function applyPeriodChange(db, companyId, entityId, changeType, payload, entityRevision = 1) {
   const periodId = String(payload.periodId || payload.id || entityId);
-  const current = db.prepare('SELECT company_id, server_revision FROM periods WHERE id = ?').get(periodId);
+  const current = db.prepare('SELECT company_id, server_revision, close_operation_id FROM periods WHERE id = ?').get(periodId);
   if (current && current.company_id !== companyId) throw new Error('CROSS_COMPANY_PERIOD_CHANGE_REJECTED');
-  if (current && Number(current.server_revision || 0) >= Number(entityRevision || 0)) return;
+  if (payload.closeOperationId !== undefined && (typeof payload.closeOperationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(payload.closeOperationId) || payload.status !== 'CLOSED')) throw new Error('INVALID_PERIOD_CLOSE_PROOF');
+  if (current?.close_operation_id && payload.closeOperationId && current.close_operation_id !== payload.closeOperationId) throw new Error('CONFLICTING_PERIOD_CLOSE_PROOF');
+  if (current && Number(current.server_revision || 0) >= Number(entityRevision || 0)) {
+    if (Number(current.server_revision || 0) === Number(entityRevision || 0) &&
+        !current.close_operation_id && payload.closeOperationId) {
+      db.prepare(`UPDATE periods SET close_operation_id = ? WHERE company_id = ? AND id = ? AND is_closed = 1`)
+        .run(payload.closeOperationId, companyId, periodId);
+    }
+    return;
+  }
   if (typeof payload.name !== 'string' || typeof payload.startDate !== 'string') {
     if (payload.status === 'CLOSED' && current) {
       db.prepare(`UPDATE periods SET end_date = ?, is_closed = 1, closed_at = ?, archive_filename = COALESCE(?, archive_filename),
         status = 'CLOSED', server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`).run(
         payload.endDate || null, payload.closedAt || new Date().toISOString(), payload.archiveFilename || null,
         entityRevision, payload.closedAt || new Date().toISOString(), companyId, periodId
-      );
+       );
+       if (payload.closeOperationId) db.prepare('UPDATE periods SET close_operation_id = ? WHERE company_id = ? AND id = ?')
+         .run(payload.closeOperationId, companyId, periodId);
       if (payload.nextPeriod?.id) {
         applyPeriodChange(db, companyId, payload.nextPeriod.id, 'INSERT', {
           ...payload.nextPeriod, periodId: payload.nextPeriod.id, isClosed: false
@@ -573,6 +588,8 @@ function applyPeriodChange(db, companyId, entityId, changeType, payload, entityR
       archive_filename = ?, status = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
       .run(payload.name, payload.startDate, payload.endDate || null, isClosed ? 1 : 0, payload.closedAt || null,
         payload.notes || null, payload.archiveFilename || null, isClosed ? 'CLOSED' : 'OPEN', entityRevision, now, companyId, periodId);
+    if (payload.closeOperationId) db.prepare('UPDATE periods SET close_operation_id = ? WHERE company_id = ? AND id = ?')
+      .run(payload.closeOperationId, companyId, periodId);
   } else {
     db.prepare(`INSERT INTO periods (
       id, company_id, name, start_date, end_date, is_closed, closed_at, notes, archive_filename,
@@ -587,28 +604,62 @@ function applyPeriodChange(db, companyId, entityId, changeType, payload, entityR
 function applyPartyChange(db, companyId, entityId, changeType, payload, entityRevision = 1) {
   const partyId = String(payload.partyRecordId || payload.id || entityId);
   const current = db.prepare(`SELECT company_id, server_revision, status, is_closed, closed_at, size_order_json,
-    archived_patta_numbers_json, is_archived FROM parties WHERE id = ?`).get(partyId);
+    archived_patta_numbers_json, is_archived, ended_at, ended_operation_id, month_closed_period_id FROM parties WHERE id = ?`).get(partyId);
   if (current && current.company_id !== companyId) throw new Error('CROSS_COMPANY_PARTY_CHANGE_REJECTED');
-  if (current && Number(current.server_revision || 0) >= Number(entityRevision || 0)) return;
+  const finishPresent = Object.prototype.hasOwnProperty.call(payload, 'endedAt') || Object.prototype.hasOwnProperty.call(payload, 'endedOperationId');
+  if (finishPresent && (!payload.endedAt || !Number.isFinite(Date.parse(payload.endedAt)) ||
+    typeof payload.endedOperationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(payload.endedOperationId))) throw new Error('INVALID_PARTY_FINISH_PROOF');
+  if (current?.ended_operation_id && finishPresent && (current.ended_operation_id !== payload.endedOperationId || current.ended_at !== payload.endedAt)) throw new Error('CONFLICTING_PARTY_FINISH_PROOF');
+  if (current?.month_closed_period_id && payload.monthClosedPeriodId != null && current.month_closed_period_id !== payload.monthClosedPeriodId) throw new Error('CONFLICTING_PARTY_MONTH_PROOF');
+  if (payload.monthClosedPeriodId != null && !db.prepare(`SELECT 1 FROM periods WHERE company_id = ? AND id = ? AND is_closed = 1 AND close_operation_id IS NOT NULL`).get(companyId, payload.monthClosedPeriodId)) throw new Error('INVALID_PARTY_MONTH_PROOF');
+  if (current && Number(current.server_revision || 0) >= Number(entityRevision || 0)) {
+    if (Number(current.server_revision || 0) === Number(entityRevision || 0)) {
+      if (finishPresent && !current.ended_operation_id && current.status === 'CLOSED') {
+        db.prepare(`UPDATE parties SET ended_at = ?, ended_operation_id = ? WHERE company_id = ? AND id = ?`)
+          .run(payload.endedAt, payload.endedOperationId, companyId, partyId);
+      }
+      if (payload.monthClosedPeriodId && !current.month_closed_period_id && current.status === 'CLOSED') {
+        db.prepare(`UPDATE parties SET month_closed_period_id = ? WHERE company_id = ? AND id = ?`)
+          .run(payload.monthClosedPeriodId, companyId, partyId);
+      }
+    }
+    return;
+  }
   const now = payload.updatedAt || payload.closedAt || new Date().toISOString();
   const hasFullPartyPayload = typeof payload.partyNumber === 'string' && typeof payload.modelId === 'string';
+  // Lifecycle proof is installed on the same revision as the rest of a partial
+  // close/carry patch; omission on older clients is never a clear instruction.
+  const applyProof = () => {
+    if (!current) return;
+    if (finishPresent) db.prepare(`UPDATE parties SET ended_at = COALESCE(ended_at, ?), ended_operation_id = COALESCE(ended_operation_id, ?) WHERE company_id = ? AND id = ?`)
+      .run(payload.endedAt, payload.endedOperationId, companyId, partyId);
+    if (payload.monthClosedPeriodId) db.prepare(`UPDATE parties SET month_closed_period_id = COALESCE(month_closed_period_id, ?) WHERE company_id = ? AND id = ?`)
+      .run(payload.monthClosedPeriodId, companyId, partyId);
+  };
   if (!hasFullPartyPayload && payload.isArchived === true) {
     if (current) {
       db.prepare(`UPDATE parties SET status = 'CLOSED', is_closed = 1, is_archived = 1, closed_at = ?,
         server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
-        .run(payload.closedAt || now, entityRevision, now, companyId, partyId);
+         .run(payload.closedAt || now, entityRevision, now, companyId, partyId);
+      applyProof();
     }
     return;
   }
   if (!hasFullPartyPayload && (payload.status === 'CLOSED' || payload.isClosed === true)) {
     if (!current) return;
-    db.prepare(`UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = ?, server_revision = ?, updated_at = ?
-      WHERE company_id = ? AND id = ?`).run(payload.closedAt || now, entityRevision, now, companyId, partyId);
+     db.prepare(`UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = COALESCE(closed_at, ?),
+       archived_patta_numbers_json = COALESCE(?, archived_patta_numbers_json),
+       is_archived = CASE WHEN ? THEN 1 ELSE is_archived END, server_revision = ?, updated_at = ?
+       WHERE company_id = ? AND id = ?`).run(payload.closedAt || now,
+       Array.isArray(payload.archivedPattaNumbers) ? JSON.stringify(payload.archivedPattaNumbers) : null,
+       payload.isArchived === true ? 1 : 0, entityRevision, now, companyId, partyId);
+     applyProof();
     return;
   }
   if (!hasFullPartyPayload && Array.isArray(payload.archivedPattaNumbers)) {
     if (current) db.prepare(`UPDATE parties SET archived_patta_numbers_json = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
-      .run(JSON.stringify(payload.archivedPattaNumbers), entityRevision, now, companyId, partyId);
+       .run(JSON.stringify(payload.archivedPattaNumbers), entityRevision, now, companyId, partyId);
+     applyProof();
     return;
   }
   if (!hasFullPartyPayload && current && (
@@ -622,7 +673,8 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
     db.prepare(`UPDATE parties SET ish_soni_per_patta = ?, total_ish_soni = ?, ish_soni = ?,
       cumulative_ish_soni = ?, server_revision = ?, updated_at = ? WHERE company_id = ? AND id = ?`)
       .run(payload.ishSoniPerPatta ?? null, payload.totalIshSoni ?? null, Number(payload.ishSoni || 0),
-        Number(payload.cumulativeIshSoni || 0), entityRevision, now, companyId, partyId);
+         Number(payload.cumulativeIshSoni || 0), entityRevision, now, companyId, partyId);
+     applyProof();
     return;
   }
   if (!hasFullPartyPayload) throw new Error('REMOTE_PARTY_CHANGE_INVALID');
@@ -669,6 +721,7 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
     }
     partyValues.push(entityRevision, now, companyId, partyId);
       db.prepare(updateParty).run(...partyValues);
+      applyProof();
   } else {
     db.prepare(`INSERT INTO parties (
       id, company_id, party_number, physical_party_number, model_id, model_name, color, patta_count,
@@ -677,7 +730,11 @@ function applyPartyChange(db, companyId, entityId, changeType, payload, entityRe
        sizes_json, size_order_json, printed_at, is_closed, archived_patta_numbers_json, status, created_at, updated_at,
       provenance, server_revision
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_SYNC', ?)`)
-      .run(...values);
+       .run(...values);
+     if (finishPresent || payload.monthClosedPeriodId) {
+       db.prepare(`UPDATE parties SET ended_at = ?, ended_operation_id = ?, month_closed_period_id = ? WHERE company_id = ? AND id = ?`)
+         .run(payload.endedAt || null, payload.endedOperationId || null, payload.monthClosedPeriodId || null, companyId, partyId);
+     }
   }
   advancePattaSequence(db, companyId, payload.pattaEndNumber);
 }

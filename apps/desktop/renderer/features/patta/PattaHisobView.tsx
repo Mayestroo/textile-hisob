@@ -16,6 +16,7 @@ import {
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
 import { buildPartyTicketsList, getPartyHealth } from '../../domain/partyAnalytics';
+import { selectLifecycleItems, groupLifecycleCohorts, PattaLifecycle } from '../../domain/pattaLifecycle';
 import { selectPartyHistoryForView, selectPartySeriesTab } from '../../domain/partyHistoryVisibility';
 import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
 import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
@@ -53,8 +54,8 @@ export const PattaHisobView: React.FC = () => {
       return {
         search: typeof value.search === 'string' ? value.search : '',
         status: ['all', 'mismatch', 'complete', 'in_progress'].includes(value.status) ? value.status : 'all',
-        series: value.series === 'closed' ? 'closed' : 'active'
-      } as { search: string; status: 'all' | 'mismatch' | 'complete' | 'in_progress'; series: 'active' | 'closed' };
+        series: ['active', 'closed', 'ended', 'legacy'].includes(value.series) ? value.series : (value.series === 'closed' ? 'closed' : 'active')
+      } as { search: string; status: 'all' | 'mismatch' | 'complete' | 'in_progress'; series: PattaLifecycle };
     } catch { return { search: '', status: 'all' as const, series: 'active' as const }; }
   };
   const [savedJournalFilters, setSavedJournalFilters] = useState(() => ({ scope: filterScope, ...readJournalFilters(filterStorageKey) }));
@@ -277,6 +278,39 @@ export const PattaHisobView: React.FC = () => {
 
   const activeSizes = availableSizes && availableSizes.length > 0 ? availableSizes : DEFAULT_BATCH_SIZES;
 
+  // Compute item-level lifecycle facts
+  const { lifecycleItems } = useMemo(() => {
+    const mode = isAllTimeMode ? 'all-time' : isArchiveMode ? 'archive' : 'current';
+    const periodId = selectedArchiveData?.period?.id || selectedArchiveFilename;
+    const res = selectLifecycleItems({
+      parties: sourcePrintedPartyHistory,
+      tickets: submittedTickets,
+      periods,
+      mode,
+      archivePeriodId: periodId || undefined
+    });
+    return { lifecycleItems: res.items };
+  }, [sourcePrintedPartyHistory, submittedTickets, periods, isAllTimeMode, isArchiveMode, selectedArchiveData, selectedArchiveFilename]);
+
+  // Tab badges: distinct cohorts and pattas for each lifecycle state
+  const lifecycleTabBadges = useMemo(() => {
+    const counts = {
+      active: { groups: 0, pattas: 0 },
+      closed: { groups: 0, pattas: 0 },
+      ended: { groups: 0, pattas: 0 },
+      legacy: { groups: 0, pattas: 0 }
+    };
+    for (const tab of ['active', 'closed', 'ended', 'legacy'] as const) {
+      const itemsInTab = lifecycleItems.filter((item) => item.lifecycle === tab);
+      const cohorts = groupLifecycleCohorts(itemsInTab);
+      counts[tab] = {
+        groups: cohorts.length,
+        pattas: itemsInTab.length
+      };
+    }
+    return counts;
+  }, [lifecycleItems]);
+
   const toggleAccordion = (partyId: string) => {
     setExpandedPartyIds((prev) => {
       const next = new Set(prev);
@@ -354,7 +388,11 @@ export const PattaHisobView: React.FC = () => {
         };
       }
 
-      const tickets = buildPartyTicketsList(record, submittedTickets, activeSizes, true, isArchiveMode);
+      const partySlotsInTab = lifecycleItems.filter((item) => item.partyId === record.id && item.lifecycle === seriesTab);
+      if (partySlotsInTab.length === 0) continue;
+      const validPattaNumbersInTab = new Set(partySlotsInTab.map((s) => s.pattaNumber));
+      const allTickets = buildPartyTicketsList(record, submittedTickets, activeSizes, true, isArchiveMode);
+      const tickets = allTickets.filter((t) => validPattaNumbersInTab.has(t.pattaNumber));
       if (isArchiveMode && tickets.length === 0) {
         continue;
       }
@@ -789,7 +827,7 @@ export const PattaHisobView: React.FC = () => {
             onClick={() => updateJournalFilters({ series: 'active' })}
             className={`patta-hisob-tab journal-tab ${seriesTab === 'active' ? 'active selected' : ''}`}
           >
-            Patta hisob · {(printedPartyHistory || []).filter((p) => !p.isClosed).length}
+            Faol · {lifecycleTabBadges.active.groups} guruh · {lifecycleTabBadges.active.pattas} patta
           </button>
           <button
             type="button"
@@ -798,7 +836,25 @@ export const PattaHisobView: React.FC = () => {
             onClick={() => updateJournalFilters({ series: 'closed' })}
             className={`patta-hisob-tab journal-tab ${seriesTab === 'closed' ? 'active selected' : ''}`}
           >
-            Yopilgan · Yakunlangan · {(printedPartyHistory || []).filter((p) => p.isClosed).length}
+            Yopilgan · {lifecycleTabBadges.closed.groups} guruh · {lifecycleTabBadges.closed.pattas} patta
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={seriesTab === 'ended'}
+            onClick={() => updateJournalFilters({ series: 'ended' })}
+            className={`patta-hisob-tab journal-tab ${seriesTab === 'ended' ? 'active selected' : ''}`}
+          >
+            Yakunlangan · {lifecycleTabBadges.ended.groups} guruh · {lifecycleTabBadges.ended.pattas} patta
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={seriesTab === 'legacy'}
+            onClick={() => updateJournalFilters({ series: 'legacy' })}
+            className={`patta-hisob-tab journal-tab ${seriesTab === 'legacy' ? 'active selected' : ''}`}
+          >
+            Eski arxiv · {lifecycleTabBadges.legacy.groups} guruh · {lifecycleTabBadges.legacy.pattas} patta
           </button>
         </div>
 

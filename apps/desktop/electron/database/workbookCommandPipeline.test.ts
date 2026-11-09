@@ -833,6 +833,11 @@ describe(' workbook local command pipeline', () => {
       availableSizes: ['M', 'L'], configs: [{ modelId: 'model_one', partyNumber: '41', isCustomParty: false, totalIshSoni: '10', color: 'Qora', sizes: { M: '2', L: '' } }]
     }).committed).toBe(true);
     expect(apply('CloseParty', 'op_party_close', 'party', 'party_current', { partyRecordId: 'party_current' }).committed).toBe(true);
+    expect(apply('CreateParty', 'op_party_for_series', 'party', 'party_for_series', {
+      partyRecordId: 'party_for_series', partyNumber: '42', modelId: 'model_one', modelName: 'Model One',
+      pattaCount: 1, cumulativePattaCount: 2, ishSoniPerPatta: 10, totalIshSoni: 10, ishSoni: 10,
+      cumulativeIshSoni: 20, sizes: { M: 1 }, printedAt: '2026-09-23T10:00:00.000Z'
+    }).committed).toBe(true);
     db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)
       VALUES (?, 566, ?) ON CONFLICT(company_id) DO UPDATE SET next_patta_number = 566, updated_at = excluded.updated_at`)
       .run(companyId, now);
@@ -857,7 +862,127 @@ describe(' workbook local command pipeline', () => {
       .toMatchObject({ is_closed: 0, status: 'OPEN' });
     expect(db.prepare('SELECT status, is_archived FROM parties WHERE company_id = ? AND id = ?').get(companyId, 'party_current'))
       .toMatchObject({ status: 'CLOSED', is_archived: 0 });
-    expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(10);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox WHERE company_id = ?').get(companyId).count).toBe(11);
+  });
+
+  it('keeps month and finish proofs provisional until exact accepted feed facts; reopens with frozen P hash intact', () => {
+    const db = seedModel();
+    const now = '2026-09-20T00:00:00.000Z';
+    db.prepare(`INSERT INTO periods(id,company_id,name,start_date,is_closed,status,created_at)
+      VALUES('P',?,'P','2026-09-01',0,'OPEN',?)`).run(companyId, now);
+    db.prepare(`INSERT INTO parties(id,company_id,party_number,physical_party_number,model_id,patta_count,
+      sizes_json,patta_start_number,patta_end_number,status,printed_at,created_at,updated_at)
+      VALUES('A',?,'1','1','model_one',2,'{"M":2}',1,2,'ACTIVE',?,?,?)`).run(companyId, now, now, now);
+    db.prepare(`INSERT INTO parties(id,company_id,party_number,physical_party_number,model_id,patta_count,
+      sizes_json,patta_start_number,patta_end_number,status,printed_at,created_at,updated_at)
+      VALUES('B',?,'2','2','model_one',1,'{"M":1}',3,3,'ACTIVE',?,?,?)`).run(companyId, now, now, now);
+    for (const [id, party, number, qty] of [['A1', 'A', 1, 10], ['B1', 'B', 3, 7]] as const) {
+      db.prepare(`INSERT INTO tickets(id,company_id,model_id,period_id,party_number,party_record_id,
+        patta_number,qty,status,submitted_at,created_at) VALUES(?,?,'model_one','P',?, ?, ?,?,'CONFIRMED',?,?)`)
+        .run(id, companyId, party === 'A' ? '1' : '2', party, number, qty, now, now);
+    }
+    const archive = { period: { id: 'P' }, submittedTickets: [{ id: 'A1', qty: 10 }, { id: 'B1', qty: 7 }],
+      gross: 119, tariff: 7 };
+    const execute = (type: string, id: string, entityType: string, entityId: string, payload: any, localArchive?: any) =>
+      workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+        commandType: type, commandId: id, operationId: id, companyId, entityType, entityId, payload, localArchive
+      });
+    execute('ClosePeriod', 'closeP', 'period', 'P', { periodId: 'P', endDate: '2026-09-30',
+      nextPeriod: { id: 'Q', name: 'Q', startDate: '2026-10-01' } }, archive);
+    expect(db.prepare(`SELECT close_operation_id FROM periods WHERE id='P'`).get().close_operation_id).toBeNull();
+    expect(db.prepare(`SELECT month_closed_period_id FROM parties WHERE id='B'`).get().month_closed_period_id).toBeNull();
+    const savedP = db.prepare(`SELECT archive_json, sha256 FROM period_archives WHERE period_id='P'`).get();
+    expect(JSON.parse(savedP.archive_json).gross).toBe(119);
+    expect(JSON.parse(savedP.archive_json)).not.toHaveProperty('before');
+    expect(JSON.parse(db.prepare(`SELECT local_archive_json FROM local_outbox WHERE operation_id='closeP'`).get().local_archive_json))
+      .toMatchObject({ kind: 'period-close-effects', effects: { completedPartyIds: ['B'] } });
+
+    const { applyChangesBatch } = require('../sync/changeFeedApplier.cjs');
+    const event = (entityType: string, entityId: string, entityRevision: number, payload: any, changeId: string) =>
+      ({ entityType, entityId, entityRevision, payload, changeId, changeType: 'UPDATE', operationId: payload.endedOperationId || 'closeP' });
+    applyChangesBatch(db, companyId, [
+      event('period', 'P', 1, { periodId: 'P', status: 'CLOSED', endDate: '2026-09-30',
+        closedAt: now, closeOperationId: 'closeP' }, '1'),
+      event('party', 'B', 1, { partyRecordId: 'B', status: 'CLOSED', isClosed: true,
+        closedAt: now, monthClosedPeriodId: 'P', archivedPattaNumbers: [3] }, '2'),
+      event('party', 'A', 1, { partyRecordId: 'A', archivedPattaNumbers: [1] }, '3')
+    ], '3');
+    expect(db.prepare(`SELECT month_closed_period_id FROM parties WHERE id='B'`).get().month_closed_period_id).toBe('P');
+    expect(db.prepare(`SELECT status, archived_patta_numbers_json FROM parties WHERE id='A'`).get())
+      .toEqual({ status: 'ACTIVE', archived_patta_numbers_json: '[1]' });
+    execute('CompletePartySeries', 'finishQ', 'party_series', 'Q', { periodId: 'Q', endDate: '2026-10-31' });
+    const intent = JSON.parse(db.prepare(`SELECT payload_json FROM local_outbox WHERE operation_id='finishQ'`).get().payload_json);
+    expect(intent.finishScopeHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(db.prepare(`SELECT ended_at FROM parties WHERE id='B'`).get().ended_at).toBeNull();
+    applyChangesBatch(db, companyId, [
+      event('party', 'A', 2, { partyRecordId: 'A', status: 'CLOSED', isClosed: true, closedAt: now,
+        endedAt: now, endedOperationId: 'finishQ' }, '4'),
+      event('party', 'B', 2, { partyRecordId: 'B', status: 'CLOSED', isClosed: true, closedAt: now,
+        endedAt: now, endedOperationId: 'finishQ', monthClosedPeriodId: 'P' }, '5')
+    ], '5');
+    expect(db.prepare(`SELECT ended_operation_id, month_closed_period_id FROM parties WHERE id='B'`).get())
+      .toEqual({ ended_operation_id: 'finishQ', month_closed_period_id: 'P' });
+    expect(db.prepare(`SELECT archive_json, sha256 FROM period_archives WHERE period_id='P'`).get()).toEqual(savedP);
+    databaseManager.closeAllCompanyDatabases();
+    const reopened = databaseManager.getCompanyDatabase(userData, companyId);
+    expect(reopened.prepare(`SELECT ended_operation_id FROM parties WHERE id='A'`).get().ended_operation_id).toBe('finishQ');
+    expect(reopened.prepare(`SELECT archive_json, sha256 FROM period_archives WHERE period_id='P'`).get()).toEqual(savedP);
+  });
+
+  it('replaces only its own provisional P archive with a verified accepted archive once', async () => {
+    const db = seedModel();
+    db.prepare(`INSERT INTO periods(id,company_id,name,start_date,is_closed,status,closed_at,close_operation_id,created_at)
+      VALUES('P',?,'P','2026-09-01',1,'CLOSED','2026-09-30T00:00:00.000Z','closeP','2026-09-01')`).run(companyId);
+    const local = { period: { id: 'P' }, gross: 100 };
+    const server = { period: { id: 'P' }, gross: 119, tariff: 7 };
+    const localHash = computePayloadHash(canonicalStringify(local));
+    const serverHash = computePayloadHash(canonicalStringify(server));
+    db.prepare(`INSERT INTO period_archives(company_id,period_id,archive_json,sha256,archived_at) VALUES(?,'P',?,?,?)`)
+      .run(companyId, JSON.stringify(local), localHash, '2026-09-30');
+    const { insertOutboxOperation } = outboxManager;
+    insertOutboxOperation(db, { operation_id: 'closeP', company_id: companyId, command_type: 'ClosePeriod',
+      entity_type: 'period', entity_id: 'P', base_revision: 0, payload_json: '{}', payload_hash: computePayloadHash('{}'),
+      status: 'SYNCED', created_at: '2026-09-30', local_archive_json: JSON.stringify({ version: 1,
+        kind: 'period-close-effects', operationId: 'closeP', periodArchive: local,
+        effects: { provisionalArchiveSha256: localHash } }) });
+    const { reconcileLifecycleArchives } = require('../sync/lifecycleArchiveReconcile.cjs');
+    const client = { getPeriodArchive: async () => ({ archive_json: server, sha256: serverHash, archived_at: '2026-09-30' }) };
+    expect(await reconcileLifecycleArchives(db, companyId, client)).toEqual({ reconciled: 1, incomplete: 0 });
+    expect(db.prepare(`SELECT archive_json,sha256 FROM period_archives WHERE period_id='P'`).get())
+      .toEqual({ archive_json: JSON.stringify(server), sha256: serverHash });
+    expect(await reconcileLifecycleArchives(db, companyId, { getPeriodArchive: async () => { throw Error('must not reread'); } }))
+      .toEqual({ reconciled: 0, incomplete: 0 });
+    expect(db.prepare(`SELECT archive_json,sha256 FROM period_archives WHERE period_id='P'`).get().sha256).toBe(serverHash);
+  });
+
+  it('rejected series scope restores only its own provisional reservation/sequence and retains exact intent', async () => {
+    const db = seedModel();
+    const now = '2026-09-01T00:00:00.000Z';
+    db.prepare(`INSERT INTO periods(id,company_id,name,start_date,status,created_at)
+      VALUES('P',?,'P','2026-09-01','OPEN',?)`).run(companyId, now);
+    db.prepare(`INSERT INTO parties(id,company_id,party_number,physical_party_number,model_id,patta_count,
+      sizes_json,status,created_at,updated_at)
+      VALUES('A',?,'1','1','model_one',1,'{"M":1}','ACTIVE',?,?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO company_patta_sequences(company_id,next_patta_number,updated_at) VALUES(?,9,?)`)
+      .run(companyId, now);
+    db.prepare(`INSERT INTO local_meta(key,value,updated_at) VALUES('patta_lifecycle_v1','1',?)`).run(now);
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'CompletePartySeries', commandId: 'finishP', operationId: 'finishP',
+      companyId, entityType: 'party_series', entityId: 'P', payload: { periodId: 'P', endDate: '2026-09-30' }
+    });
+    expect(db.prepare(`SELECT status, ended_at FROM parties WHERE id='A'`).get())
+      .toEqual({ status: 'CLOSED', ended_at: null });
+    expect(db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id=?`).get(companyId).next_patta_number).toBe(1);
+    const outbox = db.prepare(`SELECT payload_json,local_archive_json FROM local_outbox WHERE operation_id='finishP'`).get();
+    expect(JSON.parse(outbox.local_archive_json).effects.partyIds).toEqual(['A']);
+    expect(await outboxDispatcher.dispatchOutbox(db, companyId, {
+      pushOperations: async () => ({ results: [{ operationId: 'finishP', status: 'CONFLICT', error: { code: 'FINISH_SCOPE_CHANGED' } }] })
+    })).toMatchObject({ conflict: 1 });
+    expect(db.prepare(`SELECT status, ended_at FROM parties WHERE id='A'`).get())
+      .toEqual({ status: 'ACTIVE', ended_at: null });
+    expect(db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id=?`).get(companyId).next_patta_number).toBe(9);
+    expect(db.prepare(`SELECT status,payload_json FROM local_outbox WHERE operation_id='finishP'`).get())
+      .toMatchObject({ status: 'CONFLICT', payload_json: outbox.payload_json });
   });
 
   it('persists four distinct period-scoped worker adjustments atomically and rejects duplicate or closed-period writes', () => {

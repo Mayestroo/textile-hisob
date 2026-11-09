@@ -205,7 +205,12 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       isClosed: false
     };
 
+    const localCloseOpId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? ('local_close_' + crypto.randomUUID())
+      : ('local_close_' + Date.now());
+
     const closedPeriod = {
+      closeOperationId: localCloseOpId,
       ...state.currentPeriod,
       endDate: cleanDate,
       isClosed: true,

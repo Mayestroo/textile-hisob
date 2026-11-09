@@ -118,6 +118,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
     ORDER BY op.causal_sequence ASC, op.rowid ASC
     LIMIT ?
   `).all(companyId, batchSize);
+  const lifecycleSupported = db.prepare("SELECT value FROM local_meta WHERE key = 'patta_lifecycle_v1'").get()?.value === '1';
   const firstUnresolvedBatch = db.prepare(`SELECT operation_id FROM local_outbox
     WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
       AND command_type IN ('UpdateBatchSettings', 'CompletePattaBatch')
@@ -126,6 +127,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
   // two company batch mutations in one concurrent push request.
   let batchMutationSeen = false;
   const eligible = candidates.filter((op) => {
+    if (op.command_type === 'CompletePartySeries' && JSON.parse(op.payload_json).finishScopeHash && !lifecycleSupported) return false;
     if (op.command_type !== 'UpdateBatchSettings' && op.command_type !== 'CompletePattaBatch') return true;
     if (op.operation_id !== firstUnresolvedBatch?.operation_id) return false;
     if (batchMutationSeen) return false;
@@ -328,10 +330,15 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           const partyAlias = db.prepare(`SELECT canonical_party_id FROM party_id_aliases
             WHERE company_id = ? AND legacy_party_id = ?`).get(companyId, requestedPartyId);
           const partyId = partyAlias?.canonical_party_id || requestedPartyId;
-          db.prepare(`UPDATE parties SET server_revision = ?, status = ?, is_closed = ?,
-            closed_at = COALESCE(?, closed_at), updated_at = COALESCE(?, updated_at)
-            WHERE company_id = ? AND id = ? AND server_revision <= ?`)
-            .run(res.serverRevision, status, status === 'CLOSED' ? 1 : 0,
+           const pendingFinish = db.prepare(`SELECT local_archive_json FROM local_outbox WHERE company_id = ? AND command_type = 'CompletePartySeries'
+             AND status IN ('PENDING','SENDING','SYNCED') AND local_archive_json IS NOT NULL`).all(companyId)
+             .some((row) => JSON.parse(row.local_archive_json)?.effects?.partyIds?.includes(partyId));
+           db.prepare(`UPDATE parties SET server_revision = ?, status = CASE WHEN ? OR ended_at IS NOT NULL THEN status ELSE ? END,
+             is_closed = CASE WHEN ? THEN is_closed ELSE ? END,
+             closed_at = COALESCE(?, closed_at), updated_at = COALESCE(?, updated_at)
+             WHERE company_id = ? AND id = ? AND server_revision <= ?`)
+             .run(res.serverRevision, Boolean(pendingFinish) ? 1 : 0, status,
+               Boolean(pendingFinish) ? 1 : 0, status === 'CLOSED' ? 1 : 0,
               status === 'CLOSED' ? (res.committedAt || new Date().toISOString()) : null,
               res.committedAt || null, companyId, partyId, res.serverRevision);
           factsUpdated++;
@@ -393,6 +400,9 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           factsUpdated++;
         }
       }
+      if (op.command_type === 'CompletePartySeries' || op.command_type === 'ClosePeriod') {
+        if (restoreRejectedLifecycleEffects(db, companyId, op)) factsUpdated++;
+      }
       conflict++;
     } else {
       const errorCode = res.error?.code;
@@ -410,6 +420,9 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         factsUpdated++;
       } else if (op.command_type === 'UpdateTicket' && restoreTicketEntries(db, companyId, op)) {
         factsUpdated++;
+      }
+      if (op.command_type === 'CompletePartySeries' || op.command_type === 'ClosePeriod') {
+        if (restoreRejectedLifecycleEffects(db, companyId, op)) factsUpdated++;
       }
       deadLetter++;
     }
@@ -432,6 +445,72 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
     transientErrors: 0
     ,operatorReauthRequired
   };
+}
+
+// A rejected provisional reset may only restore rows still carrying this
+// operation's own write timestamp/revision. Accepted newer feed facts win.
+function restoreRejectedLifecycleEffects(db, companyId, op) {
+  if (!op.local_archive_json) return false;
+  const record = JSON.parse(op.local_archive_json);
+  if (record.version !== 1 || record.operationId !== op.operation_id ||
+      !['series-finish-effects', 'period-close-effects'].includes(record.kind)) return false;
+  const appliedAt = record.effects?.appliedAt;
+  if (!appliedAt) return false;
+  db.transaction(() => {
+    for (const party of record.before?.parties || []) {
+      if (party.company_id !== companyId) continue;
+      db.prepare(`UPDATE parties SET status = ?, is_closed = ?, closed_at = ?, archived_patta_numbers_json = ?,
+        updated_at = ? WHERE company_id = ? AND id = ? AND updated_at = ? AND server_revision = ?
+        AND ended_at IS NULL AND month_closed_period_id IS NULL`)
+        .run(party.status, party.is_closed, party.closed_at, party.archived_patta_numbers_json,
+          party.updated_at, companyId, party.id, appliedAt, party.server_revision);
+    }
+    for (const ticket of record.before?.tickets || []) {
+      if (record.kind === 'period-close-effects' &&
+          db.prepare('SELECT close_operation_id FROM periods WHERE company_id = ? AND id = ?')
+            .get(companyId, op.entity_id)?.close_operation_id) continue;
+      db.prepare(`UPDATE tickets SET is_closed = ? WHERE company_id = ? AND id = ?
+        AND is_closed = 1 AND server_revision = ?`)
+        .run(ticket.is_closed, companyId, ticket.id, ticket.server_revision);
+    }
+    if (record.kind === 'series-finish-effects') {
+      for (const settings of record.before?.settings || []) {
+        db.prepare(`UPDATE patta_batch_settings SET party_number = ?, is_custom_party = ?, total_ish_soni = ?,
+          sizes_json = ?, updated_at = ? WHERE company_id = ? AND model_id = ? AND updated_at = ? AND server_revision = ?`)
+          .run(settings.party_number, settings.is_custom_party, settings.total_ish_soni, settings.sizes_json,
+            settings.updated_at, companyId, settings.model_id, appliedAt, settings.server_revision);
+      }
+      const sequence = record.before?.sequence;
+      if (sequence) db.prepare(`UPDATE company_patta_sequences SET next_patta_number = ?, updated_at = ?
+        WHERE company_id = ? AND next_patta_number = 1 AND updated_at = ?`)
+        .run(sequence.next_patta_number, sequence.updated_at, companyId, appliedAt);
+      else db.prepare(`DELETE FROM company_patta_sequences WHERE company_id = ? AND next_patta_number = 1 AND updated_at = ?`)
+        .run(companyId, appliedAt);
+    } else if (record.before?.period?.company_id === companyId) {
+      const period = record.before.period;
+      db.prepare(`UPDATE periods SET end_date = ?, is_closed = ?, closed_at = ?, archive_filename = ?,
+        status = ?, updated_at = ? WHERE company_id = ? AND id = ? AND updated_at = ? AND server_revision = ?
+        AND close_operation_id IS NULL`)
+        .run(period.end_date, period.is_closed, period.closed_at, period.archive_filename,
+          period.status, period.updated_at, companyId, period.id, appliedAt, period.server_revision);
+      // A provisional archive is removed only if no authority has installed a
+      // canonical close. Never rewrite an accepted archive/hash here.
+      db.prepare(`DELETE FROM period_archives WHERE company_id = ? AND period_id = ?
+        AND sha256 = ? AND NOT EXISTS (
+        SELECT 1 FROM periods WHERE company_id = ? AND id = ? AND close_operation_id IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM local_meta WHERE key = ?)`)
+        .run(companyId, period.id, record.effects?.provisionalArchiveSha256 || '',
+          companyId, period.id, `accepted_archive_sha256:${period.id}`);
+      const nextId = JSON.parse(op.payload_json).nextPeriod?.id;
+      if (nextId) db.prepare(`DELETE FROM periods WHERE company_id = ? AND id = ? AND provenance = 'LOCAL_COMMAND'
+        AND server_revision = 0 AND is_closed = 0 AND NOT EXISTS (
+          SELECT 1 FROM tickets t WHERE t.company_id = periods.company_id AND t.period_id = periods.id)
+        AND NOT EXISTS (SELECT 1 FROM local_outbox child WHERE child.company_id = periods.company_id
+          AND child.operation_id <> ? AND child.entity_id = periods.id AND child.status <> 'SUPERSEDED')`)
+        .run(companyId, nextId, op.operation_id);
+    }
+  })();
+  return true;
 }
 
 module.exports = {

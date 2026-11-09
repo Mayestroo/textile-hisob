@@ -421,14 +421,21 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
   completePartySeries: async () => {
     const state = get();
     const formattedDate = formatDateTime(new Date());
+    const finishOpId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? `local_finish_${crypto.randomUUID()}`
+      : `local_finish_${Date.now()}`;
+    const finishTime = new Date().toISOString();
 
-    // 1. Mark active printed parties as closed
+    // 1. Mark eligible printed parties as ended (both active and certified month-closed)
     const updatedHistory = (state.printedPartyHistory || []).map((r) => {
-      if (!r.isClosed) {
+      const isEligible = !r.isArchived && !r.endedAt && (!r.isClosed || Boolean(r.monthClosedPeriodId));
+      if (isEligible) {
         return {
           ...r,
           isClosed: true,
-          closedAt: formattedDate
+          closedAt: r.closedAt || formattedDate,
+          endedAt: finishTime,
+          endedOperationId: finishOpId
         };
       }
       return r;

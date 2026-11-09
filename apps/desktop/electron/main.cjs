@@ -698,13 +698,25 @@ if (isSyncEnabled) {
       const ready = assertRuntimeReady(args?.companyId);
       const filename = typeof args?.filename === 'string' ? args.filename : '';
       if (!filename || filename.length > 256) throw Object.assign(new Error('INVALID_PERIOD_ARCHIVE'), { code: 'INVALID_PERIOD_ARCHIVE' });
-      const period = ready.db.prepare(`
-        SELECT id FROM periods WHERE company_id = ? AND (id = ? OR archive_filename = ?) AND is_closed = 1
-      `).get(ready.companyId, filename, filename);
-      if (!period) throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
-      const localArchive = require('./database/projectionReader.cjs').loadPeriodArchiveFromSqlite(
-        ready.db, ready.companyId, period.id
-      );
+       const period = ready.db.prepare(`
+         SELECT id, close_operation_id FROM periods WHERE company_id = ? AND (id = ? OR archive_filename = ?) AND is_closed = 1
+       `).get(ready.companyId, filename, filename);
+       if (!period) throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
+       const provisionalClose = ready.db.prepare(`SELECT 1 FROM local_outbox WHERE company_id = ? AND entity_id = ?
+         AND command_type = 'ClosePeriod' AND local_archive_json IS NOT NULL LIMIT 1`).get(ready.companyId, period.id);
+       const acceptedArchive = ready.db.prepare('SELECT value FROM local_meta WHERE key = ?')
+         .get(`accepted_archive_sha256:${period.id}`)?.value;
+       if (provisionalClose && (!period.close_operation_id || !acceptedArchive)) {
+         throw Object.assign(new Error('PERIOD_ARCHIVE_AWAITING_AUTHORITY'), { code: 'PERIOD_ARCHIVE_AWAITING_AUTHORITY' });
+       }
+       const localArchive = require('./database/projectionReader.cjs').loadPeriodArchiveFromSqlite(
+         ready.db, ready.companyId, period.id
+       );
+       if (acceptedArchive && (localArchive?.sha256 !== acceptedArchive ||
+           require('./database/canonicalPayload.cjs').computePayloadHash(
+             require('./database/canonicalPayload.cjs').canonicalStringify(localArchive?.data)) !== acceptedArchive)) {
+         throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
+       }
       let archiveData = localArchive?.data || null;
       if (!archiveData) {
         const remoteArchive = await createSyncClient(ready.companyId, false).getPeriodArchive(period.id);
@@ -726,6 +738,17 @@ if (isSyncEnabled) {
       return { success: true, data: archiveData, payrollValuation, periodId: period.id, companyId: ready.companyId };
     } catch (error) {
       return ErrorResponse(error, 'PERIOD_ARCHIVE_READ_FAILED');
+    }
+  });
+
+  ipcMain.handle('patta-journal-read', async (_event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      const { readPattaJournalFacts } = require('./database/pattaJournalReader.cjs');
+      const facts = readPattaJournalFacts(ready.db, ready.companyId, args);
+      return { success: true, facts, companyId: ready.companyId };
+    } catch (error) {
+      return ErrorResponse(error, 'PATTA_JOURNAL_READ_FAILED');
     }
   });
 

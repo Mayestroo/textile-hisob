@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   SyncPull: (companyId) => ipcRenderer.invoke('sync-pull', companyId),
   SyncReconnect: (companyId) => ipcRenderer.invoke('sync-reconnect', companyId),
   PeriodArchiveRead: (args) => ipcRenderer.invoke('period-archive-read', args),
+  PattaJournalRead: (args) => ipcRenderer.invoke('patta-journal-read', args),
   OperatorLogin: (companyId, operatorId, password) => ipcRenderer.invoke('operator-login', { companyId, operatorId, password }),
   OperatorRevoke: (companyId) => ipcRenderer.invoke('operator-revoke', companyId),
   LeaseAcquire: (companyId, blockSize) => ipcRenderer.invoke('lease-acquire', { companyId, blockSize }),
