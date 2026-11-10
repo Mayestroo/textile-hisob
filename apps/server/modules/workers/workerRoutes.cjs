@@ -129,6 +129,63 @@ function registerWorkerRoutes(app, options = {}) {
         return reply.code(201).send({ success: true, binding });
       } catch (error) { return sendWorkerError(reply, error); }
     });
+
+    workerApi.post('/api/worker/onboarding-contact', async (request, reply) => {
+      try {
+        const telegramId = String(request.body?.telegramId || '');
+        const companyId = String(request.body?.companyId || '');
+        const phone = String(request.body?.phoneNumber || '').trim();
+        const contactName = String(request.body?.contactName || '').trim().slice(0, 160);
+        if (!/^\d{1,24}$/.test(telegramId) || !/^[A-Za-z0-9_-]{1,64}$/.test(companyId)
+          || !/^\+?[0-9 ()-]{7,24}$/.test(phone)) {
+          return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_CONTACT' } });
+        }
+        await pool.query(
+          `INSERT INTO worker_onboarding_contacts (telegram_id, company_id, phone_number, contact_name, updated_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (telegram_id) DO UPDATE SET company_id = EXCLUDED.company_id,
+             phone_number = EXCLUDED.phone_number, contact_name = EXCLUDED.contact_name, updated_at = NOW()`,
+          [telegramId, companyId, phone, contactName]
+        );
+        return reply.code(201).send({ success: true });
+      } catch (error) { return sendWorkerError(reply, error); }
+    });
+  });
+
+  app.post('/api/worker/onboarding-bind', async (request, reply) => {
+    try {
+      const companyId = String(request.body?.companyId || '');
+      const telegramId = String(request.body?.telegramId || '');
+      const workerId = Number(request.body?.workerId);
+      const expiresAt = request.body?.expiresAt;
+      const suppliedToken = typeof request.headers['x-worker-auth-token'] === 'string'
+        ? request.headers['x-worker-auth-token'] : '';
+      if (!verifyWorkerWebToken({ companyId, workerId: 0, telegramId, expiresAt }, suppliedToken, workerHmacSecret)) {
+        return reply.code(401).send({ success: false, error: { code: 'WORKER_AUTH_REQUIRED' } });
+      }
+      if (!Number.isSafeInteger(workerId) || workerId < 1) {
+        return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_ID' } });
+      }
+      const photoMatch = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(request.body?.photo || ''));
+      if (!photoMatch) return reply.code(400).send({ success: false, error: { code: 'WORKER_PHOTO_REQUIRED' } });
+      const photo = Buffer.from(photoMatch[1], 'base64');
+      if (!photo.length || photo.length > 300 * 1024) return reply.code(413).send({ success: false, error: { code: 'WORKER_PHOTO_SIZE_INVALID' } });
+      const contact = await pool.query(
+        'SELECT phone_number FROM worker_onboarding_contacts WHERE telegram_id = $1 AND company_id = $2',
+        [telegramId, companyId]
+      );
+      if (!contact.rows[0]) return reply.code(409).send({ success: false, error: { code: 'WORKER_CONTACT_REQUIRED' } });
+      const binding = await workerService.claimWorkerBinding(pool, {
+        telegramId, companyId, workerId, username: String(request.body?.username || '')
+      }, { pinRequired: false });
+      await pool.query(
+        `UPDATE workers SET phone_number = $3, profile_photo = $4, profile_photo_updated_at = NOW()
+         WHERE company_id = $1 AND id = $2`,
+        [companyId, workerId, contact.rows[0].phone_number, photo]
+      );
+      await pool.query('DELETE FROM worker_onboarding_contacts WHERE telegram_id = $1', [telegramId]);
+      return reply.code(201).header('Cache-Control', 'no-store').send({ success: true, binding });
+    } catch (error) { return sendWorkerError(reply, error); }
   });
 
   async function authorizeWorkerRead(request) {

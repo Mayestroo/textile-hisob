@@ -48,6 +48,8 @@ class WorkerPrivacyTests(unittest.TestCase):
                 "party_number": 4, "size": "M", "qty": 3, "my_operations": "Sew"}]}
         if method == "POST" and route == "/api/worker/bindings":
             return {"success": True, "binding": BINDING}
+        if method == "POST" and route == "/api/worker/onboarding-contact":
+            return {"success": True}
         raise AssertionError(f"Unexpected API call: {method} {route}")
 
     def test_nonprivate_updates_neither_read_data_nor_change_registration_state(self):
@@ -86,7 +88,7 @@ class WorkerPrivacyTests(unittest.TestCase):
         messages = [call.args[1] for call in self.telegram.call_args_list]
         self.assertFalse(any("Fixture &lt;Worker&gt;" in message["text"] for message in messages))
         self.assertFalse(any("authToken" in json.dumps(message) for message in messages))
-        self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_COMPANY_ID")
+        self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_CONTACT")
 
     def test_private_identity_must_match_destination(self):
         for user in ({}, {"id": 999}, {"id": USER["id"], "is_bot": True}):
@@ -146,22 +148,21 @@ class WorkerPrivacyTests(unittest.TestCase):
             bot.send_profile(USER['id'], str(USER['id']), BINDING)
         self.assertIn('Hisob to‘liq emas', self.telegram.call_args.args[1]['text'])
 
-    def test_private_registration_and_pin_submission_still_work(self):
-        with patch.object(bot, "get_worker_binding", return_value=None), patch.object(bot, "DEFAULT_COMPANY_ID", ""):
+    def test_start_requests_contact_before_opening_onboarding_webapp(self):
+        with patch.object(bot, "get_worker_binding", return_value=None), patch.object(bot, "DEFAULT_COMPANY_ID", "company-a"):
             bot.process_update(update("/start"))
-            self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_COMPANY_ID")
-            bot.process_update(update("company-a"))
-            self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_WORKER_ID")
-            with patch.object(bot, "get_worker_id_binding", return_value=None), patch.object(bot, "get_worker_enrollment", return_value={
-                "worker_name": BINDING["worker_name"], "pin_required": True, "pin_configured": True
-            }):
-                bot.process_update(update("27"))
-            self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_PIN")
-            bot.process_update(update("1234"))
-        self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "BOUND")
-        self.telegram.assert_any_call("deleteMessage", {"chat_id": USER["id"], "message_id": 8})
-        self.api.assert_any_call("POST", "/api/worker/bindings", {
-            "telegramId": str(USER["id"]), "workerId": 27, "companyId": "company-a", "username": "fixture", "pin": "1234"})
+            self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_CONTACT")
+            self.assertTrue(self.telegram.call_args.args[1]["reply_markup"]["keyboard"][0][0]["request_contact"])
+            bot.process_update({"message": {"chat": {"id": USER["id"], "type": "private"}, "from": USER,
+                                "contact": {"user_id": USER["id"], "phone_number": "+998901234567",
+                                            "first_name": "Fixture", "last_name": "Worker"}}})
+        self.assertEqual(bot.USER_STATES[str(USER["id"])]["step"], "WAITING_WEBAPP")
+        self.api.assert_any_call("POST", "/api/worker/onboarding-contact", {
+            "telegramId": str(USER["id"]), "companyId": "company-a", "phoneNumber": "+998901234567",
+            "contactName": "Fixture Worker"})
+        webapp_button = self.telegram.call_args.args[1]["reply_markup"]["inline_keyboard"][0][0]
+        self.assertIn("onboarding=1", webapp_button["web_app"]["url"])
+        self.assertIn("authToken=", webapp_button["web_app"]["url"])
 
 
 def consume_binding_contract():

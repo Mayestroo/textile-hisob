@@ -38,6 +38,7 @@
     }
 
     const urlParams = new URLSearchParams(window.location.search);
+    const isWorkerOnboarding = urlParams.get('onboarding') === '1';
     let targetWorkerId = urlParams.get('workerId');
     let companyId = urlParams.get('companyId');
     let paramTelegramId = urlParams.get('telegramId');
@@ -52,7 +53,7 @@
         expiresAt: expiresAt,
         authToken: workerAuthToken
       });
-    } else {
+    } else if (!isWorkerOnboarding) {
       const saved = loadSavedSession();
       if (saved && saved.workerId && saved.authToken) {
         targetWorkerId = saved.workerId;
@@ -179,7 +180,7 @@
         const currentTgId = tgUser?.id ? String(tgUser.id) : paramTelegramId;
 
         // If not bound or first time entering without credentials, show Ulanish screen
-        if (urlParams.get('mode') === 'bind' || urlParams.get('onboard') === 'true' || !targetWorkerId || !workerAuthToken) {
+        if (isWorkerOnboarding || urlParams.get('mode') === 'bind' || urlParams.get('onboard') === 'true' || !targetWorkerId || !workerAuthToken) {
           showWorkerBindScreen(urlParams.get('workerId') || '', '', companyId || 'comp_novda');
           return;
         }
@@ -575,6 +576,7 @@
       const foundCard = document.getElementById('workerFoundCard');
       const brandName = document.getElementById('workerBrandName');
       const subtitle = document.getElementById('workerBindSubtitle');
+      const cameraCard = document.getElementById('workerCameraCard');
 
       const co = company || companyId || 'comp_novda';
       if (brandName) brandName.textContent = co;
@@ -583,6 +585,7 @@
       if (idInput && initialId) idInput.value = initialId;
       if (foundName && initialName) foundName.textContent = initialName;
       if (foundCard) foundCard.style.display = initialName ? 'flex' : 'none';
+      if (cameraCard) cameraCard.style.display = isWorkerOnboarding ? 'flex' : 'none';
     }
 
     function hideWorkerBindScreen() {
@@ -655,6 +658,52 @@
     window.hideWorkerBindScreen = hideWorkerBindScreen;
 
     const workerIdInput = document.getElementById('workerIdInput');
+    let onboardingPhoto = '';
+    let cameraStream = null;
+    const cameraVideo = document.getElementById('workerCameraPreview');
+    const cameraStatus = document.getElementById('workerCameraStatus');
+    const cameraStartButton = document.getElementById('workerCameraStartBtn');
+    const cameraCaptureButton = document.getElementById('workerCameraCaptureBtn');
+    cameraStartButton?.addEventListener('click', async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        if (cameraStatus) cameraStatus.textContent = 'Kamera ochilmadi. Telegram ilovasida qayta urinib ko‘ring.';
+        return;
+      }
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        cameraVideo.srcObject = cameraStream;
+        cameraVideo.style.display = 'block';
+        cameraStartButton.style.display = 'none';
+        cameraCaptureButton.style.display = 'block';
+        if (cameraStatus) cameraStatus.textContent = 'Kameraga ruxsat berildi. Yuzingizni kadrga joylashtiring.';
+      } catch {
+        if (cameraStatus) cameraStatus.textContent = 'Kamera ruxsati berilmadi. Davom etish uchun ruxsat bering.';
+      }
+    });
+    cameraCaptureButton?.addEventListener('click', () => {
+      const canvas = document.getElementById('workerCameraCanvas');
+      if (!cameraVideo?.videoWidth || !canvas) return;
+      const ratio = Math.min(1, 900 / cameraVideo.videoWidth);
+      canvas.width = Math.round(cameraVideo.videoWidth * ratio);
+      canvas.height = Math.round(cameraVideo.videoHeight * ratio);
+      canvas.getContext('2d')?.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+      onboardingPhoto = canvas.toDataURL('image/jpeg', 0.68);
+      cameraStream?.getTracks().forEach(track => track.stop());
+      cameraVideo.srcObject = null;
+      cameraVideo.style.display = 'none';
+      cameraCaptureButton.style.display = 'none';
+      cameraStartButton.style.display = 'block';
+      cameraStartButton.textContent = 'Suratni qayta olish';
+      if (cameraStatus) cameraStatus.textContent = 'Surat olindi. Endi Ishchi ID raqamingizni kiriting.';
+      updateOnboardingSubmit();
+    });
+
+    function updateOnboardingSubmit() {
+      const submitBtn = document.getElementById('workerSubmitRequestBtn');
+      if (submitBtn && isWorkerOnboarding) {
+        submitBtn.disabled = !onboardingPhoto || !/^\d{1,9}$/.test(workerIdInput?.value.trim() || '');
+      }
+    }
     if (workerIdInput) {
       workerIdInput.addEventListener('input', async () => {
         const val = workerIdInput.value.trim();
@@ -673,7 +722,7 @@
             if (data.success && data.worker && data.worker.worker_name) {
               if (foundName) foundName.textContent = data.worker.worker_name;
               if (foundCard) foundCard.style.display = 'flex';
-              if (submitBtn) submitBtn.disabled = false;
+              if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
               return;
             }
           }
@@ -681,18 +730,46 @@
         if (val === '1') {
           if (foundName) foundName.textContent = 'Абдуллаева Мавлуда';
           if (foundCard) foundCard.style.display = 'flex';
-          if (submitBtn) submitBtn.disabled = false;
+          if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
         } else {
           if (foundName) foundName.textContent = `Ishchi #${val}`;
           if (foundCard) foundCard.style.display = 'flex';
-          if (submitBtn) submitBtn.disabled = false;
+          if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
         }
       });
     }
 
-    document.getElementById('workerSubmitRequestBtn')?.addEventListener('click', () => {
+    document.getElementById('workerSubmitRequestBtn')?.addEventListener('click', async () => {
       triggerHaptic('success');
       const val = document.getElementById('workerIdInput')?.value.trim();
+      if (isWorkerOnboarding) {
+        const submit = document.getElementById('workerSubmitRequestBtn');
+        const status = document.getElementById('workerCameraStatus');
+        const currentTgId = tg?.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : paramTelegramId;
+        if (!onboardingPhoto || !currentTgId || !/^\d{1,9}$/.test(val || '')) return;
+        submit.disabled = true;
+        if (status) status.textContent = 'Profil saqlanmoqda…';
+        try {
+          const response = await fetch('/api/worker/onboarding-bind', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-worker-auth-token': workerAuthToken || '' },
+            cache: 'no-store',
+            referrerPolicy: 'no-referrer',
+            body: JSON.stringify({ companyId, telegramId: currentTgId, expiresAt, workerId: Number(val),
+              username: tg?.initDataUnsafe?.user?.username || '', photo: onboardingPhoto })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.error?.code || 'SAQLASH_XATOSI');
+          if (status) status.textContent = 'Profil muvaffaqiyatli ulandi. Botga qayting va hisobingizni oching.';
+          try { tg?.HapticFeedback?.notificationOccurred('success'); } catch {}
+          try { tg?.sendData?.(JSON.stringify({ action: 'onboarding_complete' })); } catch {}
+          setTimeout(() => { try { tg?.close?.(); } catch {} }, 1000);
+        } catch (error) {
+          if (status) status.textContent = `Ulab bo‘lmadi: ${error.message}. Ma’lumotlarni tekshirib qayta urinib ko‘ring.`;
+          updateOnboardingSubmit();
+        }
+        return;
+      }
       if (tg && typeof tg.sendData === 'function') {
         try {
           tg.sendData(JSON.stringify({ action: 'bind_request', workerId: val, companyId: companyId || 'comp_novda' }));

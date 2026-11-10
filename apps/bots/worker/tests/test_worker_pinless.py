@@ -76,7 +76,7 @@ class PinlessWorkerEnrollmentTests(unittest.TestCase):
             worker_bot.handle_text(1, {"id": 123456789}, "/start")
 
         self.assertEqual(worker_bot.USER_STATES["123456789"], {
-            "step": "WAITING_WORKER_ID",
+            "step": "WAITING_CONTACT",
             "company_id": "comp_novda",
         })
         send_message.assert_called_once()

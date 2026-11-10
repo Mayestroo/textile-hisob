@@ -262,22 +262,35 @@ def begin_registration(chat_id, user):
             main_keyboard(binding, telegram_id),
         )
         return
-    if DEFAULT_COMPANY_ID:
-        USER_STATES[telegram_id] = {"step": "WAITING_WORKER_ID", "company_id": DEFAULT_COMPANY_ID}
-    else:
-        USER_STATES[telegram_id] = {"step": "WAITING_COMPANY_ID"}
-
-    keyboard = []
-    if WORKER_WEBAPP_URL:
-        keyboard.append([{"text": "🔗 Hisobga ulanish (Web App)", "web_app": {"url": WORKER_WEBAPP_URL}}])
-    reply_markup = {"keyboard": keyboard, "resize_keyboard": True} if keyboard else {"remove_keyboard": True}
+    USER_STATES[telegram_id] = {"step": "WAITING_CONTACT", "company_id": DEFAULT_COMPANY_ID or "comp_novda"}
+    reply_markup = {
+        "keyboard": [[{"text": "📱 Telefon raqamni ulashish", "request_contact": True}]],
+        "resize_keyboard": True,
+        "one_time_keyboard": True,
+    }
     send_message(
         chat_id,
         "Assalomu alaykum!\n\n"
-        "Hisobingizga ulanish va ma'lumotlaringizni ko'rish uchun "
-        "quyidagi <b>Hisobga ulanish</b> tugmasini bosing:",
+        "Davom etish uchun telefon raqamingizni ulashing. Keyingi bosqichlar — suratga olish va "
+        "Ishchi ID kiritish — Web App ichida bajariladi:",
         reply_markup,
     )
+
+
+def send_onboarding_webapp(chat_id, user, state):
+    telegram_id = str(user.get("id", ""))
+    if not WORKER_WEBAPP_URL:
+        send_message(chat_id, "Web App manzili sozlanmagan. Korxona ma'muriyatiga murojaat qiling.")
+        return
+    expires, token = worker_web_token(state.get("company_id") or "comp_novda", 0, telegram_id)
+    params = urllib.parse.urlencode({
+        "onboarding": "1", "companyId": state.get("company_id") or "comp_novda",
+        "telegramId": telegram_id, "expiresAt": expires, "authToken": token,
+    })
+    url = f"{WORKER_WEBAPP_URL}{'&' if '?' in WORKER_WEBAPP_URL else '?'}{params}"
+    send_message(chat_id, "Rahmat! Endi Web App’ni ochib, kamera ruxsatini bering va Ishchi ID raqamingizni kiriting.", {
+        "inline_keyboard": [[{"text": "📸 Web App’ni ochish", "web_app": {"url": url}}]]
+    })
 
 
 def start_worker_id_check(chat_id, user, telegram_id, state, text):
@@ -424,9 +437,45 @@ def process_update(update):
                     main_keyboard(binding, telegram_id),
                 )
                 return
+            if payload.get("action") == "onboarding_complete":
+                binding = get_worker_binding(telegram_id)
+                if not binding:
+                    send_message(chat_id, "Profil hali ulanmagan. Web App’da qayta urinib ko‘ring.")
+                    return
+                USER_STATES[telegram_id] = {"step": "BOUND", "binding": binding}
+                send_message(chat_id, f"✅ Profil ulandi: <b>{escape(binding['worker_name'])}</b>. Web App’ni ochish uchun tugmani bosing.", main_keyboard(binding, telegram_id))
+                return
         except Exception as error:
             send_message(chat_id, f"Bog'lanishda xatolik yuz berdi: <code>{escape(str(error))}</code>")
             return
+
+    contact = message.get("contact")
+    if contact and chat_id:
+        state = USER_STATES.get(telegram_id, {})
+        if state.get("step") != "WAITING_CONTACT":
+            return
+        if str(contact.get("user_id", "")) != telegram_id:
+            send_message(chat_id, "Iltimos, o'zingizning telefon raqamingizni tugma orqali ulashing.")
+            return
+        phone = str(contact.get("phone_number", "")).strip()
+        if not re.fullmatch(r"\+?[0-9 ()-]{7,24}", phone):
+            send_message(chat_id, "Telefon raqam formati noto'g'ri. Qayta ulashing.")
+            return
+        state["phone"] = phone
+        state["contact_name"] = " ".join(part for part in (contact.get("first_name"), contact.get("last_name")) if part).strip()[:160]
+        try:
+            api_request("POST", "/api/worker/onboarding-contact", {
+                "telegramId": telegram_id,
+                "companyId": state.get("company_id") or "comp_novda",
+                "phoneNumber": phone,
+                "contactName": state["contact_name"],
+            })
+        except RuntimeError as error:
+            send_message(chat_id, f"Kontaktni saqlab bo'lmadi: <code>{escape(error)}</code>. Qayta /start bosing.")
+            return
+        state["step"] = "WAITING_WEBAPP"
+        send_onboarding_webapp(chat_id, user, state)
+        return
 
     text = message.get("text")
     if chat_id and text:

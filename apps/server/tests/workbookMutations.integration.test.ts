@@ -61,7 +61,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_worker_adjustment_manual_payroll_types.sql',
       'deploy_model_batch_size_names_migration.sql',
       'deploy_party_size_order_migration.sql',
-      'deploy_patta_lifecycle_provenance_migration.sql'
+      'deploy_patta_lifecycle_provenance_migration.sql',
+      'deploy_worker_onboarding_profile_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'

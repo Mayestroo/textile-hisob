@@ -28,7 +28,8 @@ const EXPECTED_MIGRATIONS = Object.freeze({
   25: 'deploy_worker_adjustment_manual_payroll_types.sql',
   26: 'deploy_model_batch_size_names_migration.sql',
   27: 'deploy_party_size_order_migration.sql',
-  28: 'deploy_patta_lifecycle_provenance_migration.sql'
+  28: 'deploy_patta_lifecycle_provenance_migration.sql',
+  29: 'deploy_worker_onboarding_profile_migration.sql'
 });
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([

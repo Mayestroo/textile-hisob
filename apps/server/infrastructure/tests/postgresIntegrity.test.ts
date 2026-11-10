@@ -39,7 +39,8 @@ const exactMigrations = [
   'deploy_worker_adjustment_manual_payroll_types.sql',
   'deploy_model_batch_size_names_migration.sql',
   'deploy_party_size_order_migration.sql',
-  'deploy_patta_lifecycle_provenance_migration.sql'
+  'deploy_patta_lifecycle_provenance_migration.sql',
+  'deploy_worker_onboarding_profile_migration.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -493,7 +494,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
 
   it('verifies a fresh schema after applying all ordered deployment migrations', async () => {
     const freshReport = await verifyPostgresReleaseState(isolatedPool);
-    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+    expect(freshReport.migrations.rows.map((row: any) => row.version)).toEqual(exactMigrations.map((_migration, index) => index + 1));
     expect(freshReport.foreignKeys.presentAndValidated).toBe(REQUIRED_FOREIGN_KEYS.length);
     expect(freshReport.partyPolicy.callsExactPolicyFunction).toBe(true);
     expect(freshReport.baseline.scopePreserved).toBe(true);

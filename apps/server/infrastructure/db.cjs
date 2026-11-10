@@ -149,7 +149,8 @@ async function resetServerDatabase() {
     'deploy_worker_adjustment_manual_payroll_types.sql',
     'deploy_model_batch_size_names_migration.sql',
     'deploy_party_size_order_migration.sql',
-    'deploy_patta_lifecycle_provenance_migration.sql'
+    'deploy_patta_lifecycle_provenance_migration.sql',
+    'deploy_worker_onboarding_profile_migration.sql'
   ];
   for (const filename of migrations) {
     await p.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
