@@ -18,6 +18,13 @@ const valuation: PayrollValuation = {
 };
 
 describe('payroll display takes all company-bound worker money from selected-period valuation', () => {
+  it('treats an absent valuation as unavailable instead of crashing', () => {
+    const display = payrollDisplay([model], [worker], undefined, 'hisob_test_company', 'P');
+    expect(display.ready).toBe(false);
+    expect(display.reportReady).toBe(false);
+    expect(display.unknown.has(display.key('m', 7, 'Sew'))).toBe(true);
+  });
+
   it('uses gross/net and manual components from valuation, while model earnings remain piecework', () => {
     const display = payrollDisplay([model], [worker], valuation, 'hisob_test_company', 'P');
     expect(display.masterReport.workers[0]).toMatchObject({

@@ -10,8 +10,14 @@ const validRate = (value: unknown): value is number | string =>
 
 // The read contract is the only money source in a company-bound workbook. The
 // optimistic grid remains the editing/quantity source, never an extra wage fact.
-export function payrollDisplay(models: ModelConfig[], workers: Worker[], valuation: PayrollValuation,
+export function payrollDisplay(models: ModelConfig[], workers: Worker[], valuationInput: PayrollValuation | null | undefined,
   companyId: string | undefined, periodId: string) {
+  // Store hydration can briefly leave older or partially persisted state without a valuation.
+  // Treat that as unavailable rather than crashing the renderer while reading companyId.
+  const valuation: PayrollValuation = valuationInput || {
+    companyId: '', period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+    accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN',
+  };
   const legacy = !companyId;
   const ready = legacy || (valuation.companyId === companyId && valuation.period?.periodId === periodId
     && valuation.accountingStatus !== 'UNAVAILABLE' && Array.isArray(valuation.workers));
