@@ -14,6 +14,7 @@ import { displayedMoney, payrollDisplay } from '../../engine/payrollDisplay';
 import { useWorkbookStore } from '../../store/workbookStore';
 import { useAuthStore } from '../../store/authStore';
 import { formatUzbekDate } from '../../utils/formatters';
+import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 
 const VIRTUAL_THRESHOLD = 30;
 const ROW_HEIGHT_STANDARD = 52;
@@ -540,6 +541,7 @@ export const UmumiyView: React.FC = () => {
   const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
   const companyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const isServerConnected = useWorkbookStore((s) => s.isServerConnected);
   const updateWorker = useWorkbookStore((s) => s.updateWorker);
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const setActiveCell = useWorkbookStore((s) => s.setActiveCell);
@@ -588,6 +590,7 @@ export const UmumiyView: React.FC = () => {
   }, []);
 
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
+  const payrollReadAttempt = useRef('');
 
   const handleSelectRow = useCallback((workerId: number, toggle = false) => {
     setSelectedWorkerId((prev) => {
@@ -611,6 +614,41 @@ export const UmumiyView: React.FC = () => {
 
   const display = useMemo(() => payrollDisplay(models, workers, payrollValuation, companyId, currentPeriod.id),
     [models, workers, payrollValuation, companyId, currentPeriod.id]);
+
+  // The workbook projection and payroll valuation are read together at startup, but a
+  // legacy/partial projection can lack the latter. Once sync runtime is ready, retry
+  // the narrow company+period-bound SQLite payroll read instead of leaving the report
+  // permanently at “Noma’lum”. Never use a result after the active company/period changes.
+  useEffect(() => {
+    const attemptKey = `${companyId || ''}:${currentPeriod.id}`;
+    if (!companyId || !currentPeriod.id || !isServerConnected || display.reportReady
+      || payrollReadAttempt.current === attemptKey) return;
+    payrollReadAttempt.current = attemptKey;
+
+    let cancelled = false;
+    void (async () => {
+      const api = getElectronApi();
+      const runtime = await resolveElectronRuntimeMode(api);
+      if (runtime.mode !== 'sync' || !runtime.success || typeof api?.PayrollRead !== 'function') return;
+      try {
+        const result = await api.PayrollRead(companyId, currentPeriod.id);
+        const state = useWorkbookStore.getState();
+        if (cancelled || state.licenseStatus?.companyId !== companyId || state.currentPeriod.id !== currentPeriod.id) return;
+        if (result?.success && result.companyId === companyId && result.periodId === currentPeriod.id
+          && result.payrollValuation?.companyId === companyId
+          && result.payrollValuation.period?.periodId === currentPeriod.id) {
+          useWorkbookStore.setState({ payrollValuation: result.payrollValuation });
+        } else {
+          addNotification('warning', 'Hisob ma’lumoti topilmadi',
+            `Joriy davr (${currentPeriod.id}) uchun ish haqi hisobini SQLite’dan o‘qib bo‘lmadi: ${result?.error || result?.code || result?.payrollValuation?.accountingReasons?.join(', ') || 'davrga bog‘langan hisob ma’lumoti mavjud emas'}.`);
+        }
+      } catch (error) {
+        if (!cancelled) addNotification('warning', 'Hisobni o‘qish xatosi',
+          error instanceof Error ? error.message : 'SQLite ish haqi hisobini o‘qib bo‘lmadi.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [addNotification, companyId, currentPeriod.id, display.reportReady, isServerConnected]);
   const masterReport = display.masterReport;
   const money = (value: number) => displayedMoney(value, display.reportReady, display.incomplete);
   const selectedPeriodOpen = periods.some((period) => period.id === currentPeriod.id && !period.isClosed)
