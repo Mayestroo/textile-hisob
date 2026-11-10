@@ -294,7 +294,7 @@
       const incomplete = c.accountingStatus !== 'COMPLETE';
       const netEl = document.getElementById('netPayAmount');
 
-      const netFormatted = `${formatNumber(c.net)}${incomplete ? ' (oraliq)' : ''}`;
+      const netFormatted = formatNumber(c.net);
       netEl.textContent = `${netFormatted} so'm`;
       netEl.innerHTML = `${escapeHtml(netFormatted)} <span class="hero-curr">so'm</span>`;
 
@@ -312,16 +312,16 @@
       }
 
       const grossEl = document.getElementById('grossPayAmount');
-      if (grossEl) grossEl.textContent = `${formatNumber(c.pieceworkGross)}${incomplete ? ' (oraliq)' : ''}`;
+      if (grossEl) grossEl.textContent = formatNumber(c.pieceworkGross);
       const avansEl = document.getElementById('avansAmount');
       if (avansEl) avansEl.textContent = c.avans ? formatNumber(c.avans) : '—';
       const jarimaEl = document.getElementById('jarimaAmount');
       if (jarimaEl) jarimaEl.textContent = c.jarima ? formatNumber(c.jarima) : '—';
 
       const okladEl = document.getElementById('okladAmount');
-      if (okladEl) okladEl.textContent = `${formatMoney(c.oklad)}${incomplete ? ' (oraliq)' : ''}`;
+      if (okladEl) okladEl.textContent = formatMoney(c.oklad);
       const grossTotalEl = document.getElementById('grossTotalAmount');
-      if (grossTotalEl) grossTotalEl.textContent = `${formatMoney(c.gross)}${incomplete ? ' (oraliq)' : ''}`;
+      if (grossTotalEl) grossTotalEl.textContent = formatMoney(c.gross);
       const magazinEl = document.getElementById('magazinAmount');
       if (magazinEl) magazinEl.textContent = formatMoney(c.magazin);
       const stajEl = document.getElementById('stajAmount');
@@ -454,7 +454,7 @@
       }
 
     // Event Listeners
-    document.getElementById('refreshBtn').addEventListener('click', () => {
+    document.getElementById('refreshBtn')?.addEventListener('click', () => {
       triggerHaptic('medium');
       loadWorkerData();
     });
@@ -701,10 +701,6 @@
         } catch (e) {}
       }
       alert('So‘rov yuborildi. Admin tasdiqlagach hisobingiz ochiladi.');
-    });
-
-    document.getElementById('workerCloseBtn')?.addEventListener('click', () => {
-      try { tg?.close?.(); } catch (e) {}
     });
 
     // Auto-refresh: Automatically update worked amounts in real-time

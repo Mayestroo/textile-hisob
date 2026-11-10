@@ -26,7 +26,7 @@ describe('offline payroll consumers', () => {
     const context = { state, document, formatMoney: (n: number) => `${n} so'm`, formatNumber: String, escapeHtml: String };
     vm.runInNewContext(`${hero}\n${ops}\nrenderHero(); renderOperations();`, context);
     expect(elements.get('netPaySubtitle').textContent.includes('Hisob to‘liq emas')).toBe(warning);
-    expect(elements.get('netPayAmount').textContent.includes('oraliq')).toBe(warning);
+    if (warning) expect(elements.get('netPaySubtitle').textContent).toContain('yakuniy oylik emas');
     expect(elements.get('modelsBreakdownList').innerHTML).toContain(rate == null ? 'Summa noma’lum' : `${amount} so'm`);
     if (rate === 0) expect(elements.get('modelsBreakdownList').innerHTML).toContain("0 so'm / dona");
   });
@@ -36,8 +36,8 @@ describe('offline payroll consumers', () => {
     const context: any = {};
     vm.runInNewContext(`${helpers}\nthis.render = (workers) => [payrollWarning(workers), ...workers.map(w => payrollAmount(w, w.net))];`, context);
     expect(context.render([{ accountingStatus: 'INCOMPLETE', unknownEntryCount: 1, net: -2 }, { accountingStatus: 'COMPLETE', net: 0 }]))
-       .toEqual(expect.arrayContaining([expect.stringContaining('1 ta ish narxi noma’lum'), '-2 (oraliq, tasdiqlanmagan)', '0']));
-    expect(context.render([{ net: 0 }])).toEqual([expect.stringContaining('Hisob to‘liq emas'), '0 (oraliq, tasdiqlanmagan)']);
+       .toEqual(expect.arrayContaining([expect.stringContaining('1 ta ish narxi noma’lum'), '-2 (tasdiqlanmagan)', '0']));
+    expect(context.render([{ net: 0 }])).toEqual([expect.stringContaining('Hisob to‘liq emas'), '0 (tasdiqlanmagan)']);
   });
 
   it.each([
@@ -61,8 +61,7 @@ describe('offline payroll consumers', () => {
       setText: (id: string, text: string) => { byId(id).textContent = text; }, number: String, coMoney: String };
     vm.runInNewContext(`${helpers}\n${render}\nrenderCompanyHome({accountingStatus:${JSON.stringify(status || 'UNAVAILABLE')},period:{name:'September'}})`, context);
     expect(byId('companyWorkerCount').textContent.includes('Hisob to‘liq emas')).toBe(Boolean(expected));
-    expect(byId('companyNet').textContent.includes('oraliq')).toBe(Boolean(expected));
-    expect(byId('companyGross').textContent.includes('oraliq')).toBe(Boolean(expected));
+    if (expected) expect(byId('companyWorkerCount').textContent).toContain('yakuniy oylik emas');
     expect(byId('companyNet').textContent).toContain('-2');
   });
 });

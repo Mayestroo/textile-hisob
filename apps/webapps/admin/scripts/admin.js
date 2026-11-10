@@ -19,12 +19,12 @@
   }
 
   function payrollIncomplete(worker) { return worker?.accountingStatus === 'INCOMPLETE' || worker?.accountingStatus === 'UNAVAILABLE' || !worker?.accountingStatus; }
-  function payrollAmount(worker, value) { return `${value}${payrollIncomplete(worker) ? ' (oraliq, tasdiqlanmagan)' : ''}`; }
+  function payrollAmount(worker, value) { return `${value}${payrollIncomplete(worker) ? ' (tasdiqlanmagan)' : ''}`; }
   function payrollWarning(workers, payroll) {
     const count = workers.reduce((sum, worker) => sum + (payrollIncomplete(worker) ? Number(worker.unknownEntryCount || 0) : 0), 0);
     if (payroll && !payroll.period) return ' · ⚠️ Davr mavjud emas; oylik hisoblanmagan.';
     return workers.some(payrollIncomplete) || (payroll && payroll.accountingStatus !== 'COMPLETE')
-      ? ` · ⚠️ Hisob to‘liq emas: ${count} ta ish narxi noma’lum, ${workers.reduce((sum, worker) => sum + Number(worker.unresolvedAdjustmentCount || 0), 0)} ta tuzatish aniqlanmagan. Summalar faqat aniqlangan ishlar bo‘yicha oraliq hisob, yakuniy oylik emas.` : '';
+      ? ` · ⚠️ Hisob to‘liq emas: ${count} ta ish narxi noma’lum, ${workers.reduce((sum, worker) => sum + Number(worker.unresolvedAdjustmentCount || 0), 0)} ta tuzatish aniqlanmagan. Faqat aniqlangan ishlar hisoblangan; yakuniy oylik emas.` : '';
   }
 
   function setOnlineStatus(isOnline, labelText = null) {
@@ -416,10 +416,10 @@
     const staj = workers.reduce((sum, worker) => sum + Number(worker.staj || 0), 0);
     const net = workers.reduce((sum, worker) => sum + Number(worker.net || 0), 0);
     const pieces = workers.reduce((sum, worker) => sum + Number(worker.pieces || 0), 0);
-    setText('companyNet', `${coMoney(net)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
-    setText('companyGross', `${coMoney(gross)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
-    setText('companyPiecework', `${coMoney(piecework)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
-    setText('companyOklad', `${coMoney(oklad)}${payroll.accountingStatus !== 'COMPLETE' || workers.some(payrollIncomplete) ? ' (oraliq)' : ''}`);
+    setText('companyNet', coMoney(net));
+    setText('companyGross', coMoney(gross));
+    setText('companyPiecework', coMoney(piecework));
+    setText('companyOklad', coMoney(oklad));
     setText('companyMagazin', coMoney(magazin));
     setText('companyAdvance', coMoney(advance));
     setText('companyFine', coMoney(fine));
@@ -497,7 +497,7 @@
       const avans = Number(worker.avans || 0);
 
       if (payrollIncomplete(worker)) {
-        left.appendChild(coText('span', 'co-worker-badge co-worker-status warning', 'Hisob to‘liq emas · oraliq summa'));
+        left.appendChild(coText('span', 'co-worker-badge co-worker-status warning', 'Hisob to‘liq emas · tasdiqlanmagan'));
       } else if (net < 0) {
         left.appendChild(coText('span', 'co-worker-badge co-worker-status negative', 'Manfiy'));
       } else if (staj > 0) {
@@ -1161,7 +1161,7 @@
     const payrollRows = isWorkerDetail && companyPanel.selectedWorker
       ? [companyPanel.selectedWorker]
       : companyPanel.payroll;
-    const rows = [['ID', 'Ishchi', 'Hisoblangan (oraliq)', 'Avans', 'Jarima', 'Staj', 'Sof foyda (oraliq)', 'Ish soni', 'Hisob holati', 'Narxi noma’lum ishlar'],
+    const rows = [['ID', 'Ishchi', 'Hisoblangan', 'Avans', 'Jarima', 'Staj', 'Sof foyda', 'Ish soni', 'Hisob holati', 'Narxi noma’lum ishlar'],
       ...payrollRows.map((worker) => [worker.workerId, worker.name, worker.gross, worker.avans, worker.jarima, worker.staj, worker.net, worker.pieces, payrollIncomplete(worker) ? 'Hisob to‘liq emas; yakuniy oylik emas' : 'To‘liq', worker.unknownEntryCount || 0])];
     const csv = '\ufeff' + rows.map((row) => row.map((cellValue) => `"${String(cellValue ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));

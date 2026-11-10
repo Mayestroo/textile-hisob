@@ -192,14 +192,14 @@ def send_profile(chat_id, telegram_id, binding):
     warning = ("\n⚠️ Davr mavjud emas; oylik hisoblanmagan.\n" if unavailable else
                f"\n⚠️ Hisob to‘liq emas: {profile.get('unknownEntryCount', 0)} ta ish narxi noma’lum, "
                f"{profile.get('unresolvedAdjustmentCount', 0)} ta tuzatish aniqlanmagan. "
-               "Ko‘rsatilgan summa faqat aniqlangan ishlar bo‘yicha oraliq hisob, yakuniy oylik emas.\n") if incomplete else ""
+               "Ko‘rsatilgan summa faqat aniqlangan ishlar bo‘yicha hisoblangan; yakuniy oylik emas.\n") if incomplete else ""
     text = (
         f"📊 <b>SHAXSIY HISOB-KITOB</b>\n"
         f"👤 {escape(profile['worker_name'])} (ID: #{profile['worker_id']})\n"
         f"📅 Davr: {escape(profile['period_name'])}\n\n"
-        f"💵 {'Hisoblangan oraliq summa' if incomplete else 'Jami ishlangan'}: {format_money(profile['gross'])}\n"
+        f"💵 {'Hisoblangan summa' if incomplete else 'Jami ishlangan'}: {format_money(profile['gross'])}\n"
         f"➖ Jarima: {format_money(profile['jarima'])}\n"
-        f"✅ <b>{'Sof oraliq summa' if incomplete else 'Sof foyda'}: {format_money(profile['net'])}</b>\n"
+        f"✅ <b>{'Sof summa' if incomplete else 'Sof foyda'}: {format_money(profile['net'])}</b>\n"
         f"{warning}"
         f"🏷 Bajarilgan ish: {format_number(profile['pieces'])} dona"
     )
@@ -218,7 +218,7 @@ def send_operations(chat_id, telegram_id, binding):
         return
     lines = ["<b>BAJARILGAN ISHLAR</b>"]
     for model in breakdown.values():
-        lines.append(f"\n👗 <b>{escape(model['name'])}</b>: {format_money(model['earnings'])}{' (oraliq)' if incomplete else ''}")
+        lines.append(f"\n👗 <b>{escape(model['name'])}</b>: {format_money(model['earnings'])}")
         for operation in model.get("operations", []):
             rate = operation.get('rate')
             lines.append(
@@ -226,7 +226,7 @@ def send_operations(chat_id, telegram_id, binding):
                 f"{format_number(rate)} so'm = <b>{format_money(operation['amount'])}</b>" if rate is not None else
                 f"  • {escape(operation['name'])}: {format_number(operation['qty'])} dona × narx noma’lum = <b>summa noma’lum</b>"
             )
-    lines.append(f"\n{'Narxi ma’lum ishlar bo‘yicha oraliq jami' if incomplete else 'Jami'}: <b>{format_money(profile['gross'])}</b>")
+    lines.append(f"\n{'Narxi ma’lum ishlar bo‘yicha jami' if incomplete else 'Jami'}: <b>{format_money(profile['gross'])}</b>")
     if incomplete:
         lines.append(f"⚠️ Hisob to‘liq emas: {profile.get('unknownEntryCount', 0)} ta ish narxi noma’lum, {profile.get('unresolvedAdjustmentCount', 0)} ta tuzatish aniqlanmagan. Yakuniy oylik emas.")
     send_message(chat_id, "\n".join(lines), main_keyboard(binding, telegram_id))
