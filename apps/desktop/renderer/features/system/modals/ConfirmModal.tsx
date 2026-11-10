@@ -40,8 +40,9 @@ export const ConfirmModal: React.FC = () => {
   const cancelText = confirmState.cancelText || "Bekor qilish";
 
   return (
-    <div
-      onClick={() => closeConfirm(false)}
+      <div
+        className="phase-c-confirm-overlay"
+        onClick={() => closeConfirm(false)}
       style={{
         position: 'fixed',
         inset: 0,
@@ -56,6 +57,7 @@ export const ConfirmModal: React.FC = () => {
       }}
     >
       <div
+        className="phase-c-confirm-card"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -88,7 +90,7 @@ export const ConfirmModal: React.FC = () => {
             <span
               style={{
                 fontWeight: 800,
-                fontSize: '14.5px',
+                fontSize: '17.5px',
                 color: isDanger ? '#b91c1c' : 'var(--primary-dark)',
                 letterSpacing: '-0.2px'
               }}
@@ -121,7 +123,7 @@ export const ConfirmModal: React.FC = () => {
           <p
             style={{
               margin: '0 0 20px',
-              fontSize: '13.5px',
+              fontSize: '15px',
               color: 'var(--text-primary)',
               lineHeight: 1.55,
               whiteSpace: 'pre-line'
@@ -138,7 +140,7 @@ export const ConfirmModal: React.FC = () => {
               className="soft-btn soft-btn-secondary"
               style={{
                 padding: '8px 16px',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 600,
                 borderRadius: 'var(--radius-md)'
               }}
@@ -152,7 +154,7 @@ export const ConfirmModal: React.FC = () => {
               className="soft-btn"
               style={{
                 padding: '8px 18px',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 700,
                 borderRadius: 'var(--radius-md)',
                 background: isDanger ? '#ef4444' : 'var(--primary)',

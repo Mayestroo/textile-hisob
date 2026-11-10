@@ -28,7 +28,7 @@ export function buildPartyTicketsList(
   partyRecord: PrintedPartyRecord,
   submittedTickets: SubmittedTicketRecord[],
   activeSizes: string[],
-  includeArchived: boolean = true,
+  includeArchived: boolean = false,
   onlySubmitted: boolean = false
 ): PartyPattaItem[] {
   const list: PartyPattaItem[] = [];
@@ -46,13 +46,6 @@ export function buildPartyTicketsList(
     );
   });
 
-  const ticketByPattaNumber = new Map<number, SubmittedTicketRecord>();
-  for (const t of relevantTickets) {
-    if (t.pattaNumber !== undefined && t.pattaNumber !== null && !ticketByPattaNumber.has(t.pattaNumber)) {
-      ticketByPattaNumber.set(t.pattaNumber, t);
-    }
-  }
-
   let currentPattaIndex = 1;
   const sizesObj = partyRecord.sizes || {};
   const storedPerPatta = Number(partyRecord.ishSoniPerPatta);
@@ -62,15 +55,19 @@ export function buildPartyTicketsList(
     : partyRecord.pattaCount > 0 && Number.isFinite(legacyPartyTotal)
       ? legacyPartyTotal / partyRecord.pattaCount
       : 0;
-  const archivedSet = new Set(partyRecord.archivedPattaNumbers || []);
-
+  const endPatta = partyRecord.pattaEndNumber ?? partyRecord.cumulativePattaCount;
   const startPatta = partyRecord.pattaStartNumber
-    ?? (partyRecord.cumulativePattaCount > partyRecord.pattaCount
-      ? partyRecord.cumulativePattaCount - partyRecord.pattaCount + 1
+    ?? (endPatta > partyRecord.pattaCount
+      ? endPatta - partyRecord.pattaCount + 1
       : 1);
 
-  // Combine activeSizes with any keys in sizesObj to ensure all printed sizes are evaluated
-  const allSizes = Array.from(new Set([...activeSizes, ...Object.keys(sizesObj)]));
+  // New parties own their print-time row order. Older records retain the historic
+  // global order, then include any stored keys absent from that template.
+  const allSizes = Array.from(new Set([
+    ...(Array.isArray(partyRecord.sizeOrder) ? partyRecord.sizeOrder : activeSizes),
+    ...Object.keys(sizesObj)
+  ]));
+  const slots: Array<{ actual: number; relative: number; size: string }> = [];
 
   for (const sz of allSizes) {
     const countForSize = parseInt(sizesObj[sz] || '0', 10);
@@ -79,39 +76,67 @@ export function buildPartyTicketsList(
     for (let i = 0; i < countForSize; i++) {
       const relNum = currentPattaIndex++;
       const actualSeqNum = startPatta + relNum - 1;
-      const isArchived = archivedSet.has(relNum) || archivedSet.has(actualSeqNum);
-
-      // If this patta was already archived in previous periods, skip it in active month
-      if (!includeArchived && isArchived) {
-        continue;
-      }
-
-      // O(1) Map lookup for both relative number (1, 2, 3...) and sequential printed number (5, 6, 7...)
-      const sub = ticketByPattaNumber.get(actualSeqNum) || ticketByPattaNumber.get(relNum);
-      const isSubmitted = !!sub || isArchived;
-
-      // In closed/archived months, if onlySubmitted is requested, skip unentered tickets!
-      if (onlySubmitted && !isSubmitted) {
-        continue;
-      }
-
-      const enteredQty = sub ? sub.qty : (isArchived ? ishSoniPerPatta : 0);
-      const expected = ishSoniPerPatta;
-      const deficit = isSubmitted ? expected - enteredQty : expected;
-
-      list.push({
-        id: sub?.id,
-        pattaNumber: actualSeqNum,
-        actualPattaNumber: actualSeqNum,
-        relativePattaNumber: relNum,
-        size: sz,
-        expectedQty: expected,
-        isSubmitted,
-        enteredQty,
-        deficit,
-        submittedAt: sub?.submittedAt
-      });
+      slots.push({ actual: actualSeqNum, relative: relNum, size: sz });
     }
+  }
+
+  // Resolve against ALL printed slots before hiding archived rows. A number in
+  // the absolute namespace must never be reused as a relative number elsewhere.
+  // Legacy relative numbers remain supported only outside the absolute range.
+  const actualNumbers = new Set(slots.map(slot => slot.actual));
+  const resolveNumber = (number: number): number | undefined => {
+    if (actualNumbers.has(number)) return number;
+    if (Number.isSafeInteger(number) && number >= 1 && number <= slots.length) return startPatta + number - 1;
+    return undefined;
+  };
+  const ticketByPattaNumber = new Map<number, SubmittedTicketRecord>();
+  const usedTicketIds = new Set<string>();
+  // Reserve absolute matches first, independent of input order; fallback cannot
+  // overwrite an absolute ticket or assign the same ticket identity twice.
+  const resolutionOrder = [...relevantTickets].sort((a, b) => {
+    const accepted = (ticket: SubmittedTicketRecord) => ticket.status === 'CONFIRMED' || !ticket.status;
+    return Number(accepted(b)) - Number(accepted(a)) || a.id.localeCompare(b.id);
+  });
+  for (const absolutePass of [true, false]) {
+    for (const ticket of resolutionOrder) {
+      if (actualNumbers.has(ticket.pattaNumber) !== absolutePass) continue;
+      const actual = resolveNumber(ticket.pattaNumber);
+      if (actual === undefined || ticketByPattaNumber.has(actual) || usedTicketIds.has(ticket.id)) continue;
+      ticketByPattaNumber.set(actual, ticket);
+      usedTicketIds.add(ticket.id);
+    }
+  }
+  const archivedSet = new Set((partyRecord.archivedPattaNumbers || []).map(resolveNumber));
+
+  for (const { actual: actualSeqNum, relative: relNum, size: sz } of slots) {
+    const isArchived = archivedSet.has(actualSeqNum);
+    if (!includeArchived && isArchived) continue;
+    const sub = ticketByPattaNumber.get(actualSeqNum);
+    // Archived patta numbers represent fulfilled work even if their original
+    // ticket is no longer present in the current projection.
+    const isSubmitted = !!sub || isArchived;
+
+    // In closed/archived months, if onlySubmitted is requested, skip unentered tickets!
+    if (onlySubmitted && !isSubmitted) {
+      continue;
+    }
+
+    const enteredQty = sub ? sub.qty : (isArchived ? ishSoniPerPatta : 0);
+    const expected = ishSoniPerPatta;
+    const deficit = isSubmitted ? expected - enteredQty : expected;
+
+    list.push({
+      id: sub?.id,
+      pattaNumber: actualSeqNum,
+      actualPattaNumber: actualSeqNum,
+      relativePattaNumber: relNum,
+      size: sz,
+      expectedQty: expected,
+      isSubmitted,
+      enteredQty,
+      deficit,
+      submittedAt: sub?.submittedAt
+    });
   }
 
   return list;

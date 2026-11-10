@@ -52,7 +52,8 @@ function registerWorkerRoutes(app, options = {}) {
   const workerApiToken = options.workerApiToken ?? readSecret(env, 'NOVDA_WORKER_API_TOKEN');
   const workerHmacSecret = options.workerAuthHmacSecret ?? readSecret(env, 'WORKER_AUTH_HMAC_SECRET');
   const workerPinRequired = String(env.NOVDA_WORKER_PIN_REQUIRED ?? 'true').toLowerCase() !== 'false';
-  const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', '..', '..', 'worker-bot', 'webapp', 'index.html');
+  const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', '..', 'webapps', 'worker', 'index.html');
+  const fontPath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'assets', 'fonts');
 
   app.get('/worker-app', async (_request, reply) => {
     try {
@@ -64,6 +65,35 @@ function registerWorkerRoutes(app, options = {}) {
         .send(html);
     } catch {
       return reply.code(503).send({ success: false, error: { code: 'WORKER_WEBAPP_UNAVAILABLE', message: 'Worker app unavailable' } });
+    }
+  });
+
+  app.get('/worker-app-assets/:asset', async (request, reply) => {
+    const assets = {
+      'worker.css': { file: 'styles/worker.css', type: 'text/css; charset=utf-8' },
+      'worker.js': { file: 'scripts/worker.js', type: 'application/javascript; charset=utf-8' }
+    };
+    const asset = Object.hasOwn(assets, request.params.asset) ? assets[request.params.asset] : null;
+    if (!asset) return reply.code(404).send({ success: false, error: { code: 'WORKER_ASSET_NOT_FOUND' } });
+    try {
+      return reply.type(asset.type).header('Cache-Control', 'no-store')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(fs.readFileSync(path.join(path.dirname(workerWebAppPath), asset.file), 'utf8'));
+    } catch {
+      return reply.code(503).send({ success: false, error: { code: 'WORKER_ASSET_UNAVAILABLE' } });
+    }
+  });
+
+  app.get('/worker-app-font/:asset', async (request, reply) => {
+    const asset = request.params.asset;
+    if (asset !== 'IBMPlexSans[wdth,wght].ttf' && asset !== 'Onest[wght].ttf')
+      return reply.code(404).send({ success: false, error: { code: 'WORKER_FONT_NOT_FOUND' } });
+    try {
+      return reply.type('font/ttf').header('Cache-Control', 'public, max-age=86400')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(fs.readFileSync(path.join(fontPath, asset)));
+    } catch {
+      return reply.code(503).send({ success: false, error: { code: 'WORKER_FONT_UNAVAILABLE' } });
     }
   });
 
@@ -99,6 +129,63 @@ function registerWorkerRoutes(app, options = {}) {
         return reply.code(201).send({ success: true, binding });
       } catch (error) { return sendWorkerError(reply, error); }
     });
+
+    workerApi.post('/api/worker/onboarding-contact', async (request, reply) => {
+      try {
+        const telegramId = String(request.body?.telegramId || '');
+        const companyId = String(request.body?.companyId || '');
+        const phone = String(request.body?.phoneNumber || '').trim();
+        const contactName = String(request.body?.contactName || '').trim().slice(0, 160);
+        if (!/^\d{1,24}$/.test(telegramId) || !/^[A-Za-z0-9_-]{1,64}$/.test(companyId)
+          || !/^\+?[0-9 ()-]{7,24}$/.test(phone)) {
+          return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_CONTACT' } });
+        }
+        await pool.query(
+          `INSERT INTO worker_onboarding_contacts (telegram_id, company_id, phone_number, contact_name, updated_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (telegram_id) DO UPDATE SET company_id = EXCLUDED.company_id,
+             phone_number = EXCLUDED.phone_number, contact_name = EXCLUDED.contact_name, updated_at = NOW()`,
+          [telegramId, companyId, phone, contactName]
+        );
+        return reply.code(201).send({ success: true });
+      } catch (error) { return sendWorkerError(reply, error); }
+    });
+  });
+
+  app.post('/api/worker/onboarding-bind', async (request, reply) => {
+    try {
+      const companyId = String(request.body?.companyId || '');
+      const telegramId = String(request.body?.telegramId || '');
+      const workerId = Number(request.body?.workerId);
+      const expiresAt = request.body?.expiresAt;
+      const suppliedToken = typeof request.headers['x-worker-auth-token'] === 'string'
+        ? request.headers['x-worker-auth-token'] : '';
+      if (!verifyWorkerWebToken({ companyId, workerId: 0, telegramId, expiresAt }, suppliedToken, workerHmacSecret)) {
+        return reply.code(401).send({ success: false, error: { code: 'WORKER_AUTH_REQUIRED' } });
+      }
+      if (!Number.isSafeInteger(workerId) || workerId < 1) {
+        return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_ID' } });
+      }
+      const photoMatch = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(request.body?.photo || ''));
+      if (!photoMatch) return reply.code(400).send({ success: false, error: { code: 'WORKER_PHOTO_REQUIRED' } });
+      const photo = Buffer.from(photoMatch[1], 'base64');
+      if (!photo.length || photo.length > 300 * 1024) return reply.code(413).send({ success: false, error: { code: 'WORKER_PHOTO_SIZE_INVALID' } });
+      const contact = await pool.query(
+        'SELECT phone_number FROM worker_onboarding_contacts WHERE telegram_id = $1 AND company_id = $2',
+        [telegramId, companyId]
+      );
+      if (!contact.rows[0]) return reply.code(409).send({ success: false, error: { code: 'WORKER_CONTACT_REQUIRED' } });
+      const binding = await workerService.claimWorkerBinding(pool, {
+        telegramId, companyId, workerId, username: String(request.body?.username || '')
+      }, { pinRequired: false });
+      await pool.query(
+        `UPDATE workers SET phone_number = $3, profile_photo = $4, profile_photo_updated_at = NOW()
+         WHERE company_id = $1 AND id = $2`,
+        [companyId, workerId, contact.rows[0].phone_number, photo]
+      );
+      await pool.query('DELETE FROM worker_onboarding_contacts WHERE telegram_id = $1', [telegramId]);
+      return reply.code(201).header('Cache-Control', 'no-store').send({ success: true, binding });
+    } catch (error) { return sendWorkerError(reply, error); }
   });
 
   async function authorizeWorkerRead(request) {
@@ -125,10 +212,25 @@ function registerWorkerRoutes(app, options = {}) {
     return input;
   }
 
+  app.get('/api/worker/enrollment-check', async (request, reply) => {
+    try {
+      const companyId = String(request.query?.companyId || 'comp_novda').trim();
+      const workerId = Number(request.query?.workerId);
+      if (!workerId || !Number.isSafeInteger(workerId)) {
+        return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_ID' } });
+      }
+      const worker = await workerService.getWorkerForEnrollment(pool, companyId, workerId, { pinRequired: false });
+      return reply.header('Cache-Control', 'no-store').send({
+        success: true,
+        worker: { worker_id: worker.worker_id, worker_name: worker.worker_name }
+      });
+    } catch (error) { return sendWorkerError(reply, error); }
+  });
+
   app.get('/api/worker/profile', async (request, reply) => {
     try {
       const input = await authorizeWorkerRead(request);
-      const profile = await workerService.getWorkerProfile(pool, input);
+      const profile = await workerService.getWorkerProfile(pool, { ...input, periodId: request.query?.periodId });
       return reply.header('Cache-Control', 'no-store').send({ success: true, profile });
     } catch (error) { return sendWorkerError(reply, error); }
   });

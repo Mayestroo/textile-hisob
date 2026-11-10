@@ -6,7 +6,7 @@ import { useWorkbookStore } from '../../store/workbookStore';
 import { isValidCompanyId } from '../../store/helpers/hydration';
 import { getElectronApi, resolveElectronRuntimeMode, ElectronRuntimeModeResult } from '../../store/runtimeMode';
 import { captureSessionIdentity, isSessionCurrent } from '../../store/sessionGuard';
-import { preserveWorkbookProjectionDrafts, reloadWorkbookProjection, runReconnect, runSyncPull } from '../../store/businessMutations';
+import { preserveWorkbookProjectionDrafts, reloadWorkbookProjection, runReconnect, runSyncPull, stalePayrollValuation } from '../../store/businessMutations';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export const BACKGROUND_CHANGE_POLL_INTERVAL_MS = 2_000;
@@ -30,6 +30,25 @@ export function isEditableInputTarget(target: unknown): boolean {
 
 export function shouldRunBackgroundSync(online: boolean, hasCompany: boolean, documentVisible: boolean): boolean {
   return online && hasCompany && documentVisible;
+}
+
+export function reconnectRequiresProjectionReload(result: any): boolean {
+  const details = result?.result;
+  if (!details) return true;
+  const changedCounts = [
+    details.recoveredCount,
+    details.pulledInitial,
+    details.supersededBatchSettingsCount,
+    details.recoveredVoidedPattaDuplicateCount,
+    details.recoveredPeriodScopeMismatchCount,
+    details.recoveredCapturedTicketCount,
+    details.reconciledCount,
+    details.pulledFinal,
+    details.pushed?.synced,
+    details.pushed?.conflict,
+    details.pushed?.deadLetter
+  ];
+  return changedCounts.some((count) => Number(count) > 0);
 }
 
 export function summarizeFailedOutboxOperations(operations: unknown): string[] {
@@ -107,6 +126,17 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
   const pullInFlight = useRef(false);
   const projectionDirty = useRef(false);
   const pullContinuationTimer = useRef<number | undefined>(undefined);
+  const markDisconnected = () => {
+    const state = useWorkbookStore.getState();
+    if (!state.isServerConnected && state.payrollValuation.syncStatus !== 'CURRENT') return;
+    useWorkbookStore.setState({ isServerConnected: false,
+      payrollValuation: stalePayrollValuation(state.payrollValuation) });
+  };
+  const markPayrollStale = () => {
+    const valuation = useWorkbookStore.getState().payrollValuation;
+    const stale = stalePayrollValuation(valuation);
+    if (stale !== valuation) useWorkbookStore.setState({ payrollValuation: stale });
+  };
 
   const refreshPendingCount = async () => {
     const eAPI = getElectronApi();
@@ -140,8 +170,10 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     if (!online || !isValidCompanyId(activeCompanyId) || syncInFlight.current || manual && syncing) return;
     syncInFlight.current = true;
     const initialLicenseStatus = useWorkbookStore.getState().licenseStatus;
+    const initialPeriodId = useWorkbookStore.getState().currentPeriod.id;
     const session = captureSessionIdentity(activeCompanyId);
     const isCurrent = () => useWorkbookStore.getState().licenseStatus === initialLicenseStatus
+      && useWorkbookStore.getState().currentPeriod.id === initialPeriodId
       && isSessionCurrent(session, useWorkbookStore.getState().licenseStatus?.companyId || useAuthStore.getState().companyId)
       && useWorkbookStore.getState().licenseStatus?.companyId === activeCompanyId
       && (!useAuthStore.getState().companyId || useAuthStore.getState().companyId === activeCompanyId);
@@ -151,24 +183,38 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       if (!allowsManualSync(runtime) || !isCurrent() || typeof eAPI?.SyncReconnect !== 'function') return;
       if (manual) setStatus('syncing');
        const result = await runReconnect(eAPI, activeCompanyId);
-       if (!isCurrent()) return;
-       if (result?.success) {
-         try {
-           const refreshed = await reloadWorkbookProjection(eAPI, activeCompanyId);
-           if (!isCurrent()) return;
-           const safeProjection = preserveWorkbookProjectionDrafts(
-             refreshed,
-             useWorkbookStore.getState(),
-             isEditableInputTarget(document.activeElement)
-           );
-            const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
-            useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
-            projectionDirty.current = false;
-         } catch {
-           useWorkbookStore.setState({ isServerConnected: true });
-         }
+        if (!isCurrent()) return;
+        if (result?.success) {
+          try {
+            if (!reconnectRequiresProjectionReload(result)) {
+              if (result.result?.proofChanged && typeof eAPI.PayrollRead === 'function') {
+                const payroll = await eAPI.PayrollRead(activeCompanyId, initialPeriodId);
+                if (!isCurrent()) return;
+                if (payroll?.success && payroll.companyId === activeCompanyId && payroll.periodId === initialPeriodId
+                  && payroll.payrollValuation?.period?.periodId === initialPeriodId)
+                  useWorkbookStore.setState({ payrollValuation: payroll.payrollValuation });
+                else markDisconnected();
+              }
+              if (!useWorkbookStore.getState().isServerConnected) {
+                useWorkbookStore.setState({ isServerConnected: true });
+              }
+            } else {
+              const refreshed = await reloadWorkbookProjection(eAPI, activeCompanyId);
+              if (!isCurrent()) return;
+              const safeProjection = preserveWorkbookProjectionDrafts(
+                refreshed,
+                useWorkbookStore.getState(),
+                isEditableInputTarget(document.activeElement)
+              );
+              const { companyId: _projectionCompanyId, ...workbookProjection } = safeProjection;
+              useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
+              projectionDirty.current = false;
+            }
+          } catch {
+             if (isCurrent()) markDisconnected();
+          }
        } else {
-         useWorkbookStore.setState({ isServerConnected: false });
+          markDisconnected();
        }
        await refreshPendingCount();
       const failures = useSyncStore.getState().failedChanges;
@@ -179,7 +225,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         : reconnectFailure;
       setStatus(result?.success && failures === 0 && !reconnectFailure ? 'synced' : 'error', error);
     } catch (error) {
-      useWorkbookStore.setState({ isServerConnected: false });
+       if (isCurrent()) markDisconnected();
       setStatus('error', error instanceof Error ? error.message : 'VPS sync failed');
     } finally {
       syncInFlight.current = false;
@@ -190,8 +236,10 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     if (!online || !isValidCompanyId(activeCompanyId) || syncInFlight.current || pullInFlight.current) return;
     pullInFlight.current = true;
     const initialLicenseStatus = useWorkbookStore.getState().licenseStatus;
+    const initialPeriodId = useWorkbookStore.getState().currentPeriod.id;
     const session = captureSessionIdentity(activeCompanyId);
     const isCurrent = () => useWorkbookStore.getState().licenseStatus === initialLicenseStatus
+      && useWorkbookStore.getState().currentPeriod.id === initialPeriodId
       && isSessionCurrent(session, useWorkbookStore.getState().licenseStatus?.companyId || useAuthStore.getState().companyId)
       && useWorkbookStore.getState().licenseStatus?.companyId === activeCompanyId
       && (!useAuthStore.getState().companyId || useAuthStore.getState().companyId === activeCompanyId);
@@ -203,9 +251,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       const response = await runSyncPull(eAPI, activeCompanyId);
       if (!isCurrent()) return;
       if (response?.success !== true || response.result?.success !== true) {
-        if (useWorkbookStore.getState().isServerConnected) {
-          useWorkbookStore.setState({ isServerConnected: false });
-        }
+        markDisconnected();
         return;
       }
 
@@ -217,6 +263,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         projectionDirty.current = true;
       }
       if (result.hasMore === true) {
+        markPayrollStale();
         if (!useWorkbookStore.getState().isServerConnected) {
           useWorkbookStore.setState({ isServerConnected: true });
         }
@@ -229,6 +276,14 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         return;
       }
       if (!projectionDirty.current) {
+        if (result.proofChanged && typeof eAPI.PayrollRead === 'function') {
+          const payroll = await eAPI.PayrollRead(activeCompanyId, initialPeriodId);
+          if (!isCurrent()) return;
+          if (payroll?.success && payroll.companyId === activeCompanyId && payroll.periodId === initialPeriodId
+            && payroll.payrollValuation?.period?.periodId === initialPeriodId)
+            useWorkbookStore.setState({ payrollValuation: payroll.payrollValuation });
+          else markDisconnected();
+        }
         if (!useWorkbookStore.getState().isServerConnected) {
           useWorkbookStore.setState({ isServerConnected: true });
         }
@@ -246,15 +301,15 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
       useWorkbookStore.setState({ ...workbookProjection, isServerConnected: true });
       projectionDirty.current = false;
     } catch {
-      if (isCurrent() && useWorkbookStore.getState().isServerConnected) {
-        useWorkbookStore.setState({ isServerConnected: false });
-      }
+      if (isCurrent()) markDisconnected();
     } finally {
       pullInFlight.current = false;
     }
   };
 
   const handleManualSync = () => synchronize(true);
+
+  useEffect(() => { if (!online && activeCompanyId) markDisconnected(); }, [online, activeCompanyId]);
 
   useEffect(() => {
     void refreshPendingCount();
@@ -341,7 +396,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         gap: '6px',
         padding: '4px 10px',
         borderRadius: 'var(--radius-full)',
-        fontSize: '11.5px',
+        fontSize: '14.5px',
         fontWeight: 600,
          backgroundColor: statusBackground,
          color: statusColor,
@@ -363,12 +418,12 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
             : <Wifi size={13} color={statusColor} />}
       <span>{syncing ? 'Sinxron...' : !online ? 'Oflayn' : hasSyncError ? 'Sync xatosi' : hasPendingChanges ? 'Navbatda' : isServerConnected ? 'Sinxron' : 'VPS?'}</span>
       {pendingChanges > 0 && (
-        <span style={{ marginLeft: '2px', background: '#d97706', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
+        <span style={{ marginLeft: '2px', background: '#d97706', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '13px', fontWeight: 700 }}>
           {pendingChanges}
         </span>
       )}
       {failedChanges > 0 && (
-        <span style={{ marginLeft: '2px', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
+        <span style={{ marginLeft: '2px', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '13px', fontWeight: 700 }}>
           !{failedChanges}
         </span>
       )}

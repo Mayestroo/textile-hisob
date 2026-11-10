@@ -21,8 +21,8 @@ export const NotificationToast: React.FC = () => {
             </div>
 
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px' }}>{n.title}</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>{n.message}</div>
+              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '2px' }}>{n.title}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: '1.4' }}>{n.message}</div>
             </div>
 
             <button

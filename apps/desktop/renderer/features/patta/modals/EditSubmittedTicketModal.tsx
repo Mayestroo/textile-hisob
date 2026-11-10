@@ -1,30 +1,59 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Check, AlertCircle } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
 import { SubmittedTicketRecord } from '../../../types/workbook';
+import { useAuthStore } from '../../../store/authStore';
 
 export const EditSubmittedTicketModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
   const modalData = useWorkbookStore((s) => s.modalState.data) as SubmittedTicketRecord | undefined;
   const closeModal = useWorkbookStore((s) => s.closeModal);
+  const openModal = useWorkbookStore((s) => s.openModal);
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const models = useWorkbookStore((s) => s.models);
   const workers = useWorkbookStore((s) => s.workers);
   const updateSubmittedTicket = useWorkbookStore((s) => s.updateSubmittedTicket);
+  const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const selectedArchiveFilename = useWorkbookStore((s) => s.selectedArchiveFilename);
+  const payrollCompanyId = useWorkbookStore((s) => s.payrollValuation.companyId);
+  const canEditTickets = useAuthStore((s) => s.permissions.includes('edit:patta'));
+  const authUserId = useAuthStore((s) => s.user?.uid || '');
+  const authRole = useAuthStore((s) => s.role || '');
 
   const isOpen = modalType === 'edit_ticket';
+  const returnToWorkerDetail = Number((modalData as any)?.returnToWorkerDetail);
+  const closeTicketModal = useCallback(() => {
+    if (Number.isSafeInteger(returnToWorkerDetail) && returnToWorkerDetail > 0) openModal({ type: 'worker_detail', workerId: returnToWorkerDetail, data: { focusTicketId: modalData?.id } });
+    else closeModal();
+  }, [returnToWorkerDetail, openModal, closeModal]);
 
   // Find the ticket from state to ensure fresh data
   const ticket = useMemo(() => {
     if (!isOpen || !modalData) return null;
-    return submittedTickets.find((s) => s.id === modalData.id) || modalData;
+    return submittedTickets.find((s) => s.id === modalData.id) || null;
   }, [isOpen, modalData, submittedTickets]);
 
   const model = useMemo(() => {
     if (!ticket) return null;
     return models.find((m) => m.id === ticket.modelId || m.name === ticket.modelId) || null;
   }, [ticket, models]);
+  const jumpContext = (modalData as any)?.jumpContext;
+  const jumpContextInvalid = Boolean(jumpContext && (
+    jumpContext.companyId !== (licenseStatus?.companyId || useAuthStore.getState().companyId)
+    || ((ticket as any)?.companyId && (ticket as any).companyId !== jumpContext.companyId)
+    || (payrollCompanyId && jumpContext.companyId !== payrollCompanyId)
+    || jumpContext.periodId !== currentPeriod.id
+    || jumpContext.activationId !== (licenseStatus?.activationId || licenseStatus?.machineId || '')
+    || jumpContext.authUserId !== authUserId
+    || jumpContext.authRole !== authRole
+    || ticket?.periodId !== currentPeriod.id
+    || currentPeriod.isClosed || selectedArchiveFilename || !canEditTickets
+  ));
+  useEffect(() => {
+    if (isOpen && jumpContext && jumpContextInvalid) closeTicketModal();
+  }, [isOpen, jumpContext, jumpContextInvalid, closeTicketModal]);
 
   // Worker lookup map
   const workerMap = useMemo(() => {
@@ -35,26 +64,23 @@ export const EditSubmittedTicketModal: React.FC = () => {
     return map;
   }, [workers]);
 
-  // Operations order and rate map
+  // Display the saved ticket rate, never today's tariff for old work.
   const operationsList = useMemo(() => {
     if (!model) return [];
-    const opRateMap = new Map<string, number>();
-    for (const op of model.operations) {
-      opRateMap.set(op.name, op.rate);
-    }
 
     const order = model.pattaOpsOrder && model.pattaOpsOrder.length > 0
       ? model.pattaOpsOrder
       : model.operations.map((o) => o.name);
 
     return order.map((opName) => {
-      const op = model.operations.find((o) => o.name === opName);
+      const originals = (ticket?.entries || []).filter((entry) => entry.opName === opName);
       return {
         name: opName,
-        rate: op?.rate !== undefined ? op.rate : (opRateMap.get(opName) || 0)
+        rate: originals.length === 1 ? originals[0].rateSnapshot ?? null : null,
+        entryId: originals.length === 1 ? originals[0].entryId : undefined
       };
     });
-  }, [model]);
+  }, [model, ticket]);
 
   // Form state: opName -> workerId string (e.g. "4")
   const [entriesMap, setEntriesMap] = useState<Record<string, string>>({});
@@ -80,26 +106,34 @@ export const EditSubmittedTicketModal: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isOpen && e.key === 'Escape') {
-        closeModal();
+        closeTicketModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, closeModal]);
+  }, [isOpen, closeTicketModal]);
 
-  if (!isOpen || !ticket || !model) return null;
+  if (!isOpen) return null;
+  if (jumpContextInvalid || !ticket || !model || !canEditTickets) return <div role="alert" className="modal-overlay phase-c-dialog" style={{ zIndex: 9999, padding: 20 }}>
+    <div className="modal-card" style={{ padding: 24, maxWidth: 520 }}>
+      <p>Patta tahrirlash ochilmadi: tanlangan patta topilmadi yoki kompaniya, davr, arxiv holati yoxud ruxsat o‘zgardi.</p>
+      <button className="soft-btn" onClick={closeTicketModal}>Yopish</button>
+    </div>
+  </div>;
 
   const ticketQty = ticket.qty || 0;
 
   // Calculate live total sum for assigned operations
   let liveTotalAmount = 0;
   let assignedOpsCount = 0;
+  let unknownRateCount = 0;
 
   for (const op of operationsList) {
     const val = entriesMap[op.name];
     const wId = val ? parseInt(val, 10) : null;
     if (wId && workerMap.has(wId)) {
-      liveTotalAmount += op.rate * ticketQty;
+      if (op.rate !== null) liveTotalAmount += op.rate * ticketQty;
+      else unknownRateCount++;
       assignedOpsCount++;
     }
   }
@@ -114,9 +148,32 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
   const handleSave = async () => {
     setErrorMsg(null);
+    const latest = useWorkbookStore.getState();
+    const actor = useAuthStore.getState();
+    if (!latest.submittedTickets.some((item) => item.id === ticket.id && item.periodId === ticket.periodId)
+      || (jumpContext && (latest.licenseStatus?.companyId !== jumpContext.companyId
+        || ((latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId && (latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId !== jumpContext.companyId)
+        || (latest.payrollValuation.companyId && latest.payrollValuation.companyId !== jumpContext.companyId)
+        || latest.currentPeriod.id !== jumpContext.periodId
+        || (latest.licenseStatus?.activationId || latest.licenseStatus?.machineId || '') !== jumpContext.activationId))
+      || (jumpContext && (actor.user?.uid || '') !== jumpContext.authUserId)
+      || (jumpContext && (actor.role || '') !== jumpContext.authRole)
+      || latest.selectedArchiveFilename || latest.currentPeriod.isClosed || !actor.permissions.includes('edit:patta')) {
+      setErrorMsg('Kontekst yoki tahrirlash ruxsati o‘zgardi. Patta qayta ochilib tekshirilishi kerak.');
+      return;
+    }
+    const names = (ticket.entries || []).map((entry) => entry.opName);
+    if (new Set(names).size !== names.length || new Set(operationsList.map((op) => op.name)).size !== operationsList.length) {
+      setErrorMsg('Takrorlangan operatsiyalarni bu oynada xavfsiz tahrirlab bo’lmaydi.');
+      return;
+    }
+    if (names.some((name) => !operationsList.some((op) => op.name === name))) {
+      setErrorMsg('Avvalgi operatsiya modelda topilmadi; uning tarixiy narxini taxmin qilib bo’lmaydi.');
+      return;
+    }
 
     // Validate: Check if all non-empty IDs are valid workers
-    const updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number }> = [];
+    const updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string }> = [];
 
     for (const op of operationsList) {
       const valStr = entriesMap[op.name];
@@ -133,7 +190,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
         updatedEntries.push({
           opName: op.name,
           workerId: wId,
-          rateSnapshot: op.rate
+          ...(op.entryId ? { entryId: op.entryId } : {}),
+          ...(op.rate !== null ? { rateSnapshot: op.rate } : {})
         });
       }
     }
@@ -147,7 +205,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
     try {
       const success = await updateSubmittedTicket(ticket.id, updatedEntries);
       if (success) {
-        closeModal();
+        closeTicketModal();
       }
     } finally {
       setIsSaving(false);
@@ -155,9 +213,9 @@ export const EditSubmittedTicketModal: React.FC = () => {
   };
 
   return (
-    <div 
-      className="modal-overlay" 
-      onClick={closeModal}
+    <div
+      className="modal-overlay phase-c-dialog"
+      onClick={closeTicketModal}
       style={{
         position: 'fixed',
         top: 0,
@@ -173,8 +231,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
         padding: '20px'
       }}
     >
-      <div 
-        className="modal-card" 
+      <div
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -200,7 +258,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '17px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
                 Patta #{ticket.pattaNumber} ni tahrirlash
               </h2>
               <span style={{
@@ -208,13 +266,13 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 color: '#ffffff',
                 padding: '2px 8px',
                 borderRadius: 'var(--radius-full)',
-                fontSize: '11.5px',
+                fontSize: '14.5px',
                 fontWeight: 700
               }}>
                 Partiya {ticket.partyNumber}
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span>Model: <strong style={{ color: 'var(--text-primary)' }}>{model.name}</strong></span>
               <span>•</span>
               <span>Konveyer: <strong style={{ color: '#818cf8' }}>{ticket.konveyer ? `${ticket.konveyer}-Konveyer` : 'Noma\'lum'}</strong></span>
@@ -228,7 +286,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
           </div>
 
           <button
-            onClick={closeModal}
+            onClick={closeTicketModal}
             className="soft-btn"
             style={{
               padding: '6px',
@@ -252,7 +310,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: 'var(--radius-md)',
             color: '#ef4444',
-            fontSize: '12.5px',
+            fontSize: '15px',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
@@ -265,11 +323,11 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
         {/* 1 Column Operations Table */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginBottom: '10px' }}>
             ℹ️ Xato kiritilgan operatsiyalarda kerakli <strong>Ishchi ID raqamini</strong> o'zgartiring. Saqlanganda ish sonlari va summalar butun tizim bo'ylab avtomatik yangilanadi.
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px' }}>
             <thead>
               <tr style={{ background: 'var(--bg-surface-subtle)', borderBottom: '2px solid var(--border-subtle)', height: '34px' }}>
                 <th style={{ width: '45px', textAlign: 'center', color: 'var(--text-secondary)' }}>№</th>
@@ -287,10 +345,10 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 const hasId = valStr !== '';
                 const isFound = wId ? workerMap.has(wId) : false;
                 const workerName = isFound && wId ? workerMap.get(wId) : '';
-                const opAmount = isFound ? op.rate * ticketQty : 0;
+                const opAmount = isFound && op.rate !== null ? op.rate * ticketQty : null;
 
                 return (
-                  <tr 
+                  <tr
                     key={op.name}
                     style={{
                       height: '38px',
@@ -299,7 +357,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                     }}
                   >
                     {/* № */}
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)', fontSize: '11px' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)', fontSize: '14px' }}>
                       {idx + 1}
                     </td>
 
@@ -309,8 +367,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
                     </td>
 
                     {/* Dona narxi */}
-                    <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '12px' }}>
-                      {op.rate.toLocaleString()} so'm
+                    <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '15px' }}>
+                      {op.rate === null ? 'Noma’lum' : `${op.rate.toLocaleString()} so'm`}
                     </td>
 
                     {/* Worker ID input */}
@@ -326,7 +384,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                           height: '28px',
                           textAlign: 'center',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '15px',
                           borderColor: hasId ? (isFound ? 'var(--primary)' : '#ef4444') : 'var(--border-subtle)',
                           backgroundColor: hasId ? (isFound ? 'var(--primary-light)' : 'rgba(239, 68, 68, 0.12)') : 'var(--bg-surface)'
                         }}
@@ -345,24 +403,24 @@ export const EditSubmittedTicketModal: React.FC = () => {
                             color: 'var(--primary)',
                             padding: '2px 8px',
                             borderRadius: 'var(--radius-full)',
-                            fontSize: '12px'
+                            fontSize: '15px'
                           }}>
                             <span style={{ fontWeight: 800 }}>#{wId}</span>
                             <span>{workerName}</span>
                           </span>
                         ) : (
-                          <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '11.5px' }}>
+                          <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '14.5px' }}>
                             Ishchi topilmadi! ({valStr})
                           </span>
                         )
                       ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>—</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '14.5px' }}>—</span>
                       )}
                     </td>
 
                     {/* Subtotal */}
-                    <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: opAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {opAmount > 0 ? formatMoney(opAmount) : '—'}
+                    <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: opAmount !== null && opAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                      {opAmount === null && isFound ? 'Noma’lum' : opAmount !== null && opAmount > 0 ? formatMoney(opAmount) : '—'}
                     </td>
                   </tr>
                 );
@@ -383,23 +441,23 @@ export const EditSubmittedTicketModal: React.FC = () => {
           gap: '12px'
         }}>
           <div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '14.5px', color: 'var(--text-muted)' }}>
               Tanlangan operatsiyalar: <strong>{assignedOpsCount} ta</strong>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--primary)' }}>
-              Jami summa: {formatMoney(liveTotalAmount)} so'm
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--primary)' }}>
+              Jami summa: {formatMoney(liveTotalAmount)} so'm{unknownRateCount > 0 ? ` (${unknownRateCount} narx noma’lum)` : ''}
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
-              onClick={closeModal}
+              onClick={closeTicketModal}
               disabled={isSaving}
               className="soft-btn"
               style={{
                 padding: '7px 16px',
                 borderRadius: 'var(--radius-md)',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 600,
                 cursor: 'pointer'
               }}
@@ -414,7 +472,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
               style={{
                 padding: '7px 20px',
                 borderRadius: 'var(--radius-md)',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 700,
                 backgroundColor: 'var(--primary)',
                 color: '#ffffff',

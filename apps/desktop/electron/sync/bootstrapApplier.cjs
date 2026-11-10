@@ -1,6 +1,7 @@
 'use strict';
 
 const { setLocalCursor } = require('./changeFeedApplier.cjs');
+const { recordSnapshotBaseline } = require('./feedEvidence.cjs');
 
 const BOOTSTRAP_COMPLETE_KEY = '_bootstrap_complete';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -160,6 +161,7 @@ function validateBootstrapResponse(response, companyId) {
     }
 
     const periodIds = new Set();
+    const closedPeriodIds = new Set();
     for (const period of snapshot.periods) {
       requireCondition(requireString(period.id) && requireString(period.name) && requireDate(period.startDate));
       requireCondition(requireOptionalDate(period.endDate)
@@ -169,7 +171,9 @@ function validateBootstrapResponse(response, companyId) {
         && requireNullableString(period.archiveFilename));
       requireCondition(PERIOD_STATUSES.has(period.status) && requireRevision(period.serverRevision));
       requireCondition(requireOptionalTimestamp(period.createdAt) && requireOptionalTimestamp(period.updatedAt));
+      requireCondition(period.closeOperationId == null || (/^[A-Za-z0-9_-]{1,128}$/.test(period.closeOperationId) && period.isClosed));
       periodIds.add(period.id);
+      if (period.isClosed && period.closeOperationId) closedPeriodIds.add(period.id);
     }
 
     const partyIds = new Set();
@@ -187,10 +191,15 @@ function validateBootstrapResponse(response, companyId) {
         && requireOptionalTimestamp(party.closedAt)
         && requireOptionalTimestamp(party.createdAt)
         && requireOptionalTimestamp(party.updatedAt));
+      requireCondition((party.endedAt == null) === (party.endedOperationId == null));
+      requireCondition(party.endedAt == null || (requireTimestamp(party.endedAt) && /^[A-Za-z0-9_-]{1,128}$/.test(party.endedOperationId)));
+      requireCondition(party.monthClosedPeriodId == null || closedPeriodIds.has(party.monthClosedPeriodId));
       requireCondition(requireNullableString(party.modelName) && requireNullableString(party.color));
       requireCondition(party.ishSoniPerPatta === null || party.ishSoniPerPatta === undefined || requireNumber(party.ishSoniPerPatta));
       requireCondition(party.totalIshSoni === null || party.totalIshSoni === undefined || requireNumber(party.totalIshSoni));
       requireCondition(isObject(party.sizes) && Array.isArray(party.archivedPattaNumbers));
+      requireCondition(party.sizeOrder === undefined || party.sizeOrder === null
+        || (Array.isArray(party.sizeOrder) && party.sizeOrder.length <= 128 && party.sizeOrder.every(requireString)));
       partyIds.add(party.id);
       partyById.set(party.id, party);
     }
@@ -228,10 +237,17 @@ function validateBootstrapResponse(response, companyId) {
       requireCondition(groupPartyIds.size === 2);
     }
 
+    const adjustmentIds = new Set();
     for (const adjustment of snapshot.workerAdjustments) {
       requireCondition(requireString(adjustment.id) && workerIds.has(Number(adjustment.workerId)));
-      requireCondition(['AVANS', 'JARIMA'].includes(adjustment.type) && requireNumber(adjustment.amount));
+      requireCondition(['AVANS', 'JARIMA', 'OKLAD', 'MAGAZIN'].includes(adjustment.type) && requireNumber(adjustment.amount));
       requireCondition(adjustment.periodId === null || adjustment.periodId === undefined || periodIds.has(adjustment.periodId));
+      requireCondition(!adjustmentIds.has(adjustment.id)); adjustmentIds.add(adjustment.id);
+      if (['OKLAD', 'MAGAZIN'].includes(adjustment.type)) {
+        requireCondition(typeof adjustment.periodId === 'string' && periodIds.has(adjustment.periodId));
+        requireCondition(Number.isSafeInteger(Number(adjustment.amount)) && adjustment.status === 'POSTED');
+      }
+      if (adjustment.status !== undefined) requireCondition(adjustment.status === 'POSTED');
       requireCondition(requireString(adjustment.provenance));
       requireCondition(requireOptionalTimestamp(adjustment.createdAt));
     }
@@ -296,6 +312,8 @@ function validateBootstrapResponse(response, companyId) {
         && typeof config.totalIshSoni === 'string'
         && (config.totalIshSoni === '' || requireString(config.totalIshSoni)));
       requireCondition(isObject(config.sizes) && requireRevision(config.serverRevision));
+      requireCondition(config.sizeNames === undefined || config.sizeNames === null
+        || (Array.isArray(config.sizeNames) && config.sizeNames.length <= 128 && config.sizeNames.every(requireString)));
       requireCondition(requireNullableString(config.color) && requireOptionalTimestamp(config.updatedAt));
     }
     for (const archive of snapshot.periodArchives) {
@@ -383,13 +401,13 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
 
   const insertPeriod = db.prepare(`INSERT INTO periods (
     id, company_id, name, start_date, end_date, is_closed, closed_at, notes, archive_filename,
-    status, created_at, updated_at, server_revision, provenance
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP')`);
+     status, created_at, updated_at, server_revision, provenance, close_operation_id
+   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?)`);
   for (const period of snapshot.periods) {
     insertPeriod.run(period.id, companyId, period.name, period.startDate, period.endDate || null,
       period.isClosed ? 1 : 0, period.closedAt || null, period.notes || null, period.archiveFilename || null,
       period.status, period.createdAt || new Date().toISOString(),
-      period.updatedAt || period.createdAt || new Date().toISOString(), period.serverRevision);
+       period.updatedAt || period.createdAt || new Date().toISOString(), period.serverRevision, period.closeOperationId || null);
   }
 
   const insertCollisionException = db.prepare(`INSERT INTO legacy_party_collision_exceptions (
@@ -406,9 +424,9 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
     id, company_id, party_number, physical_party_number, model_id, model_name, color, patta_count,
     cumulative_patta_count, patta_start_number, patta_end_number,
     ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni,
-    sizes_json, printed_at, is_closed, closed_at, archived_patta_numbers_json, status, created_at,
-    updated_at, provenance, server_revision, is_archived
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?)`);
+    sizes_json, size_order_json, printed_at, is_closed, closed_at, archived_patta_numbers_json, status, created_at,
+     updated_at, provenance, server_revision, is_archived, ended_at, ended_operation_id, month_closed_period_id
+   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?, ?, ?, ?)`);
   const partyIsProtected = db.prepare(`SELECT 1 FROM legacy_party_collision_exceptions
     WHERE company_id = ? AND party_id = ? AND status = 'ACTIVE' LIMIT 1`);
   const saveProtectedRange = db.prepare(`INSERT INTO protected_party_patta_ranges(
@@ -422,9 +440,10 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
       protectedRow ? null : party.pattaStartNumber ?? null,
       protectedRow ? null : party.pattaEndNumber ?? null,
       party.ishSoniPerPatta ?? null, party.totalIshSoni ?? null, party.ishSoni, party.cumulativeIshSoni,
-      JSON.stringify(party.sizes), party.printedAt || null, party.isClosed ? 1 : 0, party.closedAt || null,
+       JSON.stringify(party.sizes), party.sizeOrder == null ? null : JSON.stringify(party.sizeOrder), party.printedAt || null, party.isClosed ? 1 : 0, party.closedAt || null,
       JSON.stringify(party.archivedPattaNumbers), party.status, party.createdAt || new Date().toISOString(),
-      party.updatedAt || party.createdAt || new Date().toISOString(), party.serverRevision, party.isArchived ? 1 : 0);
+       party.updatedAt || party.createdAt || new Date().toISOString(), party.serverRevision, party.isArchived ? 1 : 0,
+       party.endedAt || null, party.endedOperationId || null, party.monthClosedPeriodId || null);
     if (protectedRow && Number.isSafeInteger(party.pattaStartNumber) && Number.isSafeInteger(party.pattaEndNumber)) {
       saveProtectedRange.run(companyId, party.id, party.pattaStartNumber, party.pattaEndNumber);
     }
@@ -436,10 +455,11 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
 
   const insertBalance = db.prepare(`INSERT INTO worker_adjustments (
     id, company_id, worker_id, period_id, type, amount, description, provenance, status, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'POSTED', ?)`);
+  ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`);
   for (const adjustment of snapshot.workerAdjustments) {
     insertBalance.run(adjustment.id, companyId, adjustment.workerId, adjustment.periodId || null,
-      adjustment.type, adjustment.amount, adjustment.provenance, adjustment.createdAt || new Date().toISOString());
+      adjustment.type, adjustment.amount, adjustment.provenance, adjustment.status || 'POSTED',
+      adjustment.createdAt || new Date().toISOString());
   }
 
   const insertTicket = db.prepare(`INSERT INTO tickets (
@@ -463,13 +483,17 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
 
   const insertProduction = db.prepare(`INSERT INTO production_adjustments (
     adjustment_id, company_id, model_id, worker_id, op_name, delta_qty, reason, status,
-    server_revision, provenance, created_at, created_by, original_adjustment_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?, ?)`);
+    server_revision, provenance, created_at, created_by, original_adjustment_id,
+    original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REMOTE_BOOTSTRAP', ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const adjustment of snapshot.productionAdjustments) {
     insertProduction.run(adjustment.adjustmentId, companyId, adjustment.modelId, adjustment.workerId,
       adjustment.opName, adjustment.deltaQty, adjustment.reason || 'REMOTE_BOOTSTRAP', adjustment.status,
       adjustment.serverRevision, adjustment.createdAt || new Date().toISOString(),
-      adjustment.createdBy || 'SERVER', adjustment.originalAdjustmentId || null);
+       adjustment.createdBy || 'SERVER', adjustment.originalAdjustmentId || null,
+       adjustment.originalTicketId ?? null, adjustment.originalEntryId ?? null,
+       adjustment.originalPeriodId ?? null, adjustment.originalRateSnapshot ?? null,
+       adjustment.attributionStatus || 'UNRESOLVED');
   }
 
   if (snapshot.batchSettings.company) {
@@ -480,11 +504,11 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
         settings.updatedAt || new Date().toISOString());
   }
   const insertModelSetting = db.prepare(`INSERT INTO patta_batch_settings (
-    company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, server_revision, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json, server_revision, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const config of snapshot.batchSettings.models) {
     insertModelSetting.run(companyId, config.modelId, config.partyNumber, config.isCustomParty ? 1 : 0,
-      config.totalIshSoni, config.color || null, JSON.stringify(config.sizes), config.serverRevision,
+      config.totalIshSoni, config.color || null, JSON.stringify(config.sizes), config.sizeNames == null ? null : JSON.stringify(config.sizeNames), config.serverRevision,
       config.updatedAt || new Date().toISOString());
   }
 
@@ -510,6 +534,7 @@ function applyBootstrapSnapshot(db, companyId, response, options = {}) {
       throw bootstrapError('BOOTSTRAP_FOREIGN_KEY_VIOLATION', 'Bootstrap rows violate canonical SQLite references');
     }
     setLocalCursor(db, validated.cursor);
+    recordSnapshotBaseline(db, companyId, response.feedBaseline, validated.cursor);
     db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, '1', ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(BOOTSTRAP_COMPLETE_KEY, new Date().toISOString());

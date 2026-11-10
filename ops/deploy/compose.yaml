@@ -155,7 +155,7 @@ services:
   novda-admin-bot:
     build:
       context: ../..
-      dockerfile: admin-bot/Dockerfile
+      dockerfile: apps/bots/admin/Dockerfile
     image: ${NOVDA_ADMIN_BOT_IMAGE:-novda-admin-bot:production}
     container_name: novda-admin-bot
     restart: unless-stopped
@@ -164,11 +164,9 @@ services:
       PORT: "8080"
       NOVDA_ADMIN_API_URL: http://novda-api:3474
       NOVDA_ADMIN_API_TOKEN_FILE: /run/secrets/admin-api-token
-      NOVDA_ADMIN_TELEGRAM_IDS_FILE: /run/secrets/admin-telegram-ids
       NOVDA_ADMIN_WEBAPP_SESSION_SECRET_FILE: /run/secrets/admin-webapp-session-secret
       ADMIN_WEBAPP_URL: ${NOVDA_ADMIN_WEBAPP_URL:-https://sync.novdatextile.uz/admin-app}
       ADMIN_BOT_TOKEN_FILE: /run/secrets/admin-bot-token
-      NOVDA_LICENSE_ED25519_PRIVATE_KEY_FILE: /run/secrets/novda-license-ed25519-private-key
     depends_on:
       novda-api:
         condition: service_healthy
@@ -198,14 +196,12 @@ services:
     secrets:
       - admin-bot-token
       - admin-api-token
-      - admin-telegram-ids
       - admin-webapp-session-secret
-      - novda-license-ed25519-private-key
 
   novda-worker-bot:
     build:
       context: ../..
-      dockerfile: worker-bot/Dockerfile
+      dockerfile: apps/bots/worker/Dockerfile
     image: ${NOVDA_WORKER_BOT_IMAGE:-novda-worker-bot:production}
     container_name: novda-worker-bot
     restart: unless-stopped
@@ -317,7 +313,5 @@ secrets:
     file: /srv/novda/secrets/bots/worker-api-token
   worker-auth-hmac-secret:
     file: /srv/novda/secrets/bots/worker-auth-hmac-secret
-  novda-license-ed25519-private-key:
-    file: /srv/novda/secrets/bots/novda-license-ed25519-private-key
   cloudflare-tunnel-token:
     file: /srv/novda/secrets/bots/cloudflare-tunnel-token

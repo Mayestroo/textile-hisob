@@ -4,6 +4,7 @@ const { canonicalStringify, computePayloadHash } = require('./canonicalPayload.c
 
 function workbookError(code, message) {
   const error = new Error(message);
+  error[Symbol.for('hisob.sync.applicationError')] = true;
   error.code = code;
   return error;
 }
@@ -138,8 +139,11 @@ async function executeUpsertWorker(client, companyId, operationId, payload, cano
 
   const adjustmentProvenance = options.adminTelegramId ? 'ADMIN_WEBAPP' : 'WORKBOOK_COMMAND';
   for (const adjustment of payload.balanceAdjustments || []) {
+    if (['OKLAD', 'MAGAZIN'].includes(adjustment.type) && !adjustment.periodId) {
+      throw workbookError('PERIOD_REQUIRED', `${adjustment.type} requires an explicit period`);
+    }
     if (adjustment.periodId) {
-      const period = await client.query(`SELECT id FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0`, [companyId, adjustment.periodId]);
+      const period = await client.query(`SELECT id FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0 FOR SHARE`, [companyId, adjustment.periodId]);
       if (!period.rows.length) throw workbookError('PERIOD_CLOSED', `Period "${adjustment.periodId}" is not open`);
     }
     await client.query(`
@@ -235,7 +239,9 @@ async function readPeriodArchiveSource(client, companyId, period) {
     FROM models WHERE company_id = $1 ORDER BY id`, [companyId]);
   const workers = await client.query(`SELECT w.id, w.name, w.staj, w.role,
       COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'AVANS'), 0) AS avans,
-      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'JARIMA'), 0) AS jarima
+      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'JARIMA'), 0) AS jarima,
+      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'OKLAD' AND a.status = 'POSTED'), 0) AS oklad,
+      COALESCE(SUM(a.amount) FILTER (WHERE a.type = 'MAGAZIN' AND a.status = 'POSTED'), 0) AS magazin
       FROM workers w LEFT JOIN worker_adjustments a ON a.company_id = w.company_id AND a.worker_id = w.id AND a.period_id = $2
       WHERE w.company_id = $1 GROUP BY w.id, w.company_id, w.name, w.staj, w.role ORDER BY w.id`, [companyId, period.id]);
   const parties = await client.query(`SELECT p.id, p.party_number,
@@ -243,14 +249,15 @@ async function readPeriodArchiveSource(client, companyId, period) {
       p.model_name, p.color, p.patta_count, p.cumulative_patta_count,
       COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
       COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number,
-      ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json, printed_at,
-      p.is_closed, p.closed_at, p.archived_patta_numbers_json
+       ish_soni_per_patta, total_ish_soni, ish_soni, cumulative_ish_soni, sizes_json, size_order_json, printed_at,
+       p.is_closed, p.closed_at, p.archived_patta_numbers_json
       FROM parties p
       LEFT JOIN model_id_aliases a ON a.company_id = p.company_id AND a.legacy_model_id = p.model_id
       LEFT JOIN protected_party_patta_ranges r ON r.company_id = p.company_id AND r.party_record_id = p.id
-      WHERE p.company_id = $1 AND (p.status != 'CLOSED' OR p.printed_at::date >= $2::date AND p.printed_at::date <= $3::date)
+       WHERE p.company_id = $1 AND (p.status != 'CLOSED' OR p.printed_at::date >= $2::date AND p.printed_at::date <= $3::date
+         OR EXISTS (SELECT 1 FROM tickets t WHERE t.company_id = p.company_id AND t.party_record_id = p.id AND t.period_id = $4))
       ORDER BY p.printed_at, p.id`,
-      [companyId, period.start_date, period.end_date || period.start_date]);
+       [companyId, period.start_date, period.end_date || period.start_date, period.id]);
   const tickets = await client.query(`SELECT id, model_id, period_id, party_number, party_record_id, patta_number, qty, size, color, konveyer, status, submitted_at
       FROM tickets WHERE company_id = $1 AND (period_id = $2 OR (period_id IS NULL AND submitted_at::date >= $3::date AND submitted_at::date <= $4::date))
       ORDER BY submitted_at, id`, [companyId, period.id, period.start_date, period.end_date || period.start_date]);
@@ -267,7 +274,7 @@ async function readPeriodArchiveSource(client, companyId, period) {
   const entriesByTicket = new Map();
   for (const entry of entryRows) {
     const list = entriesByTicket.get(entry.ticket_id) || [];
-    list.push({ opName: entry.op_name, workerId: entry.worker_id, workerNameSnapshot: entry.worker_name_snapshot, rateSnapshot: Number(entry.rate_snapshot || 0), brak: entry.brak || undefined });
+    list.push({ opName: entry.op_name, workerId: entry.worker_id, workerNameSnapshot: entry.worker_name_snapshot, rateSnapshot: entry.rate_snapshot == null ? null : Number(entry.rate_snapshot), brak: entry.brak || undefined });
     entriesByTicket.set(entry.ticket_id, list);
   }
   const pattaBatchConfigs = Object.fromEntries(settings.rows.filter((row) => row.model_id).map((row) => [row.model_id, {
@@ -275,7 +282,8 @@ async function readPeriodArchiveSource(client, companyId, period) {
     color: row.color || undefined, sizes: row.sizes_json || {}
   }]));
   const submittedTickets = tickets.rows.map((row) => ({
-    id: row.id, modelId: row.model_id, partyNumber: row.party_number, partyRecordId: row.party_record_id,
+     id: row.id, modelId: row.model_id, partyNumber: row.party_number, partyRecordId: row.party_record_id,
+     periodId: row.period_id,
     pattaNumber: row.patta_number, qty: Number(row.qty), size: row.size || '', color: row.color || '',
     konveyer: row.konveyer || '', status: row.status,
     submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : String(row.submitted_at),
@@ -290,6 +298,7 @@ async function readPeriodArchiveSource(client, companyId, period) {
     totalIshSoni: row.total_ish_soni === null ? undefined : Number(row.total_ish_soni),
     ishSoni: Number(row.ish_soni || 0), cumulativeIshSoni: Number(row.cumulative_ish_soni || 0),
     sizes: row.sizes_json || {},
+    ...(row.size_order_json == null ? {} : { sizeOrder: row.size_order_json }),
     printedAt: row.printed_at instanceof Date ? row.printed_at.toISOString() : (row.printed_at ? String(row.printed_at) : undefined),
     isClosed: Boolean(row.is_closed), closedAt: row.closed_at instanceof Date ? row.closed_at.toISOString() : row.closed_at,
     archivedPattaNumbers: row.archived_patta_numbers_json || []
@@ -306,7 +315,9 @@ async function readPeriodArchiveSource(client, companyId, period) {
       id: row.id, name: row.name, hisobSheetName: row.hisob_sheet_name, title: row.title, party: row.party,
       color: row.color, size: row.size, operations: row.operations_json || [], pattaOpsOrder: row.patta_ops_order_json || [], hisobQuantities: {}
     })),
-    workers: workers.rows.map((row) => ({ id: row.id, name: row.name, staj: Number(row.staj || 0), role: row.role || undefined, avans: Number(row.avans || 0), jarima: Number(row.jarima || 0) })),
+    workers: workers.rows.map((row) => ({ id: row.id, name: row.name, staj: Number(row.staj || 0), role: row.role || undefined,
+      avans: Number(row.avans || 0), jarima: Number(row.jarima || 0),
+      oklad: Number(row.oklad || 0), magazin: Number(row.magazin || 0) })),
     printedPartyHistory,
     submittedTickets,
     pattaBatchConfigs,
@@ -331,11 +342,13 @@ async function executeClosePeriod(client, companyId, operationId, payload, canon
   const open = await client.query(`SELECT id FROM periods WHERE company_id = $1 AND is_closed = 0 AND id <> $2 FOR UPDATE`, [companyId, period.id]);
   if (open.rows.length) throw workbookError('OPEN_PERIOD_EXISTS', 'Another open period already exists');
 
-  const activeParties = await client.query(`SELECT id, sizes_json, archived_patta_numbers_json
-    FROM parties WHERE company_id = $1 AND status != 'CLOSED' AND is_closed = 0 ORDER BY id FOR UPDATE`, [companyId]);
+   const activeParties = await client.query(`SELECT id, sizes_json, archived_patta_numbers_json
+     FROM parties WHERE company_id = $1 AND status != 'CLOSED' AND is_closed = 0 AND ended_at IS NULL ORDER BY id FOR UPDATE`, [companyId]);
+  // Only accepted active facts fulfill work. Archive source/retention queries
+  // intentionally keep VOIDED and other historical records independently.
   const periodTickets = await client.query(`SELECT party_record_id, patta_number FROM tickets
     WHERE company_id = $1 AND (period_id = $2 OR (period_id IS NULL AND submitted_at::date >= $3::date AND submitted_at::date <= $4::date))
-      AND is_closed = 0 ORDER BY party_record_id, patta_number`, [companyId, period.id, period.start_date, payload.endDate]);
+      AND is_closed = 0 AND status = 'CONFIRMED' ORDER BY party_record_id, patta_number`, [companyId, period.id, period.start_date, payload.endDate]);
   const ticketsByParty = new Map();
   for (const ticket of periodTickets.rows) {
     const submitted = ticketsByParty.get(ticket.party_record_id) || [];
@@ -381,16 +394,16 @@ async function executeClosePeriod(client, companyId, operationId, payload, canon
     ON CONFLICT (company_id, period_id) DO UPDATE SET archive_json = excluded.archive_json, sha256 = excluded.sha256, archived_at = excluded.archived_at`,
   [companyId, period.id, archiveJson, archiveHash, now]);
 
-  await client.query(`UPDATE periods SET end_date = $1::date, is_closed = 1, closed_at = $2, archive_filename = $3,
-    status = 'CLOSED', server_revision = $4, updated_at = $2 WHERE company_id = $5 AND id = $6`,
-  [payload.endDate, now, payload.archiveFilename || null, revision, companyId, period.id]);
+   await client.query(`UPDATE periods SET end_date = $1::date, is_closed = 1, closed_at = $2, archive_filename = $3,
+     status = 'CLOSED', server_revision = $4, updated_at = $2, close_operation_id = $7 WHERE company_id = $5 AND id = $6`,
+   [payload.endDate, now, payload.archiveFilename || null, revision, companyId, period.id, operationId]);
   await client.query(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, server_revision, created_at, updated_at)
     VALUES ($1, $2, $3, $4::date, 0, 'OPEN', 1, $5, $5)`,
   [payload.nextPeriod.id, companyId, payload.nextPeriod.name, payload.nextPeriod.startDate, now]);
 
   let lastChangeId = 0;
   const periodChange = await appendChange(client, companyId, 'period', period.id, revision, operationId, 'UPDATE',
-    { ...payload, status: 'CLOSED', closedAt: now, archiveSha256: archiveHash }, now);
+     { ...payload, status: 'CLOSED', closedAt: now, closeOperationId: operationId, archiveSha256: archiveHash }, now);
   lastChangeId = Number(periodChange.rows[0].change_id);
   const nextPeriodChange = await appendChange(client, companyId, 'period', payload.nextPeriod.id, 1, operationId, 'INSERT',
     { ...payload.nextPeriod, periodId: payload.nextPeriod.id, companyId, isClosed: false }, now);
@@ -403,11 +416,11 @@ async function executeClosePeriod(client, companyId, operationId, payload, canon
     const submitted = ticketsByParty.get(partyId) || [];
     const completedPattaNumbers = Array.from(new Set([...archived, ...submitted])).sort((a, b) => a - b);
     const updated = await client.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = $1,
-      archived_patta_numbers_json = $2::jsonb, server_revision = server_revision + 1, updated_at = $1
-      WHERE company_id = $3 AND id = $4 RETURNING server_revision`,
-    [now, JSON.stringify(completedPattaNumbers), companyId, partyId]);
+       archived_patta_numbers_json = $2::jsonb, month_closed_period_id = $5, server_revision = server_revision + 1, updated_at = $1
+       WHERE company_id = $3 AND id = $4 RETURNING server_revision`,
+     [now, JSON.stringify(completedPattaNumbers), companyId, partyId, period.id]);
     const change = await appendChange(client, companyId, 'party', partyId, updated.rows[0].server_revision, operationId, 'UPDATE',
-      { partyRecordId: partyId, status: 'CLOSED', isClosed: true, closedAt: now, archivedPattaNumbers: completedPattaNumbers }, now);
+       { partyRecordId: partyId, status: 'CLOSED', isClosed: true, closedAt: now, monthClosedPeriodId: period.id, archivedPattaNumbers: completedPattaNumbers }, now);
     lastChangeId = Number(change.rows[0].change_id);
   }
   for (const { partyRecordId: partyId, archivedPattaNumbers } of rollover) {
@@ -473,12 +486,18 @@ async function executeUpdateParty(client, companyId, operationId, payload, canon
       cumulativeIshSoni: payload.cumulativeIshSoni,
       updatedAt: now
     }
-    : {
-      ...payload,
+    : (() => {
+      const preservedOrder = current.size_order_json;
+      const updatePayload = { ...payload };
+      if (preservedOrder == null) delete updatePayload.sizeOrder;
+      else updatePayload.sizeOrder = preservedOrder;
+      return {
+      ...updatePayload,
       cumulativePattaCount: Number(current.cumulative_patta_count || 0),
       pattaStartNumber: current.patta_start_number === null ? undefined : Number(current.patta_start_number),
       pattaEndNumber: current.patta_end_number === null ? undefined : Number(current.patta_end_number)
-    };
+      };
+    })();
   const change = await appendChange(client, companyId, 'party', partyRecordId, revision, operationId, 'UPDATE', changePayload, now);
   return { serverRevision: revision, entityId: result.rows[0].id, changeId: change.rows[0].change_id, committedAt: change.rows[0].committed_at };
 }
@@ -487,9 +506,7 @@ async function executeUpdateBatchSettings(client, companyId, operationId, payloa
   await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':batch-settings'))`, [companyId]);
   const currentResult = await client.query(`SELECT server_revision, available_sizes_json FROM company_batch_settings WHERE company_id = $1 FOR UPDATE`, [companyId]);
   const current = currentResult.rows[0];
-  const revision = options.skipRevision
-    ? Number(current?.server_revision || 0) + 1
-    : assertBaseRevision({ baseRevision: envelope.baseRevision }, current?.server_revision || 0, 'Batch settings');
+  const revision = assertBaseRevision({ baseRevision: envelope.baseRevision }, current?.server_revision || 0, 'Batch settings');
   const availableSizes = payload.availableSizes === undefined
     ? (current?.available_sizes_json || [])
     : payload.availableSizes;
@@ -502,14 +519,15 @@ async function executeUpdateBatchSettings(client, companyId, operationId, payloa
   for (const config of payload.configs || []) {
     const modelId = await assertActiveModel(client, companyId, config.modelId);
     await client.query(`INSERT INTO patta_batch_settings (
-      company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, server_revision, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 1, $8)
+       company_id, model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json, server_revision, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, 1, $9)
     ON CONFLICT (company_id, model_id) DO UPDATE SET party_number = excluded.party_number,
       is_custom_party = excluded.is_custom_party, total_ish_soni = excluded.total_ish_soni,
-      color = excluded.color, sizes_json = excluded.sizes_json,
+       color = excluded.color, sizes_json = excluded.sizes_json,
+       size_names_json = COALESCE(excluded.size_names_json, patta_batch_settings.size_names_json),
       server_revision = patta_batch_settings.server_revision + 1, updated_at = excluded.updated_at`,
     [companyId, modelId, config.partyNumber, config.isCustomParty, config.totalIshSoni, config.color || null,
-      JSON.stringify(config.sizes || {}), now]);
+       JSON.stringify(config.sizes || {}), config.sizeNames == null ? null : JSON.stringify(config.sizeNames), now]);
   }
   const change = await appendChange(client, companyId, 'batch_settings', companyId, revision, operationId,
     'UPDATE', { ...payload, availableSizes, companyId, serverRevision: revision }, now);
@@ -545,10 +563,13 @@ async function executeCompletePattaBatch(client, companyId, operationId, payload
     }
     lastChangeId = Number(mutation.changeId || lastChangeId);
   }
+  if (!Number.isSafeInteger(payload.batchSettingsBaseRevision) || payload.batchSettingsBaseRevision < 0) {
+    throw workbookError('REVISION_CONFLICT', 'Batch settings revision is missing; reload before printing');
+  }
   const settings = await executeUpdateBatchSettings(client, companyId, operationId, {
     availableSizes: payload.availableSizes,
     configs: payload.configs
-  }, { baseRevision: payload.batchSettingsBaseRevision }, { skipRevision: true });
+  }, { baseRevision: payload.batchSettingsBaseRevision });
   lastChangeId = Math.max(lastChangeId, Number(settings.changeId || 0));
   const batchChange = await appendChange(client, companyId, 'patta_batch', payload.batchId, 1, operationId, 'INSERT',
     { batchId: payload.batchId, parties: canonicalPartyIds }, new Date().toISOString());
@@ -562,14 +583,37 @@ async function executeCompletePartySeries(client, companyId, operationId, payloa
   if (payload.endDate < calendarDate(period.rows[0].start_date) || (period.rows[0].end_date && payload.endDate > calendarDate(period.rows[0].end_date))) {
     throw workbookError('INVALID_PERIOD_RANGE', 'Party series close date is outside the open period');
   }
-  const now = new Date().toISOString();
-  let lastChangeId = 0;
-  const parties = await client.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1, closed_at = $1,
-    server_revision = server_revision + 1, updated_at = $1 WHERE company_id = $2 AND status != 'CLOSED'
-    RETURNING id, server_revision`, [now, companyId]);
-  for (const party of parties.rows) {
-    const change = await appendChange(client, companyId, 'party', party.id, party.server_revision, operationId, 'UPDATE',
-      { partyRecordId: party.id, isClosed: true, closedAt: now }, now);
+   const eligible = await client.query(`SELECT p.id, p.server_revision, p.closed_at, p.month_closed_period_id
+     FROM parties p WHERE p.company_id = $1 AND p.is_archived = FALSE AND p.ended_at IS NULL
+       AND ((p.status != 'CLOSED' AND p.is_closed = 0) OR EXISTS (
+         SELECT 1 FROM periods closed WHERE closed.company_id = p.company_id AND closed.id = p.month_closed_period_id
+           AND closed.is_closed = 1 AND closed.close_operation_id IS NOT NULL))
+     ORDER BY p.id FOR UPDATE`, [companyId]);
+   if (payload.finishScopeHash) {
+     const { finishScopeHash } = require('../../../../packages/domain/pattaFinishScope.cjs');
+     const [settings, sequence] = await Promise.all([
+       client.query('SELECT server_revision FROM company_batch_settings WHERE company_id = $1', [companyId]),
+       client.query('SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1', [companyId])
+     ]);
+     const actualHash = finishScopeHash({ companyId, periodId: payload.periodId,
+       parties: eligible.rows.map((p) => ({ id: p.id, expectedRevision: Number(p.server_revision || 0) })),
+       batchSettingsRevision: Number(settings.rows[0]?.server_revision || 0),
+       nextPattaNumber: Number(sequence.rows[0]?.next_patta_number || 1) });
+     if (actualHash !== payload.finishScopeHash) throw workbookError('FINISH_SCOPE_CHANGED', 'Party series changed; reload before finishing');
+   }
+   if (!eligible.rows.length) return { serverRevision: 0, entityId: payload.periodId, changeId: 0, committedAt: new Date().toISOString() };
+   const now = new Date().toISOString();
+   let lastChangeId = 0;
+   for (const selected of eligible.rows) {
+     const updated = await client.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1,
+       closed_at = COALESCE(closed_at, $1), ended_at = $1, ended_operation_id = $2,
+       server_revision = server_revision + 1, updated_at = $1
+       WHERE company_id = $3 AND id = $4 AND ended_at IS NULL RETURNING server_revision, closed_at`,
+     [now, operationId, companyId, selected.id]);
+     const party = updated.rows[0];
+     const change = await appendChange(client, companyId, 'party', selected.id, party.server_revision, operationId, 'UPDATE',
+       { partyRecordId: selected.id, status: 'CLOSED', isClosed: true, closedAt: party.closed_at instanceof Date ? party.closed_at.toISOString() : party.closed_at,
+         endedAt: now, endedOperationId: operationId, monthClosedPeriodId: selected.month_closed_period_id }, now);
     lastChangeId = Number(change.rows[0].change_id);
   }
   const tickets = await client.query(`UPDATE tickets SET is_closed = 1, server_revision = server_revision + 1
@@ -599,7 +643,7 @@ async function executeCompletePartySeries(client, companyId, operationId, payloa
   await client.query(`UPDATE company_patta_sequences SET next_patta_number = 1, updated_at = NOW()
     WHERE company_id = $1`, [companyId]);
   const seriesChange = await appendChange(client, companyId, 'party_series', payload.periodId, 1, operationId, 'UPDATE',
-    { periodId: payload.periodId, partiesClosed: parties.rows.length, ticketsClosed: tickets.rows.length,
+     { periodId: payload.periodId, partiesClosed: eligible.rows.length, ticketsClosed: tickets.rows.length,
       pattaSequenceReset: true, nextPattaNumber: 1 }, now);
   lastChangeId = Number(seriesChange.rows[0].change_id);
   return { serverRevision: 1, entityId: payload.periodId, changeId: lastChangeId, committedAt: now };
@@ -670,6 +714,7 @@ async function getPeriodArchive(pool, companyId, periodId) {
 
 module.exports = {
   executeWorkbookOperation,
+  readPeriodArchiveSource,
   getPeriodArchive,
   appendChange
 };

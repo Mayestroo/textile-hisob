@@ -9,8 +9,8 @@
  * Exercises: commandPipeline, tickets, ticket_entries, local_outbox.
  */
 
-const databaseManager = require('../../database/databaseManager.cjs');
-const commandPipeline = require('../../database/commandPipeline.cjs');
+const databaseManager = require('../../database/core/databaseManager.cjs');
+const commandPipeline = require('../../database/commands/commandPipeline.cjs');
 
 function getArg(flag) {
   const idx = process.argv.indexOf(flag);

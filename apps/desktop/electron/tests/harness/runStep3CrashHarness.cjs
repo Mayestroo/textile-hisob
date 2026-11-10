@@ -15,7 +15,7 @@ const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const databaseManager = require('../../database/databaseManager.cjs');
+const databaseManager = require('../../database/core/databaseManager.cjs');
 
 function killProcessTree(pid) {
   if (process.platform === 'win32') {
@@ -174,7 +174,7 @@ async function executeStep3CrashHarness() {
     if (!committedOutbox.payload_hash || committedOutbox.payload_hash.length !== 64) {
       throw new Error(`Committed outbox operation missing valid 64-char payload_hash! (Found: ${committedOutbox.payload_hash})`);
     }
-    const { computePayloadHash } = require('../../database/canonicalPayload.cjs');
+    const { computePayloadHash } = require('../../database/core/canonicalPayload.cjs');
     const expectedPayloadHash = computePayloadHash(committedOutbox.payload_json);
     if (committedOutbox.payload_hash !== expectedPayloadHash) {
       throw new Error(`Committed outbox payload_hash (${committedOutbox.payload_hash}) does not match payload_json (${expectedPayloadHash})`);

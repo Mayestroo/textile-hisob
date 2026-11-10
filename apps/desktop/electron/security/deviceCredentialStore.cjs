@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isSafeCompanyId } = require('../database/companyPath.cjs');
+const { isSafeCompanyId } = require('../database/core/companyPath.cjs');
 
 /**
  * Resolves Electron's safeStorage API.

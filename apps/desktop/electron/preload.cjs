@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   getRuntimeMode: () => ipcRenderer.invoke('get-runtime-mode'),
   dbRead: (companyId) => ipcRenderer.invoke('db-read', companyId),
+  PayrollRead: (companyId, periodId) => ipcRenderer.invoke('payroll-read', companyId, periodId),
+  AdjustmentSources: (companyId, modelId, workerId, opName) => ipcRenderer.invoke('adjustment-sources', companyId, modelId, workerId, opName),
   dbWrite: (data, options) => ipcRenderer.invoke('db-write', data, options),
   dbPatch: (patches, options) => ipcRenderer.invoke('db-patch', patches, options),
   archivesList: (companyId) => ipcRenderer.invoke('archives-list', companyId),
@@ -47,6 +49,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   SyncPull: (companyId) => ipcRenderer.invoke('sync-pull', companyId),
   SyncReconnect: (companyId) => ipcRenderer.invoke('sync-reconnect', companyId),
   PeriodArchiveRead: (args) => ipcRenderer.invoke('period-archive-read', args),
+  PattaJournalRead: (args) => ipcRenderer.invoke('patta-journal-read', args),
   OperatorLogin: (companyId, operatorId, password) => ipcRenderer.invoke('operator-login', { companyId, operatorId, password }),
   OperatorRevoke: (companyId) => ipcRenderer.invoke('operator-revoke', companyId),
   LeaseAcquire: (companyId, blockSize) => ipcRenderer.invoke('lease-acquire', { companyId, blockSize }),

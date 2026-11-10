@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { assertCompanyAccess, resolveAdminAccess } = require('../admin/adminAccess.cjs');
+const { loadPayroll } = require('./payrollValuation.cjs');
 
 const PIN_WINDOW_MS = 10 * 60 * 1000;
 const PIN_ATTEMPT_LIMIT = 5;
@@ -107,7 +108,7 @@ async function claimWorkerBinding(pool, input, options = {}) {
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`novda:worker-telegram:${params.telegramId}`]);
 
     const existingTelegram = await client.query(
-      `SELECT telegram_id, company_id, worker_id FROM worker_telegram_bindings WHERE telegram_id = $1 FOR UPDATE`,
+      `SELECT telegram_id, company_id, worker_id, username FROM worker_telegram_bindings WHERE telegram_id = $1 FOR UPDATE`,
       [params.telegramId]
     );
     if (existingTelegram.rows.length) {
@@ -115,7 +116,6 @@ async function claimWorkerBinding(pool, input, options = {}) {
       if (binding.company_id !== params.companyId || Number(binding.worker_id) !== params.workerId) {
         return { error: workerError('TELEGRAM_ACCOUNT_ALREADY_BOUND', 409) };
       }
-      return { binding };
     }
 
     const workerResult = await client.query(
@@ -128,6 +128,12 @@ async function claimWorkerBinding(pool, input, options = {}) {
     );
     const worker = workerResult.rows[0];
     if (!worker || worker.status !== 'ACTIVE') return { error: workerError('WORKER_NOT_FOUND', 404) };
+    if (existingTelegram.rows.length) {
+      // A lost-response retry has the same public DTO as a fresh claim. Read the
+      // current active worker name, retain the stored username, and require no PIN
+      // or additional write for the already verified, identical binding.
+      return { binding: { ...existingTelegram.rows[0], worker_name: worker.name } };
+    }
     if (pinRequired && (!worker.pin_salt || !worker.pin_hash)) {
       return { error: workerError('WORKER_ENROLLMENT_NOT_CONFIGURED', 409) };
     }
@@ -195,7 +201,7 @@ async function claimWorkerBinding(pool, input, options = {}) {
   return result.binding;
 }
 
-async function unbindWorkerTelegramBinding(pool, input, globalAdminIds = new Set()) {
+async function unbindWorkerTelegramBinding(pool, input) {
   const companyId = String(input?.companyId || '').trim();
   const workerId = Number(input?.workerId);
   const telegramId = String(input?.telegramId || '').trim();
@@ -206,7 +212,7 @@ async function unbindWorkerTelegramBinding(pool, input, globalAdminIds = new Set
     throw workerError('INVALID_TELEGRAM_ID', 400);
   }
 
-  const access = await resolveAdminAccess(pool, adminTelegramId, globalAdminIds);
+  const access = await resolveAdminAccess(pool, adminTelegramId);
   try {
     assertCompanyAccess(access, companyId);
   } catch (error) {
@@ -253,84 +259,22 @@ async function getWorkerProfile(pool, input) {
   const client = await pool.connect();
   try {
     const worker = await resolveBoundWorker(client, params);
-    const periodResult = await client.query(
-      `SELECT start_date, end_date, is_closed FROM periods
-       WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC LIMIT 1`,
-      [params.companyId]
-    );
-    const period = periodResult.rows[0] || null;
-    const effectiveRateSql = 'COALESCE(NULLIF(e.rate_snapshot, 0), rates.rate, 0)';
-    const breakdownResult = await client.query(
-      `SELECT m.id AS model_id, m.name AS model_name, e.op_name AS operation_name,
-              ${effectiveRateSql}::TEXT AS rate,
-              SUM(e.qty)::TEXT AS qty,
-              SUM(e.qty * ${effectiveRateSql})::TEXT AS amount
-       FROM ticket_entries e
-       JOIN tickets t ON t.company_id = e.company_id AND t.id = e.ticket_id
-       JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
-       LEFT JOIN LATERAL (
-         SELECT CASE
-           WHEN COALESCE(operation_row.value->>'rate', '') ~ '^-?[0-9]+(\\.[0-9]+)?$'
-           THEN (operation_row.value->>'rate')::NUMERIC
-           ELSE 0::NUMERIC
-         END AS rate
-         FROM jsonb_array_elements(m.operations_json) AS operation_row(value)
-         WHERE operation_row.value->>'name' = e.op_name
-         LIMIT 1
-       ) rates ON TRUE
-       WHERE e.company_id = $1 AND e.worker_id = $2 AND t.status = 'CONFIRMED' AND t.is_closed = 0
-         AND ($3::DATE IS NULL OR t.submitted_at >= $3::DATE)
-         AND ($4::DATE IS NULL OR t.submitted_at < ($4::DATE + INTERVAL '1 day'))
-       GROUP BY m.id, m.name, e.op_name, e.rate_snapshot, rates.rate
-       ORDER BY m.name, e.op_name`,
-      [params.companyId, params.workerId, period?.start_date || null, period?.end_date || null]
-    );
-    const adjustmentResult = await client.query(
-      `SELECT type, COALESCE(SUM(amount), 0)::TEXT AS total
-       FROM worker_adjustments
-       WHERE company_id = $1 AND worker_id = $2
-         AND ($3::DATE IS NULL OR created_at >= $3::DATE)
-         AND ($4::DATE IS NULL OR created_at < ($4::DATE + INTERVAL '1 day'))
-       GROUP BY type`,
-      [params.companyId, params.workerId, period?.start_date || null, period?.end_date || null]
-    );
-
-    const models = {};
-    let gross = 0;
-    let pieces = 0;
-    for (const row of breakdownResult.rows) {
-      const modelId = String(row.model_id);
-      if (!models[modelId]) models[modelId] = { id: modelId, name: row.model_name, earnings: 0, pieces: 0, operations: [] };
-      const operation = {
-        name: row.operation_name,
-        rate: Number(row.rate || 0),
-        qty: Number(row.qty || 0),
-        amount: Number(row.amount || 0)
-      };
-      models[modelId].operations.push(operation);
-      models[modelId].earnings += operation.amount;
-      models[modelId].pieces += operation.qty;
-      gross += operation.amount;
-      pieces += operation.qty;
-    }
-    const adjustments = Object.fromEntries(adjustmentResult.rows.map((row) => [row.type, Number(row.total || 0)]));
-    const avans = Math.max(0, adjustments.AVANS || 0);
-    const jarima = Math.max(0, adjustments.JARIMA || 0);
-    const staj = Math.max(0, Number(worker.staj || 0));
-    const periodStart = period?.start_date ? String(period.start_date).slice(0, 10) : null;
+    const payroll = await loadPayroll(client, params.companyId, input?.periodId, worker);
+    const row = payroll.workers[0];
     return {
       worker_id: worker.worker_id,
       worker_name: worker.worker_name,
       company_id: worker.company_id,
-      period_name: periodStart ? `Davr ${periodStart.slice(0, 7)}` : 'Joriy davr',
-      period: period ? { startDate: periodStart, endDate: period.end_date, isClosed: Boolean(period.is_closed) } : null,
-      gross,
-      avans,
-      jarima,
-      staj,
-      net: gross - avans - jarima - staj,
-      pieces,
-      models_breakdown: models
+      period_name: payroll.period ? `${payroll.period.name}${payroll.period.isClosed ? ' · qayta hisoblangan (arxiv o‘zgarmagan)' : ''}` : 'Davr mavjud emas',
+      period: payroll.period,
+      periodId: payroll.period?.periodId || null,
+      pieceworkGross: row.pieceworkGross, oklad: row.oklad, gross: row.gross,
+      magazin: row.magazin, avans: row.avans, jarima: row.jarima, staj: row.staj, net: row.net,
+      accountingStatus: row.accountingStatus, accountingReasons: row.accountingReasons,
+      syncStatus: row.syncStatus, earningsLabel: row.earningsLabel,
+      unknownEntryCount: row.unknownEntryCount, unknownQuantity: row.unknownQuantity,
+      unresolvedAdjustmentCount: row.unresolvedAdjustmentCount,
+      pieces: row.pieces, rawQuantity: row.rawQuantity, models_breakdown: row.models_breakdown
     };
   } finally {
     client.release();

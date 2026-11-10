@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Plus, Layers, Copy, FileText } from 'lucide-react';
+import { CustomSelect } from '../../../components/ui/CustomSelect';
 
 export const NewModelModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -33,12 +34,12 @@ export const NewModelModal: React.FC = () => {
   };
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
+    <div className="modal-overlay phase-c-dialog" onClick={closeModal}>
       <div className="modal-card" style={{ maxWidth: '540px', width: '95%' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
             <Layers size={20} />
-            <span style={{ fontSize: '16px', fontWeight: 800 }}>Yangi Model & Varaqlar Qo'shish</span>
+            <span style={{ fontSize: '19px', fontWeight: 800 }}>Yangi Model & Varaqlar Qo'shish</span>
           </div>
           <button
             onClick={closeModal}
@@ -57,7 +58,7 @@ export const NewModelModal: React.FC = () => {
               border: '1px solid rgba(16, 185, 129, 0.25)',
               padding: '12px 16px',
               borderRadius: 'var(--radius-md)',
-              fontSize: '12.5px',
+              fontSize: '15px',
               color: 'var(--text-secondary)'
             }}>
               <div style={{ fontWeight: 700, color: 'var(--primary)', marginBottom: '4px' }}>
@@ -71,7 +72,7 @@ export const NewModelModal: React.FC = () => {
 
             {/* Model Name */}
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
                 Yangi Model Nomi:
               </label>
               <input
@@ -88,7 +89,7 @@ export const NewModelModal: React.FC = () => {
 
             {/* Template Selection */}
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
                 Tayyor Shablonni Tanlang:
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -106,11 +107,11 @@ export const NewModelModal: React.FC = () => {
                     transition: 'all 0.15s'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '12.5px', color: templateType === 'standard' ? 'var(--primary)' : 'var(--text-primary)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '15px', color: templateType === 'standard' ? 'var(--primary)' : 'var(--text-primary)' }}>
                     <FileText size={15} />
                     <span>Standart Shablon</span>
                   </div>
-                  <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: '14.5px', color: 'var(--text-muted)' }}>
                     Barcha 19 ta operatsiyalar bilan tayyor
                   </span>
                 </div>
@@ -129,11 +130,11 @@ export const NewModelModal: React.FC = () => {
                     transition: 'all 0.15s'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '12.5px', color: templateType === 'clone' ? '#4f46e5' : 'var(--text-primary)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '15px', color: templateType === 'clone' ? '#4f46e5' : 'var(--text-primary)' }}>
                     <Copy size={15} />
                     <span>Nusxa Olish</span>
                   </div>
-                  <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: '14.5px', color: 'var(--text-muted)' }}>
                     Mavjud modeldan operatsiyalarni ko'chirish
                   </span>
                 </div>
@@ -142,27 +143,25 @@ export const NewModelModal: React.FC = () => {
 
             {templateType === 'clone' && (
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
                   Qaysi modeldan nusxalansin?
                 </label>
-                <select
+                <CustomSelect
                   value={cloneFromId}
-                  onChange={(e) => setCloneFromId(e.target.value)}
-                  className="soft-input"
-                >
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.operations.length} ta operatsiya)
-                    </option>
-                  ))}
-                </select>
+                  width="100%"
+                  onChange={(val) => setCloneFromId(val)}
+                  options={models.map((m) => ({
+                    value: m.id,
+                    label: `${m.name} (${m.operations.length} ta operatsiya)`
+                  }))}
+                />
               </div>
             )}
 
             {/* Default Patta Info */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                   Dastlabki Partiya:
                 </label>
                 <input
@@ -170,12 +169,12 @@ export const NewModelModal: React.FC = () => {
                   value={party}
                   onChange={(e) => setParty(e.target.value)}
                   className="soft-input"
-                  style={{ height: '32px', fontSize: '12px' }}
+                  style={{ height: '32px', fontSize: '15px' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                   Rang:
                 </label>
                 <input
@@ -183,12 +182,12 @@ export const NewModelModal: React.FC = () => {
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   className="soft-input"
-                  style={{ height: '32px', fontSize: '12px' }}
+                  style={{ height: '32px', fontSize: '15px' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                   Razmer:
                 </label>
                 <input
@@ -196,7 +195,7 @@ export const NewModelModal: React.FC = () => {
                   value={size}
                   onChange={(e) => setSize(e.target.value)}
                   className="soft-input"
-                  style={{ height: '32px', fontSize: '12px' }}
+                  style={{ height: '32px', fontSize: '15px' }}
                 />
               </div>
             </div>

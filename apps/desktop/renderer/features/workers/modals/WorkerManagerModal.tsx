@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, Users, UserPlus, Trash2, Search, Edit3, Check, Award, Download } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
+import { useAuthStore } from '../../../store/authStore';
 
 export const WorkerManagerModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -13,14 +14,35 @@ export const WorkerManagerModal: React.FC = () => {
   const confirmAction = useWorkbookStore((s) => s.confirmAction);
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const exportWorkersExcel = useWorkbookStore((s) => s.exportWorkersExcel);
+  const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const authState = useAuthStore();
+  const canViewWorkers = authState.permissions.includes('view:workers');
+  const authUserId = authState.user?.uid || '';
+  const authRole = authState.role || '';
   const [newWorkerName, setNewWorkerName] = useState('');
   const [newWorkerStaj, setNewWorkerStaj] = useState('');
-  const [search, setSearch] = useState('');
+  const managerScope = JSON.stringify([licenseStatus?.companyId || '', licenseStatus?.activationId || '', licenseStatus?.machineId || '', licenseStatus?.role || '', authUserId, authRole]);
+  const managerSearchKey = `worker-manager:search:${managerScope}`;
+  const readManagerSearch = () => {
+    try { return window.sessionStorage.getItem(managerSearchKey) || ''; } catch { return ''; }
+  };
+  const [searchState, setSearchState] = useState(() => ({ scope: managerScope, value: readManagerSearch() }));
+  const search = searchState.scope === managerScope ? searchState.value : readManagerSearch();
+  useEffect(() => {
+    if (searchState.scope !== managerScope) setSearchState({ scope: managerScope, value: readManagerSearch() });
+  }, [managerScope, managerSearchKey, searchState.scope]);
+  useEffect(() => {
+    if (searchState.scope !== managerScope) return;
+    try {
+      if (searchState.value) window.sessionStorage.setItem(managerSearchKey, searchState.value);
+      else window.sessionStorage.removeItem(managerSearchKey);
+    } catch { /* The in-memory worker list remains searchable. */ }
+  }, [managerScope, managerSearchKey, searchState]);
   const [editingWorkerId, setEditingWorkerId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editingStaj, setEditingStaj] = useState('');
 
-  if (modalType !== 'worker_manager') return null;
+  if (modalType !== 'worker_manager' || !canViewWorkers) return null;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +78,17 @@ export const WorkerManagerModal: React.FC = () => {
     setEditingStaj('');
   };
 
+  const cancelEditing = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Escape' || editingWorkerId === null) return;
+    const row = event.currentTarget.closest('tr');
+    event.preventDefault();
+    event.stopPropagation();
+    setEditingWorkerId(null);
+    setEditingName('');
+    setEditingStaj('');
+    requestAnimationFrame(() => row?.querySelector<HTMLButtonElement>('button[title="Tahrirlash"]')?.focus());
+  };
+
   const handleDelete = async (workerId: number, name: string) => {
     const ok = await confirmAction({
       title: "Ishchini o'chirish",
@@ -75,12 +108,12 @@ export const WorkerManagerModal: React.FC = () => {
   const stajWorkersCount = workers.filter((w) => (w.staj || 0) > 0).length;
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
-      <div className="modal-card" style={{ maxWidth: '720px', width: '95%' }} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay phase-c-modal phase-c-worker-manager" onClick={closeModal}>
+      <div className="modal-card e3-manager-card" style={{ maxWidth: '720px', width: '95%' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
             <Users size={20} />
-            <span style={{ fontSize: '16px', fontWeight: 800 }}>
+            <span style={{ fontSize: '19px', fontWeight: 800 }}>
               Markaziy Ishchilar & Staj Ro'yxati ({workers.length} ta)
             </span>
           </div>
@@ -94,7 +127,7 @@ export const WorkerManagerModal: React.FC = () => {
                 alignItems: 'center',
                 gap: '6px',
                 padding: '6px 14px',
-                fontSize: '12.5px',
+                fontSize: '15px',
                 fontWeight: 600,
                 borderRadius: 'var(--radius-full)'
               }}
@@ -103,7 +136,7 @@ export const WorkerManagerModal: React.FC = () => {
               <Download size={14} />
               <span>Excel yuklab olish</span>
             </button>
-            <button
+            <button aria-label="Oynani yopish"
               onClick={closeModal}
               className="soft-btn soft-btn-secondary"
               style={{ width: '32px', height: '32px', padding: 0, borderRadius: 'var(--radius-full)' }}
@@ -116,7 +149,7 @@ export const WorkerManagerModal: React.FC = () => {
         <div className="modal-body">
           {/* Info Banner */}
           <div style={{
-            fontSize: '12.5px',
+            fontSize: '15px',
             color: 'var(--text-secondary)',
             background: 'var(--primary-light)',
             padding: '12px 16px',
@@ -131,7 +164,7 @@ export const WorkerManagerModal: React.FC = () => {
           </div>
 
           {/* Add Worker Form */}
-          <form onSubmit={handleAdd} style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
+          <form className="e3-manager-form" onSubmit={handleAdd} style={{ display: 'flex', gap: '10px', marginTop: '2px' }}>
             <input
               type="text"
               placeholder="Yangi ishchi F.I.O..."
@@ -169,14 +202,14 @@ export const WorkerManagerModal: React.FC = () => {
               type="text"
               placeholder="Qidirish (ID yoki ism bo'yicha)..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => setSearchState({ scope: managerScope, value: e.target.value })}
               className="soft-input"
               style={{ paddingLeft: '34px' }}
             />
           </div>
 
           {/* Worker List Table */}
-          <div style={{
+          <div className="e3-manager-table" style={{
             maxHeight: '380px',
             overflowY: 'auto',
             overflowX: 'hidden',
@@ -217,7 +250,7 @@ export const WorkerManagerModal: React.FC = () => {
                             background: 'var(--bg-surface-subtle)',
                             padding: '2px 8px',
                             borderRadius: 'var(--radius-full)',
-                            fontSize: '11.5px'
+                            fontSize: '14.5px'
                           }}>
                             {w.id}
                           </span>
@@ -229,12 +262,13 @@ export const WorkerManagerModal: React.FC = () => {
                               type="text"
                               value={editingName}
                               onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={cancelEditing}
                               autoFocus
                               className="soft-input"
                               style={{ height: '28px', fontWeight: 600 }}
                             />
                           ) : (
-                            <span 
+                            <span
                               onClick={() => startEditing(w.id, w.name, w.staj)}
                               style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}
                               title="Tahrirlash uchun bosing"
@@ -259,7 +293,7 @@ export const WorkerManagerModal: React.FC = () => {
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') saveEditing(w.id);
-                                if (e.key === 'Escape') setEditingWorkerId(null);
+                                cancelEditing(e);
                               }}
                               className="soft-input"
                               style={{ height: '28px', textAlign: 'right', fontWeight: 700, color: '#7c3aed' }}
@@ -286,7 +320,7 @@ export const WorkerManagerModal: React.FC = () => {
                                 <button
                                   onClick={() => saveEditing(w.id)}
                                   className="soft-btn soft-btn-primary"
-                                  style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-full)' }}
+                                  style={{ padding: '3px 8px', fontSize: '14px', borderRadius: 'var(--radius-full)' }}
                                   title="Saqlash"
                                 >
                                   <Check size={12} />
@@ -295,7 +329,7 @@ export const WorkerManagerModal: React.FC = () => {
                                 <button
                                   onClick={() => setEditingWorkerId(null)}
                                   className="soft-btn soft-btn-secondary"
-                                  style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-full)' }}
+                                  style={{ padding: '3px 8px', fontSize: '14px', borderRadius: 'var(--radius-full)' }}
                                 >
                                   Bekor
                                 </button>
@@ -305,7 +339,7 @@ export const WorkerManagerModal: React.FC = () => {
                                 <button
                                   onClick={() => startEditing(w.id, w.name, w.staj)}
                                   className="soft-btn soft-btn-secondary"
-                                  style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-full)', color: '#4f46e5' }}
+                                  style={{ padding: '3px 8px', fontSize: '14px', borderRadius: 'var(--radius-full)', color: '#4f46e5' }}
                                   title="Tahrirlash"
                                 >
                                   <Edit3 size={12} />
@@ -334,7 +368,7 @@ export const WorkerManagerModal: React.FC = () => {
         </div>
 
         <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
             Jami: <strong>{workers.length} nafar</strong> (shundan <strong>{stajWorkersCount} nafari</strong> stajli)
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -350,7 +384,7 @@ export const WorkerManagerModal: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '12.5px'
+                fontSize: '15px'
               }}
               title="Ishchilar ro'yxatini Excel (.xlsx) faylida yuklab olish"
             >

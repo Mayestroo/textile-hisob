@@ -59,6 +59,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   worker_telegram_bindings,
   worker_telegram_binding_events,
   worker_binding_limits,
+  worker_onboarding_contacts,
   company_batch_settings,
   patta_batch_settings,
   period_archives,

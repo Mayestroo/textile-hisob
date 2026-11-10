@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
 import { ModelConfig } from '../../types/workbook';
 import { getTicketPartyStatus } from '../../domain/ticketValidation';
@@ -30,6 +30,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
   const updateTicketField = useWorkbookStore((s) => s.updateTicketField);
   const setTicketWorker = useWorkbookStore((s) => s.setTicketWorker);
+  const clearTicketForm = useWorkbookStore((s) => s.clearTicketForm);
   const jonatish = useWorkbookStore((s) => s.jonatish);
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const setActiveCell = useWorkbookStore((s) => s.setActiveCell);
@@ -41,17 +42,90 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const { isNonExistentParty, isWrongModelParty, hasBlockingError, errorBannerText } =
     getTicketPartyStatus(form, model, printedPartyHistory, submittedTickets, { strictParty, strictPatta });
 
-  // Auto fill size & qty from printed history if available (ONLY in strict mode)
-  useEffect(() => {
-    if (!strictParty || !strictPatta) return;
-    if (!form.party || !form.patta) return;
-    const pNum = parseInt(form.patta, 10);
-    if (isNaN(pNum) || pNum <= 0) return;
+  // Active operation row tracking for focus outline
+  const [activeOpIndex, setActiveOpIndex] = useState<number | null>(null);
 
-    const matchedParty = (printedPartyHistory || []).find(
-      (h) => h.modelId === model.id && String(h.partyNumber) === String(form.party)
+  // Helper to parse printedAt into YYYY-MM-DD for date input
+  const parseToIsoDate = (val: string | undefined): string | null => {
+    if (!val) return null;
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return trimmed.slice(0, 10);
+    const dmy = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+    if (dmy) {
+      return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  };
+
+  // 1. Initial resolution: default to active or latest printed party and next unsubmitted patta
+  useEffect(() => {
+    const history = printedPartyHistory || [];
+    if (!form.party) {
+      const activeParty = history.find((h) => h.modelId === model.id && !h.isClosed)
+        || history.filter((h) => h.modelId === model.id).slice(-1)[0];
+      if (activeParty) {
+        updateTicketField(model.id, 'party', String(activeParty.partyNumber));
+        const submittedForParty = (submittedTickets || []).filter(
+          (t) => t.modelId === model.id && String(t.partyNumber) === String(activeParty.partyNumber)
+        );
+        const nextPatta = (activeParty.pattaStartNumber || 1) + submittedForParty.length;
+        const maxPatta = activeParty.pattaEndNumber || ((activeParty.pattaStartNumber || 1) + activeParty.pattaCount - 1);
+        if (!form.patta && nextPatta <= maxPatta) {
+          updateTicketField(model.id, 'patta', String(nextPatta));
+        }
+      }
+    }
+  }, [model.id, form.party, form.patta, printedPartyHistory, submittedTickets, updateTicketField]);
+
+  // 2. Comprehensive Auto-fill: Sana, Rang, Razmer, and Ish soni from printed party history
+  useEffect(() => {
+    const history = printedPartyHistory || [];
+    let matchedParty = history.find(
+      (h) => h.modelId === model.id && String(h.partyNumber).trim() === String(form.party || '').trim()
     );
-    if (matchedParty && matchedParty.sizes) {
+
+    const pNum = parseInt(form.patta || '', 10);
+
+    // If no party match, but patta number is given, search by patta range
+    if (!matchedParty && !isNaN(pNum) && pNum > 0) {
+      matchedParty = history.find((h) => {
+        if (h.modelId !== model.id) return false;
+        const start = h.pattaStartNumber ?? 1;
+        const end = h.pattaEndNumber ?? (start + h.pattaCount - 1);
+        return pNum >= start && pNum <= end;
+      });
+      if (matchedParty && (!form.party || form.party !== String(matchedParty.partyNumber))) {
+        updateTicketField(model.id, 'party', String(matchedParty.partyNumber));
+      }
+    }
+
+    if (!matchedParty) return;
+
+    // Auto-fill Sana (Date)
+    if (matchedParty.printedAt) {
+      const isoDate = parseToIsoDate(matchedParty.printedAt);
+      if (isoDate && form.date !== isoDate) {
+        updateTicketField(model.id, 'date', isoDate);
+      }
+    }
+
+    // Auto-fill Rang (Color)
+    if (matchedParty.color && form.color !== matchedParty.color) {
+      updateTicketField(model.id, 'color', matchedParty.color);
+    }
+
+    // Auto-fill Ish soni (Quantity)
+    const perPatta = matchedParty.ishSoniPerPatta
+      || (matchedParty.pattaCount > 0 ? Math.round(matchedParty.ishSoni / matchedParty.pattaCount) : matchedParty.ishSoni);
+    if (perPatta > 0 && (!form.qty || form.qty === '0')) {
+      updateTicketField(model.id, 'qty', String(perPatta));
+    }
+
+    // Auto-fill Razmer (Size) based on patta position within size distributions
+    if (!isNaN(pNum) && pNum > 0 && matchedParty.sizes) {
       const startPatta = matchedParty.pattaStartNumber
         ?? (matchedParty.cumulativePattaCount > matchedParty.pattaCount
           ? matchedParty.cumulativePattaCount - matchedParty.pattaCount + 1
@@ -60,7 +134,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
       let counter = 1;
       let targetSize = '';
-      for (const sz of (availableSizes || DEFAULT_BATCH_SIZES)) {
+      const historicalOrder = Array.from(new Set([
+        ...(Array.isArray(matchedParty.sizeOrder) ? matchedParty.sizeOrder : (availableSizes || DEFAULT_BATCH_SIZES)),
+        ...Object.keys(matchedParty.sizes || {})
+      ]));
+      for (const sz of historicalOrder) {
         const count = parseInt(matchedParty.sizes[sz] || '0', 10) || 0;
         if (relPattaNum >= counter && relPattaNum < counter + count) {
           targetSize = sz;
@@ -71,11 +149,19 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
       if (targetSize && form.size !== targetSize) {
         updateTicketField(model.id, 'size', targetSize);
       }
-      if (matchedParty.color && (!form.color || form.color === 'Кора')) {
-        updateTicketField(model.id, 'color', matchedParty.color);
-      }
     }
-  }, [strictParty, strictPatta, form.party, form.patta, printedPartyHistory, model.id, availableSizes, updateTicketField, form.size, form.color]);
+  }, [
+    model.id,
+    form.party,
+    form.patta,
+    form.date,
+    form.color,
+    form.size,
+    form.qty,
+    printedPartyHistory,
+    availableSizes,
+    updateTicketField
+  ]);
 
   // Inline new operation state
   const [isAddingInline, setIsAddingInline] = useState(false);
@@ -135,7 +221,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   };
 
   // Build worker lookup map
-  const workerMap = React.useMemo(() => {
+  const workerMap = useMemo(() => {
     const map = new Map<number, string>();
     for (const w of workers) {
       map.set(w.id, w.name);
@@ -176,6 +262,14 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         el.select();
       }
     } catch {}
+  };
+
+  const submitTicketAndFocusKonveyer = () => {
+    void jonatish(model.id).then((submitted) => {
+      if (submitted) {
+        requestAnimationFrame(() => safeFocus(konveyerInputRef.current));
+      }
+    });
   };
 
   const handleKonveyerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -242,10 +336,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         const nextOp = model.pattaOpsOrder[nextIndex];
         safeFocus(inputRefs.current[nextOp]);
       } else {
-        jonatish(model.id);
-        setTimeout(() => {
-          safeFocus(pattaInputRef.current);
-        }, 150);
+        submitTicketAndFocusKonveyer();
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -311,141 +402,107 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     syncDeleteOperation(model.id, opName);
   };
 
+  const handleCancel = () => {
+    clearTicketForm(model.id);
+    addNotification('info', 'Tozalandi', "Kiritilgan ishchilar ro'yxati tozalandi.");
+    const firstOp = model.pattaOpsOrder[0];
+    if (firstOp && inputRefs.current[firstOp]) {
+      safeFocus(inputRefs.current[firstOp]);
+    }
+  };
+
+  const handleSubmit = () => {
+    if ((strictParty || strictPatta) && hasBlockingError) {
+      addNotification(
+        'error',
+        'Chop etilmagan partiya',
+        errorBannerText || `Partiya ${currentPartyStr} hali chop etilmagan! Avval «Patta» varag'ida chop eting.`
+      );
+      return;
+    }
+    submitTicketAndFocusKonveyer();
+  };
+
+  // Calculations for operations and rates
+  const totalRates = useMemo(() => {
+    return model.pattaOpsOrder.reduce((sum, opName) => {
+      const op = model.operations.find((o) => o.name === opName);
+      return sum + (op ? Number(op.rate || 0) : 0);
+    }, 0);
+  }, [model.pattaOpsOrder, model.operations]);
+
+  const filledOpsCount = useMemo(() => {
+    return model.pattaOpsOrder.filter((opName) => {
+      const val = form.entries?.[opName];
+      const num = Number(val);
+      return val && num && workerMap.has(num);
+    }).length;
+  }, [model.pattaOpsOrder, form.entries, workerMap]);
+
+  const progressPct = useMemo(() => {
+    const total = model.pattaOpsOrder.length;
+    if (total === 0) return 0;
+    return Math.min(100, Math.round((filledOpsCount / total) * 100));
+  }, [model.pattaOpsOrder.length, filledOpsCount]);
+
   return (
-    <div className="excel-grid-container" style={{ padding: '20px', background: 'var(--bg-app)' }}>
-      <div style={{
-        maxWidth: '960px',
-        margin: '0 auto',
-        background: 'var(--bg-surface)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-md)',
-        border: '1px solid var(--border-subtle)',
-        overflow: 'hidden'
-      }}>
-        {/* Modern Top Header */}
-        <div style={{
-          padding: '16px 20px',
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--primary-light)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Layers size={18} color="var(--primary)" />
+    <div className="phase-b-patta-entry">
+      <div className="patta-entry-card">
+        {/* Pixel-Perfect Top Header */}
+        <div className="patta-entry-header">
+          <div className="patta-header-top">
+            <div className="patta-header-icon">
+              <Layers size={22} strokeWidth={2.4} />
             </div>
             <div>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                Patta Kiritish — {model.name}
+              <div className="patta-header-title-row">
+                <h1 className="patta-header-title">Patta kiritish</h1>
+                <span className="patta-model-badge">{model.name}</span>
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Ishchilar raqamini ketma-ket kiritib Enter bosing
+              <div className="patta-header-subtitle">
+                <span>Ishchi raqamini kiriting va</span>
+                <kbd className="patta-kbd">Enter</kbd>
+                <span>bosing, kursor keyingi qatorga o'tadi</span>
               </div>
             </div>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() => {
-                setIsAddingInline(true);
-                setTimeout(() => newOpInputRef.current?.focus(), 50);
-              }}
-              className="soft-btn soft-btn-secondary"
-              style={{ borderRadius: 'var(--radius-full)', padding: '6px 14px' }}
-            >
-              <Plus size={14} color="var(--primary)" />
-              <span>Operatsiya qo'shish</span>
-            </button>
-
-            <button
-              onClick={() => {
-                if ((strictParty || strictPatta) && hasBlockingError) {
-                  addNotification(
-                    'error',
-                    'Chop etilmagan partiya',
-                    errorBannerText || `Partiya ${currentPartyStr} hali chop etilmagan! Avval «Patta» varag'ida chop eting.`
-                  );
-                  return;
-                }
-                jonatish(model.id);
-              }}
-              className="soft-btn soft-btn-primary"
-              style={{
-                borderRadius: 'var(--radius-full)',
-                padding: '6px 18px'
-              }}
-              title="Kiritilgan ma'lumotlarni hisobga jo'natish (Enter / F5)"
-            >
-              <Send size={15} />
-              <span>Jo'natish</span>
-            </button>
+          {/* Dynamic Progress Bar underneath header */}
+          <div
+            className="patta-header-progress-track"
+            title={`Jarayon: ${filledOpsCount} / ${model.pattaOpsOrder.length} (${progressPct}%)`}
+          >
+            <div
+              className="patta-header-progress-fill"
+              style={{ width: `${progressPct}%` }}
+            />
           </div>
         </div>
 
-        {/* Form Card Grid Table */}
-        <table className="excel-table" style={{ width: '100%' }}>
-          <colgroup>
-            <col style={{ width: '54px' }} />
-            <col style={{ width: '270px' }} />
-            <col style={{ width: '120px' }} />
-            <col style={{ width: '260px' }} />
-            <col style={{ width: '180px' }} />
-          </colgroup>
-
-          <tbody>
-            {/* ROW 1: Model Title */}
-            <tr style={{ height: '38px', backgroundColor: 'var(--bg-surface-subtle)' }}>
-              <td></td>
-              <td 
-                colSpan={4} 
-                style={{ 
-                  fontWeight: 800, 
-                  fontSize: '15px', 
-                  color: 'var(--primary)', 
-                  textAlign: 'center',
-                  letterSpacing: '0.2px'
-                }}
-              >
-                {(() => {
-                  const raw = model.title || model.name;
-                  const clean = raw.replace(/^(Модел-\s*|Модель-\s*|Model-\s*)+/i, '').trim();
-                  return `Модел- ${clean}`;
-                })()}
-              </td>
-            </tr>
-
-            {/* ROW 2: Konveyer & Date */}
-            <tr style={{ height: '36px' }}>
-              <td></td>
-              <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
-                Конвейер
-              </td>
-              <td style={{ padding: '4px 8px' }}>
+        {/* Section 1: Patta ma'lumotlari */}
+        <div className="patta-info-section">
+          <h2 className="patta-section-title">Patta ma'lumotlari</h2>
+          <div className="patta-info-box">
+            {/* ROW 1: Konveyer & Sana */}
+            <div className="patta-info-row">
+              <div className="patta-col-left">
+                <div className="patta-label-wrapper">
+                  <span className="patta-label-title">Konveyer</span>
+                </div>
                 <input
                   ref={konveyerInputRef}
+                  data-patta-konveyer-input="true"
                   type="text"
                   value={form.konveyer || ''}
                   onChange={(e) => updateTicketField(model.id, 'konveyer', e.target.value)}
                   onKeyDown={handleKonveyerKeyDown}
                   onFocus={() => handleCellFocus('C2', form.konveyer || '')}
-                  className="soft-input"
-                  style={{ height: '30px', textAlign: 'center', fontWeight: 700 }}
-                  placeholder=""
+                  className="patta-input patta-input-short"
+                  placeholder="Tanlang"
                 />
-              </td>
-              <td colSpan={2} style={{ fontWeight: 600, textAlign: 'center' }}>
-                <span style={{ color: 'var(--text-secondary)', marginRight: '8px' }}>Сана:</span>
+              </div>
+
+              <div className="patta-col-right">
+                <label className="patta-right-label">Sana</label>
                 <input
                   type="date"
                   value={form.date}
@@ -453,22 +510,28 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   max={hasActivePeriod ? currentPeriod?.endDate : undefined}
                   onChange={(e) => updateTicketField(model.id, 'date', e.target.value)}
                   onFocus={() => handleCellFocus('D2', form.date)}
-                  className="soft-input"
-                  style={{ width: 'auto', display: 'inline-block', height: '30px', fontWeight: 600 }}
+                  className="patta-input patta-input-wide"
                 />
-              </td>
-            </tr>
+              </div>
+            </div>
 
-            {/* ROW 3: Party */}
-            <tr style={{ height: '36px' }}>
-              <td></td>
-                <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                  <input type="checkbox" checked={strictParty} onChange={(e) => updateTicketField(model.id, 'strictParty', e.target.checked)} />
-                  Партия <small style={{ color: strictParty ? 'var(--primary)' : 'var(--text-muted)' }}>{strictParty ? 'Қатъий' : 'Эркин'}</small>
+            {/* ROW 2: Partiya & Rang */}
+            <div className="patta-info-row">
+              <div className="patta-col-left">
+                <div className="patta-label-wrapper">
+                  <span className="patta-label-title">Partiya</span>
+                  <span className="patta-label-required">*</span>
+                  <span className="patta-label-majburiy">Majburiy</span>
+                </div>
+                <label
+                  className="patta-checkbox-label"
+                  onClick={() => updateTicketField(model.id, 'strictParty', !strictParty)}
+                >
+                  <span className={`patta-custom-checkbox ${strictParty ? 'is-checked' : 'is-unchecked'}`}>
+                    {strictParty && <Check size={11} strokeWidth={3.5} />}
+                  </span>
+                  <span>Qat'iy</span>
                 </label>
-              </td>
-              <td style={{ padding: '4px 8px' }}>
                 <input
                   ref={partyInputRef}
                   type="text"
@@ -476,31 +539,47 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   onChange={(e) => updateTicketField(model.id, 'party', e.target.value)}
                   onKeyDown={handlePartyKeyDown}
                   onFocus={() => handleCellFocus('C3', form.party)}
-                  className="soft-input"
+                  className="patta-input patta-input-short"
+                  placeholder="Raqam"
                   style={{
-                    height: '30px',
-                    textAlign: 'center',
-                    fontWeight: 700,
                     borderColor: (strictParty && (isNonExistentParty || isWrongModelParty)) ? '#ef4444' : undefined,
-                    backgroundColor: (strictParty && (isNonExistentParty || isWrongModelParty)) ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)',
-                    color: (strictParty && (isNonExistentParty || isWrongModelParty)) ? '#f87171' : 'var(--text-primary)'
+                    backgroundColor: (strictParty && (isNonExistentParty || isWrongModelParty)) ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                    color: (strictParty && (isNonExistentParty || isWrongModelParty)) ? '#ef4444' : undefined
                   }}
-                  placeholder={strictParty ? "" : "(ixtiyoriy)"}
                 />
-              </td>
-              <td colSpan={2}></td>
-            </tr>
+              </div>
 
-            {/* ROW 4: Patta, Rang, Razmer */}
-            <tr style={{ height: '36px' }}>
-              <td></td>
-                <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                  <input type="checkbox" checked={strictPatta} onChange={(e) => updateTicketField(model.id, 'strictPatta', e.target.checked)} />
-                  Патта <small style={{ color: strictPatta ? 'var(--primary)' : 'var(--text-muted)' }}>{strictPatta ? 'Қатъий' : 'Эркин'}</small>
+              <div className="patta-col-right">
+                <label className="patta-right-label">Rang</label>
+                <input
+                  type="text"
+                  disabled={hasBlockingError}
+                  value={form.color || ''}
+                  onChange={(e) => updateTicketField(model.id, 'color', e.target.value)}
+                  onFocus={() => handleCellFocus('D5', form.color || '')}
+                  className="patta-input patta-input-wide"
+                  placeholder=""
+                />
+              </div>
+            </div>
+
+            {/* ROW 3: Patta & Razmer */}
+            <div className="patta-info-row">
+              <div className="patta-col-left">
+                <div className="patta-label-wrapper">
+                  <span className="patta-label-title">Patta</span>
+                  <span className="patta-label-required">*</span>
+                  <span className="patta-label-majburiy">Majburiy</span>
+                </div>
+                <label
+                  className="patta-checkbox-label"
+                  onClick={() => updateTicketField(model.id, 'strictPatta', !strictPatta)}
+                >
+                  <span className={`patta-custom-checkbox ${strictPatta ? 'is-checked' : 'is-unchecked'}`}>
+                    {strictPatta && <Check size={11} strokeWidth={3.5} />}
+                  </span>
+                  <span>Qat'iy</span>
                 </label>
-              </td>
-              <td style={{ padding: '4px 8px' }}>
                 <input
                   ref={pattaInputRef}
                   type="text"
@@ -508,29 +587,36 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   onChange={(e) => updateTicketField(model.id, 'patta', e.target.value)}
                   onKeyDown={handlePattaKeyDown}
                   onFocus={() => handleCellFocus('C4', form.patta || '')}
-                  className="soft-input"
+                  className="patta-input patta-input-short"
+                  placeholder="Raqam"
                   style={{
-                    height: '30px',
-                    textAlign: 'center',
-                    fontWeight: 700,
                     borderColor: (strictPatta && hasBlockingError) ? '#ef4444' : undefined,
-                    backgroundColor: (strictPatta && hasBlockingError) ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)',
-                    color: (strictPatta && hasBlockingError) ? '#f87171' : 'var(--text-primary)'
+                    backgroundColor: (strictPatta && hasBlockingError) ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                    color: (strictPatta && hasBlockingError) ? '#ef4444' : undefined
                   }}
-                  placeholder={strictPatta ? "" : "(ixtiyoriy)"}
                 />
-              </td>
-              <td style={{ fontWeight: 700, textAlign: 'center', color: 'var(--text-secondary)' }}>Ранг</td>
-              <td style={{ fontWeight: 700, textAlign: 'center', color: 'var(--text-secondary)' }}>Размер</td>
-            </tr>
+              </div>
 
-            {/* ROW 5: Qty, Color, Size */}
-            <tr style={{ height: '38px' }}>
-              <td></td>
-              <td style={{ fontWeight: 700, textAlign: 'right', paddingRight: '16px', color: 'var(--text-secondary)' }}>
-                Иш сони
-              </td>
-              <td style={{ padding: '4px 8px' }}>
+              <div className="patta-col-right">
+                <label className="patta-right-label">Razmer</label>
+                <input
+                  type="text"
+                  disabled={hasBlockingError}
+                  value={form.size || ''}
+                  onChange={(e) => updateTicketField(model.id, 'size', e.target.value)}
+                  onFocus={() => handleCellFocus('E5', form.size || '')}
+                  className="patta-input patta-input-wide"
+                  placeholder=""
+                />
+              </div>
+            </div>
+
+            {/* ROW 4: Ish soni */}
+            <div className="patta-info-row">
+              <div className="patta-col-left">
+                <div className="patta-label-wrapper">
+                  <span className="patta-label-title">Ish soni</span>
+                </div>
                 <input
                   ref={qtyInputRef}
                   type="number"
@@ -538,313 +624,266 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   value={form.qty || ''}
                   onChange={(e) => updateTicketField(model.id, 'qty', e.target.value)}
                   onKeyDown={handleQtyKeyDown}
+                  onWheel={(e) => e.currentTarget.blur()}
                   onFocus={() => handleCellFocus('C5', String(form.qty || ''))}
-                  className="soft-input"
-                  style={{
-                    height: '32px',
-                    textAlign: 'center',
-                    fontWeight: 800,
-                    fontSize: '14px',
-                    color: hasBlockingError ? 'var(--text-muted)' : 'var(--primary)',
-                    backgroundColor: hasBlockingError ? 'var(--bg-surface-subtle)' : 'var(--primary-light)',
-                    borderColor: hasBlockingError ? 'var(--border-default)' : 'rgba(52, 211, 153, 0.4)',
-                    opacity: hasBlockingError ? 0.6 : 1,
-                    cursor: hasBlockingError ? 'not-allowed' : 'text'
-                  }}
-                  placeholder=""
+                  className="patta-input patta-input-short"
+                  placeholder="Dona"
                 />
-              </td>
-              <td style={{ padding: '4px 8px' }}>
-                <input
-                  type="text"
-                  disabled={hasBlockingError}
-                  value={form.color || ''}
-                  onChange={(e) => updateTicketField(model.id, 'color', e.target.value)}
-                  onFocus={() => handleCellFocus('D5', form.color || '')}
-                  className="soft-input"
-                  style={{
-                    height: '30px',
-                    textAlign: 'center',
-                    fontWeight: 600,
-                    backgroundColor: hasBlockingError ? 'var(--bg-surface-subtle)' : 'var(--bg-surface)',
-                    color: 'var(--text-primary)',
-                    opacity: hasBlockingError ? 0.6 : 1,
-                    cursor: hasBlockingError ? 'not-allowed' : 'text'
-                  }}
-                  placeholder=""
-                />
-              </td>
-              <td style={{ padding: '4px 8px' }}>
-                <input
-                  type="text"
-                  disabled={hasBlockingError}
-                  value={form.size || ''}
-                  onChange={(e) => updateTicketField(model.id, 'size', e.target.value)}
-                  onFocus={() => handleCellFocus('E5', form.size || '')}
-                  className="soft-input"
-                  style={{
-                    height: '30px',
-                    textAlign: 'center',
-                    fontWeight: 600,
-                    backgroundColor: hasBlockingError ? 'var(--bg-surface-subtle)' : 'var(--bg-surface)',
-                    color: 'var(--text-primary)',
-                    opacity: hasBlockingError ? 0.6 : 1,
-                    cursor: hasBlockingError ? 'not-allowed' : 'text'
-                  }}
-                  placeholder=""
-                />
-              </td>
-            </tr>
+              </div>
+              <div className="patta-col-right" />
+            </div>
+          </div>
+        </div>
 
-            {/* ROW 6: Column Headers */}
-            <tr style={{ backgroundColor: 'var(--bg-surface-subtle)', fontWeight: 700, height: '36px' }}>
-              <td style={{ textAlign: 'center' }}>№</td>
-              <td style={{ paddingLeft: '14px' }}>Операция номи</td>
-              <td style={{ textAlign: 'center', color: 'var(--primary)' }}>Номер</td>
-              <td style={{ paddingLeft: '14px' }}>Исм фамилия</td>
-              <td style={{ textAlign: 'center' }}>Брак иш / Амал</td>
-            </tr>
+        {/* Section 2: Operatsiyalar */}
+        <div className="patta-ops-section">
+          <div className="patta-ops-header">
+            <h2 className="patta-section-title" style={{ margin: 0 }}>Operatsiyalar</h2>
+            <div className="patta-ops-badge">
+              {model.pattaOpsOrder.length} ta · jami {totalRates.toLocaleString()} so'm
+            </div>
+          </div>
 
-            {/* ROW 7+: Operations List */}
-            {model.pattaOpsOrder.map((opName, idx) => {
-              const rowNum = 7 + idx;
-              const workerIdVal = (form.entries && form.entries[opName] !== undefined && form.entries[opName] !== null) ? String(form.entries[opName]) : '';
-              const workerNum = Number(workerIdVal);
-              const workerName = workerNum && workerMap.has(workerNum) ? workerMap.get(workerNum) : '';
-              const isInvalidWorker = workerIdVal !== '' && (!workerNum || !workerMap.has(workerNum));
-              const opConfig = model.operations.find((o) => o.name === opName);
-              const isBeingDragged = draggedOpIdx === idx;
-              const isOver = dragOverOpIdx === idx && draggedOpIdx !== null && draggedOpIdx !== idx;
+          <table className="patta-ops-table">
+            <colgroup>
+              <col style={{ width: '48px' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '17%' }} />
+              <col style={{ width: '31%' }} />
+              <col style={{ width: '44px' }} />
+            </colgroup>
 
-              return (
-                <tr
-                  key={opName}
-                  draggable={!hasBlockingError}
-                  onDragStart={(e) => handleOpDragStart(e, idx)}
-                  onDragOver={(e) => handleOpDragOver(e, idx)}
-                  onDrop={(e) => handleOpDrop(e, idx)}
-                  onDragEnd={handleOpDragEnd}
-                  style={{
-                    height: '34px',
-                    transition: 'background-color 0.15s, box-shadow 0.15s, opacity 0.15s',
-                    opacity: isBeingDragged ? 0.35 : hasBlockingError ? 0.6 : 1,
-                    backgroundColor: isBeingDragged
-                      ? 'var(--primary-light)'
-                      : isOver
-                      ? 'rgba(59, 130, 246, 0.12)'
-                      : undefined,
-                    boxShadow: isOver
-                      ? (draggedOpIdx !== null && draggedOpIdx < idx
-                          ? 'inset 0 -3px 0 0 var(--primary)'
-                          : 'inset 0 3px 0 0 var(--primary)')
-                      : undefined
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!hasBlockingError && draggedOpIdx === null) e.currentTarget.style.backgroundColor = 'var(--bg-surface-subtle)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!hasBlockingError && draggedOpIdx === null) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {/* Col A: № */}
-                  <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                    <span style={{ 
-                      background: 'var(--bg-surface-subtle)', 
-                      padding: '2px 8px', 
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: '11px'
-                    }}>
-                      {idx + 1}
-                    </span>
-                  </td>
-                  
-                  {/* Col B: Operatsiya nomi */}
-                  <td style={{ fontWeight: 600, paddingLeft: '14px', color: 'var(--text-primary)', userSelect: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <thead>
+              <tr>
+                <th className="patta-ops-th" style={{ textAlign: 'center' }}>Nº</th>
+                <th className="patta-ops-th" style={{ textAlign: 'left', paddingLeft: '12px' }}>OPERATSIYA</th>
+                <th className="patta-ops-th" style={{ textAlign: 'right', paddingRight: '18px' }}>NARX</th>
+                <th className="patta-ops-th" style={{ textAlign: 'center' }}>ISHCHI RAQAMI</th>
+                <th className="patta-ops-th" style={{ textAlign: 'left', paddingLeft: '14px' }}>ISHCHI</th>
+                <th className="patta-ops-th" style={{ width: '44px' }}></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {model.pattaOpsOrder.map((opName, idx) => {
+                const rowNum = 7 + idx;
+                const workerIdVal = (form.entries && form.entries[opName] !== undefined && form.entries[opName] !== null) ? String(form.entries[opName]) : '';
+                const workerNum = Number(workerIdVal);
+                const workerName = workerNum && workerMap.has(workerNum) ? workerMap.get(workerNum) : '';
+                const isInvalidWorker = workerIdVal !== '' && (!workerNum || !workerMap.has(workerNum));
+                const isComplete = Boolean(workerIdVal && !isInvalidWorker);
+                const opConfig = model.operations.find((o) => o.name === opName);
+                const isBeingDragged = draggedOpIdx === idx;
+                const isOver = dragOverOpIdx === idx && draggedOpIdx !== null && draggedOpIdx !== idx;
+
+                return (
+                  <tr
+                    key={opName}
+                    className={`patta-op-row ${isComplete ? 'is-complete' : ''}`}
+                    draggable={!hasBlockingError}
+                    onDragStart={(e) => handleOpDragStart(e, idx)}
+                    onDragOver={(e) => handleOpDragOver(e, idx)}
+                    onDrop={(e) => handleOpDrop(e, idx)}
+                    onDragEnd={handleOpDragEnd}
+                    style={{
+                      opacity: isBeingDragged ? 0.35 : hasBlockingError ? 0.6 : 1,
+                      backgroundColor: isBeingDragged
+                        ? 'var(--primary-light)'
+                        : isOver
+                        ? 'rgba(59, 130, 246, 0.12)'
+                        : undefined
+                    }}
+                  >
+                    {/* Col 1: Nº / Checkmark */}
+                    <td style={{ textAlign: 'center' }}>
+                      {isComplete ? (
+                        <div className="patta-check-badge">
+                          <Check size={14} strokeWidth={3.5} />
+                        </div>
+                      ) : (
+                        <span className="patta-row-idx">{idx + 1}</span>
+                      )}
+                    </td>
+
+                    {/* Col 2: Operatsiya Nomi with Drag Grip */}
+                    <td style={{ paddingLeft: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span
                           title="O'rnini almashtirish uchun ushlab torting (Drag & Drop)"
+                          className="patta-grip-icon"
                           style={{
                             cursor: hasBlockingError ? 'not-allowed' : 'grab',
                             display: 'inline-flex',
-                            alignItems: 'center',
-                            color: 'var(--text-muted)',
-                            opacity: 0.55,
-                            flexShrink: 0
+                            alignItems: 'center'
                           }}
                         >
-                          <GripVertical size={15} />
+                          <GripVertical size={14} />
                         </span>
-                        <span>{opName}</span>
+                        <span className="patta-op-name" title={opName}>{opName}</span>
                       </div>
-                      {opConfig && (
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                          ({opConfig.rate} so'm)
-                        </span>
-                      )}
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Col C: Worker Number Input */}
-                  <td style={{ padding: '2px 8px', textAlign: 'center' }}>
+                    {/* Col 3: Narx */}
+                    <td className="patta-rate-text">
+                      {opConfig ? `${opConfig.rate} so'm` : "0 so'm"}
+                    </td>
+
+                    {/* Col 4: Ishchi Raqami Input */}
+                    <td style={{ textAlign: 'center', padding: '3px 8px' }}>
+                      <input
+                        ref={(el) => { inputRefs.current[opName] = el; }}
+                        type="number"
+                        disabled={hasBlockingError}
+                        value={workerIdVal}
+                        onChange={(e) => handleWorkerIdChange(opName, e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx)}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        onFocus={() => {
+                          setActiveOpIndex(idx);
+                          handleCellFocus(`C${rowNum}`, workerIdVal);
+                        }}
+                        onBlur={() => {
+                          if (activeOpIndex === idx) {
+                            setActiveOpIndex(null);
+                          }
+                        }}
+                        className={isComplete ? "patta-worker-pill" : "patta-worker-input"}
+                        placeholder="Raqam"
+                      />
+                    </td>
+
+                    {/* Col 5: Ishchi Nomi */}
+                    <td style={{ paddingLeft: '14px' }}>
+                      {workerName ? (
+                        <span className="patta-worker-name">{workerName}</span>
+                      ) : isInvalidWorker ? (
+                        <span style={{ fontSize: '14.5px', color: '#dc2626', fontStyle: 'italic' }}>
+                          Ishchi topilmadi! ({workerIdVal})
+                        </span>
+                      ) : (
+                        <span className="patta-worker-placeholder">Raqam kiriting</span>
+                      )}
+                    </td>
+
+                    {/* Col 6: Delete action */}
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteOp(opName, e)}
+                        className="patta-trash-btn"
+                        title={`"${opName}" operatsiyasini o'chirish`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {/* INLINE NEW OPERATION ENTRY */}
+              {isAddingInline && (
+                <tr style={{ height: '42px', backgroundColor: '#ecfdf5' }}>
+                  <td style={{ textAlign: 'center', fontWeight: 800, color: '#047857' }}>
+                    {model.pattaOpsOrder.length + 1}
+                  </td>
+                  <td style={{ padding: '4px 8px' }}>
                     <input
-                      ref={(el) => { inputRefs.current[opName] = el; }}
-                      type="number"
-                      disabled={hasBlockingError}
-                      value={workerIdVal}
-                      onChange={(e) => handleWorkerIdChange(opName, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(e, idx)}
-                      onFocus={() => handleCellFocus(`C${rowNum}`, workerIdVal)}
-                      className="soft-input"
-                      placeholder=""
-                      style={{
-                        height: '28px',
-                        textAlign: 'center',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        backgroundColor: hasBlockingError ? 'var(--bg-surface-subtle)' : (workerIdVal ? 'var(--primary-light)' : isInvalidWorker ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface)'),
-                        borderColor: hasBlockingError ? 'var(--border-subtle)' : (workerIdVal ? 'var(--primary)' : isInvalidWorker ? '#ef4444' : 'var(--border-subtle)'),
-                        color: isInvalidWorker ? '#f87171' : (workerIdVal ? 'var(--primary)' : 'var(--text-primary)'),
-                        opacity: hasBlockingError ? 0.6 : 1,
-                        cursor: hasBlockingError ? 'not-allowed' : 'text'
-                      }}
+                      ref={newOpInputRef}
+                      type="text"
+                      placeholder="Operatsiya nomini yozing..."
+                      value={newOpName}
+                      onChange={(e) => setNewOpName(e.target.value)}
+                      onKeyDown={handleInlineKeyDown}
+                      className="patta-input"
+                      style={{ height: '32px', width: '100%' }}
                     />
                   </td>
-
-                  {/* Col D: Worker Name */}
-                  <td style={{ paddingLeft: '14px', fontWeight: 600 }}>
-                    {workerName ? (
-                      <span style={{ color: 'var(--primary)', background: 'var(--primary-light)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: '12px' }}>
-                        {workerName}
-                      </span>
-                    ) : isInvalidWorker ? (
-                      <span style={{ fontSize: '11.5px', color: '#dc2626', fontStyle: 'italic' }}>
-                        Ishchi topilmadi! ({workerIdVal})
-                      </span>
-                    ) : null}
+                  <td style={{ padding: '4px 8px' }}>
+                    <input
+                      ref={newRateInputRef}
+                      type="number"
+                      placeholder="Narxi..."
+                      value={newOpRate}
+                      onChange={(e) => setNewOpRate(e.target.value)}
+                      onKeyDown={handleInlineKeyDown}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="patta-input"
+                      style={{ height: '32px', width: '100%', textAlign: 'center' }}
+                    />
                   </td>
-
-                  {/* Col E: Actions / Brak */}
+                  <td colSpan={2} style={{ fontSize: '15px', color: '#64748b', paddingLeft: '14px' }}>
+                    Enter bosing → hisobga qo'shiladi
+                  </td>
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteOp(opName, e)}
-                      className="soft-btn soft-btn-danger"
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: '11px'
-                      }}
-                      title={`"${opName}" operatsiyasini o'chirish`}
-                    >
-                      <Trash2 size={12} />
-                      <span>O'chirish</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={handleSaveInlineOperation}
+                        className="patta-btn-submit"
+                        style={{ height: '28px', padding: '0 8px', fontSize: '14.5px', borderRadius: '6px' }}
+                      >
+                        <Check size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingInline(false)}
+                        className="patta-btn-cancel"
+                        style={{ height: '28px', padding: '0 8px', fontSize: '14.5px', borderRadius: '6px' }}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              );
-            })}
+              )}
+            </tbody>
+          </table>
 
-            {/* INLINE NEW OPERATION ENTRY */}
-            {isAddingInline ? (
-              <tr style={{ height: '42px', backgroundColor: 'var(--primary-light)' }}>
-                <td style={{ textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }}>
-                  {model.pattaOpsOrder.length + 1}
-                </td>
-                <td style={{ padding: '4px 8px' }}>
-                  <input
-                    ref={newOpInputRef}
-                    type="text"
-                    placeholder="Operatsiya nomini yozing..."
-                    value={newOpName}
-                    onChange={(e) => setNewOpName(e.target.value)}
-                    onKeyDown={handleInlineKeyDown}
-                    className="soft-input"
-                    style={{ height: '32px', fontWeight: 600 }}
-                  />
-                </td>
-                <td style={{ padding: '4px 8px' }}>
-                  <input
-                    ref={newRateInputRef}
-                    type="number"
-                    placeholder="Narxi..."
-                    value={newOpRate}
-                    onChange={(e) => setNewOpRate(e.target.value)}
-                    onKeyDown={handleInlineKeyDown}
-                    className="soft-input"
-                    style={{ height: '32px', textAlign: 'center', fontWeight: 700 }}
-                  />
-                </td>
-                <td style={{ fontSize: '12px', color: 'var(--text-muted)', paddingLeft: '14px' }}>
-                  Enter bosing → hisobga qo'shiladi
-                </td>
-                <td style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <button
-                      onClick={handleSaveInlineOperation}
-                      className="soft-btn soft-btn-primary"
-                      style={{ padding: '4px 10px', fontSize: '11.5px', borderRadius: 'var(--radius-full)' }}
-                    >
-                      <Check size={13} />
-                      <span>Saqlash</span>
-                    </button>
-                    <button
-                      onClick={() => setIsAddingInline(false)}
-                      className="soft-btn soft-btn-secondary"
-                      style={{ padding: '4px 8px', borderRadius: 'var(--radius-full)' }}
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              <tr 
-                onClick={() => {
-                  setIsAddingInline(true);
-                  setTimeout(() => newOpInputRef.current?.focus(), 50);
-                }}
-                style={{ height: '36px', cursor: 'pointer', backgroundColor: 'var(--bg-surface)', transition: 'background-color 0.15s' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface-subtle)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
-              >
-                <td style={{ textAlign: 'center' }}>
-                  <span style={{ 
-                    background: 'var(--bg-surface-subtle)', 
-                    padding: '2px 8px', 
-                    borderRadius: 'var(--radius-full)', 
-                    fontSize: '11px',
-                    color: 'var(--primary)',
-                    fontWeight: 700
-                  }}>
-                    +
-                  </span>
-                </td>
-                <td style={{ paddingLeft: '14px', color: 'var(--primary)', fontWeight: 600, fontSize: '12.5px' }}>
-                  + Yangi operatsiya va narx kiritish uchun bosing...
-                </td>
-                <td colSpan={3}></td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          {/* Add Operation button */}
+          {!isAddingInline && (
+            <button
+              type="button"
+              className="patta-add-op-btn"
+              onClick={() => {
+                setIsAddingInline(true);
+                setTimeout(() => newOpInputRef.current?.focus(), 50);
+              }}
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              <span>Operatsiya qo'shish</span>
+            </button>
+          )}
+        </div>
 
         {/* Footer */}
-        <div style={{
-          padding: '14px 20px',
-          background: 'var(--bg-surface-subtle)',
-          borderTop: '1px solid var(--border-subtle)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '12px',
-          color: 'var(--text-secondary)'
-        }}>
-          <div>
-            <strong>Tezkor kiritish:</strong> Raqamni kiritib <strong>Enter</strong> bosilganda avtomatik keyingi qatorga o'tadi.
+        <div className="patta-entry-footer">
+          <div className="patta-footer-stats">
+            <span>
+              <strong>{filledOpsCount} / {model.pattaOpsOrder.length}</strong> operatsiya to'ldirildi
+            </span>
+            <span style={{ marginLeft: '18px' }}>
+              Jami narx: <strong>{totalRates.toLocaleString()} so'm</strong>
+            </span>
           </div>
-          <div style={{ fontWeight: 700, color: 'var(--primary)' }}>
-            Jami: {model.pattaOpsOrder.length} ta operatsiya
+
+          <div className="patta-footer-actions">
+            <button
+              type="button"
+              className="patta-btn-cancel"
+              onClick={handleCancel}
+            >
+              Bekor qilish
+            </button>
+            <button
+              type="button"
+              className="patta-btn-submit"
+              onClick={handleSubmit}
+              title="Kiritilgan ma'lumotlarni hisobga jo'natish (Enter)"
+            >
+              <Send size={14} />
+              <span>Jo'natish</span>
+            </button>
           </div>
         </div>
       </div>

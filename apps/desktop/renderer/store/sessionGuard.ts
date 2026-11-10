@@ -6,6 +6,18 @@ export interface SessionIdentity {
 let observedCompanyId: string | null = null;
 let sessionGeneration = 0;
 
+/** Invalidate async work when the license/operator session changes, even if the company does not. */
+export function invalidateSessionIdentity(companyId?: string | null): SessionIdentity | null {
+  if (!companyId || companyId === 'unassigned') {
+    observedCompanyId = null;
+    sessionGeneration += 1;
+    return null;
+  }
+  observedCompanyId = companyId;
+  sessionGeneration += 1;
+  return { companyId, generation: sessionGeneration };
+}
+
 /** Observe the active company and advance identity whenever it changes. */
 export function captureSessionIdentity(companyId: string | null | undefined): SessionIdentity | null {
   if (!companyId || companyId === 'unassigned') return null;

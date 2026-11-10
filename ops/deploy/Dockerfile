@@ -7,13 +7,16 @@ RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY apps/server ./apps/server
 COPY packages/contracts/keys/licensePublicKey.cjs ./packages/contracts/keys/licensePublicKey.cjs
-COPY worker-bot/webapp/index.html ./worker-bot/webapp/index.html
+COPY apps/webapps ./apps/webapps
+COPY packages/assets/fonts ./packages/assets/fonts
 COPY ops/deploy/migrateProduction.cjs ./ops/deploy/migrateProduction.cjs
 COPY ops/deploy/importSqliteBaseline.cjs ./ops/deploy/importSqliteBaseline.cjs
 COPY ops/deploy/verifyProductionDatabase.cjs ./ops/deploy/verifyProductionDatabase.cjs
 COPY packages/domain/periodWriteGuard.cjs ./packages/domain/periodWriteGuard.cjs
 COPY packages/domain/partyPolicy.cjs ./packages/domain/partyPolicy.cjs
 COPY packages/domain/pattaSequence.cjs ./packages/domain/pattaSequence.cjs
+COPY packages/domain/pattaFinishScope.cjs ./packages/domain/pattaFinishScope.cjs
+COPY packages/domain/payrollReducer.cjs ./packages/domain/payrollReducer.cjs
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \

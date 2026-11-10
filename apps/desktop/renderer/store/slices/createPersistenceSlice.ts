@@ -13,7 +13,7 @@ import { useAuthStore } from '../authStore';
 import { hydrateWorkbookData, isPayloadOwnedByCompany, isValidCompanyId } from '../helpers/hydration';
 import { captureSessionIdentity, isSessionCurrent } from '../sessionGuard';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
-import { hasFocusedEditableControl, preserveWorkbookProjectionDrafts, runReconnect } from '../businessMutations';
+import { hasFocusedEditableControl, hydratePayrollValuation, preserveWorkbookProjectionDrafts, runReconnect, stalePayrollValuation } from '../businessMutations';
 import { findNextPartyNumber } from '../pattaBatch';
 
 function notifyRejection(state: Pick<WorkbookStore, 'addNotification'>, code = '_COMMAND_REQUIRED', message?: string) {
@@ -54,6 +54,10 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
     }
     const session = captureSessionIdentity(currentCompanyId);
     if (!session) return;
+    set({ payrollValuation: {
+      companyId: currentCompanyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+      accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+    } });
     const initialLicenseStatus = get().licenseStatus;
     const isCurrentCompany = () => {
       const currentLicenseStatus = get().licenseStatus;
@@ -112,6 +116,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             submittedTickets: hydrated.submittedTickets,
             currentPeriod: hydrated.currentPeriod,
             periods: hydrated.periods,
+            payrollValuation: hydratePayrollValuation(result.data.payrollValuation, currentCompanyId, hydrated.currentPeriod.id),
             ticketForms: hydrated.ticketForms,
             pattaBatchConfigs: hydrated.pattaBatchConfigs,
             deletedTicketIds: hydrated.deletedTicketIds,
@@ -121,14 +126,19 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             isServerConnected: false
           });
           if (typeof eAPI.SyncReconnect === 'function') {
+            const requestedPeriodId = get().currentPeriod.id;
             void runReconnect(eAPI, currentCompanyId).then(async (syncResult: any) => {
-              if (!isCurrentCompany()) return;
+              if (!isCurrentCompany() || get().currentPeriod.id !== requestedPeriodId) return;
               if (!syncResult?.success) {
-                set({ isServerConnected: false });
+                set({ isServerConnected: false, payrollValuation: stalePayrollValuation(get().payrollValuation) });
                 return;
               }
               const refreshed = await eAPI.dbRead(currentCompanyId);
-              if (!isCurrentCompany() || !refreshed?.success || !refreshed.data || !isPayloadOwnedByCompany(refreshed.data, currentCompanyId)) return;
+              if (!isCurrentCompany() || get().currentPeriod.id !== requestedPeriodId) return;
+              if (!refreshed?.success || !refreshed.data || !isPayloadOwnedByCompany(refreshed.data, currentCompanyId)) {
+                set({ payrollValuation: stalePayrollValuation(get().payrollValuation) });
+                return;
+              }
               const latest = preserveWorkbookProjectionDrafts(
                 hydrateSqliteProjection(refreshed.data, currentCompanyId),
                 get(),
@@ -145,6 +155,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
                 submittedTickets: latest.submittedTickets,
                 currentPeriod: latest.currentPeriod,
                 periods: latest.periods,
+                payrollValuation: latest.payrollValuation,
                 ticketForms: latest.ticketForms,
                 pattaBatchConfigs: latest.pattaBatchConfigs,
                 deletedTicketIds: latest.deletedTicketIds,
@@ -154,7 +165,8 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
                 isServerConnected: true
               });
             }).catch(() => {
-              if (isCurrentCompany()) set({ isServerConnected: false });
+              if (isCurrentCompany() && get().currentPeriod.id === requestedPeriodId)
+                set({ isServerConnected: false, payrollValuation: stalePayrollValuation(get().payrollValuation) });
             });
           }
         } catch (error) {
@@ -207,6 +219,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             printedPartyHistory: [],
             submittedTickets: [],
             currentPeriod: freshPeriod,
+            payrollValuation: hydratePayrollValuation(null, currentCompanyId, freshPeriod.id),
             periods: [],
             ticketForms: {},
             pattaBatchConfigs: {},
@@ -241,6 +254,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
             printedPartyHistory: cleanHistory,
             submittedTickets: subTickets,
             currentPeriod: hydrated.currentPeriod,
+            payrollValuation: hydratePayrollValuation(companyData.payrollValuation, currentCompanyId, hydrated.currentPeriod.id),
             periods: hydrated.periods,
             ticketForms: hydrated.ticketForms,
             pattaBatchConfigs: hydrated.pattaBatchConfigs,
@@ -269,6 +283,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
           const hydrated = hydrateWorkbookData(json.data);
           set({
             ...hydrated,
+            payrollValuation: hydratePayrollValuation(json.data.payrollValuation, currentCompanyId, hydrated.currentPeriod.id),
             isServerConnected: true
           });
           return;
@@ -401,9 +416,61 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
   },
 
   exportExcel: () => {
-    const { models, workers } = get();
-    exportWorkbookToExcel(models, workers);
-    get().addNotification('success', 'Yuklab olindi', 'Excel (.xlsx) fayli muvaffaqiyatli saqlandi!');
+    const initial = get();
+    const companyId = initial.licenseStatus?.companyId || useAuthStore.getState().companyId;
+    const periodId = initial.currentPeriod.id;
+    const session = captureSessionIdentity(companyId);
+    void (async () => {
+      let valuation = initial.payrollValuation;
+      const eAPI = getElectronApi();
+      const runtime = await resolveElectronRuntimeMode(eAPI);
+      if (runtime.mode === 'sync' || (eAPI && typeof eAPI.dbRead === 'function')) {
+        if ((runtime.mode === 'sync' && !runtime.success) || !session || !isSessionCurrent(session, get().licenseStatus?.companyId || useAuthStore.getState().companyId)
+          || get().currentPeriod.id !== periodId || get().licenseStatus?.companyId !== companyId) return;
+        try {
+          const result = await eAPI?.dbRead?.(companyId);
+          const data = result?.success ? result.data : null;
+          const contextStillCurrent = isSessionCurrent(session, get().licenseStatus?.companyId || useAuthStore.getState().companyId)
+            && get().currentPeriod.id === periodId && get().licenseStatus?.companyId === companyId;
+          const ownsData = data?.companyId === companyId && data?.currentPeriod?.id === periodId;
+          if (!contextStillCurrent) return;
+          valuation = ownsData && data.payrollValuation?.companyId === companyId
+            && data.payrollValuation.period?.periodId === periodId
+            ? data.payrollValuation
+            : {
+              companyId: companyId || '', period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+              accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+            };
+          if (ownsData) {
+            // Export facts and valuation from the same trusted SQLite read, never stale renderer money.
+            exportWorkbookToExcel(data.models || [], data.workers || [], undefined, valuation);
+            get().addNotification('success', 'Yuklab olindi', 'Excel (.xlsx) fayli muvaffaqiyatli saqlandi!');
+          } else {
+            exportWorkbookToExcel(initial.models, initial.workers, undefined, valuation);
+            get().addNotification('warning', 'Excel taxminiy', 'Mahalliy davr konteksti mos kelmadi; summa noma’lum sifatida eksport qilindi.');
+          }
+        } catch {
+          if (!isSessionCurrent(session, get().licenseStatus?.companyId || useAuthStore.getState().companyId)
+            || get().currentPeriod.id !== periodId || get().licenseStatus?.companyId !== companyId) return;
+          const unavailable = {
+            companyId: companyId || '', period: null, workers: [], accountingStatus: 'UNAVAILABLE' as const,
+            accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' as const
+          };
+          exportWorkbookToExcel(initial.models, initial.workers, undefined, unavailable);
+          get().addNotification('warning', 'Excel taxminiy', 'Mahalliy hisobni o‘qib bo‘lmadi; summa noma’lum sifatida eksport qilindi.');
+        }
+        return;
+      }
+      if (get().currentPeriod.id !== periodId) return;
+      if (companyId) {
+        valuation = {
+          companyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+          accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+        };
+      }
+      exportWorkbookToExcel(initial.models, initial.workers, undefined, valuation);
+      get().addNotification('success', 'Yuklab olindi', 'Excel (.xlsx) fayli muvaffaqiyatli saqlandi!');
+    })();
   },
 
   exportWorkersExcel: () => {
@@ -547,6 +614,7 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
       return { success: false, message: 'Korxona biriktirilmagan' };
     }
     const session = captureSessionIdentity(compId);
+    const requestedPeriodId = get().currentPeriod.id;
     if (!session) return { success: false, message: 'Company session unavailable' };
 
     const eAPI = getElectronApi();
@@ -584,7 +652,8 @@ export const createPersistenceSlice: StateCreator<WorkbookStore, [], [], Persist
         throw new Error(result?.error || result?.code || 'The VPS projection is unavailable or belongs to another company');
       }
       const latestCompany = get().licenseStatus?.companyId;
-      if (!isSessionCurrent(session, latestCompany || useAuthStore.getState().companyId)) {
+       if (!isSessionCurrent(session, latestCompany || useAuthStore.getState().companyId)
+         || get().currentPeriod.id !== requestedPeriodId) {
         return { success: false, message: 'Company changed before server restore was applied' };
       }
       const hydrated = hydrateSqliteProjection(result.data, compId);

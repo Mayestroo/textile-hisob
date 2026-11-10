@@ -1,6 +1,7 @@
 'use strict';
 
 const { validateCompanyScope } = require('../../../auth/auth.cjs');
+const { acquireCompanyBootstrapLock, releaseCompanyBootstrapLock } = require('../changeFeedWatermark.cjs');
 
 /**
  * Creates change feed GET handler for Fastify.
@@ -53,17 +54,52 @@ function createChangeFeedHandler(pool) {
       }
     }
 
-    const res = await pool.query(
+    const client = await pool.connect();
+    let lockHeld = false;
+    let transactionStarted = false;
+    let discardClient = false;
+    let res;
+    let headCursor;
+    let sequenceResult;
+    try {
+      // The same company lock used by bootstrap and all sync writers fences
+      // uncommitted lower sequence IDs before the as-of head is sampled.
+      await acquireCompanyBootstrapLock(client, companyId);
+      lockHeld = true;
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      transactionStarted = true;
+      const head = await client.query(`SELECT COALESCE(MAX(change_id), 0)::text AS cursor
+        FROM change_log WHERE company_id = $1`, [companyId]);
+      headCursor = String(head.rows[0]?.cursor ?? '0');
+      if (!/^\d{1,19}$/.test(headCursor) || BigInt(headCursor) > 9223372036854775807n)
+        throw new Error('FEED_HEAD_INVALID');
+      res = await client.query(
       `SELECT change_id, company_id, entity_type, entity_id, entity_revision,
-              operation_id, change_type, payload_json, committed_at
+               operation_id, change_type, payload_json, committed_at
        FROM change_log
-       WHERE company_id = $1 AND change_id > $2
-       ORDER BY change_id ASC
-       LIMIT $3`,
-      [companyId, cursor, limit]
-    );
+        WHERE company_id = $1 AND change_id > $2 AND change_id <= $3
+        ORDER BY change_id ASC
+        LIMIT $4`,
+      [companyId, cursor, headCursor, limit + 1]
+      );
+      sequenceResult = await client.query(`SELECT next_patta_number FROM company_patta_sequences
+        WHERE company_id = $1`, [companyId]);
+      await client.query('COMMIT');
+      transactionStarted = false;
+    } catch (error) {
+      if (transactionStarted) {
+        try { await client.query('ROLLBACK'); } catch { discardClient = true; }
+      }
+      throw error;
+    } finally {
+      if (lockHeld) {
+        try { await releaseCompanyBootstrapLock(client, companyId); } catch { discardClient = true; }
+      }
+      client.release(discardClient ? new Error('FEED_CONNECTION_DISCARDED') : undefined);
+    }
 
-    const items = res.rows.map((row) => ({
+    const hasMore = res.rows.length > limit;
+    const items = res.rows.slice(0, limit).map((row) => ({
       changeId: String(row.change_id),
       companyId: row.company_id,
       entityType: row.entity_type,
@@ -75,15 +111,9 @@ function createChangeFeedHandler(pool) {
       committedAt: row.committed_at
     }));
 
-    let nextCursor = cursor;
-    if (items.length > 0) {
-      nextCursor = items[items.length - 1].changeId;
-    }
-
-    const hasMore = items.length === limit;
-    const sequenceResult = await pool.query(`
-      SELECT next_patta_number FROM company_patta_sequences WHERE company_id = $1
-    `, [companyId]);
+    // When the page is exhausted, the company's as-of head can be ahead of
+    // the last visible event due to global IDs belonging to other tenants.
+    const nextCursor = hasMore ? items[items.length - 1].changeId : headCursor;
     const nextPattaNumber = Number(sequenceResult.rows[0]?.next_patta_number || 1);
     if (!Number.isSafeInteger(nextPattaNumber) || nextPattaNumber < 1) {
       return reply.code(500).send({
@@ -96,11 +126,15 @@ function createChangeFeedHandler(pool) {
       success: true,
       items,
       nextCursor,
+      fromCursor: cursor,
+      headCursor,
+      companyId,
+      feedProtocolVersion: 1,
       hasMore,
       nextPattaNumber,
       // This capability is served only by releases whose ordered migration
       // set includes the VOIDED-ticket patta-key release.
-      capabilities: { voidedPattaReuse: true }
+       capabilities: { voidedPattaReuse: true, pattaLifecycleV1: true }
     });
   };
 }

@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { WorkbookStore, ModelSlice } from '../types';
 import { ModelConfig } from '../../types/workbook';
 import { STANDARD_OPERATIONS } from '../../constants/operationConstants';
+import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
 import { getElectronApi, resolveElectronRuntimeMode } from '../runtimeMode';
 import { createWorkbookCommand, hasFocusedEditableControl, localCommitSyncNotice, preserveWorkbookProjectionDrafts, requestReconnect, reloadWorkbookProjection, submitWorkbookCommand } from '../businessMutations';
@@ -68,7 +69,8 @@ async function tryHisobAdjustment(
   modelId: string,
   workerId: number,
   opName: string,
-  targetQty: number
+  targetQty: number,
+  source?: { originalTicketId: string; originalEntryId: string }
 ): Promise<{ handled: boolean; success: boolean } | null> {
   const eAPI = getElectronApi();
   const runtime = await resolveElectronRuntimeMode(eAPI);
@@ -108,6 +110,7 @@ async function tryHisobAdjustment(
     workerId,
     opName,
     deltaQty,
+    ...(source ? { originalTicketId: source.originalTicketId, originalEntryId: source.originalEntryId } : {}),
     reason: 'MANUAL_CORRECTION',
     createdBy: '_WORKBOOK_UI',
     status: 'APPROVED',
@@ -126,6 +129,8 @@ async function tryHisobAdjustment(
     }
     set(preserveWorkbookProjectionDrafts(projection, get(), hasFocusedEditableControl()) as Partial<WorkbookStore>);
   } catch {
+    if (get().licenseStatus === state.licenseStatus) set({ payrollValuation: { companyId, period: null,
+      workers: [], accountingStatus: 'UNAVAILABLE', accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' } });
     state.addNotification('warning', '_PROJECTION_RELOAD_PENDING', 'The quantity change is saved locally and will appear after the next reload.');
   }
   requestReconnect(eAPI, companyId);
@@ -206,7 +211,8 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
         isCustomParty: false,
         totalIshSoni: '',
         color: options?.color || 'Кора',
-        sizes: {}
+        sizes: {},
+        sizeNames: [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES)])]
       }
     };
 
@@ -539,6 +545,44 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
     return true;
   },
 
+  updateModelOperations: async (modelId: string, operations: any[]) => {
+    const state = get();
+    const cleanOps = operations.map((op, idx) => ({
+      ...op,
+      name: (op.name || '').trim(),
+      rate: Math.max(0, Number(op.rate) || 0),
+      col: 3 + idx * 2,
+      id: op.id || `op_${3 + idx * 2}`
+    }));
+
+    const updatedModels = state.models.map((m) => {
+      if (m.id === modelId) {
+        return {
+          ...m,
+          operations: cleanOps,
+          pattaOpsOrder: cleanOps.map((o) => o.name)
+        };
+      }
+      return m;
+    });
+
+    const updatedModel = updatedModels.find((model) => model.id === modelId);
+    if (!updatedModel) return false;
+
+    const sync = await tryModelMutation(state, get, set, 'UpsertModel', modelId, modelCommandPayload(updatedModel));
+    if (sync?.handled) {
+      if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`"${updatedModel.name}" operatsiyalari yangilandi.`));
+      return sync.success;
+    }
+
+    set({ models: updatedModels });
+    triggerDebouncedSave(() => {
+      get().saveToDisk({ models: updatedModels, companyId: state.licenseStatus?.companyId });
+    }, 1200, 'model', () => get().licenseStatus === state.licenseStatus);
+    state.addNotification('success', 'Saqlandi', `"${updatedModel.name}" operatsiyalari muvaffaqiyatli saqlandi.`);
+    return true;
+  },
+
   updateOperationName: async (modelId: string, oldOpName: string, newOpName: string) => {
     const state = get();
     const cleanNewName = newOpName.trim();
@@ -616,9 +660,9 @@ export const createModelSlice: StateCreator<WorkbookStore, [], [], ModelSlice> =
 
   // LEGACY_COMPATIBILITY: Direct hisob aggregate mutation retained temporarily for UI parity.
   // In Step 3, direct edits transition to transactional RecordProductionAdjustmentCommand facts.
-  updateHisobQuantity: async (modelId: string, workerId: number, opName: string, qty: number) => {
+  updateHisobQuantity: async (modelId: string, workerId: number, opName: string, qty: number, source?: { originalTicketId: string; originalEntryId: string }) => {
     const state = get();
-    const sync = await tryHisobAdjustment(state, get, set, modelId, workerId, opName, qty);
+    const sync = await tryHisobAdjustment(state, get, set, modelId, workerId, opName, qty, source);
     if (sync?.handled) return sync.success;
     const updatedModels = state.models.map((m) => {
       if (m.id === modelId) {

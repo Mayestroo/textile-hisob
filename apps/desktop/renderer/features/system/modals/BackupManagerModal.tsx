@@ -166,7 +166,7 @@ export const BackupManagerModal: React.FC = () => {
   if (modalType !== 'backup_manager') return null;
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
+    <div className="modal-overlay phase-c-dialog" onClick={closeModal}>
       <div className="modal-card" style={{ maxWidth: '680px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
@@ -184,7 +184,7 @@ export const BackupManagerModal: React.FC = () => {
 
         <div className="modal-body">
           <div style={{
-            fontSize: '12.5px',
+            fontSize: '15px',
             color: 'var(--text-secondary)',
             background: 'var(--primary-light)',
             padding: '12px 16px',
@@ -196,7 +196,7 @@ export const BackupManagerModal: React.FC = () => {
               <span>Avtomatik xavfsizlik himoyasi:</span>
             </div>
             <div>Har bir asosiy amal (jonatish, qaytarish, yangi operatsiya) da to'liq zaxira saqlanadi.</div>
-            <div style={{ marginTop: '2px', color: 'var(--text-muted)', fontSize: '11.5px' }}>
+            <div style={{ marginTop: '2px', color: 'var(--text-muted)', fontSize: '14.5px' }}>
               Istalgan zaxira yonidagi <strong>"Tiklash"</strong> tugmasini bosib, o'sha paytdagi ma'lumotlarni qaytarib olishingiz mumkin.
             </div>
           </div>
@@ -204,7 +204,7 @@ export const BackupManagerModal: React.FC = () => {
           {/* VPS Disaster Recovery Card */}
           <div
             style={{
-              fontSize: '12.5px',
+              fontSize: '15px',
               color: 'var(--text-secondary)',
               background: 'rgba(59, 130, 246, 0.07)',
               padding: '12px 16px',
@@ -221,10 +221,10 @@ export const BackupManagerModal: React.FC = () => {
                 <Server size={16} />
                 <span>VPS serverdan tiklash:</span>
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+              <div style={{ fontSize: '15px', color: 'var(--text-primary)' }}>
                 Biriktirilgan korxona: <strong style={{ color: '#2563eb' }}>{activeCompanyName}</strong> {activeCompanyId ? `(${activeCompanyId})` : ''}
               </div>
-              <div style={{ marginTop: '2px', color: 'var(--text-muted)', fontSize: '11px', lineHeight: 1.4 }}>
+              <div style={{ marginTop: '2px', color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.4 }}>
                 Agar kompyuter bazasi o'chib ketgan bo'lsa, ushbu korxonaning kanonik ma'lumotlarini VPS serverdan qayta yuklang.
               </div>
             </div>
@@ -238,7 +238,7 @@ export const BackupManagerModal: React.FC = () => {
                 color: '#ffffff',
                 borderRadius: 'var(--radius-full)',
                 padding: '8px 16px',
-                fontSize: '12px',
+                fontSize: '15px',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
@@ -253,9 +253,9 @@ export const BackupManagerModal: React.FC = () => {
             </button>
           </div>
 
-          <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>Mavjud zaxiralar ({backups.length} ta):</span>
-            <span style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '14.5px', fontWeight: 500, color: 'var(--text-muted)' }}>
               Toshkent vaqti bilan
             </span>
           </div>
@@ -306,7 +306,7 @@ export const BackupManagerModal: React.FC = () => {
                               <div style={{ fontWeight: 700, color: isBeforeReset ? '#b45309' : 'var(--text-primary)' }}>
                                 {isBeforeReset ? 'Qaytarishdan oldingi zaxira' : 'Avtomatik zaxira'}
                               </div>
-                              <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                              <div style={{ fontSize: '14.5px', color: 'var(--text-muted)', marginTop: '1px' }}>
                                 {formattedTime}
                               </div>
                             </div>
@@ -314,10 +314,10 @@ export const BackupManagerModal: React.FC = () => {
                         </td>
 
                         <td style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
                             {b.workersCount !== undefined ? `${b.workersCount} ta ishchi` : ''}
                           </div>
-                          <div style={{ fontSize: '11px', color: (b.filledOpsCount || 0) > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                          <div style={{ fontSize: '14px', color: (b.filledOpsCount || 0) > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
                             {(b.filledOpsCount || 0) > 0 ? `${b.filledOpsCount} ta hisob yozuvi` : `${(b.size / 1024).toFixed(1)} KB`}
                           </div>
                         </td>
@@ -329,7 +329,7 @@ export const BackupManagerModal: React.FC = () => {
                             style={{
                               padding: '4px 12px',
                               borderRadius: 'var(--radius-full)',
-                              fontSize: '11.5px',
+                              fontSize: '14.5px',
                               background: isBeforeReset ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : undefined,
                               color: isBeforeReset ? '#ffffff' : 'var(--primary)'
                             }}

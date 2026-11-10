@@ -2,39 +2,48 @@ import { StateCreator } from 'zustand';
 import { WorkbookStore, PattaBatchSlice } from '../types';
 import { ModelPattaBatchConfig, PrintedPartyRecord } from '../../types/workbook';
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
+import { sortPattaSizes } from '../../domain/pattaSizeSystem';
 import { formatDateTime } from '../../utils/formatters';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
-import { createRecordId, findAvailablePattaStart, findNextPartyNumber, removePattaSizeFromBatchConfigs } from '../pattaBatch';
+import { createRecordId, findAvailablePattaStart, findNextPartyNumber } from '../pattaBatch';
 
 export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBatchSlice> = (set, get) => ({
   availableSizes: [...DEFAULT_BATCH_SIZES],
+  batchSettingsServerRevision: 0,
+  batchSettingsPrintRevision: null,
   nextPartyNumber: 1,
   pattaBatchConfigs: {},
   printedPartyHistory: [],
 
-  addCustomSize: (sizeName: string) => {
+  addCustomSize: (modelId: string, sizeName?: string) => {
+    if (sizeName === undefined) { sizeName = modelId; modelId = get().models[0]?.id || ''; }
     const clean = sizeName.trim().toUpperCase();
     if (!clean) return;
     const state = get();
-    const current = state.availableSizes || DEFAULT_BATCH_SIZES;
+    const config = state.pattaBatchConfigs[modelId];
+    const current = config?.sizeNames ?? [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
     if (current.some((s) => s.toLowerCase() === clean.toLowerCase())) {
       state.addNotification('warning', 'Mavjud razmer', `«${clean}» razmeri allaqachon mavjud.`);
       return;
     }
-    const updated = [...current, clean];
-    set({ availableSizes: updated });
-    get().saveToDisk({ availableSizes: updated });
+    const updated = sortPattaSizes([...current, clean]);
+    const pattaBatchConfigs = { ...state.pattaBatchConfigs, [modelId]: { ...config, partyNumber: config?.partyNumber || '', totalIshSoni: config?.totalIshSoni || '', sizes: config?.sizes || {}, sizeNames: updated } };
+    set({ pattaBatchConfigs });
+    get().saveToDisk({ pattaBatchConfigs });
     state.addNotification('success', "Razmer qo'shildi", `Yangi «${clean}» razmeri muvaffaqiyatli qo'shildi.`);
   },
 
-  deleteCustomSize: (sizeName: string) => {
+  deleteCustomSize: (modelId: string, sizeName?: string) => {
+    if (sizeName === undefined) { sizeName = modelId; modelId = get().models[0]?.id || ''; }
     const clean = sizeName.trim().toUpperCase();
     const state = get();
-    const current = state.availableSizes || DEFAULT_BATCH_SIZES;
-    const updated = current.filter((s) => s.toUpperCase() !== clean);
-    const pattaBatchConfigs = removePattaSizeFromBatchConfigs(state.pattaBatchConfigs, clean);
-    set({ availableSizes: updated, pattaBatchConfigs });
-    get().saveToDisk({ availableSizes: updated, pattaBatchConfigs });
+    const config = state.pattaBatchConfigs[modelId];
+    if (Number(config?.sizes?.[sizeName] || 0) > 0) { state.addNotification('warning', 'Razmerda son bor', 'Avval ushbu razmerdagi pattalar sonini nolga tushiring.'); return; }
+    const current = config?.sizeNames ?? [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
+    const sizes = Object.fromEntries(Object.entries(config?.sizes || {}).filter(([size]) => size.toUpperCase() !== clean));
+    const pattaBatchConfigs = { ...state.pattaBatchConfigs, [modelId]: { ...config, partyNumber: config?.partyNumber || '', totalIshSoni: config?.totalIshSoni || '', sizes, sizeNames: current.filter((s) => s.toUpperCase() !== clean) } };
+    set({ pattaBatchConfigs });
+    get().saveToDisk({ pattaBatchConfigs });
     state.addNotification('info', "Razmer o'chirildi", `«${clean}» razmeri ro'yxatdan olib tashlandi.`);
   },
 
@@ -49,7 +58,8 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         const c = state.pattaBatchConfigs[m.id];
         const isTarget = m.id === modelId;
         const resetSizes: Record<string, string> = {};
-        for (const s of state.availableSizes || DEFAULT_BATCH_SIZES) {
+        const sizeNames = c?.sizeNames ?? [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(c?.sizes || {})])];
+        for (const s of sizeNames) {
           resetSizes[s] = isTarget ? '' : c?.sizes?.[s] || '';
         }
 
@@ -57,7 +67,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
           partyNumber: isTarget ? '' : (c?.isCustomParty ? c.partyNumber : ''),
           isCustomParty: isTarget ? false : Boolean(c?.isCustomParty),
           totalIshSoni: isTarget ? '' : c?.totalIshSoni || '',
-          color: c?.color || m.color || 'Кора',
+          color: isTarget ? '' : (c?.color || ''),
           sizes: resetSizes
         };
       }
@@ -96,10 +106,6 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
   updatePattaBatchSize: (modelId: string, size: string, count: string) => {
     set((state) => {
       const sizeKey = size.trim().toUpperCase();
-      const currentSizes = state.availableSizes || DEFAULT_BATCH_SIZES;
-      const availableSizes = currentSizes.some((value) => value.toUpperCase() === sizeKey)
-        ? currentSizes
-        : [...currentSizes, sizeKey];
       const current = state.pattaBatchConfigs[modelId] || {
         partyNumber: '1',
         totalIshSoni: '',
@@ -112,9 +118,9 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         [modelId]: { ...current, sizes: updatedSizes }
       };
       triggerDebouncedSave(() => {
-        get().saveToDisk({ pattaBatchConfigs: updated, availableSizes });
+        get().saveToDisk({ pattaBatchConfigs: updated });
       }, 1200, 'patta_batch');
-      return { availableSizes, pattaBatchConfigs: updated };
+      return { pattaBatchConfigs: updated };
     });
   },
 
@@ -231,6 +237,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         ishSoni: p.totalIshSoni || p.ishSoni,
         cumulativeIshSoni: 0,
         sizes: p.sizes ? { ...p.sizes } : undefined,
+        sizeOrder: p.sizeOrder ? [...p.sizeOrder] : (p.sizes ? sortPattaSizes(Object.keys(p.sizes)) : undefined),
         printedAt: formattedDate
       };
 
@@ -278,15 +285,17 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       const c = state.pattaBatchConfigs[m.id];
       const isPrinted = printedModelIds.has(m.id);
       const resetSizes: Record<string, string> = {};
-      for (const s of state.availableSizes || DEFAULT_BATCH_SIZES) {
+      const sizeNames = c?.sizeNames ?? [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(c?.sizes || {})])];
+      for (const s of sizeNames) {
         resetSizes[s] = isPrinted ? '' : c?.sizes?.[s] || '';
       }
       updatedConfigs[m.id] = {
         partyNumber: isPrinted ? '' : (c?.isCustomParty ? c.partyNumber : ''),
         isCustomParty: isPrinted ? false : Boolean(c?.isCustomParty),
         totalIshSoni: isPrinted ? '' : c?.totalIshSoni || '',
-        color: c?.color || m.color || 'Кора',
-        sizes: resetSizes
+        color: isPrinted ? '' : (c?.color || ''),
+        sizes: resetSizes,
+        sizeNames: c?.sizeNames
       };
     }
 
@@ -414,14 +423,23 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
   completePartySeries: async () => {
     const state = get();
     const formattedDate = formatDateTime(new Date());
+    const finishOpId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? `local_finish_${crypto.randomUUID()}`
+      : `local_finish_${Date.now()}`;
+    const finishTime = new Date().toISOString();
 
-    // 1. Mark active printed parties as closed
+    // 1. Mark eligible printed parties as ended (both active and certified month-closed)
     const updatedHistory = (state.printedPartyHistory || []).map((r) => {
-      if (!r.isClosed) {
+      const certifiedPeriod = r.monthClosedPeriodId && (state.periods || []).some((period) =>
+        period.id === r.monthClosedPeriodId && period.isClosed && Boolean(period.closeOperationId));
+      const isEligible = !r.isArchived && !r.endedAt && (!r.isClosed || Boolean(certifiedPeriod));
+      if (isEligible) {
         return {
           ...r,
           isClosed: true,
-          closedAt: formattedDate
+          closedAt: r.closedAt || formattedDate,
+          endedAt: finishTime,
+          endedOperationId: finishOpId
         };
       }
       return r;
@@ -441,8 +459,10 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
     // 3. Reset configs for all models so party inputs start completely clean
     const resetConfigs: Record<string, ModelPattaBatchConfig> = {};
     for (const m of state.models) {
+      const current = state.pattaBatchConfigs[m.id];
       const resetSizes: Record<string, string> = {};
-      for (const s of state.availableSizes || DEFAULT_BATCH_SIZES) {
+      const sizeNames = current?.sizeNames ?? [...new Set([...(state.availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(current?.sizes || {})])];
+      for (const s of sizeNames) {
         resetSizes[s] = '';
       }
       resetConfigs[m.id] = {
@@ -450,20 +470,21 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         isCustomParty: false,
         totalIshSoni: '',
         color: m.color || 'Кора',
-        sizes: resetSizes
+        sizes: resetSizes,
+        sizeNames: current?.sizeNames
       };
     }
 
-    // 4. Update state: nextPartyNumber resets to 1!
-    set({
+    // 5. Persist through the local database and canonical VPS sync pipeline
+    if (!(await get().saveToDisk({
       nextPartyNumber: 1,
       pattaBatchConfigs: resetConfigs,
       printedPartyHistory: updatedHistory,
       submittedTickets: updatedTickets
-    });
+    }))) return;
 
-    // 5. Persist through the local database and canonical VPS sync pipeline
-    await get().saveToDisk({
+    // Publish success state only after the authoritative local save succeeds.
+    set({
       nextPartyNumber: 1,
       pattaBatchConfigs: resetConfigs,
       printedPartyHistory: updatedHistory,

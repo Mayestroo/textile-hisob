@@ -27,6 +27,8 @@ export interface HydratedWorkbookData {
   workers: Worker[];
   models: ModelConfig[];
   availableSizes: string[];
+  batchSettingsServerRevision: number;
+  batchSettingsPrintRevision: number | null;
   nextPartyNumber: number;
   nextPattaNumber: number;
   reusablePattaRanges: Array<{ start: number; end: number }>;
@@ -85,6 +87,10 @@ export function hydrateWorkbookData(raw: any, fallback?: Partial<HydratedWorkboo
     workers,
     models,
     availableSizes,
+    batchSettingsServerRevision: Number.isSafeInteger(source.batchSettingsServerRevision) && source.batchSettingsServerRevision >= 0
+      ? source.batchSettingsServerRevision : (fallback?.batchSettingsServerRevision ?? 0),
+    batchSettingsPrintRevision: Number.isSafeInteger(source.batchSettingsPrintRevision) && source.batchSettingsPrintRevision >= 0
+      ? source.batchSettingsPrintRevision : (fallback?.batchSettingsPrintRevision ?? null),
     nextPartyNumber,
     nextPattaNumber,
     reusablePattaRanges,

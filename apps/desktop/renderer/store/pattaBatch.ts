@@ -3,7 +3,7 @@ import { ModelPattaBatchConfig, PrintedPartyRecord } from '../types/workbook';
 
 type BatchState = Pick<WorkbookStore,
   'models' | 'workers' | 'nextPartyNumber' | 'nextPattaNumber' | 'pattaBatchConfigs' | 'printedPartyHistory' |
-  'submittedTickets' | 'availableSizes' | 'deletedPartyIds' | 'reusablePattaRanges'>;
+  'submittedTickets' | 'availableSizes' | 'deletedPartyIds' | 'reusablePattaRanges' | 'batchSettingsPrintRevision'>;
 
 type PrintedItem = {
   modelId: string;
@@ -13,6 +13,7 @@ type PrintedItem = {
   totalIshSoni?: number;
   ishSoni: number;
   sizes?: Record<string, string>;
+  sizeOrder?: string[];
   color: string;
 };
 
@@ -165,7 +166,10 @@ export function buildBatchSettingsPayload(
       isCustomParty: Boolean(config.isCustomParty),
       totalIshSoni: config.totalIshSoni || '',
       color: config.color || '',
-      sizes: { ...(config.sizes || {}) }
+      sizes: { ...(config.sizes || {}) },
+      sizeNames: config.sizeNames != null
+        ? [...config.sizeNames]
+        : [...new Set([...(availableSizes || []), ...Object.keys(config.sizes || {})])]
     }))
   };
 }
@@ -177,7 +181,11 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
   nextPartyNumber: number;
   nextPattaNumber: number;
   deletedPartyIds: string[];
+  batchSettingsBaseRevision: number;
 } {
+  if (!Number.isSafeInteger(state.batchSettingsPrintRevision) || state.batchSettingsPrintRevision === null || state.batchSettingsPrintRevision < 0) {
+    throw new Error('REVISION_CONFLICT: reload batch settings before printing');
+  }
   if (!Array.isArray(printedItems) || printedItems.length === 0 || printedItems.length > 128) {
     throw new Error('INVALID_BATCH_PARTIES: at least one and at most 128 parties are required');
   }
@@ -219,6 +227,7 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
       ishSoni: totalIshSoni,
       cumulativeIshSoni: existingIndex >= 0 ? Number(working[existingIndex].cumulativeIshSoni || 0) : 0,
       sizes: item.sizes ? { ...item.sizes } : undefined,
+      sizeOrder: existing ? existing.sizeOrder : (item.sizeOrder ? [...item.sizeOrder] : undefined),
       printedAt: now.toISOString(),
       serverRevision: existingIndex >= 0 ? Number(working[existingIndex].serverRevision || 0) : 0
     };
@@ -233,13 +242,15 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
     const current = state.pattaBatchConfigs[model.id];
     const printed = printedModelIds.has(model.id);
     const sizes: Record<string, string> = {};
-    for (const size of state.availableSizes || []) sizes[size] = printed ? '' : current?.sizes?.[size] || '';
+    const sizeNames = current?.sizeNames ?? [...new Set([...(state.availableSizes || []), ...Object.keys(current?.sizes || {})])];
+    for (const size of sizeNames) sizes[size] = printed ? '' : current?.sizes?.[size] || '';
     configs[model.id] = {
       partyNumber: printed ? '' : (current?.isCustomParty ? current.partyNumber : ''),
       isCustomParty: printed ? false : Boolean(current?.isCustomParty),
       totalIshSoni: printed ? '' : current?.totalIshSoni || '',
       color: current?.color || model.color || 'Кора',
-      sizes
+      sizes,
+      sizeNames: current?.sizeNames
     };
   }
   const nextPartyNumber = findNextPartyNumber(updatedHistory);
@@ -251,7 +262,8 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
     settings: buildBatchSettingsPayload(state, configs),
     nextPartyNumber,
     nextPattaNumber: nextGlobalPatta,
-    deletedPartyIds
+    deletedPartyIds,
+    batchSettingsBaseRevision: state.batchSettingsPrintRevision
   };
 }
 

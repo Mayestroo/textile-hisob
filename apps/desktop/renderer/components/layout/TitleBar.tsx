@@ -1,14 +1,41 @@
-import React, { useEffect, useState } from 'react';
-import { Save, Download, Database, Users, Calendar, ShieldCheck, ShieldAlert, Clock, Code2, Sun, Moon, Building2, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import {
+  Download, Database, Users, ShieldAlert,
+  Clock, Code2, Sun, Moon, RefreshCw, ChevronLeft, ChevronRight,
+  Wallet
+} from 'lucide-react';
 import { useWorkbookStore } from '../../store/workbookStore';
+import { useAuthStore } from '../../store/authStore';
 import { selectWorkerCount } from '../../store/selectors';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { useTrialCountdown } from '../../hooks/useTrialCountdown';
 import { useOnline } from '../../hooks/useOnline';
 import { useSyncStore } from '../../store/syncStore';
-import { RoleBadge } from '../ui/RoleBadge';
 import { ConnectionStatus } from './ConnectionStatus';
 import { resolveDatabaseStatusLabel, type DatabaseRuntimeMode } from '../../utils/statusFormatters';
+
+const UZBEK_MONTH_NAMES = [
+  'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
+  'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'
+];
+
+function formatPeriodHeader(period: { name?: string; startDate?: string }): string {
+  if (period.startDate) {
+    const parts = period.startDate.slice(0, 10).split('-');
+    if (parts.length === 3) {
+      const year = parts[0];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const month = UZBEK_MONTH_NAMES[mIdx] || parts[1];
+      return `${year} — ${month}`;
+    }
+  }
+  if (period.name) {
+    const match = period.name.match(/^(\d{4})[-_\s]+([a-zA-Zа-яА-Я]+)/);
+    if (match) return `${match[1]} — ${match[2]}`;
+    return period.name;
+  }
+  return '2026 — Oktabr';
+}
 
 export const TitleBar: React.FC = () => {
   const workersCount = useWorkbookStore(selectWorkerCount);
@@ -22,9 +49,11 @@ export const TitleBar: React.FC = () => {
   const failedSyncChanges = useSyncStore((s) => s.failedChanges);
   const openModal = useWorkbookStore((s) => s.openModal);
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const canViewWorkers = useAuthStore((s) => s.permissions.includes('view:workers'));
   const availableUpdate = useWorkbookStore((s) => s.availableUpdate);
   const theme = useWorkbookStore((s) => s.theme);
   const toggleTheme = useWorkbookStore((s) => s.toggleTheme);
+  const authRole = useAuthStore((s) => s.role || 'admin');
   const countdown = useTrialCountdown(licenseStatus);
   const online = useOnline();
   const [databaseRuntimeMode, setDatabaseRuntimeMode] = useState<DatabaseRuntimeMode>('checking');
@@ -58,263 +87,188 @@ export const TitleBar: React.FC = () => {
   };
 
   const isLicActive = licenseStatus?.isActivated;
+  const periodDisplay = useMemo(() => formatPeriodHeader(currentPeriod), [currentPeriod]);
+  const avatarLetter = (authRole === 'print' ? 'P' : authRole === 'type' ? 'T' : 'A').toUpperCase();
 
   return (
     <header className="excel-titlebar">
       <div className="excel-title-left">
-        <div className="quick-actions">
-          {/* Period Button */}
-          <button 
-            className="quick-btn" 
-            title="Oylik davrini boshqarish va oyni yopish" 
+        {/* Brand Logo & Name */}
+        <div className="titlebar-brand">
+          <div className="titlebar-brand-icon">
+            <Wallet size={18} strokeWidth={2.4} />
+          </div>
+          <div className="titlebar-brand-text">
+            <span className="titlebar-brand-title">Oylik</span>
+            <span className="titlebar-brand-subtitle">hisobot</span>
+          </div>
+        </div>
+
+        {/* Period Pill: < 2026 — Oktabr > */}
+        <div className="titlebar-period-pill">
+          <button
+            type="button"
+            className="titlebar-period-btn"
+            title="Oylik davrini boshqarish"
             onClick={() => openModal({ type: 'period_manager' })}
           >
-            <Calendar size={14} color="#a7f3d0" />
-            <span>{currentPeriod.name || 'Joriy Oylik'}</span>
+            <ChevronLeft size={14} />
           </button>
-
-          {/* Workers Button */}
-          <button 
-            className="quick-btn" 
-            title="Ishchilar ro'yxati va doimiy stajlar" 
-            onClick={() => openModal({ type: 'worker_manager' })}
+          <span
+            className="titlebar-period-label"
+            title="Oylik davrini boshqarish (bosish orqali ochish)"
+            onClick={() => openModal({ type: 'period_manager' })}
           >
-            <Users size={14} color="#a7f3d0" />
-            <span>Ishchilar ({workersCount})</span>
-          </button>
-          
-          <button className="quick-btn" title="Excel (.xlsx) yuklab olish" onClick={exportExcel}>
-            <Download size={14} />
-          </button>
-
-          <button className="quick-btn" title="Zaxiralar va Baza tarixi" onClick={() => openModal({ type: 'backup_manager' })}>
-            <Database size={14} />
-          </button>
-
-          <button 
-            className="quick-btn" 
-            title="Diskdagi bazaga saqlash (Ctrl+S)" 
-            onClick={handleSave}
-            style={{ 
-              background: 'rgba(16, 185, 129, 0.22)', 
-              borderColor: 'rgba(52, 211, 153, 0.4)',
-              color: '#6ee7b7'
-            }}
+            {periodDisplay}
+          </span>
+          <button
+            type="button"
+            className="titlebar-period-btn"
+            title="Oylik davrini boshqarish"
+            onClick={() => openModal({ type: 'period_manager' })}
           >
-            <Save size={14} color="#6ee7b7" />
-            <span>Saqlash</span>
+            <ChevronRight size={14} />
           </button>
         </div>
       </div>
 
-      <div className="excel-title-right">
-        {/* Dark / Light Mode Toggle (Icon only) */}
-        <button
-          onClick={toggleTheme}
-          className="quick-btn"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.18)',
-            borderRadius: 'var(--radius-full)',
-            padding: 0,
-            cursor: 'pointer',
-            backdropFilter: 'blur(8px)',
-            transition: 'all 0.2s'
-          }}
-          title={theme === 'dark' ? "Yorug' (Light) rejimga o'tish" : "Tungi (Dark) rejimga o'tish"}
-        >
-          {theme === 'dark' ? <Sun size={14} color="#fde047" /> : <Moon size={14} color="#cbd5e1" />}
-        </button>
+      <div className="excel-title-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Subtle Utility Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            onClick={toggleTheme}
+            className="titlebar-utility-btn"
+            title={theme === 'dark' ? "Yorug' (Light) rejimga o'tish" : "Tungi (Dark) rejimga o'tish"}
+          >
+            {theme === 'dark' ? <Sun size={14} color="#fde047" /> : <Moon size={14} />}
+          </button>
 
-        {/* Role Badge (RBAC) */}
-        <RoleBadge />
+          {canViewWorkers && (
+            <button
+              onClick={() => openModal({ type: 'worker_manager' })}
+              className="titlebar-utility-btn"
+              title={`Ishchilar ro'yxati (${workersCount})`}
+            >
+              <Users size={14} />
+            </button>
+          )}
+
+          <button
+            onClick={() => openModal({ type: 'backup_manager' })}
+            className="titlebar-utility-btn"
+            title="Zaxiralar va Baza tarixi"
+          >
+            <Database size={14} />
+          </button>
+
+          <button
+            onClick={() => openModal({ type: 'developer_info' })}
+            className="titlebar-utility-btn"
+            title="Dasturchi bilan bog'lanish"
+          >
+            <Code2 size={14} />
+          </button>
+
+          {/* License badge if trial or blocked */}
+          {(!isLicActive || licenseStatus?.isTrial || licenseStatus?.isBlocked) && (
+            <div
+              onClick={() => openModal({ type: 'license_activation' })}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '14px',
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-full)',
+                cursor: 'pointer',
+                fontWeight: 600,
+                background: licenseStatus?.isBlocked ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                color: licenseStatus?.isBlocked ? '#fca5a5' : '#7dd3fc',
+                border: `1px solid ${licenseStatus?.isBlocked ? 'rgba(239, 68, 68, 0.35)' : 'rgba(56, 189, 248, 0.35)'}`
+              }}
+              title="Litsenziya holati"
+            >
+              {licenseStatus?.isBlocked ? <ShieldAlert size={12} /> : <Clock size={12} />}
+              <span>{licenseStatus?.isBlocked ? 'BLOKLANGAN' : countdown ? countdown.formattedClock : 'Sinov'}</span>
+            </div>
+          )}
+
+          {/* Update dot if available */}
+          {availableUpdate && (
+            <button
+              onClick={() => openModal({ type: 'app_update' })}
+              className="titlebar-utility-btn"
+              style={{ position: 'relative', color: '#10b981' }}
+              title={`Yangi versiya: v${availableUpdate.version}`}
+            >
+              <RefreshCw size={14} />
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '2px',
+                  right: '2px',
+                  width: '6px',
+                  height: '6px',
+                  backgroundColor: '#10b981',
+                  borderRadius: '50%'
+                }}
+              />
+            </button>
+          )}
+        </div>
 
         {/* Real-time Connection Status & Offline Queue */}
         <ConnectionStatus />
 
-
-        {/* License / Trial Badge */}
+        {/* Status Pill: ● Sinxronlangan */}
         <div
-          onClick={() => openModal({ type: 'license_activation' })}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '11.5px',
-            background: licenseStatus?.isBlocked
-              ? 'rgba(239, 68, 68, 0.15)'
-              : isLicActive && !licenseStatus?.isTrial
-              ? 'rgba(16, 185, 129, 0.15)'
-              : licenseStatus?.isTrial
-              ? 'rgba(56, 189, 248, 0.15)'
-              : 'rgba(239, 68, 68, 0.15)',
-            border: licenseStatus?.isBlocked
-              ? '1px solid rgba(239, 68, 68, 0.35)'
-              : isLicActive && !licenseStatus?.isTrial
-              ? '1px solid rgba(52, 211, 153, 0.35)'
-              : licenseStatus?.isTrial
-              ? '1px solid rgba(56, 189, 248, 0.35)'
-              : '1px solid rgba(239, 68, 68, 0.35)',
-            padding: '4px 10px',
-            borderRadius: 'var(--radius-full)',
-            cursor: 'pointer',
-            fontWeight: 600,
-            color: licenseStatus?.isBlocked
-              ? '#fca5a5'
-              : isLicActive && !licenseStatus?.isTrial
-              ? '#6ee7b7'
-              : licenseStatus?.isTrial
-              ? '#7dd3fc'
-              : '#fca5a5',
-            backdropFilter: 'blur(8px)',
-            transition: 'all 0.2s'
-          }}
-          title={
-            licenseStatus?.isTrial && countdown
-              ? `Sinov muddati: ${countdown.formattedText} qoldi`
-              : "Litsenziya holatini ko'rish va boshqarish"
-          }
-        >
-          {licenseStatus?.isBlocked ? (
-            <ShieldAlert size={13} color="#fca5a5" />
-          ) : isLicActive && !licenseStatus?.isTrial ? (
-            <ShieldCheck size={13} color="#6ee7b7" />
-          ) : licenseStatus?.isTrial ? (
-            <Clock size={13} color="#7dd3fc" />
-          ) : (
-            <ShieldAlert size={13} color="#fca5a5" />
-          )}
-          <span>
-            {licenseStatus?.isBlocked
-              ? 'BLOKLANGAN'
-              : isLicActive && !licenseStatus?.isTrial
-              ? (licenseStatus?.isLifetime ? 'Litsenziya: Faol' : `Litsenziya: ${licenseStatus?.expiry}`)
-              : licenseStatus?.isTrial
-              ? `Sinov: ${countdown ? countdown.formattedClock : (licenseStatus.remainingText || '24 soat')}`
-              : 'Aktivatsiya kutilmoqda'}
-          </span>
-        </div>
-
-        {/* Korxona (Sex) Badge */}
-        {licenseStatus?.companyName && (
-          <div
-            className="quick-btn"
-            style={{
-              background: 'rgba(99, 102, 241, 0.12)',
-              border: '1px solid rgba(129, 140, 248, 0.3)',
-              borderRadius: 'var(--radius-full)',
-              padding: '4px 10px',
-              color: '#a5b4fc',
-              fontSize: '11px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              cursor: 'default'
-            }}
-            title={`Ulangan korxona: ${licenseStatus.companyName} (${licenseStatus.companyId || 'company_main'})`}
-          >
-            <Building2 size={12} color="#a5b4fc" />
-            <span>{licenseStatus.companyName}</span>
-          </div>
-        )}
-
-        {/* Developer Button */}
-        <button
-          onClick={() => openModal({ type: 'developer_info' })}
-          className="quick-btn"
-          style={{
-            background: 'rgba(2, 132, 199, 0.15)',
-            border: '1px solid rgba(56, 189, 248, 0.35)',
-            borderRadius: 'var(--radius-full)',
-            padding: '4px 10px',
-            color: '#7dd3fc'
-          }}
-          title="Dasturchi bilan bog'lanish va buyurtma xizmatlari"
-        >
-          <Code2 size={13} color="#7dd3fc" />
-          <span>Dasturchi</span>
-        </button>
-
-        {/* Database Status Chip */}
-        <div 
-          onClick={() => openModal({ type: 'backup_manager' })}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            fontSize: '11.5px', 
-            background: syncHasFailures ? 'rgba(239, 68, 68, 0.12)' : isSyncHealthy ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-            border: `1px solid ${syncHasFailures ? 'rgba(239, 68, 68, 0.3)' : isSyncHealthy ? 'rgba(52, 211, 153, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
-            padding: '4px 10px', 
-            borderRadius: 'var(--radius-full)',
-            cursor: 'pointer',
-            fontWeight: 600,
-            color: syncHasFailures ? '#fca5a5' : isSyncHealthy ? '#6ee7b7' : '#fde047',
-            backdropFilter: 'blur(8px)'
-          }}
+          className="titlebar-status-pill"
           title={databaseRuntimeMode === 'sync'
             ? `Lokal SQLite · ${databaseStatusLabel}`
             : isServerConnected
               ? "Markaziy serverga ulangan (avtomatik sinxronizatsiya)"
               : "Lokal xotirada ishlamoqda"}
+          onClick={() => openModal({ type: 'backup_manager' })}
+          style={{ cursor: 'pointer' }}
         >
-          <span style={{ 
-            width: '6px', 
-            height: '6px', 
-            borderRadius: '50%', 
-            backgroundColor: syncHasFailures ? '#ef4444' : isSyncHealthy ? '#10b981' : '#f59e0b',
-            boxShadow: syncHasFailures ? '0 0 6px rgba(239, 68, 68, 0.5)' : isSyncHealthy ? '0 0 6px rgba(16, 185, 129, 0.5)' : '0 0 6px rgba(245, 158, 11, 0.5)'
-          }} />
-          <span>{databaseStatusLabel}</span>
+          <span
+            className="titlebar-status-dot"
+            style={{
+              backgroundColor: syncHasFailures ? '#ef4444' : isSyncHealthy ? '#22c55e' : '#f59e0b'
+            }}
+          />
+          <span>{databaseStatusLabel || 'Sinxronlangan'}</span>
         </div>
 
-        {/* Update Check / Status Icon Button */}
+        {/* Excel Button: ⤓ Excel */}
         <button
-          onClick={() => openModal({ type: 'app_update' })}
-          className="quick-btn"
-          style={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '28px',
-            height: '28px',
-            padding: 0,
-            borderRadius: 'var(--radius-full)',
-            background: availableUpdate ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.08)',
-            border: availableUpdate ? '1px solid rgba(52, 211, 153, 0.65)' : '1px solid rgba(255, 255, 255, 0.18)',
-            color: availableUpdate ? '#34d399' : '#cbd5e1',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            backdropFilter: 'blur(8px)',
-            boxShadow: availableUpdate ? '0 0 10px rgba(16, 185, 129, 0.45)' : 'none'
-          }}
-          title={availableUpdate ? `Yangi versiya mavjud: v${availableUpdate.version}. Bosib yangilang.` : "Dastur yangilanishlarini tekshirish"}
+          type="button"
+          className="titlebar-excel-btn"
+          title="Excel (.xlsx) yuklab olish"
+          onClick={exportExcel}
         >
-          <RefreshCw size={14} color={availableUpdate ? '#34d399' : '#cbd5e1'} />
-          {/* Notification dot badge when update is available */}
-          {availableUpdate && (
-            <span
-              style={{
-                position: 'absolute',
-                top: '-2px',
-                right: '-2px',
-                width: '9px',
-                height: '9px',
-                backgroundColor: '#10b981',
-                borderRadius: '50%',
-                border: '2px solid #0f172a',
-                boxShadow: '0 0 6px #10b981'
-              }}
-            />
-          )}
+          <Download size={13} strokeWidth={2.4} />
+          <span>Excel</span>
         </button>
+
+        {/* Saqlash Button: solid dark green */}
+        <button
+          type="button"
+          className="titlebar-save-btn"
+          title="Diskdagi bazaga saqlash (Ctrl+S)"
+          onClick={handleSave}
+        >
+          <span>Saqlash</span>
+        </button>
+
+        {/* User Profile Avatar: (A) */}
+        <div
+          className="titlebar-avatar"
+          title={`Foydalanuvchi: ${authRole === 'admin' ? 'Admin' : authRole === 'print' ? 'Chop etuvchi' : authRole === 'type' ? 'Kirituvchi' : 'Foydalanuvchi'}`}
+          onClick={() => openModal({ type: 'developer_info' })}
+        >
+          {avatarLetter}
+        </div>
       </div>
     </header>
   );

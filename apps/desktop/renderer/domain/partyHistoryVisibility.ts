@@ -1,7 +1,15 @@
 import type { PrintedPartyRecord } from '../types/workbook';
+import type { PattaLifecycle } from './pattaLifecycle';
 
 export type PartyHistoryViewMode = 'live' | 'archive' | 'all-time';
-export type PartySeriesTab = 'active' | 'closed';
+export type PartySeriesTab = PattaLifecycle;
+
+export const LIFECYCLE_TAB_LABELS: Record<PartySeriesTab, string> = {
+  active: 'Faol',
+  closed: 'Yopilgan',
+  ended: 'Yakunlangan',
+  legacy: 'Eski arxiv'
+};
 
 export function selectPartyHistoryForView(
   history: PrintedPartyRecord[],
@@ -18,5 +26,16 @@ export function selectPartySeriesTab(
   mode: PartyHistoryViewMode
 ): PrintedPartyRecord[] {
   if (mode !== 'live') return history;
-  return history.filter((party) => tab === 'closed' ? party.isClosed : !party.isClosed);
+  // Legacy compatibility helper for callers expecting whole-party filtering.
+  // Journal presentation classifies item-by-item via selectLifecycleItems.
+  if (tab === 'ended') {
+    return history.filter((p) => Boolean(p.endedAt && p.endedOperationId));
+  }
+  if (tab === 'closed') {
+    return history.filter((p) => p.isClosed && !p.endedAt);
+  }
+  if (tab === 'legacy') {
+    return history.filter((p) => p.isClosed && !p.endedAt && !p.monthClosedPeriodId);
+  }
+  return history.filter((p) => !p.isClosed && !p.endedAt);
 }

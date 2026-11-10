@@ -21,7 +21,21 @@ export const createLicenseSlice: StateCreator<WorkbookStore, [], [], LicenseSlic
     if (!eAPI?.getLicenseStatus) throw new Error('Aktivatsiya holatini tekshirish faqat Desktop dasturida mavjud.');
     try {
       const status = await eAPI.getLicenseStatus();
-      set({ licenseStatus: status });
+      const previous = get();
+      const companyId = (value: typeof status | null) => value?.companyId?.trim() || '';
+      const sessionId = (value: typeof status | null) => value?.activationId || value?.machineId || '';
+      const validContext = (value: typeof status | null) => Boolean(value?.isActivated && !value.isBlocked && companyId(value));
+      const contextChanged = !validContext(status)
+        || !validContext(previous.licenseStatus)
+        || companyId(status) !== companyId(previous.licenseStatus)
+        || sessionId(status) !== sessionId(previous.licenseStatus);
+      set(contextChanged ? {
+        licenseStatus: status,
+        payrollValuation: {
+          companyId: companyId(status), period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+          accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+        }
+      } : { licenseStatus: status });
       return status;
     } catch (err: any) {
       console.error('License check error:', err);

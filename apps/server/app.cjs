@@ -27,7 +27,7 @@ const { mutationFenceEnabled, createBusinessMutationFence } = require('./modules
 function buildFastifyServer(options = {}) {
   const app = fastify({
     logger: options.logger || false,
-    bodyLimit: 64 * 1024
+    bodyLimit: 512 * 1024
   });
 
   const pool = options.pool || getServerPool();
@@ -68,12 +68,10 @@ function buildFastifyServer(options = {}) {
     pool,
     env,
     adminApiToken: options.adminApiToken,
-    allowedAdminIds: options.allowedAdminIds,
     sessionSecret: options.adminWebAppSessionSecret,
     adminBotInternalUrl: options.adminBotInternalUrl,
     adminWebAppPath: options.adminWebAppPath,
     fetchImpl: options.fetchImpl,
-    signerClient: options.adminSignerClient,
     dashboard: options.adminDashboard,
     publicKey: options.licensePublicKey
   });

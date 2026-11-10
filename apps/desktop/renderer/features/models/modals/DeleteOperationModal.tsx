@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { X, AlertTriangle, Trash2 } from 'lucide-react';
+import { CustomSelect } from '../../../components/ui/CustomSelect';
 
 export const DeleteOperationModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -32,7 +33,7 @@ export const DeleteOperationModal: React.FC = () => {
   };
 
   return (
-    <div className="modal-overlay" onClick={closeModal}>
+    <div className="modal-overlay phase-c-dialog" onClick={closeModal}>
       <div className="modal-card" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626' }}>
@@ -50,47 +51,43 @@ export const DeleteOperationModal: React.FC = () => {
 
         <div className="modal-body">
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
               Model:
             </label>
-            <select
+            <CustomSelect
               value={modelId}
-              onChange={(e) => {
-                setModelId(e.target.value);
-                const m = models.find((mod) => mod.id === e.target.value);
+              width="100%"
+              onChange={(val) => {
+                setModelId(val);
+                const m = models.find((mod) => mod.id === val);
                 if (m && m.operations.length > 0) {
                   setSelectedOp(m.operations[0].name);
                 }
               }}
-              className="soft-input"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.title})
-                </option>
-              ))}
-            </select>
+              options={models.map((m) => ({
+                value: m.id,
+                label: `${m.name} (${m.title})`
+              }))}
+            />
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
               O'chiriladigan operatsiyani tanlang:
             </label>
-            <select
+            <CustomSelect
               value={selectedOp}
-              onChange={(e) => setSelectedOp(e.target.value)}
-              className="soft-input"
-            >
-              {currentModel?.operations.map((op) => (
-                <option key={op.id} value={op.name}>
-                  {op.name} ({op.rate} so'm)
-                </option>
-              ))}
-            </select>
+              width="100%"
+              onChange={(val) => setSelectedOp(val)}
+              options={(currentModel?.operations || []).map((op) => ({
+                value: op.name,
+                label: `${op.name} (${op.rate} so'm)`
+              }))}
+            />
           </div>
 
           <div style={{
-            fontSize: '12.5px',
+            fontSize: '15px',
             color: '#991b1b',
             background: '#fef2f2',
             border: '1px solid #fee2e2',

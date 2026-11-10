@@ -1,3 +1,5 @@
+import { sortPattaSizes } from './pattaSizeSystem';
+
 export interface PartyWorkQuantities {
   partyTotal: number;
   pattaCount: number;
@@ -97,13 +99,25 @@ export function calculateBatchWorkQuantities(
 
 export function buildPattaWorkTickets(
   ishSoniPerPatta: number,
-  sizes: Record<string, string | number> | undefined
+  sizes: Record<string, string | number> | undefined,
+  sizeOrder?: string[]
 ): PattaWorkTicket[] {
   const normalizedSizes = normalizePattaSizeCounts(sizes);
   calculateBatchWorkQuantities(ishSoniPerPatta, normalizedSizes.pattaCount);
   const tickets: PattaWorkTicket[] = [];
 
-  for (const [size, count] of Object.entries(normalizedSizes.sizes)) {
+  const entries = Object.entries(normalizedSizes.sizes);
+  const byName = new Map(entries);
+  let orderedNames: string[];
+  if (sizeOrder && sizeOrder.length > 0) {
+    const explicitSet = new Set(sizeOrder);
+    const unlisted = sortPattaSizes(entries.map(([size]) => size).filter((s) => !explicitSet.has(s)));
+    orderedNames = [...sizeOrder, ...unlisted];
+  } else {
+    orderedNames = sortPattaSizes(entries.map(([size]) => size));
+  }
+  for (const size of orderedNames) {
+    const count = byName.get(size) || 0;
     for (let index = 0; index < count; index += 1) {
       tickets.push({ size, perPatta: ishSoniPerPatta });
     }

@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="uz">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b132b" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <meta name="novda-admin-webapp-version" content="-20261013" />
+  <title>Novda — Admin Console</title>
+  <link rel="stylesheet" href="/admin-app/admin.css" />
+  <link rel="stylesheet" href="/admin-app/company-admin.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/admin-app/financial-intent.js" defer></script>
+  <script src="/admin-app/admin.js" defer></script>
+</head>
+
+<body>
+  <!-- Auth Gate Modal Screen -->
+  <div id="authGate" class="auth-gate" role="status" aria-live="polite">
+    <div class="auth-card">
+      <div class="auth-brand-wrapper">
+        <div class="brand-mark" aria-hidden="true">
+          <span>N</span>
+          <i></i>
+        </div>
+        <span class="auth-pulse-dot"></span>
+      </div>
+      <p class="eyebrow">NOVDA BOSHQARUV</p>
+      <h1>Administrator</h1>
+      <p id="authMessage" class="muted">Telegram ma’lumotlari tekshirilmoqda…</p>
+      <div id="authError" class="notice notice-error" hidden></div>
+      <button id="retryAuth" class="button button-primary" type="button" hidden>Qayta urinish</button>
+    </div>
+  </div>
+
+  <main id="companyPicker" class="auth-gate" hidden>
+    <div class="auth-card">
+      <h1>Kompaniyani tanlang</h1>
+      <p class="muted">Boshqarish uchun sizga biriktirilgan kompaniyani tanlang.</p>
+      <div id="companyPickerOptions"></div>
+      <p id="companyPickerError" class="notice notice-error" hidden></p>
+    </div>
+  </main>
+
+  <div id="companyAdminApp" class="company-app" hidden>
+    <header class="co-topbar">
+      <button id="companyClose" class="co-close is-hidden" type="button" aria-label="Ortga">
+        <svg class="co-close-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        <span>Ortga</span>
+      </button>
+      <div class="co-brand">
+        <strong id="companyBrandName">comp_novda</strong>
+        <span id="companyBrandRole">Company admin</span>
+        <button id="changeCompany" type="button" hidden>Kompaniyani almashtirish</button>
+      </div>
+      <span id="companyAvatar" class="co-avatar" aria-hidden="true"></span>
+    </header>
+    <main class="co-main">
+      <section class="co-screen is-active" data-co-screen="home">
+        <div class="co-heading">
+          <h1>Umumiy hisobot</h1>
+          <div class="co-period-badge">
+            <select id="companyPeriodSelect" class="co-period" aria-label="Hisobot davri"></select>
+            <svg class="co-period-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#26384A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+          </div>
+        </div>
+        <article class="co-profit">
+          <span>Sof to‘lanadigan foyda</span>
+          <div class="co-profit-value"><strong id="companyNet">0</strong> <small>so‘m</small></div>
+        </article>
+        <div class="co-stat-grid">
+          <article><span>Jami ishlangan</span><strong id="companyGross">0</strong></article>
+          <article><span>Berilgan avans</span><strong id="companyAdvance">0</strong></article>
+          <article><span>Doimiy staj</span><strong id="companyStaj">0</strong></article>
+          <article><span>Ishchilar</span><strong id="companyWorkerCount">0 ta</strong></article>
+        </div>
+        <div class="co-hidden-metrics" hidden aria-hidden="true">
+          <span id="companyPiecework">0</span>
+          <span id="companyOklad">0</span>
+          <span id="companyMagazin">0</span>
+          <span id="companyFine">0</span>
+        </div>
+        <div id="companyHomeParties" class="co-parties-container"></div>
+        <div id="companyPriceWarning" class="co-warning" hidden>
+          <span class="co-warning-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </span>
+          <div>
+            <strong id="companyWarningTitle">3 ta modelda narx yo‘q</strong>
+            <small id="companyWarningSubtitle">Summa hisoblanmagan</small>
+          </div>
+          <button id="companyWarningAction" data-co-go="models" type="button">Qo‘yish</button>
+        </div>
+        <div class="co-actions" hidden>
+          <button data-co-go="parties" type="button">
+            <b class="co-action-icon green">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            </b>
+            Patta kiritish
+          </button>
+          <button id="companyAdvanceAction" type="button">
+            <b class="co-action-icon amber">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="18" y1="12" x2="18.01" y2="12"/></svg>
+            </b>
+            Avans berish
+          </button>
+          <button id="companyExport" type="button">
+            <b class="co-action-icon blue">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </b>
+            Excel hisobot
+          </button>
+          <button id="companyClosePeriod" type="button">
+            <b class="co-action-icon purple">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </b>
+            Oyni yopish
+          </button>
+        </div>
+      </section>
+
+      <section class="co-screen" data-co-screen="workers">
+        <div class="co-heading"><h1>Ishchilar</h1><span id="companyWorkerCaption" class="co-muted">—</span></div>
+        <label class="co-search"><span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><input id="companyWorkerSearch" type="search" placeholder="Ism yoki ID bo‘yicha" /></label>
+        <div class="co-chips" id="companyWorkerFilters"><button class="selected" data-filter="all">Hammasi</button><button data-filter="positive">Avansli</button><button data-filter="negative">Manfiy</button><button data-filter="zero">Nol</button></div>
+        <div id="companyWorkers" class="co-list"></div>
+      </section>
+
+      <section class="co-screen" data-co-screen="parties">
+        <div class="co-heading co-heading-stack"><div><h1>Pattalar</h1><span class="co-muted">Partiyalar nazorati</span></div></div>
+        <div class="co-party-stats">
+          <article>
+            <span>Kiritilgan patta</span>
+            <strong id="companyPattaDone">0 <small>/ 0</small></strong>
+          </article>
+          <article>
+            <span>Kiritilgan ish</span>
+            <strong id="companyWorkDone">0 <small>/ 0 dona</small></strong>
+          </article>
+        </div>
+        <div class="co-chips" id="companyPartyFilters"><button class="selected" data-filter="active">Patta hisob · 0</button><button data-filter="closed">Yopilgan · 0</button></div>
+        <div id="companyParties" class="co-parties-container"></div>
+      </section>
+
+      <section class="co-screen" data-co-screen="settings">
+        <div class="co-heading"><h1>Sozlamalar</h1></div>
+        <div class="co-settings-list">
+          <button data-co-go="models" type="button"><i class="amber"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></i><span><strong>Operatsiya narxlari</strong><small id="companyMissingPrices">—</small></span><svg class="co-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-9-6"/></svg></button>
+          <button data-co-go="models" type="button"><i class="blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></i><span><strong>Modellar</strong><small id="companyModelCount">—</small></span><svg class="co-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-9-6"/></svg></button>
+          <button data-co-go="workers" type="button"><i class="green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></i><span><strong>Ishchilar</strong><small id="companySettingWorkers">—</small></span><svg class="co-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-9-6"/></svg></button>
+        </div>
+        <p class="co-section-caption">BOTLAR VA ULANISH</p>
+        <div class="co-settings-list">
+          <article><i class="purple"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></i><span><strong>Worker bot</strong><small id="companyWorkerBotStatus">Holat tekshirilmagan</small></span><em>—</em></article>
+          <article><i class="green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></i><span><strong>Litsenziya</strong><small id="companyLicenseStatus">Holat olinmoqda</small></span><em id="companyLicenseBadge">—</em></article>
+          <button id="companyLanguage" type="button"><i class="blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></i><span><strong>Til</strong><small>O‘zbekcha</small></span><svg class="co-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-9-6"/></svg></button>
+        </div>
+        <button id="companySettingsExport" class="co-outline-button" type="button">Hisobotni Excel'ga yuklash</button>
+      </section>
+
+      <section class="co-screen" data-co-screen="models">
+        <div id="companyModelChoices" class="co-model-choices"></div>
+        <div class="co-model-summary">
+          <div class="co-model-summary-head">
+            <span class="co-label">Model</span>
+            <em id="companyModelStatus" class="co-model-status-badge">Narx yo‘q</em>
+          </div>
+          <strong id="companyModelName" class="co-model-title">—</strong>
+          <div class="co-model-meta-row">
+            <small id="companyRateProgress">0 / 0 narx kiritildi</small>
+            <b id="companyRateTotal">Jami: 0 so‘m</b>
+          </div>
+          <div class="co-progress"><i id="companyRateProgressFill"></i></div>
+          <div class="co-model-stats-grid">
+            <div class="co-model-stat-cell">
+              <span class="co-label">Model narxi</span>
+              <strong id="companyModelPrice">0 so‘m</strong>
+            </div>
+            <div class="co-model-stat-cell">
+              <span class="co-label">Tikilgan ish soni</span>
+              <strong id="companyModelSewnQty" class="co-stat-orange">0 dona</strong>
+            </div>
+            <div class="co-model-stat-cell">
+              <span class="co-label">Jami summa</span>
+              <strong id="companyModelTotalAmount" class="co-stat-green">0 so‘m</strong>
+            </div>
+            <div class="co-model-stat-cell">
+              <span class="co-label">Tavofut</span>
+              <strong id="companyModelTavofut">0 so‘m</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="co-models-breakdown-card">
+          <div class="co-models-breakdown-head">
+            <div>
+              <strong>MODELLAR KESIMIDA JAMI:</strong>
+              <small id="companyModelsBreakdownPeriod">Shu oy bo‘yicha</small>
+            </div>
+            <div class="co-models-breakdown-totals">
+              <strong id="companyModelsTotalPieces">0 dona</strong>
+              <span id="companyModelsTotalAmount">0 so‘m</span>
+            </div>
+          </div>
+          <div class="co-models-table-wrap">
+            <table class="co-models-table">
+              <thead>
+                <tr>
+                  <th style="width: 32px; text-align: center;">№</th>
+                  <th style="text-align: left;">Model</th>
+                  <th style="text-align: right;">Model narxi</th>
+                  <th style="text-align: right;">Tikilgan ish soni</th>
+                  <th style="text-align: right;">Jami summa</th>
+                  <th style="text-align: right;">Tavofut</th>
+                </tr>
+              </thead>
+              <tbody id="companyModelsTableBody"></tbody>
+              <tfoot id="companyModelsTableFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="co-bulk-rate">
+          <strong class="co-bulk-title">Bo‘sh narxlarga bir xil qiymat</strong>
+          <input id="companyBulkRate" type="number" inputmode="numeric" min="0" placeholder="0" value="0"/>
+          <button id="companyApplyBulk" type="button">Qo‘llash</button>
+        </div>
+
+        <p class="co-section-caption">OPERATSIYALAR · <span id="companyOperationCount">0</span></p>
+        <div class="co-operation-card">
+          <div id="companyOperations" class="co-operation-list"></div>
+          <button id="companyMoreOperations" class="co-more-ops" type="button" hidden>Yana 10 ta ▾</button>
+        </div>
+        <button id="companySaveRates" class="co-primary-button co-save-rates" type="button">Saqlash</button>
+      </section>
+
+      <section class="co-screen" data-co-screen="worker-detail">
+        <div class="co-heading co-worker-detail-heading">
+          <div>
+            <h1 id="companyDetailName">Ishchi</h1>
+            <div id="companyDetailBadges" class="co-detail-badges"></div>
+          </div>
+        </div>
+        <article class="co-detail-profit">
+          <span id="companyDetailMonth">Sof foyda</span>
+          <div class="co-profit-value"><strong id="companyDetailNet">0</strong> <small>so‘m</small></div>
+        </article>
+        <div class="co-stat-grid">
+          <article><span>Hisoblangan</span><strong id="companyDetailGross">0</strong></article>
+          <article><span>Jami ish</span><strong id="companyDetailPieces">0 dona</strong></article>
+          <article><span>Avans</span><strong id="companyDetailAdvanceAmount">—</strong></article>
+          <article><span>Jarima</span><strong id="companyDetailFine">—</strong></article>
+        </div>
+        <div class="co-hidden-metrics" hidden aria-hidden="true">
+          <span id="companyDetailPiecework">0</span>
+          <span id="companyDetailOklad">0</span>
+          <span id="companyDetailMagazin">0</span>
+          <span id="companyDetailStaj">—</span>
+        </div>
+        <div class="co-section-row">
+          <strong>OPERATSIYALAR · <span id="companyDetailTicketCount">0</span></strong>
+          <button id="companyAllTickets" type="button">Barchasi</button>
+        </div>
+        <div id="companyWorkerTickets" class="co-list"></div>
+        <div class="co-sticky-actions">
+          <button id="companyDetailAdvance" class="co-primary-button" type="button">Avans berish</button>
+          <button id="companyDetailExport" class="co-outline-button" type="button">Excel hisobot</button>
+        </div>
+      </section>
+
+      <section class="co-screen" data-co-screen="advance">
+        <div class="co-heading co-heading-stack co-advance-heading">
+          <div>
+            <h1>Avans berish</h1>
+            <span id="companyAdvancePeriod" class="co-muted">2026 — Oktabr</span>
+          </div>
+        </div>
+
+        <article id="companyAdvanceWorkerCard" class="co-advance-worker-card" role="button" tabindex="0">
+          <div class="co-advance-worker-info">
+            <span class="co-advance-worker-label">Ishchi</span>
+            <strong id="companyAdvanceWorkerName" class="co-advance-worker-name">Ishchi</strong>
+            <span id="companyAdvanceWorkerMeta" class="co-advance-worker-meta">ID 1 · sof foyda 0 so'm</span>
+          </div>
+          <svg class="co-advance-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a97a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </article>
+
+        <article class="co-advance-inputs-card">
+          <label class="co-advance-label" for="companyAdvanceAmountInput">Avans miqdori</label>
+          <div class="co-advance-amount-box">
+            <input id="companyAdvanceAmountInput" type="text" inputmode="numeric" placeholder="0 so'm" value="200 000 so'm" autocomplete="off" />
+          </div>
+          <div id="companyAdvanceChips" class="co-advance-chips">
+            <button type="button" data-amount="100000">100 000</button>
+            <button type="button" data-amount="200000" class="selected">200 000</button>
+            <button type="button" data-amount="500000">500 000</button>
+          </div>
+          <label class="co-advance-label" for="companyAdvanceNoteInput">Izoh (ixtiyoriy)</label>
+          <div class="co-advance-note-box">
+            <input id="companyAdvanceNoteInput" type="text" placeholder="Izoh" value="" />
+          </div>
+        </article>
+
+        <article class="co-advance-summary-card">
+          <div class="co-advance-summary-row">
+            <span>Hozirgi sof foyda</span>
+            <strong id="companyAdvanceCurrentNet">0</strong>
+          </div>
+          <div class="co-advance-summary-row">
+            <span>Avans</span>
+            <strong id="companyAdvanceDelta">− 200 000</strong>
+          </div>
+          <div class="co-advance-summary-row co-advance-summary-total">
+            <span>Avansdan keyin</span>
+            <strong id="companyAdvanceAfterNet">0 so'm</strong>
+          </div>
+        </article>
+        <div class="co-advance-caption">Summa namuna</div>
+
+        <div class="co-sticky-actions">
+          <button id="companyAdvanceSubmit" class="co-primary-button" type="button">Avans berish</button>
+        </div>
+      </section>
+
+      <section class="co-screen" data-co-screen="advance-success">
+        <div class="co-advance-success-hero">
+          <div class="co-advance-success-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h1 class="co-advance-success-title">Avans<br>berildi</h1>
+          <p class="co-advance-success-subtitle">Ishchiga xabar yuborildi</p>
+        </div>
+
+        <article class="co-advance-summary-card co-advance-success-card">
+          <div class="co-advance-summary-row">
+            <span>Ishchi</span>
+            <strong id="companySuccessWorkerName">—</strong>
+          </div>
+          <div class="co-advance-summary-row">
+            <span>Miqdor</span>
+            <strong id="companySuccessAmount">0 so'm</strong>
+          </div>
+          <div class="co-advance-summary-row">
+            <span>Sana</span>
+            <strong id="companySuccessDate">—</strong>
+          </div>
+          <div class="co-advance-summary-row co-advance-summary-total">
+            <span>Qolgan sof foyda</span>
+            <strong id="companySuccessRemaining">0 so'm</strong>
+          </div>
+        </article>
+
+        <div class="co-advance-success-caption">Summa namuna</div>
+
+        <div class="co-sticky-actions co-advance-success-actions">
+          <button id="companySuccessReturnWorker" class="co-advance-btn-primary" type="button">Ishchiga qaytish</button>
+          <button id="companySuccessGoHome" class="co-advance-btn-secondary" type="button">Bosh sahifa</button>
+        </div>
+      </section>
+
+      <section class="co-screen" data-co-screen="tickets">
+        <div class="co-heading"><h1>Operatsiyalar</h1><button id="companyTicketBack" class="co-text-button" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg><span>Orqaga</span></button></div>
+        <div id="companyAllWorkerTickets" class="co-list"></div>
+      </section>
+    </main>
+
+    <nav class="co-bottom-nav" aria-label="Asosiy bo‘limlar">
+      <button class="selected" data-co-tab="home" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <span>Bosh sahifa</span>
+      </button>
+      <button data-co-tab="workers" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span>Ishchilar</span>
+      </button>
+      <button data-co-tab="parties" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/>
+          <circle cx="7.5" cy="7.5" r="1.5"/>
+        </svg>
+        <span>Pattalar</span>
+      </button>
+      <button data-co-tab="settings" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="21" x2="14" y1="4" y2="4"/>
+          <line x1="10" x2="3" y1="4" y2="4"/>
+          <line x1="21" x2="12" y1="12" y2="12"/>
+          <line x1="8" x2="3" y1="12" y2="12"/>
+          <line x1="21" x2="16" y1="20" y2="20"/>
+          <line x1="12" x2="3" y1="20" y2="20"/>
+          <line x1="14" x2="14" y1="2" y2="6"/>
+          <line x1="8" x2="8" y1="10" y2="14"/>
+          <line x1="16" x2="16" y1="18" y2="22"/>
+        </svg>
+        <span>Sozlamalar</span>
+      </button>
+    </nav>
+    <div id="companyModelSheet" class="co-sheet-backdrop" hidden>
+      <div class="co-sheet-card">
+        <div class="co-sheet-header">
+          <div>
+            <h3 id="companySheetModelName">Model nomi</h3>
+            <span id="companySheetPeriodName" class="co-muted">Shu oy statistikasi</span>
+          </div>
+          <button id="companyCloseSheet" class="co-sheet-close" type="button" aria-label="Yopish">✕</button>
+        </div>
+        <div class="co-model-stats-grid">
+          <div class="co-model-stat-cell">
+            <span class="co-label">Model narxi</span>
+            <strong id="companySheetModelPrice">0 so‘m</strong>
+          </div>
+          <div class="co-model-stat-cell">
+            <span class="co-label">Tikilgan ish soni</span>
+            <strong id="companySheetSewnQty" class="co-stat-orange">0 dona</strong>
+          </div>
+          <div class="co-model-stat-cell">
+            <span class="co-label">Jami summa</span>
+            <strong id="companySheetTotalAmount" class="co-stat-green">0 so‘m</strong>
+          </div>
+          <div class="co-model-stat-cell">
+            <span class="co-label">Tavofut</span>
+            <strong id="companySheetTavofut">0 so‘m</strong>
+          </div>
+        </div>
+        <div id="companySheetPartyMeta" class="co-sheet-party-meta"></div>
+        <button id="companySheetGoModel" class="co-primary-button" type="button">Operatsiya narxlarini ko‘rish</button>
+      </div>
+    </div>
+    <div id="companyToast" class="co-toast" role="status" aria-live="polite" hidden></div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+
+</html>

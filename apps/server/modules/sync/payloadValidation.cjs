@@ -49,6 +49,8 @@ const RECONCILIATION_DECISIONS = Object.freeze([
 ]);
 
 const AUTHORITY_FIELDS = Object.freeze([
+  'endedAt', 'endedOperationId', 'monthClosedPeriodId', 'closeOperationId',
+  'ended_at', 'ended_operation_id', 'month_closed_period_id', 'close_operation_id',
   'operator',
   'operatorId',
   'operatorRole',
@@ -79,6 +81,7 @@ function resolveEnvelopeAlias(operation, camelField, snakeField, label = camelFi
 
 function createValidationError(code, message, details = null) {
   const error = new Error(message);
+  error[Symbol.for('hisob.sync.applicationError')] = true;
   error.name = 'ValidationError';
   error.code = code;
   error.details = details;
@@ -574,7 +577,8 @@ function validateUpdateTicket(payload, context) {
     rejectAuthorityFields(entry);
     return {
       opName: normalizeText(entry.opName, `entries[${index}].opName`, { maxLength: 256 }),
-      workerId: workerReference(entry.workerId, `entries[${index}].workerId`)
+      workerId: workerReference(entry.workerId, `entries[${index}].workerId`),
+      ...(entry.entryId == null ? {} : { entryId: requiredEntityKey(entry.entryId, `entries[${index}].entryId`) })
     };
   });
   return {
@@ -589,7 +593,8 @@ function validateUpdateTicket(payload, context) {
 }
 
 function validateRecordAdjustment(payload, context) {
-  rejectAuthorityFields(payload);
+  rejectAuthorityFields(payload, [...AUTHORITY_FIELDS, 'originalPeriodId', 'originalRateSnapshot', 'attributionStatus',
+    'original_period_id', 'original_rate_snapshot', 'attribution_status', 'original_ticket_id', 'original_entry_id']);
   const commandId = requiredIdentifier(payload, ['commandId']);
   const operationId = requiredIdentifier(payload, ['operationId']);
   const causal = validateCausalFields(payload, operationId);
@@ -602,6 +607,11 @@ function validateRecordAdjustment(payload, context) {
   }
 
   const adjustmentId = requiredIdentifier(payload, ['adjustmentId']);
+  if (hasOwn(payload, 'originalTicketId') !== hasOwn(payload, 'originalEntryId')) {
+    throw createValidationError('PARTIAL_ORIGINAL_LINK', 'Both originalTicketId and originalEntryId are required');
+  }
+  const originalTicketId = hasOwn(payload, 'originalTicketId') ? requiredIdentifier(payload, ['originalTicketId']) : undefined;
+  const originalEntryId = hasOwn(payload, 'originalEntryId') ? requiredIdentifier(payload, ['originalEntryId']) : undefined;
   const modelId = requiredEntityKey(payload.modelId, 'modelId');
   const workerId = workerReference(payload.workerId, 'workerId');
   const opName = normalizeText(payload.opName, 'opName', { maxLength: 256 });
@@ -629,6 +639,10 @@ function validateRecordAdjustment(payload, context) {
     opName,
     deltaQty
   };
+  if (originalTicketId !== undefined) {
+    normalized.originalTicketId = originalTicketId;
+    normalized.originalEntryId = originalEntryId;
+  }
   for (const [field, value] of Object.entries({ reason, createdBy, status, provenance, effectiveDate, createdAt })) {
     if (value !== undefined) normalized[field] = value;
   }
@@ -638,7 +652,9 @@ function validateRecordAdjustment(payload, context) {
 }
 
 function validateReverseAdjustment(payload, context) {
-  rejectAuthorityFields(payload, [...AUTHORITY_FIELDS, 'status']);
+  rejectAuthorityFields(payload, [...AUTHORITY_FIELDS, 'status', 'originalTicketId', 'originalEntryId',
+    'originalPeriodId', 'originalRateSnapshot', 'attributionStatus', 'original_ticket_id', 'original_entry_id',
+    'original_period_id', 'original_rate_snapshot', 'attribution_status']);
   const commandId = requiredIdentifier(payload, ['commandId']);
   const operationId = requiredIdentifier(payload, ['operationId']);
   const causal = validateCausalFields(payload, operationId);
@@ -780,6 +796,13 @@ function validateCreateParty(payload, context) {
   if (hasOwn(payload, 'sizes') && payload.sizes !== undefined && payload.sizes !== null) {
     normalized.sizes = validateSizeMap(payload.sizes);
   }
+  if (hasOwn(payload, 'sizeOrder') && payload.sizeOrder !== undefined && payload.sizeOrder !== null) {
+    if (!Array.isArray(payload.sizeOrder) || payload.sizeOrder.length > 128) throw createValidationError('INVALID_PARTY_SIZE_ORDER', 'sizeOrder must be a bounded array');
+    normalized.sizeOrder = payload.sizeOrder.map((name, index) => normalizeText(name, `sizeOrder[${index}]`, { maxLength: 64 }));
+    if (new Set(normalized.sizeOrder.map((name) => name.toLocaleUpperCase())).size !== normalized.sizeOrder.length) {
+      throw createValidationError('DUPLICATE_PARTY_SIZE_ORDER', 'sizeOrder values must be unique');
+    }
+  }
   const printedAt = dateValue(payload, 'printedAt');
   if (printedAt !== undefined) normalized.printedAt = printedAt;
   Object.assign(normalized, causal);
@@ -900,20 +923,32 @@ function validateWorkerCommand(payload, context, commandType) {
     const role = optionalText(payload, 'role', { maxLength: 128 });
     if (role !== undefined) normalized.role = role;
     const adjustments = payload.balanceAdjustments === undefined ? [] : payload.balanceAdjustments;
-    if (!Array.isArray(adjustments) || adjustments.length > 2) {
-      throw createValidationError('INVALID_WORKER_ADJUSTMENTS', 'balanceAdjustments must contain at most two entries');
+    if (!Array.isArray(adjustments) || adjustments.length > 4) {
+      throw createValidationError('INVALID_WORKER_ADJUSTMENTS', 'balanceAdjustments must contain at most four entries');
     }
+    const seenTypes = new Set();
+    const seenIds = new Set();
     normalized.balanceAdjustments = adjustments.map((adjustment, index) => {
       assertPlainObject(adjustment, 'INVALID_WORKER_ADJUSTMENT');
       rejectAuthorityFields(adjustment);
       const type = strictText(adjustment.type, `balanceAdjustments[${index}].type`, { maxLength: 16 });
-      if (!['AVANS', 'JARIMA'].includes(type)) throw createValidationError('INVALID_WORKER_ADJUSTMENT_TYPE', 'Worker balance type must be AVANS or JARIMA');
+      if (!['AVANS', 'JARIMA', 'OKLAD', 'MAGAZIN'].includes(type)) throw createValidationError('INVALID_WORKER_ADJUSTMENT_TYPE', 'Worker balance type is not supported');
+      const adjustmentId = requiredIdentifier(adjustment, ['adjustmentId']);
+      if (seenTypes.has(type) || seenIds.has(adjustmentId)) {
+        throw createValidationError('DUPLICATE_WORKER_ADJUSTMENT', 'Each worker adjustment type and ID may appear only once per command');
+      }
+      seenTypes.add(type); seenIds.add(adjustmentId);
       const periodId = requiredEntityKey(adjustment.periodId, `balanceAdjustments[${index}].periodId`);
+      if (['OKLAD', 'MAGAZIN'].includes(type) && periodId === undefined) {
+        throw createValidationError('PERIOD_REQUIRED', `${type} requires an explicit periodId`);
+      }
       const description = optionalText(adjustment, 'description', { maxLength: 500 });
       const value = {
-        adjustmentId: requiredIdentifier(adjustment, ['adjustmentId']),
+        adjustmentId,
         type,
-        amountDelta: finiteNumber(adjustment.amountDelta, `balanceAdjustments[${index}].amountDelta`, { nonZero: true })
+        amountDelta: finiteNumber(adjustment.amountDelta, `balanceAdjustments[${index}].amountDelta`, {
+          nonZero: true, ...(['OKLAD', 'MAGAZIN'].includes(type) ? { safeInteger: true } : {})
+        })
       };
       if (periodId !== undefined) value.periodId = periodId;
       if (description !== undefined) value.description = description;
@@ -967,6 +1002,15 @@ function validateUpdateParty(payload, context) {
     normalized[field] = finiteNumber(payload[field], field, { min: 0 });
   }
   normalized.sizes = validateSizeMap(payload.sizes || {});
+  if (hasOwn(payload, 'sizeOrder') && payload.sizeOrder !== undefined && payload.sizeOrder !== null) {
+    if (!Array.isArray(payload.sizeOrder) || payload.sizeOrder.length > 128) throw createValidationError('INVALID_PARTY_SIZE_ORDER', 'sizeOrder must be a bounded array');
+    normalized.sizeOrder = payload.sizeOrder.map((name, index) => normalizeText(name, `sizeOrder[${index}]`, { maxLength: 64 }));
+    if (new Set(normalized.sizeOrder.map((name) => name.toLocaleUpperCase())).size !== normalized.sizeOrder.length) {
+      throw createValidationError('DUPLICATE_PARTY_SIZE_ORDER', 'sizeOrder values must be unique');
+    }
+  } else {
+    delete normalized.sizeOrder;
+  }
   const printedAt = dateValue(payload, 'printedAt');
   if (printedAt !== undefined) normalized.printedAt = printedAt;
   assertEntity(context.operation, 'UpdateParty', partyRecordId);
@@ -1000,10 +1044,16 @@ function validateBatchSettings(payload, context) {
       if (typeof value !== 'string' || value.length > 32) throw createValidationError('INVALID_BATCH_SIZE', 'Batch size values must be bounded strings');
       normalizedSizeMap[normalizedKey] = value;
     }
+    let sizeNames = config.sizeNames;
+    if (sizeNames !== undefined && sizeNames !== null) {
+      if (!Array.isArray(sizeNames) || sizeNames.length > 128) throw createValidationError('INVALID_BATCH_SIZE_NAMES', 'sizeNames must be a bounded array');
+      sizeNames = sizeNames.map((name, i) => normalizeText(name, `configs[${index}].sizeNames[${i}]`, { maxLength: 64 }));
+      if (new Set(sizeNames.map((name) => name.toLocaleUpperCase())).size !== sizeNames.length) throw createValidationError('DUPLICATE_BATCH_SIZE', 'sizeNames must be unique');
+    }
     const partyNumber = config.partyNumber === undefined || config.partyNumber === '' ? '' : normalizeText(config.partyNumber, 'partyNumber', { maxLength: 64 });
     const totalIshSoni = config.totalIshSoni === undefined || config.totalIshSoni === '' ? '' : normalizeText(config.totalIshSoni, 'totalIshSoni', { maxLength: 32 });
     const color = config.color === undefined || config.color === null || config.color === '' ? '' : normalizeText(String(config.color), 'color', { maxLength: 128 });
-    return { modelId, partyNumber, isCustomParty: config.isCustomParty === true, totalIshSoni, color, sizes: normalizedSizeMap };
+    return { modelId, partyNumber, isCustomParty: config.isCustomParty === true, totalIshSoni, color, sizes: normalizedSizeMap, ...(sizeNames !== undefined ? { sizeNames } : {}) };
   });
   const entityId = scope.companyId;
   assertEntity(context.operation, 'UpdateBatchSettings', entityId);
@@ -1014,6 +1064,9 @@ function validateCompletePattaBatch(payload, context) {
   rejectAuthorityFields(payload, [...AUTHORITY_FIELDS, 'status', 'serverRevision', 'updatedAt', 'createdAt']);
   const scope = validateWorkbookScope(payload, context);
   const batchId = requiredIdentifier(payload, ['batchId']);
+  if (!Number.isSafeInteger(payload.batchSettingsBaseRevision) || payload.batchSettingsBaseRevision < 0) {
+    throw createValidationError('REVISION_CONFLICT', 'Batch settings revision is missing or invalid; reload before printing');
+  }
   const rawParties = payload.parties;
   if (!Array.isArray(rawParties) || rawParties.length < 1 || rawParties.length > 128) {
     throw createValidationError('INVALID_BATCH_PARTIES', 'parties must contain 1–128 records');
@@ -1041,6 +1094,9 @@ function validateCompletePartySeries(payload, context) {
   const scope = validateWorkbookScope(payload, context);
   const periodId = requiredEntityKey(payload.periodId, 'periodId');
   const endDate = dateValue(payload, 'endDate', { calendarOnly: true });
+  if (payload.finishScopeHash !== undefined && (typeof payload.finishScopeHash !== 'string' || !HASH.test(payload.finishScopeHash))) {
+    throw createValidationError('INVALID_FINISH_SCOPE', 'finishScopeHash must be a SHA-256 hex digest');
+  }
   assertEntity(context.operation, 'CompletePartySeries', periodId);
   return { ...payload, ...scope, periodId, endDate };
 }

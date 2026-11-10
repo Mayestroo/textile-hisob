@@ -23,6 +23,7 @@ function createBootstrapHandler(pool, options = {}) {
         success: true,
         snapshot: result.snapshot,
         cursor: result.cursor,
+        feedBaseline: { protocolVersion: 1, companyId, headCursor: result.cursor },
         nextPattaNumber: result.nextPattaNumber,
         counts: result.counts
       });

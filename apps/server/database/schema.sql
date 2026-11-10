@@ -515,10 +515,11 @@ CREATE TABLE IF NOT EXISTS worker_adjustments (
   id VARCHAR(160) PRIMARY KEY,
   company_id VARCHAR(64) NOT NULL,
   worker_id INTEGER NOT NULL,
-  type VARCHAR(16) NOT NULL CHECK (type IN ('AVANS', 'JARIMA')),
+  type VARCHAR(16) NOT NULL CHECK (type IN ('AVANS', 'JARIMA', 'OKLAD', 'MAGAZIN')),
   amount NUMERIC NOT NULL,
   source_id VARCHAR(160) NOT NULL,
   provenance VARCHAR(64) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'POSTED',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   FOREIGN KEY (company_id, worker_id) REFERENCES workers(company_id, id)
 );

@@ -56,6 +56,10 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
     isClosed: false
   },
   periods: [],
+  payrollValuation: {
+    companyId: '', period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+    accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+  },
   selectedArchiveFilename: null,
   selectedArchiveData: null,
 
@@ -80,6 +84,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
 
     set({
       currentPeriod: newPeriod,
+      payrollValuation: { companyId: state.licenseStatus?.companyId || '', period: null, workers: [], accountingStatus: 'UNAVAILABLE', accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' },
       selectedArchiveFilename: null,
       selectedArchiveData: null
     });
@@ -106,7 +111,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       if (sync.success) state.addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`Joriy davr "${updated.name}" deb yangilandi.`));
       return sync.success;
     }
-    set({ currentPeriod: updated });
+    set({ currentPeriod: updated, payrollValuation: { companyId: state.licenseStatus?.companyId || '', period: null, workers: [], accountingStatus: 'UNAVAILABLE', accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' } });
     if (!(await state.saveToDisk({ currentPeriod: updated, companyId: state.licenseStatus?.companyId }))) return false;
     state.addNotification('success', 'Davr yangilandi', `Joriy oylik "${updated.name}" deb saqlandi (${updated.startDate}).`);
     return true;
@@ -136,7 +141,10 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
           state.addNotification('error', result?.code || 'PERIOD_ARCHIVE_READ_FAILED', result?.error || ' period archive could not be loaded.');
           return;
         }
-        set({ selectedArchiveFilename: filename, selectedArchiveData: result.data });
+        set({ selectedArchiveFilename: filename, selectedArchiveData: result.data, payrollValuation: {
+          companyId, period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+          accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+        } });
         state.addNotification('info', 'Arxiv yuklandi', `"${result.data.period?.name || filename}"  arxivi ochildi.`);
       } catch (error) {
         state.addNotification('error', 'PERIOD_ARCHIVE_READ_FAILED', error instanceof Error ? error.message : ' period archive could not be loaded.');
@@ -148,7 +156,10 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       try {
         const res = await eAPI.archiveRead(filename, companyId);
         if (res.success && res.data) {
-          set({ selectedArchiveFilename: filename, selectedArchiveData: res.data });
+          set({ selectedArchiveFilename: filename, selectedArchiveData: res.data, payrollValuation: {
+            companyId: companyId || '', period: null, workers: [], accountingStatus: 'UNAVAILABLE',
+            accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN'
+          } });
           state.addNotification('info', 'Arxiv yuklandi', `"${res.data.period?.name || filename}" arxivi ko'rish uchun ochildi.`);
           return;
         }
@@ -194,7 +205,12 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       isClosed: false
     };
 
+    const localCloseOpId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? ('local_close_' + crypto.randomUUID())
+      : ('local_close_' + Date.now());
+
     const closedPeriod = {
+      closeOperationId: localCloseOpId,
       ...state.currentPeriod,
       endDate: cleanDate,
       isClosed: true,
@@ -250,6 +266,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
         ...party,
         isClosed: isComplete,
         closedAt: isComplete ? cleanDate : undefined,
+        ...(isComplete ? { monthClosedPeriodId: state.currentPeriod.id } : {}),
         archivedPattaNumbers
       };
     });
@@ -277,10 +294,12 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
     const companyId = state.licenseStatus?.companyId;
     if (eAPI && eAPI.archiveSave) {
       try {
-        await eAPI.archiveSave(archiveFilename, archivePayload, companyId);
+        const archiveResult = await eAPI.archiveSave(archiveFilename, archivePayload, companyId);
+        if (archiveResult?.success === false) throw new Error(archiveResult.error || archiveResult.code || 'PERIOD_ARCHIVE_SAVE_FAILED');
         if (!isCurrentPeriodSession()) return rejectStalePeriodSession();
       } catch (err) {
-        console.warn('Failed to save archive in Electron', err);
+        state.addNotification('error', 'PERIOD_ARCHIVE_SAVE_FAILED', err instanceof Error ? err.message : 'Period archive could not be saved.');
+        return false;
       }
     }
 
@@ -321,18 +340,6 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
 
     const cleanForms = createInitialTicketForms(cleanModels);
 
-    set({
-      models: cleanModels,
-      workers: cleanWorkers,
-      currentPeriod: nextPeriod,
-      periods: updatedPeriods,
-      ticketForms: cleanForms,
-      printedPartyHistory: updatedPartyHistory,
-      submittedTickets: cleanSubmittedTickets,
-      selectedArchiveFilename: null,
-      selectedArchiveData: null
-    });
-
     if (!(await state.saveToDisk({
       models: cleanModels,
       workers: cleanWorkers,
@@ -344,6 +351,19 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       companyId: initialLicenseStatus?.companyId
     }, { forceBackup: true }))) return false;
     if (!isCurrentPeriodSession()) return rejectStalePeriodSession();
+
+    set({
+      models: cleanModels,
+      workers: cleanWorkers,
+      currentPeriod: nextPeriod,
+      payrollValuation: { companyId: initialLicenseStatus?.companyId || '', period: null, workers: [], accountingStatus: 'UNAVAILABLE', accountingReasons: ['PAYROLL_VALUATION_UNAVAILABLE'], syncStatus: 'UNKNOWN' },
+      periods: updatedPeriods,
+      ticketForms: cleanForms,
+      printedPartyHistory: updatedPartyHistory,
+      submittedTickets: cleanSubmittedTickets,
+      selectedArchiveFilename: null,
+      selectedArchiveData: null
+    });
 
     state.addNotification(
       'success',

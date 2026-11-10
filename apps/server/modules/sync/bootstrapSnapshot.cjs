@@ -42,7 +42,7 @@ async function readCompanySnapshot(client, companyId) {
     color: row.color,
     size: row.size,
     pattaOpsOrder: jsonValue(row.patta_ops_order_json, []),
-    status: row.status,
+    status: row.status || 'POSTED',
     serverRevision: numberValue(row.server_revision),
     createdAt: dateValue(row.created_at),
     updatedAt: dateValue(row.updated_at)
@@ -69,7 +69,7 @@ async function readCompanySnapshot(client, companyId) {
 
   const periodResult = await client.query(`
     SELECT id, company_id, name, start_date, end_date, is_closed, closed_at,
-      notes, archive_filename, status, server_revision, created_at, updated_at
+       notes, archive_filename, close_operation_id, status, server_revision, created_at, updated_at
     FROM periods WHERE company_id = $1 ORDER BY start_date DESC, id DESC
   `, [companyId]);
   const periods = periodResult.rows.map((row) => ({
@@ -80,6 +80,7 @@ async function readCompanySnapshot(client, companyId) {
     endDate: dateValue(row.end_date)?.slice(0, 10) || null,
     isClosed: Boolean(row.is_closed),
     closedAt: dateValue(row.closed_at),
+    closeOperationId: row.close_operation_id,
     notes: row.notes,
     archiveFilename: row.archive_filename,
     status: row.status,
@@ -115,7 +116,8 @@ async function readCompanySnapshot(client, companyId) {
       COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
       COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number,
       p.ish_soni_per_patta, p.total_ish_soni, p.ish_soni,
-      p.cumulative_ish_soni, p.sizes_json, p.printed_at, p.is_closed, p.closed_at,
+      p.cumulative_ish_soni, p.sizes_json, p.size_order_json, p.printed_at, p.is_closed, p.closed_at,
+       p.ended_at, p.ended_operation_id, p.month_closed_period_id,
       p.archived_patta_numbers_json, p.status, p.is_archived, p.server_revision, p.created_at, p.updated_at
     FROM parties p
     LEFT JOIN model_id_aliases a ON a.company_id = p.company_id AND a.legacy_model_id = p.model_id
@@ -139,9 +141,13 @@ async function readCompanySnapshot(client, companyId) {
     ishSoni: numberValue(row.ish_soni),
     cumulativeIshSoni: numberValue(row.cumulative_ish_soni),
     sizes: jsonValue(row.sizes_json, {}),
+    ...(row.size_order_json == null ? {} : { sizeOrder: jsonValue(row.size_order_json, []) }),
     printedAt: dateValue(row.printed_at),
     isClosed: Boolean(row.is_closed),
     closedAt: dateValue(row.closed_at),
+    endedAt: dateValue(row.ended_at),
+    endedOperationId: row.ended_operation_id,
+    monthClosedPeriodId: row.month_closed_period_id,
     archivedPattaNumbers: jsonValue(row.archived_patta_numbers_json, []),
     status: row.status,
     isArchived: Boolean(row.is_archived),
@@ -151,7 +157,7 @@ async function readCompanySnapshot(client, companyId) {
   }));
 
   const adjustmentResult = await client.query(`
-    SELECT id, company_id, worker_id, period_id, type, amount, provenance, created_at
+    SELECT id, company_id, worker_id, period_id, type, amount, status, provenance, created_at
     FROM worker_adjustments WHERE company_id = $1 ORDER BY created_at ASC, id ASC
   `, [companyId]);
   const workerAdjustments = adjustmentResult.rows.map((row) => ({
@@ -161,6 +167,7 @@ async function readCompanySnapshot(client, companyId) {
     periodId: row.period_id,
     type: row.type,
     amount: numberValue(row.amount),
+    status: row.status,
     provenance: row.provenance,
     createdAt: dateValue(row.created_at)
   }));
@@ -219,7 +226,8 @@ async function readCompanySnapshot(client, companyId) {
 
   const productionResult = await client.query(`
     SELECT adjustment_id, company_id, model_id, worker_id, op_name, delta_qty, reason,
-      status, server_revision, created_at, created_by, original_adjustment_id, provenance
+      status, server_revision, created_at, created_by, original_adjustment_id, provenance,
+      original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
     FROM production_adjustments WHERE company_id = $1 ORDER BY created_at ASC, adjustment_id ASC
   `, [companyId]);
   const productionAdjustments = productionResult.rows.map((row) => ({
@@ -235,7 +243,12 @@ async function readCompanySnapshot(client, companyId) {
     createdAt: dateValue(row.created_at),
     createdBy: row.created_by,
     originalAdjustmentId: row.original_adjustment_id,
-    provenance: row.provenance
+    provenance: row.provenance,
+    originalTicketId: row.original_ticket_id ?? null,
+    originalEntryId: row.original_entry_id ?? null,
+    originalPeriodId: row.original_period_id ?? null,
+    originalRateSnapshot: row.original_rate_snapshot == null ? null : numberValue(row.original_rate_snapshot),
+    attributionStatus: row.attribution_status || 'UNRESOLVED'
   }));
 
   const companySettingsResult = await client.query(`
@@ -244,7 +257,7 @@ async function readCompanySnapshot(client, companyId) {
   `, [companyId]);
   const modelSettingsResult = await client.query(`
     SELECT company_id, model_id, party_number, is_custom_party, total_ish_soni, color,
-      sizes_json, server_revision, updated_at
+      sizes_json, size_names_json, server_revision, updated_at
     FROM patta_batch_settings WHERE company_id = $1 ORDER BY model_id ASC
   `, [companyId]);
   const companySettings = companySettingsResult.rows[0];
@@ -263,6 +276,7 @@ async function readCompanySnapshot(client, companyId) {
       totalIshSoni: row.total_ish_soni,
       color: row.color,
       sizes: jsonValue(row.sizes_json, {}),
+      sizeNames: row.size_names_json == null ? null : jsonValue(row.size_names_json, []),
       serverRevision: numberValue(row.server_revision),
       updatedAt: dateValue(row.updated_at)
     }))

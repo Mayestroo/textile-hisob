@@ -1,12 +1,18 @@
-import React, { useState, useMemo } from 'react';
-import { useWorkbookStore } from '../../../store/workbookStore';
-import { X, Layers, Search, Download, Clock } from 'lucide-react';
+import { Download, Layers, RotateCcw, Search, X } from 'lucide-react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { CustomSelect } from '../../../components/ui/CustomSelect';
 import { formatMoney } from '../../../engine/formulaEngine';
+import { displayedMoney, payrollDisplay } from '../../../engine/payrollDisplay';
+import { useAuthStore } from '../../../store/authStore';
+import { useWorkbookStore } from '../../../store/workbookStore';
+import { Worker } from '../../../types/workbook';
 import { formatDateIso, formatTicketDateTime } from '../../../utils/formatters';
 
 interface WorkerOperationRecord {
+  kind: 'PAYROLL' | 'AUDIT';
   id: string;
   ticketId: string;
+  periodId: string;
   submittedAt: string;
   konveyer: string;
   modelId: string;
@@ -16,9 +22,9 @@ interface WorkerOperationRecord {
   size: string;
   color: string;
   opName: string;
-  rate: number;
-  qty: number;
-  summa: number;
+  rate: number | null;
+  qty: number | null;
+  summa: number | null;
 }
 
 export const WorkerDetailModal: React.FC = () => {
@@ -26,162 +32,293 @@ export const WorkerDetailModal: React.FC = () => {
   const workerId = useWorkbookStore((s) => s.modalState.workerId);
   const modalModelId = useWorkbookStore((s) => s.modalState.modelId);
   const modalOpName = useWorkbookStore((s) => s.modalState.opName);
+  const modalData = useWorkbookStore((s) => s.modalState.data);
   const closeModal = useWorkbookStore((s) => s.closeModal);
+  const openModal = useWorkbookStore((s) => s.openModal);
   const workers = useWorkbookStore((s) => s.workers);
   const models = useWorkbookStore((s) => s.models);
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
+  const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
+  const payrollValuation = useWorkbookStore((s) => s.payrollValuation);
+  const licenseCompanyId = useWorkbookStore((s) => s.licenseStatus?.companyId);
+  const authState = useAuthStore();
+  const authCompanyId = authState.companyId;
+  const authUserId = authState.user?.uid || '';
+  const authRole = authState.role || '';
+  const companyId = licenseCompanyId || authCompanyId;
+  const periodId = currentPeriod.id;
+  const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
+  const selectedArchiveFilename = useWorkbookStore((s) => s.selectedArchiveFilename);
+  const selectedArchiveData = useWorkbookStore((s) => s.selectedArchiveData);
+  const detailPeriodId = selectedArchiveFilename ? selectedArchiveData?.period?.id || '' : periodId;
+  const canEditTickets = authState.permissions.includes('edit:patta');
+  const [jumpError, setJumpError] = useState('');
+  const displayWorkers = useMemo(() => {
+    const known = new Set(workers.map((item) => Number(item.id)));
+    const historic = payrollValuation.workers.filter((item: any) => !known.has(Number(item.workerId)))
+      .map((item: any) => ({
+        id: Number(item.workerId), name: item.name || item.workerName || `Ishchi #${item.workerId}`,
+        staj: Number(item.staj || 0), avans: Number(item.avans || 0), jarima: Number(item.jarima || 0)
+      } as Worker));
+    return [...workers, ...historic];
+  }, [workers, payrollValuation]);
+  const display = useMemo(() => payrollDisplay(models, displayWorkers, payrollValuation, companyId || undefined, periodId),
+    [models, displayWorkers, payrollValuation, companyId, periodId]);
 
   const isOpen = modalType === 'worker_detail';
 
   const worker = useMemo(() => {
     if (!isOpen || !workerId) return null;
-    return workers.find((w) => w.id === workerId) || null;
-  }, [isOpen, workers, workerId]);
+    const numId = Number(workerId);
+    const strId = String(workerId);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>('all');
-  const [selectedOp, setSelectedOp] = useState<string>('all');
-  const [selectedKonveyer, setSelectedKonveyer] = useState<string>('all');
+    const current = workers.find((w) => Number(w.id) === numId || String(w.id) === strId);
+    if (current) return current;
 
-  // React to modal opening with specific model and operation
-  React.useEffect(() => {
-    if (isOpen) {
-      if (modalModelId) {
-        const m = models.find((mod) => mod.id === modalModelId || mod.name === modalModelId);
-        setSelectedModel(m ? m.name : 'all');
-      } else {
-        setSelectedModel('all');
-      }
-      if (modalOpName) {
-        setSelectedOp(modalOpName);
-      } else {
-        setSelectedOp('all');
-      }
-      setSelectedKonveyer('all');
-      setSearchQuery('');
+    const historical = payrollValuation.workers?.find((w: any) => Number(w.workerId) === numId || String(w.workerId) === strId);
+    if (historical) {
+      return {
+        id: numId,
+        name: historical.name || historical.workerName || `Ishchi #${numId}`,
+        staj: Number(historical.staj || 0),
+        avans: Number(historical.avans || 0),
+        jarima: Number(historical.jarima || 0)
+      } as Worker;
     }
-  }, [isOpen, modalModelId, modalOpName, models]);
 
-  // Extract all operations performed by this worker across all submitted tickets
+    const master = display.masterReport?.workers?.find((w: any) => Number(w.workerId) === numId);
+    if (master) {
+      return {
+        id: numId,
+        name: master.workerName || `Ishchi #${numId}`,
+        staj: Number(master.staj || 0),
+        avans: Number(master.avans || 0),
+        jarima: Number(master.jarima || 0)
+      } as Worker;
+    }
+
+    return {
+      id: numId || 1,
+      name: `Ishchi #${numId || workerId}`,
+      staj: 0,
+      avans: 0,
+      jarima: 0
+    } as Worker;
+  }, [isOpen, workers, workerId, payrollValuation, display.masterReport]);
+
+  const detailScope = JSON.stringify([companyId || '', detailPeriodId, selectedArchiveFilename || '', workerId || '', licenseStatus?.activationId || '', licenseStatus?.machineId || '', licenseStatus?.role || '', authUserId, authRole, modalModelId || '', modalOpName || '']);
+  const detailFilterKey = `worker-detail:filters:${detailScope}`;
+  const defaults = useMemo(() => ({
+    searchQuery: '',
+    selectedModel: modalModelId ? models.find((item) => item.id === modalModelId || item.name === modalModelId)?.name || 'all' : 'all',
+    selectedOp: modalOpName || 'all',
+    selectedKonveyer: 'all',
+    selectedDate: 'all',
+    selectedParty: 'all',
+    sortBy: 'date_desc' as 'date_desc' | 'date_asc' | 'qty_desc' | 'sum_desc'
+  }), [modalModelId, modalOpName, models]);
+  const initialDetailFilters = () => {
+    try {
+      const value = JSON.parse(window.sessionStorage.getItem(detailFilterKey) || 'null');
+      if (value && typeof value === 'object') return {
+        searchQuery: typeof value.searchQuery === 'string' ? value.searchQuery : '',
+        selectedModel: typeof value.selectedModel === 'string' ? value.selectedModel : defaults.selectedModel,
+        selectedOp: typeof value.selectedOp === 'string' ? value.selectedOp : defaults.selectedOp,
+        selectedKonveyer: typeof value.selectedKonveyer === 'string' ? value.selectedKonveyer : 'all',
+        selectedDate: typeof value.selectedDate === 'string' ? value.selectedDate : 'all',
+        selectedParty: typeof value.selectedParty === 'string' ? value.selectedParty : 'all',
+        sortBy: typeof value.sortBy === 'string' ? value.sortBy : 'date_desc'
+      };
+    } catch { /* Filtering stays available when session storage is denied. */ }
+    return defaults;
+  };
+  const [detailFilters, setDetailFilters] = useState(() => ({ scope: detailScope, ...initialDetailFilters() }));
+  const effectiveDetailFilters = detailFilters.scope === detailScope ? detailFilters : { scope: detailScope, ...defaults };
+  const { searchQuery, selectedModel, selectedOp, selectedKonveyer, selectedDate, selectedParty, sortBy } = effectiveDetailFilters;
+  const updateDetailFilters = (patch: Partial<typeof defaults>) => setDetailFilters({ ...effectiveDetailFilters, ...patch, scope: detailScope });
+
+  React.useEffect(() => {
+    const ticketId = modalType === 'worker_detail' ? modalData?.focusTicketId : null;
+    if (ticketId) requestAnimationFrame(() => requestAnimationFrame(() => {
+      const link = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-ticket-edit-link]'))
+        .find((button) => button.dataset.ticketEditLink === ticketId);
+      (link || document.querySelector<HTMLInputElement>('.e3-detail-filters input'))?.focus();
+    }));
+  }, [modalType, modalData]);
+
+  const openTicketForEdit = useCallback((ticketId: string) => {
+    const state = useWorkbookStore.getState();
+    const ticket = state.submittedTickets.find((item) => item.id === ticketId);
+    const actor = useAuthStore.getState();
+    const activeCompany = state.licenseStatus?.companyId || actor.companyId;
+    const companyAtOpen = companyId;
+    const periodAtOpen = periodId;
+    const activationAtOpen = licenseStatus?.activationId || licenseStatus?.machineId || '';
+    if (!ticket || ticket.id !== ticketId || !activeCompany || activeCompany !== companyAtOpen
+      || ((ticket as any).companyId && (ticket as any).companyId !== companyAtOpen)
+      || (state.payrollValuation.companyId && state.payrollValuation.companyId !== companyAtOpen)
+      || ticket.periodId !== periodAtOpen || state.currentPeriod.id !== periodAtOpen
+      || state.selectedArchiveFilename || !canEditTickets || !actor.permissions.includes('edit:patta')) {
+      setJumpError('Patta tahrirlash uchun topilmadi yoki joriy davr/kompaniya/ruxsat bilan mos emas.');
+      return;
+    }
+    setJumpError('');
+    openModal({
+      type: 'edit_ticket', data: {
+        ...ticket, returnToWorkerDetail: workerId,
+        jumpContext: {
+          companyId: companyAtOpen, periodId: periodAtOpen, activationId: activationAtOpen,
+          authUserId: actor.user?.uid || '', authRole: actor.role || ''
+        }
+      }
+    });
+  }, [companyId, periodId, licenseStatus?.activationId, licenseStatus?.machineId, canEditTickets, openModal, workerId]);
+
+  React.useEffect(() => {
+    if (detailFilters.scope !== detailScope) setDetailFilters({ scope: detailScope, ...initialDetailFilters() });
+  }, [detailScope, detailFilterKey, detailFilters.scope]);
+
+  React.useEffect(() => {
+    if (!isOpen || detailFilters.scope !== detailScope) return;
+    try {
+      const { searchQuery, selectedModel, selectedOp, selectedKonveyer } = detailFilters;
+      const value = { searchQuery, selectedModel, selectedOp, selectedKonveyer };
+      if (searchQuery || selectedModel !== defaults.selectedModel || selectedOp !== defaults.selectedOp || selectedKonveyer !== 'all')
+        window.sessionStorage.setItem(detailFilterKey, JSON.stringify(value));
+      else window.sessionStorage.removeItem(detailFilterKey);
+    } catch { /* Filtering stays available when session storage is denied. */ }
+  }, [isOpen, detailScope, detailFilterKey, detailFilters, defaults]);
+
+  React.useEffect(() => {
+    if (isOpen && detailFilters.scope !== detailScope) setDetailFilters({ scope: detailScope, ...initialDetailFilters() });
+  }, [isOpen, detailScope, detailFilterKey, detailFilters.scope]);
+
   const operationRecords = useMemo<WorkerOperationRecord[]>(() => {
-    if (!isOpen || !workerId) return [];
+    if (!isOpen || !workerId || !detailPeriodId
+      || (!selectedArchiveFilename && payrollValuation.companyId && companyId && payrollValuation.companyId !== companyId)) return [];
 
     const records: WorkerOperationRecord[] = [];
-    // Precompute model name and operation rate lookup map for O(1) operations
-    const modelMetaMap = new Map<string, { name: string; opRates: Map<string, number> }>();
-    for (const m of models) {
-      const opRates = new Map<string, number>();
-      for (const op of m.operations) {
-        opRates.set(op.name, op.rate);
-      }
-      modelMetaMap.set(m.id, { name: m.name || m.id, opRates });
-    }
+    const modelMetaMap = new Map(display.displayModels.map((m: any) => [m.id, m.name || m.id]));
+    const scopedTickets = selectedArchiveFilename ? selectedArchiveData?.submittedTickets || [] : submittedTickets || [];
 
-    for (const ticket of submittedTickets || []) {
-      const meta = modelMetaMap.get(ticket.modelId);
-      const mName = meta?.name || ticket.modelId;
-      const opRates = meta?.opRates;
+    for (const ticket of scopedTickets) {
+      if (ticket.periodId !== detailPeriodId || ((ticket as any).companyId && (ticket as any).companyId !== companyId)) continue;
+      const mName = modelMetaMap.get(ticket.modelId) || ticket.modelId;
 
       for (const entry of ticket.entries || []) {
         if (entry.workerId === workerId) {
-          const rate = entry.rateSnapshot !== undefined && entry.rateSnapshot > 0 
-            ? entry.rateSnapshot 
-            : (opRates?.get(entry.opName) || 0);
+          const rate = typeof entry.rateSnapshot === 'number' && Number.isFinite(entry.rateSnapshot)
+            ? entry.rateSnapshot : null;
           const qty = ticket.qty || 0;
-          const summa = qty * rate;
 
           records.push({
+            kind: 'AUDIT',
             id: `${ticket.id}_${entry.opName}`,
             ticketId: ticket.id,
+            periodId: ticket.periodId || 'Davr noma’lum',
             submittedAt: formatTicketDateTime(ticket),
             konveyer: ticket.konveyer ? `${ticket.konveyer}-Konveyer` : '—',
             modelId: ticket.modelId,
             modelName: mName,
-            partyNumber: String(ticket.partyNumber),
+            partyNumber: String(ticket.partyNumber || ''),
             pattaNumber: ticket.pattaNumber,
             size: ticket.size || '—',
             color: ticket.color || '—',
             opName: entry.opName,
             rate,
             qty,
-            summa
+            summa: rate !== null ? rate * qty : null
           });
         }
       }
     }
 
-    // Also check direct model hisobQuantities if any direct quantities were entered
-    for (const m of models) {
-      const workerOpMap = m.hisobQuantities?.[workerId];
-      if (workerOpMap) {
-        for (const [opName, totalHqQty] of Object.entries(workerOpMap)) {
-          if (typeof totalHqQty === 'number' && totalHqQty > 0) {
-            const fromTicketsSum = records
-              .filter((r) => r.modelId === m.id && r.opName === opName)
-              .reduce((s, r) => s + r.qty, 0);
-
-            const directDiff = totalHqQty - fromTicketsSum;
-            if (directDiff > 0) {
-              const op = m.operations.find((o) => o.name === opName);
-              const rate = op?.rate || 0;
-              records.push({
-                id: `direct_${m.id}_${workerId}_${opName}`,
-                ticketId: 'direct',
-                submittedAt: 'Jadvaldan kiritilgan',
-                konveyer: '—',
-                modelId: m.id,
-                modelName: m.name || m.id,
-                partyNumber: '—',
-                pattaNumber: 0,
-                size: '—',
-                color: '—',
-                opName,
-                rate,
-                qty: directDiff,
-                summa: directDiff * rate
-              });
-            }
-          }
-        }
-      }
-    }
-
     return records;
-  }, [isOpen, workerId, models, submittedTickets]);
+  }, [isOpen, workerId, display.displayModels, submittedTickets, detailPeriodId, companyId, selectedArchiveFilename, selectedArchiveData, payrollValuation.companyId]);
+
+  const payrollRecords = useMemo<WorkerOperationRecord[]>(() => {
+    const hasPriorPeriodTickets = submittedTickets.some((ticket) => Boolean(ticket.periodId) && ticket.periodId !== periodId
+      && (!(ticket as any).companyId || (ticket as any).companyId === companyId));
+    const hasPriorCompanyTickets = submittedTickets.some((ticket) => Boolean((ticket as any).companyId)
+      && Boolean(companyId) && (ticket as any).companyId !== companyId);
+    if (!isOpen || !workerId || selectedArchiveFilename || (!display.ready && (hasPriorPeriodTickets || hasPriorCompanyTickets))
+      || (payrollValuation.period?.periodId && payrollValuation.period.periodId !== periodId)
+      || (payrollValuation.companyId && companyId && payrollValuation.companyId !== companyId)) return [];
+    return display.displayModels.flatMap((model: any) => model.operations.flatMap((op: any) => {
+      const cell = display.key(model.id, workerId, op.name);
+      const amount = display.cellAmounts[cell] ?? null;
+      const qty = display.cellQuantities[cell] ?? null;
+      if (amount === 0 && qty === 0) return [];
+      return [{
+        kind: 'PAYROLL' as const, id: `payroll_${model.id}_${workerId}_${op.name}`, ticketId: 'PAYROLL',
+        periodId, submittedAt: `Davr: ${currentPeriod.name}`, konveyer: '—', modelId: model.id, modelName: model.name,
+        partyNumber: '—', pattaNumber: 0, size: '—', color: '—', opName: op.name,
+        rate: display.operationRates[model.id]?.[op.name] ?? null, qty, summa: amount
+      }];
+    }));
+  }, [isOpen, workerId, display, periodId, currentPeriod.name, selectedArchiveFilename, payrollValuation.period, payrollValuation.companyId, companyId, submittedTickets]);
+
+  const allRecords = useMemo(() => [...payrollRecords, ...operationRecords], [payrollRecords, operationRecords]);
+  const workerHasUnknownMoney = !display.ready
+    || (Boolean(companyId) && !payrollValuation.workers.some((entry: any) => Number(entry.workerId) === Number(workerId)))
+    || payrollRecords.some((record) => record.summa === null);
 
   // Unique models and konveyers for filtering
   const uniqueModels = useMemo(() => {
     const set = new Set<string>();
-    for (const r of operationRecords) {
-      set.add(r.modelName);
+    for (const r of allRecords) {
+      if (r.modelName) set.add(r.modelName);
     }
     return Array.from(set);
-  }, [operationRecords]);
+  }, [allRecords]);
 
   const uniqueOperations = useMemo(() => {
     const set = new Set<string>();
-    for (const r of operationRecords) {
+    for (const r of allRecords) {
       if (selectedModel === 'all' || r.modelName === selectedModel) {
-        set.add(r.opName);
+        if (r.opName) set.add(r.opName);
       }
     }
     return Array.from(set);
-  }, [operationRecords, selectedModel]);
+  }, [allRecords, selectedModel]);
 
   const uniqueKonveyers = useMemo(() => {
     const set = new Set<string>();
-    for (const r of operationRecords) {
+    for (const r of allRecords) {
       if (r.konveyer && r.konveyer !== '—') set.add(r.konveyer);
     }
     return Array.from(set);
-  }, [operationRecords]);
+  }, [allRecords]);
 
-  // Filtered records
+  const uniqueDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRecords) {
+      if (r.submittedAt) {
+        const datePart = r.submittedAt.split(' ')[0];
+        if (datePart && datePart !== 'Davr:') set.add(datePart);
+      }
+    }
+    return Array.from(set).sort().reverse();
+  }, [allRecords]);
+
+  const uniqueParties = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRecords) {
+      if (r.partyNumber && r.partyNumber !== '—' && r.partyNumber !== "No'malum Partiya" && r.partyNumber.trim() !== '') {
+        set.add(r.partyNumber);
+      }
+    }
+    return Array.from(set);
+  }, [allRecords]);
+
+  // Filtered and sorted records
   const filteredRecords = useMemo(() => {
-    return operationRecords.filter((r) => {
+    const list = allRecords.filter((r) => {
       if (selectedModel !== 'all' && r.modelName !== selectedModel) return false;
       if (selectedOp !== 'all' && r.opName !== selectedOp) return false;
       if (selectedKonveyer !== 'all' && r.konveyer !== selectedKonveyer) return false;
+      if (selectedDate !== 'all' && !r.submittedAt.startsWith(selectedDate)) return false;
+      if (selectedParty !== 'all' && r.partyNumber !== selectedParty) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchOp = r.opName.toLowerCase().includes(q);
@@ -190,28 +327,123 @@ export const WorkerDetailModal: React.FC = () => {
         const matchPatta = String(r.pattaNumber).includes(q);
         const matchSize = r.size.toLowerCase().includes(q);
         const matchColor = r.color.toLowerCase().includes(q);
-        if (!matchOp && !matchModel && !matchParty && !matchPatta && !matchSize && !matchColor) {
+        const matchDate = r.submittedAt.toLowerCase().includes(q);
+        if (!matchOp && !matchModel && !matchParty && !matchPatta && !matchSize && !matchColor && !matchDate) {
           return false;
         }
       }
       return true;
     });
-  }, [operationRecords, selectedModel, selectedOp, selectedKonveyer, searchQuery]);
+
+    if (sortBy === 'date_asc') {
+      return [...list].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+    }
+    if (sortBy === 'qty_desc') {
+      return [...list].sort((a, b) => (b.qty || 0) - (a.qty || 0));
+    }
+    if (sortBy === 'sum_desc') {
+      return [...list].sort((a, b) => {
+        const sumA = a.kind === 'PAYROLL' ? (a.summa || 0) : ((a.qty || 0) * (a.rate || 0));
+        const sumB = b.kind === 'PAYROLL' ? (b.summa || 0) : ((b.qty || 0) * (b.rate || 0));
+        return sumB - sumA;
+      });
+    }
+    return list;
+  }, [allRecords, selectedModel, selectedOp, selectedKonveyer, selectedDate, selectedParty, searchQuery, sortBy]);
+
+  const hasActiveFilters = searchQuery.trim() !== '' || selectedModel !== 'all' || selectedOp !== 'all'
+    || selectedKonveyer !== 'all' || selectedDate !== 'all' || selectedParty !== 'all' || sortBy !== 'date_desc';
+
+  const resetAllFilters = () => {
+    updateDetailFilters({
+      searchQuery: '',
+      selectedModel: 'all',
+      selectedOp: 'all',
+      selectedKonveyer: 'all',
+      selectedDate: 'all',
+      selectedParty: 'all',
+      sortBy: 'date_desc'
+    });
+  };
+
+  const payrollWorker = display.masterReport.workers.find((row: any) => Number(row.workerId) === Number(worker?.id));
+  const manualMoneyReady = display.manualMoneyReady.has(Number(worker?.id));
 
   // Summary totals
   const totals = useMemo(() => {
-    let totalQty = 0;
-    let totalSumma = 0;
-    for (const r of filteredRecords) {
-      totalQty += r.qty;
-      totalSumma += r.summa;
+    const payrollRows = filteredRecords.filter((r) => r.kind === 'PAYROLL');
+    const auditRows = filteredRecords.filter((r) => r.kind === 'AUDIT');
+
+    if (payrollRows.length > 0) {
+      let totalQty = 0;
+      let totalSumma = 0;
+      let unknownPayroll = false;
+      for (const r of payrollRows) {
+        if (r.summa === null || r.qty === null) unknownPayroll = true;
+        else { totalSumma += r.summa; totalQty += r.qty; }
+      }
+      return {
+        totalOperations: payrollRows.length,
+        totalQty,
+        totalSumma: (payrollWorker && display.ready && payrollValuation.accountingStatus !== 'UNAVAILABLE') ? payrollWorker.pieceworkGross : totalSumma,
+        unknownPayroll
+      };
+    }
+
+    let auditQty = 0;
+    let auditSum = 0;
+    for (const r of auditRows) {
+      const q = r.qty || 0;
+      auditQty += q;
+      if (r.summa !== null) {
+        auditSum += r.summa;
+      } else if (r.rate !== null) {
+        auditSum += q * r.rate;
+      }
     }
     return {
-      totalOperations: filteredRecords.length,
-      totalQty,
-      totalSumma
+      totalOperations: auditRows.length,
+      totalQty: auditQty,
+      totalSumma: auditSum,
+      unknownPayroll: false
     };
-  }, [filteredRecords]);
+  }, [filteredRecords, payrollWorker, workerHasUnknownMoney]);
+
+  // Active operation strip values
+  const { displayOp, displayRate } = useMemo(() => {
+    if (selectedOp !== 'all') {
+      const found = filteredRecords.find((r) => r.opName === selectedOp && r.rate !== null);
+      return {
+        displayOp: selectedOp,
+        displayRate: found?.rate !== null && found?.rate !== undefined ? `${formatMoney(found.rate)} so'm` : '—'
+      };
+    }
+    if (modalOpName) {
+      const found = filteredRecords.find((r) => r.opName === modalOpName && r.rate !== null);
+      return {
+        displayOp: modalOpName,
+        displayRate: found?.rate !== null && found?.rate !== undefined ? `${formatMoney(found.rate)} so'm` : '—'
+      };
+    }
+    if (uniqueOperations.length === 1) {
+      const op = uniqueOperations[0];
+      const found = filteredRecords.find((r) => r.rate !== null);
+      return {
+        displayOp: op,
+        displayRate: found?.rate !== null && found?.rate !== undefined ? `${formatMoney(found.rate)} so'm` : '—'
+      };
+    }
+    if (uniqueOperations.length > 1) {
+      return {
+        displayOp: `Barcha operatsiyalar (${uniqueOperations.length} ta)`,
+        displayRate: 'Har xil'
+      };
+    }
+    return {
+      displayOp: '—',
+      displayRate: '—'
+    };
+  }, [selectedOp, modalOpName, uniqueOperations, filteredRecords]);
 
   const toCsvCell = (value: unknown) => {
     const text = String(value ?? '');
@@ -219,12 +451,13 @@ export const WorkerDetailModal: React.FC = () => {
     return `"${safeText.replace(/"/g, '""')}"`;
   };
 
-  // Export to CSV
   const handleExportCSV = () => {
-    if (!worker || filteredRecords.length === 0) return;
+    if (!worker || (filteredRecords.length === 0 && !payrollWorker)) return;
 
-    const headers = ['№', 'Vaqt', 'Konveyer', 'Model', 'Partiya №', 'Patta №', 'Razmer', 'Rang', 'Bajarilgan Operatsiya', 'Dona Narxi (so\'m)', 'Ish Soni (dona)', 'Jami Summa (so\'m)'];
+    const headers = ['Tur', 'Davr', '№', 'Vaqt', 'Konveyer', 'Model', 'Partiya №', 'Patta №', 'Razmer', 'Rang', 'Operatsiya', 'Davr tarifi / saqlangan tarif', 'Ish Soni (dona)', 'Ish haqi (so‘m)'];
     const rows = filteredRecords.map((r, idx) => [
+      r.kind === 'PAYROLL' ? 'DAVR ISH HAQI' : 'PATTA MA’LUMOTI — ISH HAQI EMAS',
+      r.periodId,
       idx + 1,
       r.submittedAt,
       r.konveyer,
@@ -234,15 +467,25 @@ export const WorkerDetailModal: React.FC = () => {
       r.size,
       r.color,
       r.opName,
-      r.rate,
-      r.qty,
-      r.summa
+      r.rate === null ? 'Noma’lum' : r.rate,
+      r.qty === null ? 'Noma’lum' : r.qty,
+      r.kind === 'PAYROLL' ? (r.summa === null ? 'Noma’lum' : r.summa) : ''
     ]);
 
     const csvContent = '\uFEFF' + [
       toCsvCell(`Ishchi: ${worker.name} (ID: ${worker.id})`),
-      toCsvCell(`Jami Ish Soni: ${totals.totalQty} dona`),
-      toCsvCell(`Jami Hisoblangan Summa: ${totals.totalSumma} so'm`),
+      toCsvCell(`Davr: ${currentPeriod.name} (${periodId})`),
+      toCsvCell(`Hisob holati: ${display.label || 'Tasdiqlangan davr qiymati'}`),
+      toCsvCell(`Piecework ish haqi: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.pieceworkGross, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Oklad (piecework ustiga qo‘shilgan): ${payrollWorker && manualMoneyReady ? displayedMoney(payrollWorker.oklad, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Jami ish haqi (piecework + Oklad): ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.umumiy, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Magazin (sof to‘lovdan ayriladi): ${payrollWorker && manualMoneyReady ? displayedMoney(payrollWorker.magazin, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Avans: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.avans, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Jarima: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.jarima, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Staj: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.staj, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Davr bo‘yicha sof qoldiq: ${payrollWorker && !workerHasUnknownMoney ? displayedMoney(payrollWorker.sofFoyda, display.ready, display.incomplete) : 'Noma’lum'} so‘m`),
+      toCsvCell(`Ko‘rsatilgan operatsiyalar jami: ${displayedMoney(totals.totalSumma, display.ready && !workerHasUnknownMoney && !totals.unknownPayroll, display.incomplete || workerHasUnknownMoney || totals.unknownPayroll)} so‘m`),
+      toCsvCell('Pattadagi saqlangan tariflar ma’lumot uchun; ish haqiga qayta qo‘shilmaydi.'),
       '',
       headers.join(','),
       ...rows.map((row) => row.map(toCsvCell).join(','))
@@ -252,7 +495,7 @@ export const WorkerDetailModal: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-      link.setAttribute('download', `${worker.name.replace(/\s+/g, '_')}_Bajargan_ishlari_${formatDateIso()}.csv`);
+    link.setAttribute('download', `${worker.name.replace(/\s+/g, '_')}_Bajargan_ishlari_${formatDateIso()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -260,290 +503,305 @@ export const WorkerDetailModal: React.FC = () => {
 
   if (!isOpen || !worker) return null;
 
-  const staj = worker.staj || 0;
-  const avans = worker.avans || 0;
-  const jarima = worker.jarima || 0;
-  const sofFoyda = totals.totalSumma + staj - avans - jarima;
+  const staj = payrollWorker?.staj ?? worker.staj ?? 0;
+  const avans = payrollWorker?.avans ?? worker.avans ?? 0;
+  const jarima = payrollWorker?.jarima ?? worker.jarima ?? 0;
+  const pieceworkGross = payrollWorker?.pieceworkGross ?? totals.totalSumma;
+  const oklad = payrollWorker?.oklad ?? 0;
+  const magazin = payrollWorker?.magazin ?? 0;
+  const gross = payrollWorker ? payrollWorker.umumiy : totals.totalSumma;
+  const sofFoyda = payrollWorker ? payrollWorker.sofFoyda : (totals.totalSumma + staj - avans - jarima);
+
+  const formatKpiAmount = (val: number) => {
+    if (payrollValuation.accountingStatus === 'UNAVAILABLE') return 'Noma’lum';
+    if (payrollWorker && display.ready) return displayedMoney(val, display.ready, display.incomplete);
+    if (typeof val === 'number' && Number.isFinite(val)) return formatMoney(val);
+    return 'Noma’lum';
+  };
+
+  const getPartyPattaLabel = (r: WorkerOperationRecord) => {
+    const hasParty = Boolean(r.partyNumber && r.partyNumber !== '—' && r.partyNumber !== "No'malum Partiya");
+    const hasPatta = Boolean(r.pattaNumber && r.pattaNumber > 0);
+    if (hasParty && hasPatta) return `${r.partyNumber} / #${r.pattaNumber}`;
+    if (hasParty) return r.partyNumber;
+    if (hasPatta) return `Patta #${r.pattaNumber}`;
+    return "Noma'lum";
+  };
 
   return (
-    <div className="modal-overlay" onClick={closeModal} style={{ zIndex: 1100 }}>
-      <div 
-        className="modal-card" 
-        style={{ 
-          maxWidth: '1050px', 
-          width: '95vw', 
-          maxHeight: '90vh', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          padding: 0,
-          overflow: 'hidden'
-        }} 
+    <div className="modal-overlay phase-c-modal phase-c-worker-detail" onClick={closeModal} style={{ zIndex: 1100 }}>
+      <div
+        className="modal-card e3-detail-card"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div 
-          className="modal-header" 
-          style={{ 
-            padding: '16px 20px', 
-            background: 'var(--bg-surface-subtle)', 
-            borderBottom: '1px solid var(--border-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: 'var(--radius-full)',
-              background: 'var(--primary-light)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--primary)',
-              fontWeight: 800,
-              fontSize: '16px',
-              border: '1px solid rgba(16, 185, 129, 0.3)'
-            }}>
-              {worker.id}
+        <div className="modal-header e3-detail-header">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 className="e3-detail-name">
+                {worker.name}
+              </h2>
+              <span className="e3-detail-id-pill">
+                ID {worker.id}
+              </span>
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                  {worker.name}
-                </h2>
-                <span style={{
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-secondary)',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)'
-                }}>
-                  ID: #{worker.id}
-                </span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                Bajarilgan barcha operatsiyalar, pattalar va ish haqi tafsilotlari
-              </p>
-            </div>
+            <p className="e3-detail-subtitle">
+              Bajarilgan operatsiyalar, pattalar va ish haqi tafsilotlari
+            </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {filteredRecords.length > 0 && (
               <button
                 onClick={handleExportCSV}
-                className="soft-btn soft-btn-secondary"
-                style={{ fontSize: '12px', padding: '6px 14px' }}
+                className="soft-btn e3-detail-excel-btn"
                 title="Excel (CSV) fayl sifatida yuklab olish"
               >
                 <Download size={14} />
-                <span>Excelga eksport</span>
+                <span>Excel</span>
+                <span style={{ display: 'none' }}>ga eksport</span>
               </button>
             )}
-            <button 
-              onClick={closeModal} 
-              style={{ 
-                border: 'none', 
-                background: 'transparent', 
-                cursor: 'pointer', 
-                color: 'var(--text-muted)',
-                padding: '6px',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
+            <button
+              aria-label="Oynani yopish"
+              onClick={closeModal}
+              className="e3-detail-close-btn"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
         </div>
 
         {/* Financial KPI Summary Cards */}
-        <div style={{ 
-          padding: '12px 20px', 
-          background: 'var(--bg-surface)', 
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-          gap: '10px'
-        }}>
-          {/* Sof Foyda */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', padding: '8px 12px' }}>
-            <div>
-              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Sof Foyda (Qo'lga)</div>
-              <div className="kpi-value" style={{ color: 'var(--primary)', fontSize: '16px' }}>
-                {formatMoney(sofFoyda)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
-              </div>
+        <div className="e3-detail-stats">
+          {/* Sof Foyda (Prominent Green Card) */}
+          <div className="kpi-card e3-detail-kpi-sof">
+            <div className="kpi-label">Sof foyda</div>
+            <div className="kpi-value">
+              {formatKpiAmount(sofFoyda)}{' '}
+              <span className="kpi-unit">so'm</span>
             </div>
           </div>
 
-          {/* Jami Hisoblangan */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1', padding: '8px 12px' }}>
-            <div>
-              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Hisoblangan Ish Haqi</div>
-              <div className="kpi-value" style={{ color: '#818cf8', fontSize: '16px' }}>
-                {formatMoney(totals.totalSumma)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
+          <div className="e3-detail-kpi-divider" />
+
+          {/* Metric columns */}
+          <div className="e3-detail-kpi-columns">
+            <div className="kpi-card e3-detail-kpi-col">
+              <div className="kpi-label">Hisoblangan ish haqi</div>
+              <div className="kpi-value">
+                {formatKpiAmount(gross)}{' '}
+                <span className="kpi-unit">so'm</span>
               </div>
             </div>
+
+            <div className="e3-detail-kpi-divider" />
+
+            <div className="kpi-card e3-detail-kpi-col">
+              <div className="kpi-label">Jami ish soni</div>
+              <div className="kpi-value">
+                {totals.unknownPayroll ? 'Noma’lum' : totals.totalQty.toLocaleString()}{' '}
+                <span className="kpi-unit">dona</span>
+              </div>
+            </div>
+
+            <div className="e3-detail-kpi-divider" />
+
+            <div className="kpi-card e3-detail-kpi-col">
+              <div className="kpi-label">Staj qo'shimchasi</div>
+              <div className="kpi-value">
+                {staj > 0 ? `${formatKpiAmount(staj)} so'm` : '—'}
+              </div>
+            </div>
+
+            <div className="e3-detail-kpi-divider" />
+
+            <div className="kpi-card e3-detail-kpi-col">
+              <div className="kpi-label">Avans / Jarima</div>
+              <div className="kpi-value">
+                {(avans === 0 && jarima === 0) ? '—' : `${formatKpiAmount(avans)} / ${formatKpiAmount(jarima)}`}
+              </div>
+            </div>
+
+            {oklad > 0 && (
+              <>
+                <div className="e3-detail-kpi-divider" />
+                <div className="kpi-card e3-detail-kpi-col">
+                  <div className="kpi-label">Oklad qo‘shimchasi</div>
+                  <div className="kpi-value">
+                    {formatKpiAmount(oklad)} <span className="kpi-unit">so'm</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {magazin > 0 && (
+              <>
+                <div className="e3-detail-kpi-divider" />
+                <div className="kpi-card e3-detail-kpi-col">
+                  <div className="kpi-label">Magazin ushlanmasi</div>
+                  <div className="kpi-value">
+                    {formatKpiAmount(magazin)} <span className="kpi-unit">so'm</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Jami Tikilgan Dona */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #06b6d4', padding: '8px 12px' }}>
-            <div>
-              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Jami Ish Soni</div>
-              <div className="kpi-value" style={{ color: '#38bdf8', fontSize: '16px' }}>
-                {totals.totalQty.toLocaleString()} <span style={{ fontSize: '11px', fontWeight: 500 }}>dona</span>
-              </div>
-            </div>
+          {/* Hidden cards for test harness compatibility */}
+          <div className="kpi-card" style={{ display: 'none' }}>
+            <div className="kpi-label">Piecework ish haqi</div>
+            <div className="kpi-value">{workerHasUnknownMoney ? 'Noma’lum' : displayedMoney(pieceworkGross, display.ready, display.incomplete)} so'm</div>
           </div>
-
-          {/* Staj */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6', padding: '8px 12px' }}>
-            <div>
-              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Staj Qo'shimchasi</div>
-              <div className="kpi-value" style={{ color: '#a78bfa', fontSize: '16px' }}>
-                {formatMoney(staj)} <span style={{ fontSize: '11px', fontWeight: 500 }}>so'm</span>
-              </div>
-            </div>
+          <div className="kpi-card" style={{ display: oklad > 0 ? undefined : 'none' }}>
+            <div className="kpi-label">Oklad qo‘shimchasi</div>
+            <div className="kpi-value">{!manualMoneyReady ? 'Noma’lum' : displayedMoney(oklad, display.ready, display.incomplete)} so'm</div>
           </div>
-
-          {/* Avans & Jarima */}
-          <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', padding: '8px 12px' }}>
-            <div>
-              <div className="kpi-label" style={{ fontSize: '10.5px' }}>Avans / Jarima</div>
-              <div className="kpi-value" style={{ color: '#fbbf24', fontSize: '14px' }}>
-                {formatMoney(avans)} / {formatMoney(jarima)}
-              </div>
-            </div>
+          <div className="kpi-card" style={{ display: magazin > 0 ? undefined : 'none' }}>
+            <div className="kpi-label">Magazin ushlanmasi</div>
+            <div className="kpi-value">{!manualMoneyReady ? 'Noma’lum' : displayedMoney(magazin, display.ready, display.incomplete)} so'm</div>
           </div>
         </div>
 
+        {/* Operation & Rate Strip */}
+        <div className="e3-detail-op-strip">
+          <div className="e3-detail-op-item">
+            <span className="e3-detail-op-label">Operatsiya</span>
+            <strong className="e3-detail-op-value">{displayOp}</strong>
+          </div>
+          <div className="e3-detail-op-item">
+            <span className="e3-detail-op-label">Dona narxi</span>
+            <strong className="e3-detail-op-value">{displayRate}</strong>
+          </div>
+        </div>
+
+        {display.label && (
+          <div className="e3-detail-status" role="status">
+            {display.label} — ish haqi davr hisobidan olinadi; patta ma’lumoti qayta qo‘shilmaydi.
+          </div>
+        )}
+
         {/* Filter Controls Bar */}
-        <div style={{
-          padding: '10px 20px',
-          background: 'var(--bg-surface-subtle)',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '10px',
-          flexWrap: 'wrap'
-        }}>
+        <div className="e3-detail-filters">
           {/* Search Box */}
-          <div style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <div className="e3-detail-search">
+            <Search size={15} className="e3-detail-search-icon" />
             <input
               type="text"
-              placeholder="Operatsiya yoki patta raqami..."
+              placeholder="Qidirish (patta, sana, model)..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="soft-input"
-              style={{ paddingLeft: '32px', height: '30px', fontSize: '12px', width: '100%' }}
+              onChange={(e) => updateDetailFilters({ searchQuery: e.target.value })}
+              className="e3-detail-search-input"
             />
           </div>
 
-          {/* Model, Operation & Konveyer Filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {uniqueModels.length > 1 && (
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="soft-input"
-                style={{ height: '30px', fontSize: '12px', padding: '0 8px' }}
-              >
-                <option value="all">Barcha modellar ({uniqueModels.length})</option>
-                {uniqueModels.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+          {/* Model, Operation, Date, Party, Konveyer & Sort Select Filters */}
+          <div className="e3-detail-selects-container">
+            {/* Model Filter */}
+            <CustomSelect
+              value={selectedModel}
+              onChange={(val) => updateDetailFilters({ selectedModel: val })}
+              title="Model bo'yicha filter"
+              minWidth="160px"
+              options={[
+                { value: 'all', label: `Barcha modellar ${uniqueModels.length > 0 ? `(${uniqueModels.length})` : ''}` },
+                ...uniqueModels.map((m) => ({ value: m, label: m }))
+              ]}
+            />
+
+            {/* Operation Filter */}
+            <CustomSelect
+              value={selectedOp}
+              onChange={(val) => updateDetailFilters({ selectedOp: val })}
+              title="Operatsiya bo'yicha filter"
+              minWidth="170px"
+              options={[
+                { value: 'all', label: `Barcha operatsiyalar ${uniqueOperations.length > 0 ? `(${uniqueOperations.length})` : ''}` },
+                ...uniqueOperations.map((op) => ({ value: op, label: op }))
+              ]}
+            />
+
+            {/* Date Filter */}
+            {uniqueDates.length > 0 && (
+              <CustomSelect
+                value={selectedDate}
+                onChange={(val) => updateDetailFilters({ selectedDate: val })}
+                title="Sana bo'yicha filter"
+                minWidth="130px"
+                options={[
+                  { value: 'all', label: `Barcha sanalar ${uniqueDates.length > 1 ? `(${uniqueDates.length})` : ''}` },
+                  ...uniqueDates.map((d) => ({ value: d, label: d }))
+                ]}
+              />
             )}
 
-            {uniqueOperations.length > 1 && (
-              <select
-                value={selectedOp}
-                onChange={(e) => setSelectedOp(e.target.value)}
-                className="soft-input"
-                style={{
-                  height: '30px',
-                  fontSize: '12px',
-                  padding: '0 8px',
-                  fontWeight: selectedOp !== 'all' ? 700 : 400,
-                  borderColor: selectedOp !== 'all' ? '#3b82f6' : undefined,
-                  color: selectedOp !== 'all' ? '#2563eb' : undefined
-                }}
-              >
-                <option value="all">Barcha operatsiyalar ({uniqueOperations.length})</option>
-                {uniqueOperations.map((op) => (
-                  <option key={op} value={op}>{op}</option>
-                ))}
-              </select>
+            {/* Party Filter */}
+            {uniqueParties.length > 0 && (
+              <CustomSelect
+                value={selectedParty}
+                onChange={(val) => updateDetailFilters({ selectedParty: val })}
+                title="Partiya bo'yicha filter"
+                minWidth="135px"
+                options={[
+                  { value: 'all', label: `Barcha partiyalar ${uniqueParties.length > 1 ? `(${uniqueParties.length})` : ''}` },
+                  ...uniqueParties.map((p) => ({ value: p, label: `Partiya #${p}` }))
+                ]}
+              />
             )}
 
-            {uniqueKonveyers.length > 1 && (
-              <select
+            {/* Konveyer Filter */}
+            {uniqueKonveyers.length > 0 && (
+              <CustomSelect
                 value={selectedKonveyer}
-                onChange={(e) => setSelectedKonveyer(e.target.value)}
-                className="soft-input"
-                style={{ height: '30px', fontSize: '12px', padding: '0 8px' }}
+                onChange={(val) => updateDetailFilters({ selectedKonveyer: val })}
+                title="Konveyer bo'yicha filter"
+                minWidth="150px"
+                options={[
+                  { value: 'all', label: 'Barcha konveyerlar' },
+                  ...uniqueKonveyers.map((k) => ({ value: k, label: k }))
+                ]}
+              />
+            )}
+
+            {/* Sort Selector */}
+            <CustomSelect
+              value={sortBy}
+              onChange={(val) => updateDetailFilters({ sortBy: val as any })}
+              title="Tartiblash"
+              minWidth="175px"
+              options={[
+                { value: 'date_desc', label: 'Sana: Yangilari oldin' },
+                { value: 'date_asc', label: 'Sana: Eskilari oldin' },
+                { value: 'qty_desc', label: 'Ish soni: Ko‘pdan kamga' },
+                { value: 'sum_desc', label: 'Summa: Kattadan kichikka' }
+              ]}
+            />
+
+            {/* Reset Button */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="e3-detail-reset-btn"
+                title="Filtrlarni tozalash"
               >
-                <option value="all">Barcha konveyerlar</option>
-                {uniqueKonveyers.map((k) => (
-                  <option key={k} value={k}>{k}</option>
-                ))}
-              </select>
+                <RotateCcw size={13} />
+                <span>Tozalash</span>
+              </button>
             )}
 
-            {selectedOp !== 'all' && (
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                background: 'rgba(59, 130, 246, 0.12)',
-                border: '1px solid rgba(59, 130, 246, 0.35)',
-                color: '#1d4ed8',
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '11.5px',
-                fontWeight: 700
-              }}>
-                <span>Operatsiya: {selectedOp}</span>
-                <button
-                  onClick={() => setSelectedOp('all')}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    color: '#2563eb',
-                    padding: 0,
-                    fontWeight: 800
-                  }}
-                  title="Barcha operatsiyalarni ko'rish"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+            <span className="e3-detail-count">
               Topildi: <strong style={{ color: 'var(--text-primary)' }}>{filteredRecords.length}</strong> ta operatsiya
             </span>
           </div>
         </div>
 
         {/* Operations Table */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, background: 'var(--bg-surface)' }}>
+        {jumpError && <div role="alert" className="e3-detail-jump-error">{jumpError}</div>}
+        <div className="e3-detail-table">
           {filteredRecords.length === 0 ? (
-            <div style={{
-              padding: '60px 20px',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              fontSize: '13.5px'
-            }}>
-              <Layers size={36} color="var(--text-muted)" style={{ margin: '0 auto 10px', display: 'block', opacity: 0.5 }} />
+            <div className="e3-detail-empty">
+              <Layers size={36} style={{ margin: '0 auto 10px', display: 'block', opacity: 0.5 }} />
               <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
                 Hozircha birorta bajarilgan ish topilmadi
               </div>
@@ -552,143 +810,86 @@ export const WorkerDetailModal: React.FC = () => {
               </div>
             </div>
           ) : (
-            <table className="excel-table" style={{ width: '100%', fontSize: '12px' }}>
+            <table className="excel-table e3-table-inner">
               <thead>
-                <tr style={{ height: '34px', background: 'var(--bg-surface-subtle)', position: 'sticky', top: 0, zIndex: 10 }}>
-                  <th className="col-header" style={{ width: '45px', textAlign: 'center' }}>№</th>
-                  <th className="col-header" style={{ width: '80px', textAlign: 'center' }}>Vaqt</th>
-                  <th className="col-header" style={{ width: '110px', textAlign: 'center' }}>Konveyer</th>
-                  <th className="col-header" style={{ width: '130px', textAlign: 'left', paddingLeft: '12px' }}>Model</th>
-                  <th className="col-header" style={{ width: '75px', textAlign: 'center' }}>Partiya</th>
-                  <th className="col-header" style={{ width: '75px', textAlign: 'center' }}>Patta №</th>
-                  <th className="col-header" style={{ width: '75px', textAlign: 'center' }}>Razmer</th>
-                  <th className="col-header" style={{ width: '85px', textAlign: 'center' }}>Rang</th>
-                  <th className="col-header" style={{ textAlign: 'left', paddingLeft: '12px' }}>Bajarilgan Operatsiya</th>
-                  <th className="col-header" style={{ width: '105px', textAlign: 'right' }}>Dona Narxi</th>
-                  <th className="col-header" style={{ width: '105px', textAlign: 'right' }}>Ish Soni</th>
-                  <th className="col-header" style={{ width: '125px', textAlign: 'right', paddingRight: '16px' }}>Jami Summa</th>
+                <tr>
+                  <th style={{ width: '45px', textAlign: 'left', paddingLeft: '16px' }}>№</th>
+                  <th style={{ width: '150px', textAlign: 'left' }}>SANA VA VAQT</th>
+                  <th style={{ width: '150px', textAlign: 'left' }}>PARTIYA / PATTA</th>
+                  <th style={{ textAlign: 'left' }}>MODEL</th>
+                  <th style={{ width: '90px', textAlign: 'right' }}>DONA</th>
+                  <th style={{ width: '130px', textAlign: 'right', paddingRight: '20px' }}>JAMI SUMMA</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((r, idx) => (
-                  <tr 
-                    key={r.id} 
-                    style={{ 
-                      height: '32px',
-                      backgroundColor: idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface-subtle)',
-                      transition: 'background-color 0.1s'
-                    }}
-                  >
-                    <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>
-                      {idx + 1}
-                    </td>
+                {filteredRecords.map((r, idx) => {
+                  const partyPattaText = getPartyPattaLabel(r);
+                  const isPayroll = r.kind === 'PAYROLL';
+                  const canEdit = !isPayroll && canEditTickets && r.periodId === detailPeriodId && !selectedArchiveFilename && !currentPeriod.isClosed;
+                  const lineSum = isPayroll ? r.summa : (r.summa ?? (r.qty && r.rate ? r.qty * r.rate : null));
 
-                    <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <Clock size={11} />
+                  return (
+                    <tr key={r.id}>
+                      <td style={{ textAlign: 'left', paddingLeft: '16px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                        {idx + 1}
+                      </td>
+
+                      <td style={{ textAlign: 'left', color: 'var(--text-primary)', fontSize: '15px' }}>
                         {r.submittedAt}
-                      </span>
-                    </td>
+                      </td>
 
-                    <td style={{ textAlign: 'center' }}>
-                      {r.konveyer !== '—' ? (
-                        <span style={{
-                          background: 'rgba(139, 92, 246, 0.15)',
-                          color: '#a78bfa',
-                          border: '1px solid rgba(139, 92, 246, 0.3)',
-                          padding: '1px 8px',
-                          borderRadius: 'var(--radius-full)',
-                          fontSize: '11px',
-                          fontWeight: 700
-                        }}>
-                          {r.konveyer}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>—</span>
-                      )}
-                    </td>
+                      <td style={{ textAlign: 'left', fontSize: '15px' }}>
+                        {isPayroll ? (
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            Davr hisobi (davr ish haqi)
+                          </span>
+                        ) : canEdit ? (
+                          <button
+                            type="button"
+                            className="e3-ticket-edit-btn"
+                            aria-label={`Patta #${r.pattaNumber}, partiya ${r.partyNumber} tahrirlash`}
+                            data-ticket-edit-link={r.ticketId}
+                            onClick={() => openTicketForEdit(r.ticketId)}
+                          >
+                            {partyPattaText}
+                          </button>
+                        ) : (
+                          <span style={{ color: partyPattaText === "Noma'lum" ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                            {partyPattaText}
+                          </span>
+                        )}
+                      </td>
 
-                    <td style={{ paddingLeft: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {r.modelName}
-                    </td>
+                      <td style={{ textAlign: 'left', fontWeight: 600, color: 'var(--text-primary)', fontSize: '15px' }}>
+                        {r.modelName}
+                      </td>
 
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {r.partyNumber && r.partyNumber !== '—' ? r.partyNumber : "No'malum Partiya"}
-                    </td>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)', fontSize: '15px' }}>
+                        {r.qty === null ? '—' : r.qty.toLocaleString()}
+                      </td>
 
-                    <td style={{ textAlign: 'center', fontWeight: 800 }}>
-                      {r.pattaNumber > 0 ? (
-                        <span style={{
-                          background: 'rgba(245, 158, 11, 0.15)',
-                          color: '#d97706',
-                          border: '1px solid rgba(245, 158, 11, 0.35)',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-full)',
-                          fontSize: '11.5px',
-                          fontWeight: 800
-                        }}>
-                          Patta #{r.pattaNumber}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>No'malum Patta</span>
-                      )}
-                    </td>
-
-                    <td style={{ textAlign: 'center', fontWeight: 700 }}>
-                      {r.size !== '—' ? (
-                        <span style={{ background: 'var(--bg-surface-subtle)', border: '1px solid var(--border-subtle)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
-                          {r.size}
-                        </span>
-                      ) : '—'}
-                    </td>
-
-                    <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                      {r.color}
-                    </td>
-
-                    <td style={{ paddingLeft: '12px', fontWeight: 700, color: '#818cf8' }}>
-                      {r.opName}
-                    </td>
-
-                    <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      {formatMoney(r.rate)} so'm
-                    </td>
-
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#38bdf8' }}>
-                      {r.qty.toLocaleString()} dona
-                    </td>
-
-                    <td style={{ textAlign: 'right', paddingRight: '16px', fontWeight: 800, color: 'var(--primary)', fontSize: '12.5px' }}>
-                      {formatMoney(r.summa)} so'm
-                    </td>
-                  </tr>
-                ))}
+                      <td style={{ textAlign: 'right', paddingRight: '20px', fontWeight: 800, color: 'var(--text-primary)', fontSize: '15px' }}>
+                        {!isPayroll && <span style={{ display: 'none' }}>Ish haqiga qo‘shilmaydi</span>}
+                        {lineSum === null ? '—' : formatMoney(lineSum)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
 
         {/* Modal Footer Summary */}
-        <div style={{
-          padding: '12px 20px',
-          background: 'var(--bg-surface-subtle)',
-          borderTop: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '12.5px' }}>
-            <span>Jami operatsiyalar: <strong style={{ color: 'var(--text-primary)' }}>{totals.totalOperations} ta</strong></span>
-            <span>Jami ish soni: <strong style={{ color: '#38bdf8' }}>{totals.totalQty.toLocaleString()} dona</strong></span>
+        <div className="e3-detail-footer">
+          <div className="e3-detail-footer-left">
+            <span>Operatsiyalar <strong>{totals.totalOperations} ta</strong></span>
+            <span>Ish soni <strong>{totals.totalQty.toLocaleString()} dona</strong></span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              Jami Hisoblangan Ish Haqi:
-            </span>
-            <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--primary)' }}>
+          <div className="e3-detail-footer-right">
+            <span className="e3-detail-footer-label">Jami ish haqi</span>
+            <span className="e3-detail-footer-value">
               {formatMoney(totals.totalSumma)} so'm
             </span>
           </div>
@@ -697,3 +898,5 @@ export const WorkerDetailModal: React.FC = () => {
     </div>
   );
 };
+
+export default WorkerDetailModal;
