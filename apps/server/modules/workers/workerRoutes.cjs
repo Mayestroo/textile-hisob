@@ -214,7 +214,10 @@ function registerWorkerRoutes(app, options = {}) {
 
   app.get('/api/worker/enrollment-check', async (request, reply) => {
     try {
-      const companyId = String(request.query?.companyId || 'comp_novda').trim();
+      const companyId = typeof request.query?.companyId === 'string' ? request.query.companyId.trim() : '';
+      if (!companyId) {
+        return reply.code(400).send({ success: false, error: { code: 'COMPANY_ID_REQUIRED' } });
+      }
       const workerId = Number(request.query?.workerId);
       if (!workerId || !Number.isSafeInteger(workerId)) {
         return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_ID' } });

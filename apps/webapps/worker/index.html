@@ -26,7 +26,7 @@
         <span>Yopish</span>
       </button>
       <div class="worker-brand">
-        <strong id="workerBrandName">comp_novda</strong>
+        <strong id="workerBrandName"></strong>
         <span class="worker-brand-role">Ishchi</span>
       </div>
       <div class="worker-topbar-avatar"></div>
@@ -35,7 +35,7 @@
     <main class="worker-bind-main">
       <div class="worker-bind-heading">
         <h1>Ulanish</h1>
-        <span id="workerBindSubtitle" class="worker-bind-subtitle">comp_novda ishchi ilovasi</span>
+        <span id="workerBindSubtitle" class="worker-bind-subtitle">Ishchi ilovasi</span>
       </div>
 
       <article class="worker-bind-card">
@@ -49,6 +49,8 @@
       <article id="workerCameraCard" class="worker-found-card" style="display:none;flex-direction:column;align-items:stretch;gap:12px">
         <p class="worker-bind-help">Surat faqat ishchini profilida tanib olish uchun saqlanadi; yuz orqali shaxsni aniqlash ishlatilmaydi.</p>
         <video id="workerCameraPreview" autoplay playsinline muted style="display:none;width:100%;max-height:280px;border-radius:14px;background:#0b1b2b;object-fit:cover"></video>
+        <img id="workerPhotoPreview" alt="Olingan surat" style="display:none;width:100%;max-height:280px;border-radius:14px;object-fit:cover" />
+        <input id="workerCameraFileInput" type="file" accept="image/*" capture="user" style="display:none" />
         <canvas id="workerCameraCanvas" style="display:none"></canvas>
         <button id="workerCameraStartBtn" class="worker-bind-submit" type="button">Kameraga ruxsat berish</button>
         <button id="workerCameraCaptureBtn" class="worker-bind-submit" type="button" style="display:none">Suratga olish</button>
@@ -63,7 +65,7 @@
         </div>
         <div class="worker-found-info">
           <span class="worker-found-status">Topildi</span>
-          <strong id="workerFoundName" class="worker-found-name">Абдуллаева Мавлуда</strong>
+          <strong id="workerFoundName" class="worker-found-name"></strong>
         </div>
       </article>
 
@@ -86,7 +88,7 @@
       <span>Yopish</span>
     </button>
     <div class="worker-brand">
-      <div class="worker-brand-company" id="brandCompanyName">comp_novda</div>
+      <div class="worker-brand-company" id="brandCompanyName"></div>
       <div class="worker-brand-role">Ishchi</div>
     </div>
     <div class="worker-topbar-avatar" id="avatarBadge"></div>
@@ -99,10 +101,10 @@
       <div class="worker-greeting-row">
         <div class="worker-greeting-meta">
           <div class="worker-greeting-subtitle">Assalomu alaykum,</div>
-          <h1 class="worker-greeting-name" id="workerNameHeader">Абдуллаева<br>Мавлуда</h1>
+          <h1 class="worker-greeting-name" id="workerNameHeader"></h1>
         </div>
         <div class="worker-month-pill" id="periodPillBtn">
-          <span id="periodNameText">2026 — Oktabr</span>
+          <span id="periodNameText"></span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
@@ -113,14 +115,14 @@
       <section class="hero-kpi-card" id="heroCard">
         <div class="hero-label">Sof foyda</div>
         <div class="hero-amount-line">
-          <span class="hero-amount" id="netPayAmount">702 600 <span class="hero-curr">so'm</span></span>
+          <span class="hero-amount" id="netPayAmount"></span>
         </div>
         <div class="hero-subtitle" id="netPaySubtitle" style="display: none;"></div>
 
         <div class="hero-subgrid">
           <div class="hero-subgrid-col">
             <div class="hero-subgrid-label">Hisoblangan</div>
-            <div class="hero-subgrid-val" id="grossPayAmount">702 600</div>
+            <div class="hero-subgrid-val" id="grossPayAmount">—</div>
           </div>
           <div class="hero-subgrid-col">
             <div class="hero-subgrid-label">Avans</div>
@@ -146,14 +148,14 @@
         <div class="work-stat-card">
           <div class="work-stat-label">Jami ish</div>
           <div class="work-stat-val">
-            <span id="totalPiecesCount">4 684</span>
+            <span id="totalPiecesCount">0</span>
             <span class="work-stat-unit">dona</span>
           </div>
         </div>
         <div class="work-stat-card">
           <div class="work-stat-label">Operatsiyalar</div>
           <div class="work-stat-val">
-            <span id="operationsCount">49</span>
+            <span id="operationsCount">0</span>
             <span class="work-stat-unit">ta</span>
             <span id="modelsCountBadge" style="display: none;">0</span>
           </div>
@@ -166,38 +168,7 @@
         <div class="ops-section-title">OXIRGI ISHLAR</div>
         <button class="ops-section-link" id="opsViewAllBtn" onclick="switchTab('ops')">Barchasi</button>
       </div>
-      <div class="ops-list-card" id="modelsBreakdownList">
-        <div class="op-item-row">
-          <div class="op-item-info">
-            <div class="op-item-title">Орка бостирув</div>
-            <div class="op-item-sub">DZ-008-1 · 14.10 16:30</div>
-          </div>
-          <div class="op-item-meta">
-            <div class="op-item-amount">14 850 so'm</div>
-            <div class="op-item-qty">99 dona</div>
-          </div>
-        </div>
-        <div class="op-item-row">
-          <div class="op-item-info">
-            <div class="op-item-title">Орка бостирув</div>
-            <div class="op-item-sub">DZ-008-1 · 10.10 13:35</div>
-          </div>
-          <div class="op-item-meta">
-            <div class="op-item-amount">12 300 so'm</div>
-            <div class="op-item-qty">82 dona</div>
-          </div>
-        </div>
-        <div class="op-item-row">
-          <div class="op-item-info">
-            <div class="op-item-title">Орка бостирув</div>
-            <div class="op-item-sub">DZ-008-1 · 10.10 11:01</div>
-          </div>
-          <div class="op-item-meta">
-            <div class="op-item-amount">12 300 so'm</div>
-            <div class="op-item-qty">82 dona</div>
-          </div>
-        </div>
-      </div>
+      <div class="ops-list-card" id="modelsBreakdownList"></div>
     </div><!-- end ops-section-block -->
   </div><!-- end tabContentHome -->
 
@@ -206,12 +177,12 @@
       <!-- Summary Card -->
       <div class="ops-summary-card work-summary" id="opsSummaryCard">
         <div class="ops-sum-left">
-          <div class="ops-sum-label" id="opsPeriodLabel">Oktabr · jami</div>
-          <div class="ops-sum-val-green" id="opsNetPayTotal">702 600 so'm</div>
+          <div class="ops-sum-label" id="opsPeriodLabel">Davr tanlanmagan</div>
+          <div class="ops-sum-val-green" id="opsNetPayTotal">—</div>
         </div>
         <div class="ops-sum-right">
-          <div class="ops-sum-sub" id="opsCountBadge">49 ta operatsiya</div>
-          <div class="ops-sum-val-dark" id="opsPiecesTotal">4 684 dona</div>
+          <div class="ops-sum-sub" id="opsCountBadge">0 ta operatsiya</div>
+          <div class="ops-sum-val-dark" id="opsPiecesTotal">0 dona</div>
         </div>
       </div>
 
@@ -232,67 +203,7 @@
       </div>
 
       <!-- Grouped Operations List -->
-      <div id="opsFullList">
-        <!-- 14 OKTABR -->
-        <div class="ops-date-header">14 OKTABR</div>
-        <div class="ops-card-block">
-          <div class="op-item-row">
-            <div class="op-item-info">
-              <div class="op-item-title">Орка бостирув</div>
-              <div class="op-item-sub">DZ-008-1 · 14.10 16:30</div>
-            </div>
-            <div class="op-item-meta">
-              <div class="op-item-amount">14 850 so'm</div>
-              <div class="op-item-qty">99 dona</div>
-            </div>
-          </div>
-          <div class="op-item-row">
-            <div class="op-item-info">
-              <div class="op-item-title">Орка бостирув</div>
-              <div class="op-item-sub">DZ-008-1 · 14.10 15:13</div>
-            </div>
-            <div class="op-item-meta">
-              <div class="op-item-amount">18 000 so'm</div>
-              <div class="op-item-qty">120 dona</div>
-            </div>
-          </div>
-          <div class="op-item-row">
-            <div class="op-item-info">
-              <div class="op-item-title">Орка бостирув</div>
-              <div class="op-item-sub">DZ-008-1 · 14.10 14:44</div>
-            </div>
-            <div class="op-item-meta">
-              <div class="op-item-amount">20 850 so'm</div>
-              <div class="op-item-qty">139 dona</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 10 OKTABR -->
-        <div class="ops-date-header">10 OKTABR</div>
-        <div class="ops-card-block">
-          <div class="op-item-row">
-            <div class="op-item-info">
-              <div class="op-item-title">Орка бостирув</div>
-              <div class="op-item-sub">DZ-008-1 · 10.10 13:35</div>
-            </div>
-            <div class="op-item-meta">
-              <div class="op-item-amount">12 300 so'm</div>
-              <div class="op-item-qty">82 dona</div>
-            </div>
-          </div>
-          <div class="op-item-row">
-            <div class="op-item-info">
-              <div class="op-item-title">Орка бостирув</div>
-              <div class="op-item-sub">DZ-008-1 · 10.10 13:25</div>
-            </div>
-            <div class="op-item-meta">
-              <div class="op-item-amount">15 450 so'm</div>
-              <div class="op-item-qty">103 dona</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div id="opsFullList"></div>
     </section>
 
 <!-- Tab 2: Tickets -->

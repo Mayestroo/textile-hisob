@@ -448,7 +448,7 @@
     const { totalPieces: initialPeriodPieces } = getCompanyModelsSummary();
     const workDoneNode = byId('companyWorkDone');
     if (workDoneNode) {
-      const displayWork = initialPeriodPieces > 0 ? initialPeriodPieces : (totalWork || 41777);
+      const displayWork = initialPeriodPieces > 0 ? initialPeriodPieces : totalWork;
       workDoneNode.replaceChildren(
         coText('span', 'co-stat-orange', number(displayWork)),
         document.createTextNode(' '),
@@ -592,7 +592,7 @@
     }
     const workDoneNode = byId('companyWorkDone');
     if (workDoneNode) {
-      const displayWork = totalSewnInPeriod > 0 ? totalSewnInPeriod : (topMetrics.enteredWork || 41777);
+      const displayWork = totalSewnInPeriod > 0 ? totalSewnInPeriod : topMetrics.enteredWork;
       const targetWork = topMetrics.totalWork > 0 ? topMetrics.totalWork : (allPartiesTotalWork || displayWork);
       workDoneNode.replaceChildren(
         coText('span', 'co-stat-orange', number(displayWork)),
@@ -1235,7 +1235,7 @@
     setText('companyAdvanceWorkerName', target.name || `Ishchi #${target.workerId}`);
     const net = Number(target.net || 0);
     setText('companyAdvanceWorkerMeta', `ID ${target.workerId} · sof foyda ${coMoney(net)} so'm`);
-    setText('companyAdvancePeriod', selectedPeriod()?.name || '2026 — Oktabr');
+      setText('companyAdvancePeriod', selectedPeriod()?.name || 'Davr tanlanmagan');
 
     let currentAmount = 200000;
     const amountInput = byId('companyAdvanceAmountInput');

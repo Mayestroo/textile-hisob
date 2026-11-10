@@ -182,7 +182,7 @@ export function exportWorkbookToExcel(models: ModelConfig[], workers: Worker[], 
 
   // Trigger browser download
   const dateStr = formatDateIso();
-  const finalFilename = customFilename || `Buxoro_Futbolka_Hisob_${dateStr}.xlsx`;
+  const finalFilename = customFilename || `Hisob_${dateStr}.xlsx`;
   XLSX.writeFile(wb, finalFilename);
 }
 

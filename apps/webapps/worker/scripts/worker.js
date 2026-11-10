@@ -181,7 +181,7 @@
 
         // If not bound or first time entering without credentials, show Ulanish screen
         if (isWorkerOnboarding || urlParams.get('mode') === 'bind' || urlParams.get('onboard') === 'true' || !targetWorkerId || !workerAuthToken) {
-          showWorkerBindScreen(urlParams.get('workerId') || '', '', companyId || 'comp_novda');
+          showWorkerBindScreen(urlParams.get('workerId') || '', '', companyId || '');
           return;
         }
 
@@ -260,14 +260,12 @@
 
       const nameEl = document.getElementById('workerNameHeader');
       if (nameEl) {
-        nameEl.textContent = w.name || 'Абдуллаева Мавлуда';
+        nameEl.textContent = w.name || 'Ishchi';
       }
 
       const periodEl = document.getElementById('periodNameText');
       const p = state.currentPeriod;
-      if (periodEl && p && p.name) {
-        periodEl.textContent = p.name;
-      }
+      if (periodEl) periodEl.textContent = p?.name || 'Davr tanlanmagan';
 
       if (p?.isClosed) {
         const badge = document.getElementById('periodStatusBadge');
@@ -280,14 +278,14 @@
       }
 
       const brandEl = document.getElementById('brandCompanyName');
-      if (brandEl) brandEl.textContent = state.companyId || 'comp_novda';
+      if (brandEl) brandEl.textContent = state.companyId || '';
 
       const aboutId = document.getElementById('aboutWorkerId');
-      if (aboutId) aboutId.textContent = `#${w.id || '1'}`;
+      if (aboutId) aboutId.textContent = w.id ? `#${w.id}` : '—';
       const aboutName = document.getElementById('aboutWorkerName');
-      if (aboutName) aboutName.textContent = w.name || 'Абдуллаева Мавluда';
+      if (aboutName) aboutName.textContent = w.name || 'Ishchi';
       const aboutCompany = document.getElementById('aboutCompanyId');
-      if (aboutCompany) aboutCompany.textContent = state.companyId || 'comp_novda';
+      if (aboutCompany) aboutCompany.textContent = state.companyId || '—';
     }
 
     function renderHero() {
@@ -345,113 +343,20 @@
         if (Array.isArray(mb[mId]?.operations)) opCount += mb[mId].operations.length;
       }
       const opsCountEl = document.getElementById('operationsCount');
-      if (opsCountEl) opsCountEl.textContent = opCount || '49';
+      if (opsCountEl) opsCountEl.textContent = opCount;
       const opsCountBadge = document.getElementById('opsCountBadge');
-      if (opsCountBadge) opsCountBadge.textContent = `${opCount || 49} ta operatsiya`;
+      if (opsCountBadge) opsCountBadge.textContent = `${opCount} ta operatsiya`;
       const opsPiecesTotal = document.getElementById('opsPiecesTotal');
-      if (opsPiecesTotal) opsPiecesTotal.textContent = `${formatNumber(state.calculations.pieces || 4684)} dona`;
+      if (opsPiecesTotal) opsPiecesTotal.textContent = `${formatNumber(state.calculations.pieces)} dona`;
       const opsNetPayTotal = document.getElementById('opsNetPayTotal');
-      if (opsNetPayTotal) opsNetPayTotal.textContent = `${formatNumber(state.calculations.net || 702600)} so'm`;
-      const pName = (state.currentPeriod?.name || 'Oktabr').replace(/^\d{4}\s*—\s*/, '');
+      if (opsNetPayTotal) opsNetPayTotal.textContent = state.currentPeriod ? `${formatNumber(state.calculations.net)} so'm` : '—';
+      const pName = state.currentPeriod?.name?.replace(/^\d{4}\s*—\s*/, '') || '';
       const opsPeriodLabel = document.getElementById('opsPeriodLabel');
-      if (opsPeriodLabel) opsPeriodLabel.textContent = `${pName} · jami`;
+      if (opsPeriodLabel) opsPeriodLabel.textContent = pName ? `${pName} · jami` : 'Davr tanlanmagan';
 
       if (!keys.length) {
-        if (listEl) {
-          listEl.innerHTML = `
-            <div class="op-item-row">
-              <div class="op-item-info">
-                <div class="op-item-title">Орка бостирув</div>
-                <div class="op-item-sub">DZ-008-1 · 14.10 16:30</div>
-              </div>
-              <div class="op-item-meta">
-                <div class="op-item-amount">14 850 so'm</div>
-                <div class="op-item-qty">99 dona</div>
-              </div>
-            </div>
-            <div class="op-item-row">
-              <div class="op-item-info">
-                <div class="op-item-title">Орка бостирув</div>
-                <div class="op-item-sub">DZ-008-1 · 10.10 13:35</div>
-              </div>
-              <div class="op-item-meta">
-                <div class="op-item-amount">12 300 so'm</div>
-                <div class="op-item-qty">82 dona</div>
-              </div>
-            </div>
-            <div class="op-item-row">
-              <div class="op-item-info">
-                <div class="op-item-title">Орка бостирув</div>
-                <div class="op-item-sub">DZ-008-1 · 10.10 11:01</div>
-              </div>
-              <div class="op-item-meta">
-                <div class="op-item-amount">12 300 so'm</div>
-                <div class="op-item-qty">82 dona</div>
-              </div>
-            </div>
-          `;
-        }
-        if (opsFullListEl) {
-          opsFullListEl.innerHTML = `
-            <div class="ops-date-header">14 OKTABR</div>
-            <div class="ops-card-block">
-              <div class="op-item-row">
-                <div class="op-item-info">
-                  <div class="op-item-title">Орка бостирув</div>
-                  <div class="op-item-sub">DZ-008-1 · 14.10 16:30</div>
-                </div>
-                <div class="op-item-meta">
-                  <div class="op-item-amount">14 850 so'm</div>
-                  <div class="op-item-qty">99 dona</div>
-                </div>
-              </div>
-              <div class="op-item-row">
-                <div class="op-item-info">
-                  <div class="op-item-title">Орка бостирув</div>
-                  <div class="op-item-sub">DZ-008-1 · 14.10 15:13</div>
-                </div>
-                <div class="op-item-meta">
-                  <div class="op-item-amount">18 000 so'm</div>
-                  <div class="op-item-qty">120 dona</div>
-                </div>
-              </div>
-              <div class="op-item-row">
-                <div class="op-item-info">
-                  <div class="op-item-title">Орка бостирув</div>
-                  <div class="op-item-sub">DZ-008-1 · 14.10 14:44</div>
-                </div>
-                <div class="op-item-meta">
-                  <div class="op-item-amount">20 850 so'm</div>
-                  <div class="op-item-qty">139 dona</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="ops-date-header">10 OKTABR</div>
-            <div class="ops-card-block">
-              <div class="op-item-row">
-                <div class="op-item-info">
-                  <div class="op-item-title">Орка бостирув</div>
-                  <div class="op-item-sub">DZ-008-1 · 10.10 13:35</div>
-                </div>
-                <div class="op-item-meta">
-                  <div class="op-item-amount">12 300 so'm</div>
-                  <div class="op-item-qty">82 dona</div>
-                </div>
-              </div>
-              <div class="op-item-row">
-                <div class="op-item-info">
-                  <div class="op-item-title">Орка бостирув</div>
-                  <div class="op-item-sub">DZ-008-1 · 10.10 13:25</div>
-                </div>
-                <div class="op-item-meta">
-                  <div class="op-item-amount">15 450 so'm</div>
-                  <div class="op-item-qty">103 dona</div>
-                </div>
-              </div>
-            </div>
-          `;
-        }
+        if (listEl) listEl.innerHTML = '<div class="op-item-row">Hozircha ishlar mavjud emas.</div>';
+        if (opsFullListEl) opsFullListEl.innerHTML = '<div class="ops-card-block">Hozircha ishlar mavjud emas.</div>';
         return;
       }
 
@@ -561,7 +466,7 @@
     });
 
 
-    function showWorkerBindScreen(initialId = '1', initialName = 'Абдуллаева Мавлуda', company = '') {
+    function showWorkerBindScreen(initialId = '', initialName = '', company = '') {
       const bindContainer = document.getElementById('workerBindContainer');
       const dashboardContainer = document.getElementById('dashboardContainer');
       const bottomNav = document.querySelector('.bottom-nav');
@@ -578,9 +483,9 @@
       const subtitle = document.getElementById('workerBindSubtitle');
       const cameraCard = document.getElementById('workerCameraCard');
 
-      const co = company || companyId || 'comp_novda';
+      const co = company || companyId || '';
       if (brandName) brandName.textContent = co;
-      if (subtitle) subtitle.textContent = `${co} ishchi ilovasi`;
+      if (subtitle) subtitle.textContent = co ? `${co} ishchi ilovasi` : 'Ishchi ilovasi';
 
       if (idInput && initialId) idInput.value = initialId;
       if (foundName && initialName) foundName.textContent = initialName;
@@ -630,30 +535,6 @@
       });
     }
 
-    window.setWorkerDemoData = function() {
-      state.worker = { id: '1', name: 'Абдуллаева Мавлуда' };
-      state.currentPeriod = { name: '2026 — Oktabr', isClosed: false };
-      state.companyId = 'comp_novda';
-      state.calculations = {
-        net: 702600,
-        pieceworkGross: 702600,
-        gross: 702600,
-        oklad: 0,
-        magazin: 0,
-        avans: 0,
-        jarima: 0,
-        staj: 0,
-        pieces: 4684,
-        accountingStatus: 'COMPLETE',
-        unknownEntryCount: 0,
-        unresolvedAdjustmentCount: 0,
-        modelsBreakdown: {}
-      };
-      renderHeader();
-      renderHero();
-      renderOperations();
-    };
-
     window.showWorkerBindScreen = showWorkerBindScreen;
     window.hideWorkerBindScreen = hideWorkerBindScreen;
 
@@ -661,41 +542,85 @@
     let onboardingPhoto = '';
     let cameraStream = null;
     const cameraVideo = document.getElementById('workerCameraPreview');
+    const photoPreview = document.getElementById('workerPhotoPreview');
     const cameraStatus = document.getElementById('workerCameraStatus');
     const cameraStartButton = document.getElementById('workerCameraStartBtn');
     const cameraCaptureButton = document.getElementById('workerCameraCaptureBtn');
+    const cameraFileInput = document.getElementById('workerCameraFileInput');
+    let useNativeCameraCapture = false;
+    function setOnboardingPhoto(source) {
+      const renderPhoto = (image) => {
+        const canvas = document.getElementById('workerCameraCanvas');
+        if (!canvas) return;
+        const sourceWidth = image.videoWidth || image.naturalWidth || image.width;
+        const sourceHeight = image.videoHeight || image.naturalHeight || image.height;
+        if (!sourceWidth || !sourceHeight) {
+          if (cameraStatus) cameraStatus.textContent = 'Surat hali tayyor emas. Qayta urinib ko‘ring.';
+          return;
+        }
+        const scale = Math.min(1, 900 / sourceWidth, 900 / sourceHeight);
+        canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+        canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+        canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        onboardingPhoto = canvas.toDataURL('image/jpeg', 0.58);
+        if (photoPreview) {
+          photoPreview.src = onboardingPhoto;
+          photoPreview.style.display = 'block';
+        }
+        cameraVideo.style.display = 'none';
+        cameraCaptureButton.style.display = 'none';
+        cameraStartButton.style.display = 'block';
+        cameraStartButton.textContent = 'Suratni qayta olish';
+        if (cameraStatus) cameraStatus.textContent = 'Surat olindi. Ishchi ID raqamingizni kiriting.';
+        updateOnboardingSubmit();
+      };
+      if (typeof source !== 'string') {
+        renderPhoto(source);
+        return;
+      }
+      const image = new Image();
+      image.onload = () => renderPhoto(image);
+      image.onerror = () => { if (cameraStatus) cameraStatus.textContent = 'Suratni o‘qib bo‘lmadi. Qaytadan suratga oling.'; };
+      image.src = source;
+    }
+    cameraFileInput?.addEventListener('change', () => {
+      const file = cameraFileInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => setOnboardingPhoto(String(reader.result || ''));
+      reader.onerror = () => { if (cameraStatus) cameraStatus.textContent = 'Suratni ochib bo‘lmadi. Qayta urinib ko‘ring.'; };
+      reader.readAsDataURL(file);
+    });
     cameraStartButton?.addEventListener('click', async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        if (cameraStatus) cameraStatus.textContent = 'Kamera ochilmadi. Telegram ilovasida qayta urinib ko‘ring.';
+      if (useNativeCameraCapture || !navigator.mediaDevices?.getUserMedia) {
+        cameraFileInput?.click();
+        if (cameraStatus) cameraStatus.textContent = 'Old kamera ochilmoqda…';
         return;
       }
       try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 960 } }, audio: false });
         cameraVideo.srcObject = cameraStream;
         cameraVideo.style.display = 'block';
+        photoPreview.style.display = 'none';
+        await cameraVideo.play();
         cameraStartButton.style.display = 'none';
-        cameraCaptureButton.style.display = 'block';
+        if (cameraVideo.videoWidth) cameraCaptureButton.style.display = 'block';
+        else cameraVideo.addEventListener('loadedmetadata', () => { cameraCaptureButton.style.display = 'block'; }, { once: true });
         if (cameraStatus) cameraStatus.textContent = 'Kameraga ruxsat berildi. Yuzingizni kadrga joylashtiring.';
       } catch {
-        if (cameraStatus) cameraStatus.textContent = 'Kamera ruxsati berilmadi. Davom etish uchun ruxsat bering.';
+        useNativeCameraCapture = true;
+        cameraStartButton.textContent = 'Old kamerani ochish';
+        if (cameraStatus) cameraStatus.textContent = 'WebView kamerasi ochilmadi. “Old kamerani ochish” tugmasini bosing.';
       }
     });
     cameraCaptureButton?.addEventListener('click', () => {
-      const canvas = document.getElementById('workerCameraCanvas');
-      if (!cameraVideo?.videoWidth || !canvas) return;
-      const ratio = Math.min(1, 900 / cameraVideo.videoWidth);
-      canvas.width = Math.round(cameraVideo.videoWidth * ratio);
-      canvas.height = Math.round(cameraVideo.videoHeight * ratio);
-      canvas.getContext('2d')?.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
-      onboardingPhoto = canvas.toDataURL('image/jpeg', 0.68);
+      if (!cameraVideo?.videoWidth) {
+        if (cameraStatus) cameraStatus.textContent = 'Kamera hali tayyor emas. Bir oz kutib qayta bosing.';
+        return;
+      }
+      setOnboardingPhoto(cameraVideo);
       cameraStream?.getTracks().forEach(track => track.stop());
       cameraVideo.srcObject = null;
-      cameraVideo.style.display = 'none';
-      cameraCaptureButton.style.display = 'none';
-      cameraStartButton.style.display = 'block';
-      cameraStartButton.textContent = 'Suratni qayta olish';
-      if (cameraStatus) cameraStatus.textContent = 'Surat olindi. Endi Ishchi ID raqamingizni kiriting.';
-      updateOnboardingSubmit();
     });
 
     function updateOnboardingSubmit() {
@@ -716,7 +641,8 @@
           return;
         }
         try {
-          const resp = await fetch(`/api/worker/enrollment-check?companyId=${encodeURIComponent(companyId || 'comp_novda')}&workerId=${encodeURIComponent(val)}`);
+          if (!companyId) throw new Error('COMPANY_ID_REQUIRED');
+          const resp = await fetch(`/api/worker/enrollment-check?companyId=${encodeURIComponent(companyId)}&workerId=${encodeURIComponent(val)}`);
           if (resp.ok) {
             const data = await resp.json();
             if (data.success && data.worker && data.worker.worker_name) {
@@ -727,15 +653,8 @@
             }
           }
         } catch (e) {}
-        if (val === '1') {
-          if (foundName) foundName.textContent = 'Абдуллаева Мавлуда';
-          if (foundCard) foundCard.style.display = 'flex';
-          if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
-        } else {
-          if (foundName) foundName.textContent = `Ishchi #${val}`;
-          if (foundCard) foundCard.style.display = 'flex';
-          if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
-        }
+        if (foundCard) foundCard.style.display = 'none';
+        if (submitBtn) submitBtn.disabled = true;
       });
     }
 
@@ -772,7 +691,12 @@
       }
       if (tg && typeof tg.sendData === 'function') {
         try {
-          tg.sendData(JSON.stringify({ action: 'bind_request', workerId: val, companyId: companyId || 'comp_novda' }));
+          if (!companyId) {
+            const status = document.getElementById('workerCameraStatus');
+            if (status) status.textContent = 'Kompaniya ma’lumoti topilmadi. Administratorga murojaat qiling.';
+            return;
+          }
+          tg.sendData(JSON.stringify({ action: 'bind_request', workerId: val, companyId }));
           return;
         } catch (e) {}
       }

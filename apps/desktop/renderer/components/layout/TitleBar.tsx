@@ -34,7 +34,7 @@ function formatPeriodHeader(period: { name?: string; startDate?: string }): stri
     if (match) return `${match[1]} — ${match[2]}`;
     return period.name;
   }
-  return '2026 — Oktabr';
+  return 'Davr tanlanmagan';
 }
 
 export const TitleBar: React.FC = () => {
@@ -82,7 +82,7 @@ export const TitleBar: React.FC = () => {
   const handleSave = async () => {
     const saved = await saveToDisk(undefined, { forceBackup: true });
     if (saved) {
-      addNotification('success', 'Diskka Saqlandi', 'Barcha ma\'lumotlar diskdagi bazaga va Buxoro_Hisob_Oxirgi.xlsx fayliga saqlandi!');
+      addNotification('success', 'Diskka Saqlandi', 'Barcha ma\'lumotlar diskdagi bazaga saqlandi.');
     }
   };
 
@@ -104,7 +104,7 @@ export const TitleBar: React.FC = () => {
           </div>
         </div>
 
-        {/* Period Pill: < 2026 — Oktabr > */}
+        {/* Period Pill */}
         <div className="titlebar-period-pill">
           <button
             type="button"

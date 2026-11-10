@@ -67,3 +67,19 @@ it('authenticates the bound worker and validates explicit closed period on the p
     expect(other.json().error.code).toBe('PERIOD_NOT_FOUND');
   } finally { await app.close(); }
 });
+
+it('requires an explicit company scope for worker enrollment checks', async () => {
+  const app = Fastify();
+  registerWorkerRoutes(app, {
+    pool: { query: async () => ({ rows: [] }) },
+    workerApiToken: 'fixture-token',
+    workerAuthHmacSecret: 'fixture-hmac'
+  });
+  try {
+    const missing = await app.inject({ method: 'GET', url: '/api/worker/enrollment-check?workerId=7' });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json().error.code).toBe('COMPANY_ID_REQUIRED');
+  } finally {
+    await app.close();
+  }
+});
