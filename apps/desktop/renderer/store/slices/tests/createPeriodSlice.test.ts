@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPeriodSlice } from '../createPeriodSlice';
 import { createPattaBatchSlice } from '../createPattaBatchSlice';
 declare const require: (id: string) => any;
-declare const process: { cwd(): string };
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 function makeSlice() {
   const state: any = {
@@ -145,7 +145,7 @@ describe(' period legacy-storage boundary', () => {
   });
 
   it('file-mode close then finish saves and reopens paired lifecycle proof without ending open carry', async () => {
-    const root = fs.mkdtempSync(path.join(process.cwd(), '.opencode/deep-audit/output/local-test-db/patta-file-close-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'novda-patta-file-close-'));
     const file = path.join(root, 'workbook.json');
     try {
       const { slice, state, set } = makeSlice();
