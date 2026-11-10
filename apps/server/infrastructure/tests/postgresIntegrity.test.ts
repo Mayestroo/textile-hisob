@@ -456,29 +456,7 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       options: `-c search_path=${schemaName},public`
     });
     await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'schema.sql'), 'utf8'));
-    for (const filename of [
-      'deploy_active_party_migration.sql',
-      'deploy_operator_auth_migration.sql',
-      'deploy_operator_auth_rate_limit_migration.sql',
-      'deploy_reconciliation_migration.sql',
-      'deploy_ticket_identity_party_fk_migration.sql',
-      'deploy_exact_party_2_policy_migration.sql',
-      'deploy_activation_migration.sql',
-      'deploy_business_mutations_migration.sql',
-      'deploy_activation_company_scope_migration.sql',
-      'deploy_activation_policy_revision_migration.sql',
-      'deploy_exact_party_2_company_scope_migration.sql',
-      'deploy_activation_policy_device_sync_migration.sql',
-      'deploy_free_mode_ticket_party_migration.sql',
-      'deploy_patta_work_quantity_migration.sql',
-      'deploy_canonical_ids_global_patta_sequence.sql',
-      'deploy_production_adjustment_provenance_migration.sql',
-      'deploy_patta_series_sequence_migration.sql',
-      'deploy_patta_sequence_runtime_grant_migration.sql',
-      'deploy_voided_ticket_patta_reuse_migration.sql',
-      'deploy_company_admin_scope_migration.sql',
-      'deploy_worker_telegram_unbind_migration.sql'
-    ]) {
+    for (const filename of productionMigrations.slice(1)) {
       await isolatedPool.query(fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', filename), 'utf8'));
     }
   }, 120_000);

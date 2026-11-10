@@ -27,7 +27,7 @@ const { mutationFenceEnabled, createBusinessMutationFence } = require('./modules
 function buildFastifyServer(options = {}) {
   const app = fastify({
     logger: options.logger || false,
-    bodyLimit: 512 * 1024
+    bodyLimit: 64 * 1024
   });
 
   const pool = options.pool || getServerPool();

@@ -7,3 +7,7 @@ ALTER TABLE parties ADD CONSTRAINT patta_lifecycle_finish_pair
   CHECK ((ended_at IS NULL) = (ended_operation_id IS NULL));
 ALTER TABLE parties ADD CONSTRAINT patta_lifecycle_month_period_company
   FOREIGN KEY (company_id, month_closed_period_id) REFERENCES periods(company_id, id);
+
+INSERT INTO schema_migrations (version, name)
+VALUES (28, 'deploy_patta_lifecycle_provenance_migration.sql')
+ON CONFLICT (version) DO NOTHING;
