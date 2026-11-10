@@ -201,7 +201,7 @@ async function claimWorkerBinding(pool, input, options = {}) {
   return result.binding;
 }
 
-async function unbindWorkerTelegramBinding(pool, input, globalAdminIds = new Set()) {
+async function unbindWorkerTelegramBinding(pool, input) {
   const companyId = String(input?.companyId || '').trim();
   const workerId = Number(input?.workerId);
   const telegramId = String(input?.telegramId || '').trim();
@@ -212,7 +212,7 @@ async function unbindWorkerTelegramBinding(pool, input, globalAdminIds = new Set
     throw workerError('INVALID_TELEGRAM_ID', 400);
   }
 
-  const access = await resolveAdminAccess(pool, adminTelegramId, globalAdminIds);
+  const access = await resolveAdminAccess(pool, adminTelegramId);
   try {
     assertCompanyAccess(access, companyId);
   } catch (error) {

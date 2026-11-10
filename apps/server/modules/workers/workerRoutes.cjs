@@ -52,7 +52,8 @@ function registerWorkerRoutes(app, options = {}) {
   const workerApiToken = options.workerApiToken ?? readSecret(env, 'NOVDA_WORKER_API_TOKEN');
   const workerHmacSecret = options.workerAuthHmacSecret ?? readSecret(env, 'WORKER_AUTH_HMAC_SECRET');
   const workerPinRequired = String(env.NOVDA_WORKER_PIN_REQUIRED ?? 'true').toLowerCase() !== 'false';
-  const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', '..', 'bots', 'worker', 'webapp', 'index.html');
+  const workerWebAppPath = options.workerWebAppPath || path.join(__dirname, '..', '..', '..', 'webapps', 'worker', 'index.html');
+  const fontPath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'assets', 'fonts');
 
   app.get('/worker-app', async (_request, reply) => {
     try {
@@ -67,6 +68,22 @@ function registerWorkerRoutes(app, options = {}) {
     }
   });
 
+  app.get('/worker-app-assets/:asset', async (request, reply) => {
+    const assets = {
+      'worker.css': { file: 'styles/worker.css', type: 'text/css; charset=utf-8' },
+      'worker.js': { file: 'scripts/worker.js', type: 'application/javascript; charset=utf-8' }
+    };
+    const asset = Object.hasOwn(assets, request.params.asset) ? assets[request.params.asset] : null;
+    if (!asset) return reply.code(404).send({ success: false, error: { code: 'WORKER_ASSET_NOT_FOUND' } });
+    try {
+      return reply.type(asset.type).header('Cache-Control', 'no-store')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(fs.readFileSync(path.join(path.dirname(workerWebAppPath), asset.file), 'utf8'));
+    } catch {
+      return reply.code(503).send({ success: false, error: { code: 'WORKER_ASSET_UNAVAILABLE' } });
+    }
+  });
+
   app.get('/worker-app-font/:asset', async (request, reply) => {
     const asset = request.params.asset;
     if (asset !== 'IBMPlexSans[wdth,wght].ttf' && asset !== 'Onest[wght].ttf')
@@ -74,7 +91,7 @@ function registerWorkerRoutes(app, options = {}) {
     try {
       return reply.type('font/ttf').header('Cache-Control', 'public, max-age=86400')
         .header('X-Content-Type-Options', 'nosniff')
-        .send(fs.readFileSync(path.join(path.dirname(workerWebAppPath), asset)));
+        .send(fs.readFileSync(path.join(fontPath, asset)));
     } catch {
       return reply.code(503).send({ success: false, error: { code: 'WORKER_FONT_UNAVAILABLE' } });
     }

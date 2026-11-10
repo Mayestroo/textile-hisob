@@ -1,9 +1,9 @@
 'use strict';
 
 const { isValidCompanyId } = require('../auth/companyAuthority.cjs');
-const databaseManager = require('../database/databaseManager.cjs');
-const migrationRunner = require('../database/migrationRunner.cjs');
-const { MIGRATIONS } = require('../database/schema.cjs');
+const databaseManager = require('../database/core/databaseManager.cjs');
+const migrationRunner = require('../database/core/migrationRunner.cjs');
+const { MIGRATIONS } = require('../database/core/schema.cjs');
 
 const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version || 0;
 const ACTIVATION_UI_READINESS_CODES = new Set([
@@ -72,11 +72,11 @@ function loadDefaultDependencies() {
   };
 
   const modules = [
-    ['migrator', '../database/migrator.cjs'],
-    ['parityReporter', '../database/parityReporter.cjs'],
-    ['commandPipeline', '../database/commandPipeline.cjs'],
-    ['outboxManager', '../database/outboxManager.cjs'],
-    ['projectionReader', '../database/projectionReader.cjs'],
+    ['migrator', '../database/core/migrator.cjs'],
+    ['parityReporter', '../database/maintenance/parityReporter.cjs'],
+    ['commandPipeline', '../database/commands/commandPipeline.cjs'],
+    ['outboxManager', '../database/outbox/outboxManager.cjs'],
+    ['projectionReader', '../database/readers/projectionReader.cjs'],
     ['syncClient', '../sync/syncClient.cjs'],
     ['outboxDispatcher', '../sync/outboxDispatcher.cjs'],
     ['changeFeedApplier', '../sync/changeFeedApplier.cjs'],

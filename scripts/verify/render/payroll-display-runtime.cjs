@@ -3,7 +3,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const { spawnSync } = require('node:child_process');
-const { canonicalStringify, computePayloadHash } = require('../../../apps/desktop/electron/database/canonicalPayload.cjs');
+const { canonicalStringify, computePayloadHash } = require('../../../apps/desktop/electron/database/core/canonicalPayload.cjs');
 const root = path.resolve(__dirname, '../../..');
 const localDbRoot = path.join(root, '.opencode/deep-audit/output/local-test-db');
 const filters2bRun = process.env.FILTERS_2B_ONLY === '1' ? `filters-2b-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}` : '';
@@ -46,8 +46,8 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
         (['http:', 'https:'].includes(url.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)); } catch {}
       callback({ cancel: !allowed });
     });
-    const manager = require('../../../apps/desktop/electron/database/databaseManager.cjs');
-    const { readWorkbookPayrollProjection, readPeriodPayrollProjection } = require('../../../apps/desktop/electron/database/workbookPayrollRead.cjs');
+    const manager = require('../../../apps/desktop/electron/database/core/databaseManager.cjs');
+    const { readWorkbookPayrollProjection, readPeriodPayrollProjection } = require('../../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs');
     let db = manager.getCompanyDatabase(fixtureRoot, 'hisob_test_browser');
     const moneyCompany = `hisob_test_money_1c_${process.pid}`;
     let rejectNextMoneyCommand = false;
@@ -99,7 +99,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
         error: 'Unsupported writes and remote synchronization are disabled in this synthetic fixture.' }));
       }
      if (process.env.MONEY_1C_ONLY === '1') {
-        const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/workbookCommandPipeline.cjs');
+        const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/commands/workbookCommandPipeline.cjs');
         const moneyLicense = { isActivated: true, isTrial: true, isBlocked: false, deviceCredentialReady: true,
           companyId: moneyCompany, activationId: 'money-1c-local-only', machineId: 'money-1c-local-only', role: 'admin' };
         ipcMain.removeHandler('license-status');
@@ -118,7 +118,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
      }
      let capturedPattaHtml = '';
       if (process.env.MODEL_SIZES_C_ONLY === '1') {
-       const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/workbookCommandPipeline.cjs');
+       const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/commands/workbookCommandPipeline.cjs');
        const allowed = new Set(['UpdateBatchSettings', 'CompletePattaBatch']);
        ipcMain.removeHandler('workbook-command');
        ipcMain.handle('workbook-command', (_event, command) => {
@@ -360,7 +360,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
         addFilterWorker.run(9, company, 'Filter Fixture Nine', now, now);
       }
       if (process.env.PATTA_JUMP_ONLY === '1') {
-        const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/workbookCommandPipeline.cjs');
+        const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/commands/workbookCommandPipeline.cjs');
         ipcMain.removeHandler('workbook-command');
         ipcMain.handle('workbook-command', (_event, command) => {
           if (command?.companyId !== 'hisob_test_browser' || command?.commandType !== 'UpdateTicket')
@@ -1261,7 +1261,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
           fsSync.mkdirSync(screenshots, { recursive: true });
           const staleBeforeShot = path.join(screenshots, 'umumiy-1440-before.png');
           if (fsSync.existsSync(staleBeforeShot)) fsSync.unlinkSync(staleBeforeShot);
-          const localCommand = require('../../../apps/desktop/electron/database/workbookCommandPipeline.cjs');
+          const localCommand = require('../../../apps/desktop/electron/database/commands/workbookCommandPipeline.cjs');
          ipcMain.removeHandler('workbook-command');
           ipcMain.handle('workbook-command', async (_event, command) => {
             if (command?.companyId !== moneyCompany || command?.commandType !== 'UpsertWorker')
@@ -2628,7 +2628,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
        db.prepare("UPDATE period_archives SET archive_json=?,sha256=?,archived_at=? WHERE company_id=? AND period_id='P'")
          .run(JSON.stringify(closingP), computePayloadHash(canonicalStringify(closingP)), now, company);
        const currentManagerData = readWorkbookPayrollProjection(db, company);
-       const selectedValuation = require('../../../apps/desktop/electron/database/workbookPayrollRead.cjs')
+       const selectedValuation = require('../../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs')
         .readPeriodPayrollProjection(db, company, 'Q', closingArchive);
        if (currentManagerData.payrollValuation.workers[0].gross !== 108 || selectedValuation.workers[0].gross !== 84 || selectedValuation.workers[0].net !== 76) {
          throw Error('Period manager expected current 108 and selected closed 84/76');
@@ -2760,7 +2760,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
         { gross: '≈ 105', net: '≈ 97', qty: 15, rate: 7, amount: 105 });
 
       db.prepare("DELETE FROM period_archives WHERE company_id=? AND period_id='Q'").run(company);
-       const missingArchive = require('../../../apps/desktop/electron/database/workbookPayrollRead.cjs')
+       const missingArchive = require('../../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs')
         .readPeriodPayrollProjection(db, company, 'Q', null);
       await window.webContents.executeJavaScript(`window.renderWorkerDetailFixture(${JSON.stringify(archivedData)}, ${JSON.stringify(missingArchive)}, ${JSON.stringify(archivedData.period)})`);
       const missingRateUi = await window.webContents.executeJavaScript(`({ unknown: document.body.textContent.includes('Hisoblangan Ish HaqiNoma’lum'),
@@ -2768,7 +2768,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
       console.log('WORKER_DETAIL_MISSING_ARCHIVE ' + JSON.stringify(missingRateUi));
       if (!missingRateUi.unknown || !missingRateUi.line.includes('Noma’lum')) process.exitCode = 1;
       const zeroArchive = { ...archivedData, models: [{ id: 'm', operations: [{ name: 'Sew', rate: 0 }] }] };
-       const zeroValuation = require('../../../apps/desktop/electron/database/workbookPayrollRead.cjs')
+       const zeroValuation = require('../../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs')
         .readPeriodPayrollProjection(db, company, 'Q', zeroArchive);
       await verifyWorkerDetail('ZERO', archivedData, zeroValuation, archivedData.period,
         { gross: '≈ 0', net: '≈ -8', qty: 12, rate: 0, amount: 0 });
@@ -2789,7 +2789,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
           delta_qty,reason,status,provenance,created_at,created_by,original_ticket_id,original_entry_id,
           original_period_id,attribution_status)
           VALUES ('t-plus',?,'m',7,'Sew',2,'fixture','APPROVED','REMOTE_SYNC',?,'test','cv-known','cv-known-entry','T','RESOLVED')`).run(company,now);
-        const sourceFacts = require('../../../apps/desktop/electron/database/projectionReader.cjs')
+        const sourceFacts = require('../../../apps/desktop/electron/database/readers/projectionReader.cjs')
          .loadTicketFactsFromSqlite(db, company, { id: 'T', startDate: '2026-07-01', endDate: '2026-07-31' });
        const capturedTickets = sourceFacts.map(ticket => ({ ...ticket, id: ticket.ticketId, periodId: ticket.periodId }));
         const tArchive = { companyId: company,
@@ -2798,7 +2798,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
           workers: [{ id: 7, name: 'Demo worker', staj: 1, avans: 0, jarima: 0 }] };
         db.prepare(`INSERT INTO period_archives(company_id,period_id,archive_json,sha256,archived_at)
           VALUES (?,?,?,?,?)`).run(company, 'T', canonicalStringify(tArchive), computePayloadHash(canonicalStringify(tArchive)), now);
-         const tValuation = require('../../../apps/desktop/electron/database/workbookPayrollRead.cjs')
+         const tValuation = require('../../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs')
           .readPeriodPayrollProjection(db, company, 'T', tArchive);
         if (tValuation.workers[0].gross !== 119) throw Error('Conveyor period gross must include original-period correction');
        await window.webContents.executeJavaScript(`window.renderKonveyerFixture(${JSON.stringify({

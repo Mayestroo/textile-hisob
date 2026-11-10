@@ -268,7 +268,7 @@ export const WorkerManagerModal: React.FC = () => {
                               style={{ height: '28px', fontWeight: 600 }}
                             />
                           ) : (
-                            <span 
+                            <span
                               onClick={() => startEditing(w.id, w.name, w.staj)}
                               style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }}
                               title="Tahrirlash uchun bosing"

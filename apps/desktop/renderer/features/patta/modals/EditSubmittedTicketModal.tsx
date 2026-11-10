@@ -213,7 +213,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       className="modal-overlay phase-c-dialog"
       onClick={closeTicketModal}
       style={{
@@ -231,8 +231,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
         padding: '20px'
       }}
     >
-      <div 
-        className="modal-card" 
+      <div
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -348,7 +348,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 const opAmount = isFound && op.rate !== null ? op.rate * ticketQty : null;
 
                 return (
-                  <tr 
+                  <tr
                     key={op.name}
                     style={{
                       height: '38px',

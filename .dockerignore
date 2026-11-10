@@ -3,6 +3,9 @@
 AGENTS.md
 opencode.json
 node_modules
+**/node_modules
+.opencode
+.local
 dist
 dist-build
 coverage

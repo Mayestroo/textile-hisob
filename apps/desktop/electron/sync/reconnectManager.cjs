@@ -3,7 +3,7 @@
 const { getLocalCursor, applyChangesBatch } = require('./changeFeedApplier.cjs');
 const { markFeedUnavailable } = require('./feedEvidence.cjs');
 const { dispatchOutbox } = require('./outboxDispatcher.cjs');
-const { rebuildCompanyProjections } = require('../database/projectionReader.cjs');
+const { rebuildCompanyProjections } = require('../database/readers/projectionReader.cjs');
 const {
   acknowledgeOutboxOperation,
   listOutboxReconciliationCandidates,
@@ -12,7 +12,7 @@ const {
   recoverCapturedTicketProvenanceTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
-} = require('../database/outboxManager.cjs');
+} = require('../database/outbox/outboxManager.cjs');
 
 async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
   if (typeof syncClient?.getOperationStatuses !== 'function') return 0;

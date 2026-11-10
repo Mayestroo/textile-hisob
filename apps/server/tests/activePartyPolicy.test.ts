@@ -8,9 +8,9 @@ import { getServerPool, resetServerDatabase, closeServerPool } from '../infrastr
 import { canonicalStringify, computePayloadHash } from '../modules/sync/canonicalPayload.cjs';
 
 // @ts-ignore
-const migrator = require('../../desktop/electron/database/migrator.cjs');
+const migrator = require('../../desktop/electron/database/core/migrator.cjs');
 // @ts-ignore
-const databaseManager = require('../../desktop/electron/database/databaseManager.cjs');
+const databaseManager = require('../../desktop/electron/database/core/databaseManager.cjs');
 
 describe('Phase 2 â€” Active-Party Uniqueness Owner Exception Policy Tests (INV-05)', () => {
   let app: any;

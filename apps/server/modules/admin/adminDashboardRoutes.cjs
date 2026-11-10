@@ -4,12 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { createAdminDashboardService } = require('./adminDashboard.cjs');
 const { verifyAdminWebSession } = require('./adminWebAuth.cjs');
-const { assertCompanyAccess, requireGlobalAdmin, resolveAdminAccess, scopeCompanyFilters } = require('./adminAccess.cjs');
-const { parseAdminTelegramIds } = require('../activation/activationRequests.cjs');
+const { assertCompanyAccess, resolveAdminAccess, scopeCompanyFilters } = require('./adminAccess.cjs');
 const { readSecret, serviceTokenGuard } = require('../activation/activationRoutes.cjs');
 
 const INTERNAL_SESSION_PATH = '/internal/admin/webapp/session';
-const INTERNAL_SIGN_PATH = '/internal/admin/webapp/sign-activation';
 const WEBAPP_VERSION_MARKER = 'novda-admin-webapp-version';
 const MAX_INIT_DATA_LENGTH = 8192;
 const MAX_SESSION_REQUESTS_PER_MINUTE = 20;
@@ -88,43 +86,13 @@ function registerAdminDashboardRoutes(app, options = {}) {
   const adminBotInternalUrlReady = isInternalAdminBotUrl(adminBotInternalUrl);
   const workerBotHealthUrl = String(options.workerBotHealthUrl ?? env.NOVDA_WORKER_BOT_HEALTH_URL ?? '').trim();
   const workerBotHealthUrlReady = isInternalWorkerBotHealthUrl(workerBotHealthUrl);
-  const allowedAdminIds = options.allowedAdminIds instanceof Set
-    ? options.allowedAdminIds
-    : parseAdminTelegramIds(options.allowedAdminIds ?? readSecret(env, 'NOVDA_ADMIN_TELEGRAM_IDS'));
   const fetchImpl = options.fetchImpl || globalThis.fetch;
-  const adminWebAppPath = options.adminWebAppPath || path.join(__dirname, '..', '..', 'static', 'admin-webapp');
+  const adminWebAppPath = options.adminWebAppPath || path.join(__dirname, '..', '..', '..', 'webapps', 'admin');
+  const fontPath = path.join(__dirname, '..', '..', '..', '..', 'packages', 'assets', 'fonts');
   const checkSessionRateLimit = options.checkSessionRateLimit || createSessionRateLimiter();
-
-  const signerClient = options.signerClient || (async ({ sessionToken, payload, companyId }) => {
-    if (!adminApiToken || !adminBotInternalUrlReady || typeof fetchImpl !== 'function') {
-      const error = new Error('ACTIVATION_SIGNER_UNAVAILABLE');
-      error.code = 'ACTIVATION_SIGNER_UNAVAILABLE';
-      error.statusCode = 503;
-      throw error;
-    }
-    const response = await fetchImpl(`${adminBotInternalUrl}${INTERNAL_SIGN_PATH}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-novda-admin-token': adminApiToken
-      },
-      body: JSON.stringify({ sessionToken, payload, companyId })
-    });
-    let result;
-    try { result = await response.json(); } catch { result = null; }
-    if (!response.ok || result?.success !== true || result.telegramId == null) {
-      const error = new Error('ACTIVATION_SIGNER_UNAVAILABLE');
-      error.code = 'ACTIVATION_SIGNER_UNAVAILABLE';
-      error.statusCode = 503;
-      throw error;
-    }
-    return result;
-  });
 
   const dashboard = options.dashboard || createAdminDashboardService({
     pool: options.pool,
-    allowedAdminIds,
-    signerClient,
     publicKey: options.publicKey
   });
 
@@ -140,8 +108,8 @@ function registerAdminDashboardRoutes(app, options = {}) {
       });
     }
     try {
-      request.adminSession = verifyAdminWebSession(match[1], sessionSecret, null);
-      request.adminAccess = await resolveAdminAccess(pool, request.adminSession.telegramId, allowedAdminIds);
+      request.adminSession = verifyAdminWebSession(match[1], sessionSecret);
+      request.adminAccess = await resolveAdminAccess(pool, request.adminSession.telegramId);
       request.adminSessionToken = match[1];
     } catch (error) {
       return sendAdminDashboardError(reply, error);
@@ -152,23 +120,19 @@ function registerAdminDashboardRoutes(app, options = {}) {
     return assertCompanyAccess(request.adminAccess, companyId);
   }
 
-  function globalOnly(request) {
-    requireGlobalAdmin(request.adminAccess);
-  }
-
   app.post('/internal/admin/webapp/authorize', {
     preHandler: serviceTokenGuard('x-novda-admin-token', adminApiToken)
   }, async (request, reply) => {
     try {
       const telegramId = String(request.body?.telegramId || '').trim();
-      const access = await resolveAdminAccess(pool, telegramId, allowedAdminIds);
+      const access = await resolveAdminAccess(pool, telegramId);
       const companyId = request.body?.companyId;
       if (companyId !== undefined && companyId !== null && companyId !== '') {
         assertCompanyAccess(access, companyId);
       }
       return reply.header('Cache-Control', 'no-store').send({
         success: true,
-        access: { isGlobalAdmin: access.isGlobalAdmin, companyIds: access.companyIds }
+        access: { companyIds: access.companyIds }
       });
     } catch (error) {
       return sendAdminDashboardError(reply, error);
@@ -225,17 +189,17 @@ function registerAdminDashboardRoutes(app, options = {}) {
 
   app.get('/admin-app/:asset', async (request, reply) => {
     const assets = {
-      'admin.css': { type: 'text/css; charset=utf-8', file: 'admin.css' },
-      'company-admin.css': { type: 'text/css; charset=utf-8', file: 'company-admin.css' },
-      'admin.js': { type: 'application/javascript; charset=utf-8', file: 'admin.js' },
-      'financial-intent.js': { type: 'application/javascript; charset=utf-8', file: 'financial-intent.js' },
+      'admin.css': { type: 'text/css; charset=utf-8', file: 'styles/admin.css' },
+      'company-admin.css': { type: 'text/css; charset=utf-8', file: 'styles/company-admin.css' },
+      'admin.js': { type: 'application/javascript; charset=utf-8', file: 'scripts/admin.js' },
+      'financial-intent.js': { type: 'application/javascript; charset=utf-8', file: 'scripts/financial-intent.js' },
       'IBMPlexSans[wdth,wght].ttf': { type: 'font/ttf', file: 'IBMPlexSans[wdth,wght].ttf', binary: true },
       'Onest[wght].ttf': { type: 'font/ttf', file: 'Onest[wght].ttf', binary: true }
     };
     const asset = assets[request.params.asset];
     if (!asset) return reply.code(404).header('Cache-Control', 'no-store').send({ success: false, error: { code: 'ADMIN_WEBAPP_ASSET_NOT_FOUND' } });
     try {
-      const content = fs.readFileSync(path.join(adminWebAppPath, asset.file), asset.binary ? undefined : 'utf8');
+      const content = fs.readFileSync(path.join(asset.binary ? fontPath : adminWebAppPath, asset.file), asset.binary ? undefined : 'utf8');
       return reply.type(asset.type)
         .header('Cache-Control', 'no-store')
         .header('Referrer-Policy', 'no-referrer')
@@ -275,11 +239,11 @@ function registerAdminDashboardRoutes(app, options = {}) {
         const status = response.status === 403 ? 403 : response.status === 429 ? 429 : response.status >= 500 ? 503 : 401;
         return reply.code(status).header('Cache-Control', 'no-store').send({ success: false, error: { code } });
       }
-      const verified = verifyAdminWebSession(result.session.token, sessionSecret, null);
+      const verified = verifyAdminWebSession(result.session.token, sessionSecret);
       if (String(result.user.id || '') !== verified.telegramId || Number(result.session.expiresAt) !== verified.expiresAt) {
         return reply.code(401).header('Cache-Control', 'no-store').send({ success: false, error: { code: 'ADMIN_SESSION_INVALID' } });
       }
-      const access = await resolveAdminAccess(pool, verified.telegramId, allowedAdminIds);
+      const access = await resolveAdminAccess(pool, verified.telegramId);
       const safeUser = {
         id: verified.telegramId,
         firstName: String(result.user.first_name || '').slice(0, 128),
@@ -290,7 +254,7 @@ function registerAdminDashboardRoutes(app, options = {}) {
         success: true,
         session: { token: result.session.token, expiresAt: verified.expiresAt },
         user: safeUser,
-        access: { isGlobalAdmin: access.isGlobalAdmin, companyIds: access.companyIds }
+        access: { companyIds: access.companyIds }
       });
     } catch (error) {
       if (error?.code === 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED' || error?.code === 'ADMIN_SESSION_NOT_AUTHORIZED'
@@ -307,14 +271,14 @@ function registerAdminDashboardRoutes(app, options = {}) {
   app.get('/api/admin/webapp/session', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({
       session: request.adminSession,
-      access: { isGlobalAdmin: request.adminAccess.isGlobalAdmin, companyIds: request.adminAccess.companyIds }
+       access: { companyIds: request.adminAccess.companyIds }
     })));
   app.get('/api/admin/webapp/overview', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ overview: await dashboard.overview(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
   app.get('/api/admin/webapp/companies', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => {
       const companies = await dashboard.listCompanies();
-      return { companies: request.adminAccess.isGlobalAdmin ? companies : companies.filter((company) => request.adminAccess.companyIds.includes(company.companyId)) };
+      return { companies: companies.filter((company) => request.adminAccess.companyIds.includes(company.companyId)) };
     }));
   app.get('/api/admin/webapp/devices', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ devices: await dashboard.listDevices(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
@@ -361,19 +325,8 @@ function registerAdminDashboardRoutes(app, options = {}) {
       companyId: scopedCompany(request, request.params.companyId), workerId: request.params.workerId,
       telegramId: request.body?.telegramId
     }) })));
-  app.get('/api/admin/webapp/companies/:companyId/admins', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { admins: await dashboard.listCompanyAdmins(request.adminSession.telegramId, request.params.companyId) }; }));
-  app.put('/api/admin/webapp/companies/:companyId/admins/:telegramId', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { grant: await dashboard.setCompanyAdmin(request.adminSession.telegramId, {
-      companyId: request.params.companyId, telegramId: request.params.telegramId, isActive: request.body?.isActive
-    }) }; }));
   app.get('/api/admin/webapp/payroll', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => ({ payroll: await dashboard.getPayroll(scopeCompanyFilters(request.adminAccess, request.query || {})) })));
-  app.get('/api/admin/webapp/activations', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => ({ activations: await dashboard.listActivations({
-      ...scopeCompanyFilters(request.adminAccess, request.query || {}),
-      includeUnassignedPending: !request.adminAccess.isGlobalAdmin
-    }) })));
   app.get('/api/admin/webapp/models', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => dashboard.listModels(scopeCompanyFilters(request.adminAccess, request.query || {}))));
   app.get('/api/admin/webapp/parties', { preHandler: adminSessionGuard }, async (request, reply) =>
@@ -388,34 +341,6 @@ function registerAdminDashboardRoutes(app, options = {}) {
     }));
   app.get('/api/admin/webapp/balances', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => dashboard.getBalances(scopeCompanyFilters(request.adminAccess, request.query || {}))));
-  app.get('/api/admin/webapp/system', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => { globalOnly(request); return { system: await dashboard.getSystemHealth() }; }));
-  app.get('/api/admin/webapp/activations/:requestId/events', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => ({ events: await dashboard.getActivationEvents(request.params.requestId, request.adminAccess) })));
-
-  app.post('/api/admin/webapp/companies', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => {
-      if (!request.adminAccess.isGlobalAdmin) scopedCompany(request, request.body?.companyId);
-      return { company: await dashboard.upsertCompany(request.adminSession.telegramId, request.body || {}) };
-    }));
-  app.put('/api/admin/webapp/companies/:companyId/strict-mode', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => ({ mode: await dashboard.updateCompanyStrictMode(request.adminSession.telegramId, {
-      companyId: request.params.companyId,
-      strictMode: request.body?.strictMode,
-      sessionToken: request.adminSessionToken
-    }) })));
-  app.post('/api/admin/webapp/activations/:requestId/approve', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => ({ activation: await dashboard.approveActivation(request.adminSession.telegramId, {
-      ...(request.body || {}), requestId: request.params.requestId, sessionToken: request.adminSessionToken
-    }) })));
-  app.post('/api/admin/webapp/activations/:requestId/reject', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => ({ activation: await dashboard.rejectActivation(request.adminSession.telegramId, {
-      ...(request.body || {}), requestId: request.params.requestId
-    }) })));
-  app.post('/api/admin/webapp/activations/:requestId/revoke', { preHandler: adminSessionGuard }, async (request, reply) =>
-    invoke(request, reply, async () => ({ activation: await dashboard.revokeActivation(request.adminSession.telegramId, {
-      ...(request.body || {}), requestId: request.params.requestId, sessionToken: request.adminSessionToken
-    }) })));
 }
 
 module.exports = {

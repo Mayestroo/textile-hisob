@@ -10,7 +10,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 
 const root = path.resolve(__dirname, '../../..');
-const htmlPath = path.join(root, 'apps/bots/worker/webapp/index.html');
+const htmlPath = path.join(root, 'apps/webapps/worker/index.html');
 const browser = process.env.WORKER_RENDER_BROWSER || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 assert(fs.existsSync(browser), 'Set WORKER_RENDER_BROWSER to an installed Chromium browser');
 const liveFixture = process.env.MONEY_1D_API_BASE || '';
@@ -22,10 +22,7 @@ const telegramId = '123456789';
 const screenshots = process.env.MONEY_1D_SCREENSHOTS || path.join(root, '.opencode/deep-audit/output/post-redesign-filters-2e-screenshots');
 fs.mkdirSync(screenshots, { recursive: true });
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'hisob-worker-webapp-'));
-const inlineScripts = [...fs.readFileSync(htmlPath, 'utf8').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match => match[1]).filter(Boolean);
-assert.equal(inlineScripts.length, 1, 'only the worker application inline script is syntax-checked');
-const syntaxFile = path.join(userData, 'worker-inline.cjs');
-fs.writeFileSync(syntaxFile, inlineScripts[0]);
+const syntaxFile = path.join(root, 'apps/webapps/worker/scripts/worker.js');
 const syntaxCheck = spawnSync(process.execPath, ['--check', syntaxFile], { encoding: 'utf8' });
 assert.equal(syntaxCheck.status, 0, syntaxCheck.stderr);
 let profileHits = 0;
@@ -67,10 +64,16 @@ const server = http.createServer((req, res) => {
       `<script>window.Telegram={WebApp:{ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},initDataUnsafe:{user:{id:${url.searchParams.get('telegramId')}}},HapticFeedback:{impactOccurred(){},notificationOccurred(){}}}};</script>`);
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html); return;
   }
+  if (url.pathname === '/worker-app-assets/worker.css' || url.pathname === '/worker-app-assets/worker.js') {
+    const isCss = url.pathname.endsWith('.css');
+    const file = path.join(root, 'apps', 'webapps', 'worker', isCss ? 'styles/worker.css' : 'scripts/worker.js');
+    res.writeHead(200, { 'content-type': isCss ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8' });
+    res.end(fs.readFileSync(file)); return;
+  }
   if (url.pathname.startsWith('/worker-app-font/')) {
     const name = decodeURIComponent(url.pathname.slice('/worker-app-font/'.length));
     if (!['IBMPlexSans[wdth,wght].ttf','Onest[wght].ttf'].includes(name)) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'content-type': 'font/ttf' }); res.end(fs.readFileSync(path.join(path.dirname(htmlPath), name))); return;
+    res.writeHead(200, { 'content-type': 'font/ttf' }); res.end(fs.readFileSync(path.join(root, 'packages', 'assets', 'fonts', name))); return;
   }
   if (url.pathname === '/api/worker/profile' || url.pathname === '/api/worker/tickets') {
     assert.equal(req.headers['x-worker-auth-token'], token, 'fixture auth token header');
@@ -292,7 +295,7 @@ async function main() {
     assert.deepEqual(externalRequests, [], 'no non-loopback HTTP(S) request was attempted');
     assert.deepEqual(pageErrors, [], 'no uncaught worker JavaScript exception');
     assert(!blocked.some(reason => /ERR_(NAME_NOT_RESOLVED|CONNECTION_REFUSED)/.test(reason)), `unexpected failed resource: ${blocked.join(',')}`);
-    console.log(JSON.stringify({ result: 'PASS', inlineSyntax: 'node --check on extracted temporary .cjs', viewportEvidence: screenshots, expected, fontEvidence, desktopFontStress, mobileStress, storageDenied, pageErrors, apiReads: { profileHits, ticketsHits }, remoteDependency: 'Telegram SDK tag replaced with local stub; remote DNS denied; local font assets only' }, null, 2));
+    console.log(JSON.stringify({ result: 'PASS', scriptSyntax: 'node --check on worker.js', viewportEvidence: screenshots, expected, fontEvidence, desktopFontStress, mobileStress, storageDenied, pageErrors, apiReads: { profileHits, ticketsHits }, remoteDependency: 'Telegram SDK tag replaced with local stub; remote DNS denied; local font assets only' }, null, 2));
     ws.close();
   } finally {
     if (child.pid) spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });

@@ -75,16 +75,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const borderRadius = variant === 'pill' ? '9999px' : '8px';
 
   return (
-    <div 
-      ref={containerRef} 
+    <div
+      ref={containerRef}
       className={`custom-select-container ${className || ''}`}
-      style={{ 
-        position: 'relative', 
-        display: 'inline-block', 
-        minWidth: width ? undefined : minWidth, 
+      style={{
+        position: 'relative',
+        display: 'inline-block',
+        minWidth: width ? undefined : minWidth,
         width: width || undefined,
         userSelect: 'none',
-        ...style 
+        ...style
       }}
     >
       <select
@@ -143,14 +143,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {displayLabel}
         </span>
-        <ChevronDown 
-          size={14} 
-          style={{ 
+        <ChevronDown
+          size={14}
+          style={{
             color: 'var(--text-muted, #64748b)',
-            flexShrink: 0, 
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', 
-            transition: 'transform 0.15s ease' 
-          }} 
+            flexShrink: 0,
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s ease'
+          }}
         />
       </button>
 

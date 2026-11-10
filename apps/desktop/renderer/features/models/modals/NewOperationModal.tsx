@@ -10,7 +10,7 @@ export const NewOperationModal: React.FC = () => {
   const syncNewOperation = useWorkbookStore((s) => s.syncNewOperation);
   const models = useWorkbookStore((s) => s.models);
   const activeSheet = useWorkbookStore((s) => s.activeSheet);
-  
+
   const initialModelId = targetModelId || (activeSheet.endsWith('-hisob') ? activeSheet.replace('-hisob', '') : activeSheet !== 'Umumiy' ? activeSheet : 'Basiman');
   const [modelId, setModelId] = useState(initialModelId);
   const [opName, setOpName] = useState('');

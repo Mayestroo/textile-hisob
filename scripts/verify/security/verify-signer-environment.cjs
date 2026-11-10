@@ -1,11 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '../../..');
 const activeSignerFiles = [
   'apps/desktop/electron/license/license.cjs',
-  'apps/bots/admin/admin_bot.py'
+  'apps/bots/admin/src/admin_bot.py'
 ];
 const forbiddenPatterns = [
   /NOVDA_LICENSE_HMAC_SECRET/,
@@ -42,9 +43,9 @@ function checkRendererFiles(directory) {
 }
 checkRendererFiles(path.join(root, 'apps/desktop/renderer'));
 
-const adminSource = fs.readFileSync(path.join(root, 'apps/bots/admin/admin_bot.py'), 'utf8');
-if (!adminSource.includes('NOVDA_LICENSE_ED25519_PRIVATE_KEY')) {
-  fail('admin_bot.py does not use NOVDA_LICENSE_ED25519_PRIVATE_KEY');
+const adminSource = fs.readFileSync(path.join(root, 'apps/bots/admin/src/admin_bot.py'), 'utf8');
+if (/NOVDA_LICENSE_ED25519_PRIVATE_KEY|def load_signer\(|def create_activation\(/.test(adminSource)) {
+  fail('admin bot must not contain the retired production signer');
 }
 
 const generatorSource = fs.readFileSync(path.join(root, 'scripts/tools/generate_license.py'), 'utf8');
@@ -52,16 +53,16 @@ if (/NOVDA_LICENSE_ED25519_PRIVATE_KEY|BEGIN (?:RSA |EC |OPENSSH |ED25519 )?PRIV
   fail('generate_license.py must not load or use production signer material');
 }
 
-const workerSource = fs.readFileSync(path.join(root, 'apps/bots/worker/worker_bot.py'), 'utf8');
+const workerSource = fs.readFileSync(path.join(root, 'apps/bots/worker/src/worker_bot.py'), 'utf8');
 if (!workerSource.includes('WORKER_AUTH_HMAC_SECRET') || /NOVDA_LICENSE_(?:HMAC_)?SECRET/.test(workerSource)) {
-  fail('apps/bots/worker/worker_bot.py does not isolate WORKER_AUTH_HMAC_SECRET');
+  fail('apps/bots/worker/src/worker_bot.py does not isolate WORKER_AUTH_HMAC_SECRET');
 }
 
 const activeEnvironmentFiles = [
   'apps/bots/worker/.env.example',
   'apps/server/production.env.example',
   'ops/env/novda-server.env.example',
-  'PRODUCTION.md'
+  'ops/docs/PRODUCTION.md'
 ];
 for (const relativePath of activeEnvironmentFiles) {
   const source = fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -80,32 +81,43 @@ for (const relativePath of workerEnvironmentFiles) {
   }
 }
 
-const pythonCommands = process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+const pythonCommands = process.env.PYTHON
+  ? [process.env.PYTHON]
+  : process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+const pythonEnv = {
+  ...process.env,
+  ...(process.platform === 'win32' ? {
+    USERPROFILE: process.env.USERPROFILE || os.homedir(),
+    APPDATA: process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+  } : {}),
+  NOVDA_LICENSE_ED25519_PRIVATE_KEY: '',
+  NOVDA_LICENSE_ED25519_PRIVATE_KEY_FILE: ''
+};
 let signerCheck;
 for (const command of pythonCommands) {
   signerCheck = spawnSync(
     command,
-    ['-c', "import sys; sys.path.insert(0, 'apps/bots/admin'); import admin_bot; key, error = admin_bot.load_signer(''); print(error or 'SIGNER_UNEXPECTEDLY_CONFIGURED')"],
+    ['-c', "import sys; sys.path.insert(0, 'apps/bots/admin/src'); import admin_bot; assert not hasattr(admin_bot, 'load_signer') and not hasattr(admin_bot, 'create_activation'); print('SIGNER_REMOVED')"],
     {
       cwd: root,
-      env: { ...process.env, NOVDA_LICENSE_ED25519_PRIVATE_KEY: '', NOVDA_LICENSE_ED25519_PRIVATE_KEY_FILE: '' },
+      env: pythonEnv,
       encoding: 'utf8'
     }
   );
-  if (!signerCheck.error && signerCheck.status === 0 && `${signerCheck.stderr}\n${signerCheck.stdout}`.includes('SIGNER_NOT_CONFIGURED')) break;
+  if (!signerCheck.error && signerCheck.status === 0 && `${signerCheck.stderr}\n${signerCheck.stdout}`.includes('SIGNER_REMOVED')) break;
 }
 
 if (!signerCheck || signerCheck.error) {
   fail('Python interpreter is unavailable for the fail-closed signer check');
-} else if (signerCheck.status !== 0 || !`${signerCheck.stderr}\n${signerCheck.stdout}`.includes('SIGNER_NOT_CONFIGURED')) {
-  fail(`admin-bot did not fail closed when the Ed25519 key was missing: ${signerCheck.stderr || signerCheck.stdout}`);
+} else if (signerCheck.status !== 0 || !`${signerCheck.stderr}\n${signerCheck.stdout}`.includes('SIGNER_REMOVED')) {
+  fail(`admin-bot signer removal check failed: ${signerCheck.stderr || signerCheck.stdout}`);
 }
 
 for (const command of pythonCommands) {
   const retiredGenerator = spawnSync(
     command,
     [path.join(root, 'scripts/tools/generate_license.py'), 'A588-F0E4-DE9A-59A2', 'company-a', 'Company A', 'admin'],
-    { cwd: root, encoding: 'utf8', env: { ...process.env, NOVDA_LICENSE_ED25519_PRIVATE_KEY: '' } }
+    { cwd: root, encoding: 'utf8', env: pythonEnv }
   );
   if (!retiredGenerator.error) {
     if (retiredGenerator.status === 0 || !`${retiredGenerator.stderr}\n${retiredGenerator.stdout}`.includes('PRODUCTION_SIGNER_IS_ADMIN_BOT_ONLY')) {

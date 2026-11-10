@@ -10,9 +10,9 @@ const Fastify = require('fastify');
 const { Pool } = require('pg');
 const { registerWorkerRoutes, signableWorkerRequest } = require('../../../apps/server/modules/workers/workerRoutes.cjs');
 const { createAdminDashboardService } = require('../../../apps/server/modules/admin/adminDashboard.cjs');
-const manager = require('../../../apps/desktop/electron/database/databaseManager.cjs');
-const { loadPayrollValuationFromSqlite } = require('../../../apps/desktop/electron/database/payrollReader.cjs');
-const { canonicalStringify, computePayloadHash } = require('../../../apps/desktop/electron/database/canonicalPayload.cjs');
+const manager = require('../../../apps/desktop/electron/database/core/databaseManager.cjs');
+const { loadPayrollValuationFromSqlite } = require('../../../apps/desktop/electron/database/readers/payrollReader.cjs');
+const { canonicalStringify, computePayloadHash } = require('../../../apps/desktop/electron/database/core/canonicalPayload.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const fixtureDb = process.env.MONEY_1D_FIXTURE_DB;
@@ -39,7 +39,7 @@ assert(!process.env.DATABASE_URL && !process.env.NOVDA_PG_URL, 'ambient database
 const pool = new Pool({ connectionString: process.env.NOVDA_LOCAL_TEST_PG_URL, max: 3 });
 const app = Fastify({ logger: false });
 const dashboard = createAdminDashboardService({ pool });
-const workerWebAppPath = path.join(root, 'apps/bots/worker/webapp/index.html');
+const workerWebAppPath = path.join(root, 'apps/webapps/worker/index.html');
 app.addHook('onSend', async (request, reply, payload) => {
   if (request.url.startsWith('/worker-app') && typeof payload === 'string') {
     return payload.replace(/\s*<script src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"><\/script>/,

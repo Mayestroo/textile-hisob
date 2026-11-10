@@ -1,15 +1,15 @@
 'use strict';
 
-const manager = require('../database/databaseManager.cjs');
-const { executeSubmitTicketCommand } = require('../database/commandPipeline.cjs');
-const { executeWorkbookCommand } = require('../database/workbookCommandPipeline.cjs');
-const { getOperation } = require('../database/outboxManager.cjs');
-const { loadPayrollValuationFromSqlite } = require('../database/payrollReader.cjs');
+const manager = require('../database/core/databaseManager.cjs');
+const { executeSubmitTicketCommand } = require('../database/commands/commandPipeline.cjs');
+const { executeWorkbookCommand } = require('../database/commands/workbookCommandPipeline.cjs');
+const { getOperation } = require('../database/outbox/outboxManager.cjs');
+const { loadPayrollValuationFromSqlite } = require('../database/readers/payrollReader.cjs');
 const { SyncClient } = require('./syncClient.cjs');
 const { dispatchOutbox } = require('./outboxDispatcher.cjs');
 const { executeReconnectProtocol } = require('./reconnectManager.cjs');
 const { getLocalCursor } = require('./changeFeedApplier.cjs');
-const { canonicalStringify, computePayloadHash } = require('../database/canonicalPayload.cjs');
+const { canonicalStringify, computePayloadHash } = require('../database/core/canonicalPayload.cjs');
 
 let directory;
 let companyId;

@@ -68,12 +68,10 @@ function buildFastifyServer(options = {}) {
     pool,
     env,
     adminApiToken: options.adminApiToken,
-    allowedAdminIds: options.allowedAdminIds,
     sessionSecret: options.adminWebAppSessionSecret,
     adminBotInternalUrl: options.adminBotInternalUrl,
     adminWebAppPath: options.adminWebAppPath,
     fetchImpl: options.fetchImpl,
-    signerClient: options.adminSignerClient,
     dashboard: options.adminDashboard,
     publicKey: options.licensePublicKey
   });

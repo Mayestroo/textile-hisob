@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { startDownloadAndInstall, CURRENT_APP_VERSION } from '../../../services/updateService';
 import { UpdateProgress } from '../../../types/update';
-import { 
-  Sparkles, 
-  Download, 
-  X, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  Sparkles,
+  Download,
+  X,
+  CheckCircle2,
+  AlertCircle,
   RefreshCw,
   ArrowRight,
 } from 'lucide-react';

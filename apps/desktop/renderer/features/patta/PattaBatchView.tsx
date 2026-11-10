@@ -55,7 +55,7 @@ export const PattaBatchView: React.FC = () => {
   const guardedBatchPrintCompleted = (printedSummary: any) => {
     if (canUseBatchMutation()) batchPrintCompleted(printedSummary);
   };
-  
+
   const getModelSizes = (modelId: string) => {
     const config = pattaBatchConfigs[modelId];
     if (config && config.isConfigured !== false && Array.isArray(config.sizeNames) && config.sizeNames.length > 0) {
@@ -750,7 +750,7 @@ export const PattaBatchView: React.FC = () => {
                 <label style={{ display: 'block', fontSize: '15px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
                   Razmer nomi (masalan: 4XL, 5XL, 40-42, Standart):
                 </label>
-                <input 
+                <input
                   ref={customSizeInputRef}
                   type="text"
                   value={newCustomSizeInput}
@@ -815,7 +815,7 @@ export const PattaBatchView: React.FC = () => {
 
       {/* Confirm Close Party Series Modal */}
       {isClosePartyModalOpen && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             inset: 0,
@@ -829,7 +829,7 @@ export const PattaBatchView: React.FC = () => {
           }}
           onClick={() => !isClosingParty && setIsClosePartyModalOpen(false)}
         >
-          <div 
+          <div
             style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
@@ -862,7 +862,7 @@ export const PattaBatchView: React.FC = () => {
                   Partiyani yakunlash
                 </h3>
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={() => !isClosingParty && setIsClosePartyModalOpen(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
@@ -923,17 +923,17 @@ export const PattaBatchView: React.FC = () => {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button 
-                type="button" 
-                onClick={() => setIsClosePartyModalOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setIsClosePartyModalOpen(false)}
                 disabled={isClosingParty}
                 className="soft-btn soft-btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '15px' }}
               >
                 Bekor qilish
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={async () => {
                   setIsClosingParty(true);
                   try {

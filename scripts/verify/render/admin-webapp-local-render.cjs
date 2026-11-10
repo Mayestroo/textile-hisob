@@ -8,7 +8,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const root = path.resolve(__dirname, '../../..');
-const assetDir = path.join(root, 'apps/server/static/admin-webapp');
+const assetDir = path.join(root, 'apps/webapps/admin');
 const liveFixture = process.env.MONEY_1D_API_BASE || '';
 const browser = process.env.ADMIN_RENDER_BROWSER || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 assert(fs.existsSync(browser), 'Installed Edge required; ADMIN_RENDER_BROWSER may name another installed Chromium');
@@ -38,14 +38,14 @@ const periods = [
   { periodId: closedPeriodId, name: 'Original period P', startDate: '2026-09-01', isClosed: true }
 ];
 const period = periods[0];
-const hits = { company: {}, 'company-alt': {}, 'company-other': {}, global: {} };
+const hits = { company: {}, 'company-alt': {}, 'company-other': {}, 'company-multi': {} };
 const writes = [];
 const pages = new Set(['index.html', 'admin.css', 'company-admin.css', 'financial-intent.js', 'admin.js', 'IBMPlexSans[wdth,wght].ttf', 'Onest[wght].ttf']);
 function json(res, code, data) { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(data)); }
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   if (url.pathname === '/admin-app' || url.pathname === '/admin-app/') {
-     const mode = ['global', 'company-alt', 'company-other'].includes(url.searchParams.get('mode')) ? url.searchParams.get('mode') : 'company';
+     const mode = ['company-alt', 'company-other', 'company-multi'].includes(url.searchParams.get('mode')) ? url.searchParams.get('mode') : 'company';
     let html = fs.readFileSync(path.join(assetDir, 'index.html'), 'utf8');
     html = html.replace(/\s*<link rel="preconnect"[^>]*>/g, '').replace(/\s*<link\s+href="https:\/\/fonts\.googleapis\.com[^>]*>/g, '');
     html = html.replace(/<script src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"><\/script>/,
@@ -57,36 +57,38 @@ const server = http.createServer((req, res) => {
   const filename = decodeURIComponent(url.pathname.replace('/admin-app/', ''));
   if (url.pathname.startsWith('/admin-app/') && pages.has(filename)) {
     res.writeHead(200, { 'content-type': filename.endsWith('.ttf') ? 'font/ttf' : filename.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(fs.readFileSync(path.join(assetDir, filename))); return;
+    const file = filename.endsWith('.ttf') ? path.join(root, 'packages', 'assets', 'fonts', filename)
+      : filename === 'index.html' ? path.join(assetDir, filename)
+        : path.join(assetDir, filename.endsWith('.css') ? 'styles' : 'scripts', filename);
+    res.end(fs.readFileSync(file)); return;
   }
   if (!url.pathname.startsWith('/api/admin/webapp/')) { res.writeHead(404); res.end(); return; }
   const apiPath = url.pathname.slice('/api/admin/webapp/'.length);
   if (apiPath === 'session' && req.method === 'POST') {
     let body = ''; req.on('data', chunk => { body += chunk; }); req.on('end', () => {
       const initData = JSON.parse(body).initData;
-       if (!['synthetic-company', 'synthetic-company-alt', 'synthetic-company-other', 'synthetic-global'].includes(initData)) { json(res, 403, { success: false }); return; }
+       if (!['synthetic-company', 'synthetic-company-alt', 'synthetic-company-other', 'synthetic-company-multi'].includes(initData)) { json(res, 403, { success: false }); return; }
        const mode = initData.slice('synthetic-'.length);
-       const isGlobal = mode === 'global';
        json(res, 200, { success: true, session: { token: `fixture-${mode}`, expiresAt: 1893456000 },
          user: { id: mode === 'company-alt' ? '987654321' : '123456789', firstName: 'Synthetic Admin' },
-         access: { isGlobalAdmin: isGlobal, companyIds: isGlobal ? null : [mode === 'company-other' ? otherCompanyId : companyId] } });
+         access: { companyIds: mode === 'company-multi' ? [companyId, otherCompanyId] : [mode === 'company-other' ? otherCompanyId : companyId] } });
     }); return;
   }
-   const mode = req.headers.authorization === 'Bearer fixture-company' ? 'company' : req.headers.authorization === 'Bearer fixture-company-alt' ? 'company-alt' : req.headers.authorization === 'Bearer fixture-company-other' ? 'company-other' : req.headers.authorization === 'Bearer fixture-global' ? 'global' : null;
+   const mode = req.headers.authorization === 'Bearer fixture-company' ? 'company' : req.headers.authorization === 'Bearer fixture-company-alt' ? 'company-alt' : req.headers.authorization === 'Bearer fixture-company-other' ? 'company-other' : req.headers.authorization === 'Bearer fixture-company-multi' ? 'company-multi' : null;
   if (!mode) { json(res, 401, { success: false, error: { code: 'ADMIN_SESSION_REQUIRED' } }); return; }
   if (req.method !== 'GET') { writes.push(`${mode}:${req.method}:${apiPath}`); json(res, 405, { success: false, error: { code: 'FIXTURE_READ_ONLY' } }); return; }
   hits[mode][apiPath] = (hits[mode][apiPath] || 0) + 1;
    const requestedCompanyId = url.searchParams.get('companyId') || (apiPath.startsWith('companies/') ? decodeURIComponent(apiPath.split('/')[1]) : '');
-   const expectedCompanyId = mode === 'company-other' ? otherCompanyId : companyId;
-   if (mode !== 'global' && requestedCompanyId && requestedCompanyId !== expectedCompanyId) {
+   const expectedCompanyId = mode === 'company-other' || (mode === 'company-multi' && requestedCompanyId === otherCompanyId) ? otherCompanyId : companyId;
+    if (requestedCompanyId && requestedCompanyId !== expectedCompanyId) {
     json(res, 403, { success: false, error: { code: 'ADMIN_COMPANY_SCOPE_REQUIRED' } }); return;
   }
-   if (mode !== 'global' && !['session', 'companies', `companies/${expectedCompanyId}/periods`, 'worker-bot-status'].includes(apiPath)
-    && !url.searchParams.has('companyId')) { json(res, 403, { success: false, error: { code: 'ADMIN_COMPANY_SELECTION_REQUIRED' } }); return; }
-   const scoped = mode !== 'global' ? { isGlobalAdmin: false, companyIds: [expectedCompanyId] } : { isGlobalAdmin: true, companyIds: null };
+    if (!['session', 'companies', `companies/${expectedCompanyId}/periods`, 'worker-bot-status'].includes(apiPath)
+     && !url.searchParams.has('companyId')) { json(res, 403, { success: false, error: { code: 'ADMIN_COMPANY_SELECTION_REQUIRED' } }); return; }
+   const scoped = { companyIds: mode === 'company-multi' ? [companyId, otherCompanyId] : [expectedCompanyId] };
   const responses = {
      session: { session: { telegramId: mode === 'company-alt' ? '987654321' : '123456789' }, access: scoped },
-     companies: { companies: [mode === 'company-other' ? otherCompany : company] },
+     companies: { companies: mode === 'company-multi' ? [company, otherCompany, { companyId: 'unauthorized', companyName: 'Must not appear' }] : [mode === 'company-other' ? otherCompany : company] },
       [`companies/${expectedCompanyId}/periods`]: { periods },
     'worker-bot-status': { status: 'UNKNOWN' },
     overview: { overview: { companies: 1, workers: 1, models: 1, parties: 1, devices: 0, pendingActivations: 0, workerBindings: 0, recentSyncAt: null } },
@@ -157,7 +159,7 @@ async function main() {
       return {status:document.fonts.status,plex:document.fonts.check('600 15px "IBM Plex Sans"','Шаҳноза'),onest:document.fonts.check('800 34px "Onest"','Абдуллаева'),
         loaded:[...document.fonts].filter(f=>f.status==='loaded').map(f=>f.family),resources:performance.getEntriesByType('resource').filter(e=>e.name.includes('.ttf')).map(e=>e.name)};})()`);
     assert(fontEvidence.plex && fontEvidence.onest && fontEvidence.loaded.some(f=>f.includes('IBM Plex Sans')) && fontEvidence.loaded.some(f=>f.includes('Onest')) && fontEvidence.resources.length===2, `admin font evidence ${JSON.stringify(fontEvidence)}`);
-    assert.equal(await evaluate(`document.querySelector('#adminApp').hidden && document.querySelector('#companyBrandName').textContent === 'Synthetic Factory'`), true);
+    assert.equal(await evaluate(`!document.querySelector('#adminApp') && document.querySelector('#companyBrandName').textContent === 'Synthetic Factory'`), true);
     await capture('company-desktop-home.png');
     const desktopFontStress = await evaluate(`(()=>{const name=document.querySelector('#companyBrandName'),value=document.querySelector('#companyNet');
       const original=[name.textContent,value.textContent];name.textContent='Шаҳноза Абдуллаева';value.textContent='12 345 678 901 (oraliq)';
@@ -280,52 +282,20 @@ async function main() {
     await waitFor(() => evaluate(`document.querySelector('[data-co-screen="models"]').classList.contains('is-active')`), 'models');
     assert.match(await text('#companyModelName'), /Synthetic Model/); assert.match(await text('#companyModelStatus'), /Narx yo‘q/);
     await capture('company-mobile-models.png');
-    await dev.send('Page.navigate', { url: `${base}/admin-app/?mode=global` });
-    await viewport(1440, 1000, false);
-    await waitFor(() => evaluate(`!document.querySelector('#adminApp').hidden && document.querySelector('#metricCompanies').textContent === '1'`), 'global overview');
-    assert.equal(await evaluate(`document.querySelector('#companyAdminApp').hidden && document.querySelector('#adminBadge').textContent === 'SYSTEM'`), true);
-    if (liveFixture) {
-      const globalPayroll = await evaluate(`fetch('/api/admin/webapp/payroll?companyId='+encodeURIComponent(${JSON.stringify(companyId)})+'&periodId='+encodeURIComponent(${JSON.stringify(currentPeriodId)}),{headers:{Authorization:'Bearer fixture-global'}}).then(r=>r.json())`);
-      const globalRow = globalPayroll.payroll.workers.find(w => Number(w.workerId) === 731);
-      assert.deepEqual([globalRow.pieceworkGross, globalRow.oklad, globalRow.gross, globalRow.magazin, globalRow.avans, globalRow.jarima, globalRow.staj, globalRow.net],
-        [500000, 2000000, 2500000, 100000, 200000, 50000, 25000, 2125000]);
-      const unavailable = await evaluate(`fetch('/api/admin/webapp/payroll?companyId='+encodeURIComponent(${JSON.stringify(noPeriodCompany)}),{headers:{Authorization:'Bearer fixture-global'}}).then(r=>r.json())`);
-      assert.equal(unavailable.payroll.period, null);
-      assert.equal(unavailable.payroll.accountingStatus, 'UNAVAILABLE');
-      assert.equal(unavailable.payroll.workers[0].accountingStatus, 'UNAVAILABLE');
+    if (!liveFixture) {
+      await dev.send('Page.navigate', { url: `${base}/admin-app/?mode=company-multi` });
+      await waitFor(() => evaluate(`!document.querySelector('#companyPicker').hidden`), 'multi-company picker');
+      assert.equal(await evaluate(`document.querySelectorAll('#companyPickerOptions button').length`), 2);
+      assert.equal(await evaluate(`document.querySelector('#companyPickerOptions').innerText.includes('Must not appear')`), false);
+      await click(`#companyPickerOptions [data-company-id="${otherCompanyId}"]`);
+      await waitFor(() => evaluate(`!document.querySelector('#companyAdminApp').hidden && document.querySelector('#companyBrandName').textContent === 'Synthetic Factory Other'`), 'selected second company');
+      await click('#changeCompany');
+      await waitFor(() => evaluate(`!document.querySelector('#companyPicker').hidden`), 'return to company picker');
+      await click(`#companyPickerOptions [data-company-id="${companyId}"]`);
+      await waitFor(() => evaluate(`!document.querySelector('#companyAdminApp').hidden && document.querySelector('#companyBrandName').textContent === 'Synthetic Factory'`), 'selected first company');
     }
-    await capture('console-desktop-overview.png');
-    await click('#mainNav [data-view="companies"]');
-    await waitFor(() => evaluate(`document.querySelector('[data-section="companies"]')?.hidden === false && document.querySelector('[data-section="companies"]').innerText.includes('Synthetic Factory')`), 'global companies');
-    await capture('console-desktop-companies.png');
-    await evaluate(`(()=>{const el=document.querySelector('#companySearchInput');el.value='no-matching-company';el.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-    await waitFor(() => evaluate(`document.querySelector('#companyCardGrid').innerText.includes('Qidiruv bo‘yicha korxona topilmadi.') && !document.querySelector('#companyCardGrid').innerText.includes('Synthetic Factory')`), 'company card search filter');
-    await evaluate(`(()=>{const el=document.querySelector('#companySearchInput');el.value='Synthetic';el.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-    await waitFor(() => evaluate(`document.querySelector('#companyCardGrid').innerText.includes('Synthetic Factory')`), 'company search restore');
-    if (liveFixture) {
-      await click('#companyCardGrid [data-open-company]');
-      await waitFor(() => evaluate(`document.querySelector('#directorOverview')?.hidden === false && document.querySelector('#coGrossPayroll')?.textContent.includes('2 500 000')`), 'global admin existing company payroll overview');
-      assert.match(await text('#coPieceworkPayroll'), /500[\s\u00a0]000/);
-      assert.match(await text('#coOkladPayroll'), /2[\s\u00a0]000[\s\u00a0]000/);
-      assert.match(await text('#coMagazinPayroll'), /100[\s\u00a0]000/);
-      assert.match(await text('#coAvansPayroll'), /200[\s\u00a0]000/);
-      assert.match(await text('#coJarimaPayroll'), /50[\s\u00a0]000/);
-      assert.match(await text('#coStajPayroll'), /25[\s\u00a0]001/);
-      await capture('console-global-company-payroll.png');
-      await dev.send('Page.navigate', { url: `${base}/admin-app/?mode=global` });
-      await waitFor(() => evaluate(`!document.querySelector('#adminApp').hidden`), 'global console return');
-    }
-    await viewport(390, 844, true);
-    await capture('console-mobile-companies.png');
-    await click('#mainNav [data-view="overview"]');
-    await waitFor(() => evaluate(`document.querySelector('[data-section="overview"]')?.hidden === false`), 'mobile console overview');
-    await capture('console-mobile-overview.png');
-    assert.equal(await evaluate(`document.documentElement.scrollWidth <= 390 && getComputedStyle(document.querySelector('.sidebar')).backgroundColor === 'rgb(255, 255, 255)'`), true, 'global mobile rail fits viewport');
-    await dev.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
-    await capture('console-mobile-dark-host.png');
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.main-panel')).backgroundColor`), 'rgb(243, 246, 251)', 'global workspace remains legible under dark host preference');
     assert.deepEqual(external, [], 'no external HTTP(S) requests'); assert.deepEqual(writes, [], 'safe read/navigation actions only'); assert.deepEqual(errors, [], 'no uncaught application exception');
-    assert(hits.company.payroll > 0 && hits.global.overview > 0);
+    assert(hits.company.payroll > 0);
     console.log(JSON.stringify({ status: 'PASS', values, fontEvidence, desktopFontStress, mobileFontStress, deniedStorage, snapshots: fs.readdirSync(screenshotDir).filter(n => n.endsWith('.png')), hits, externalRequests: external, writes, errors }, null, 2));
   } finally {
     if (ws) ws.close();

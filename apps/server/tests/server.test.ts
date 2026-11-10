@@ -940,7 +940,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     const bodyA = JSON.parse(pullA.payload);
     expect(bodyA.items.length).toBe(2);
     expect(bodyA.nextPattaNumber).toBe(13);
-    expect(bodyA.capabilities).toEqual({ voidedPattaReuse: true });
+    expect(bodyA.capabilities).toEqual({ voidedPattaReuse: true, pattaLifecycleV1: true });
     expect(bodyA.items[0].entityId).toBe('00000000-0000-4000-8000-000000000103');
     expect(bodyA.items[1].entityId).toBe('00000000-0000-4000-8000-000000000105');
     expect(bodyA.items.every((i: any) => i.companyId === COMPANY_A)).toBe(true);
@@ -1463,9 +1463,9 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       await seedParty(COMPANY_A, 'worker-party-1', '9');
       const ticketId = crypto.randomUUID();
       await pool.query(
-        `INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id, patta_number,
+        `INSERT INTO tickets (id, company_id, model_id, period_id, party_number, party_record_id, patta_number,
           qty, status, is_closed, submitted_at)
-         VALUES ($1, $2, 'm_1', '9', 'worker-party-1', 1, 4, 'CONFIRMED', 0, NOW())`,
+         VALUES ($1, $2, 'm_1', 'period-worker-test', '9', 'worker-party-1', 1, 4, 'CONFIRMED', 0, NOW())`,
         [ticketId, COMPANY_A]
       );
       await pool.query(

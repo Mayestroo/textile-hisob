@@ -79,7 +79,7 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   if (!printTotal.includes('4 ta')) throw Error(`Expected four pattas, saw ${printTotal}`);
   await waitFor(() => db.prepare('SELECT COUNT(*) n FROM patta_batch_settings WHERE company_id=?').get('hisob_test_browser').n === 2, 'canonical settings write');
   manager.closeAllCompanyDatabases(); db = manager.getCompanyDatabase(fixtureRoot, 'hisob_test_browser'); setDb(db);
-  const readProjection = require('../../../apps/desktop/electron/database/projectionReader.cjs').loadWorkbookProjectionFromSqlite;
+  const readProjection = require('../../../apps/desktop/electron/database/readers/projectionReader.cjs').loadWorkbookProjectionFromSqlite;
   let projection = readProjection(db, 'hisob_test_browser');
   const configs = projection.pattaBatchConfigs;
   if (configs.m.sizes.M !== '1' || configs.m.sizes.XXL !== '2' || configs['model-sizes-c-b'].sizes.L !== '1' || configs['model-sizes-c-b'].sizeNames?.includes('XXL'))

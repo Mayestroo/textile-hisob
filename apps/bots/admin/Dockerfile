@@ -6,8 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /opt/novda-admin-bot
 COPY apps/bots/admin/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY apps/bots/admin/admin_bot.py ./admin_bot.py
-COPY apps/bots/admin/license_payload.py ./license_payload.py
+COPY apps/bots/admin/src/admin_bot.py ./admin_bot.py
 
 USER 997:988
 EXPOSE 8080

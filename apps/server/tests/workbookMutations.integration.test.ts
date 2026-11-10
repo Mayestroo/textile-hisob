@@ -60,7 +60,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_activation_policy_sync_count_migration.sql',
       'deploy_worker_adjustment_manual_payroll_types.sql',
       'deploy_model_batch_size_names_migration.sql',
-      'deploy_party_size_order_migration.sql'
+      'deploy_party_size_order_migration.sql',
+      'deploy_patta_lifecycle_provenance_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'
@@ -205,6 +206,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
 
     const batch = {
       commandId: 'cmd_batch', operationId: 'op_batch', companyId, batchId: 'batch_1',
+      batchSettingsBaseRevision: 0,
       parties: [{ commandId: 'cmd_batch', operationId: 'op_batch', companyId, partyRecordId: 'party_2', partyNumber: '2', modelId: 'model_2', modelName: 'Model 2', pattaCount: 2, sizes: { L: 2 }, printedAt: '2026-09-23T10:00:00.000Z' }],
       availableSizes: ['M', 'L'], configs: [{ modelId: 'model_2', partyNumber: '', isCustomParty: false, totalIshSoni: '', color: 'Qora', sizes: { M: '', L: '' } }]
     };
@@ -221,11 +223,11 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(parties.rows.map((row) => row.party_number)).toEqual(['1', '2']);
 
     await pool!.query(`INSERT INTO activation_companies (company_id, company_name, updated_by_telegram_id)
-      VALUES ($1, 'Workbook test company', '1526974123')`, [companyId]);
+      VALUES ($1, 'Workbook test company', '274466315')`, [companyId]);
     await pool!.query(`INSERT INTO activation_company_admins (
       company_id, telegram_id, assigned_by_telegram_id, assignment_source
-    ) VALUES ($1, '274466315', '1526974123', 'TELEGRAM_ADMIN')`, [companyId]);
-    const adminDashboard = createAdminDashboardService({ pool: pool!, allowedAdminIds: new Set(['1526974123']) });
+    ) VALUES ($1, '274466315', '274466315', 'TELEGRAM_ADMIN')`, [companyId]);
+    const adminDashboard = createAdminDashboardService({ pool: pool! });
     const adminEdit = await adminDashboard.updateWorker('274466315', {
       companyId, workerId: 71, baseRevision: 5, name: 'Ali Admin', staj: 6, role: 'Tikuvchi',
       operationId: '00000000-0000-4000-8000-000000000711',
@@ -330,7 +332,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       INSERT INTO activation_companies (
         company_id, company_name, allowed_roles, require_ticket_validation, is_active,
         updated_by_telegram_id, updated_by_source
-      ) VALUES ($1, 'Free Mode Fixture', ARRAY['admin'], FALSE, TRUE, '1526974123', 'TELEGRAM_ADMIN')
+      ) VALUES ($1, 'Free Mode Fixture', ARRAY['admin'], FALSE, TRUE, '274466315', 'TELEGRAM_ADMIN')
       ON CONFLICT (company_id) DO UPDATE SET
         company_name = EXCLUDED.company_name, allowed_roles = EXCLUDED.allowed_roles,
         require_ticket_validation = FALSE, is_active = TRUE,
@@ -442,14 +444,15 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       .toBe(1);
     const newSeriesBatch = {
       commandId: 'cmd_series_batch', operationId: 'op_series_batch', companyId, batchId: 'batch_after_series',
+      batchSettingsBaseRevision: 3,
       parties: [{ commandId: 'cmd_series_batch', operationId: 'op_series_batch', companyId,
         partyRecordId: 'party_after_series', partyNumber: '1', modelId: 'model_2', modelName: 'Model 2',
         pattaCount: 2, sizes: { M: 2 }, printedAt: '2026-11-01T10:00:00.000Z' }],
       availableSizes: ['M'], configs: [{ modelId: 'model_2', partyNumber: '', isCustomParty: false,
         totalIshSoni: '', color: 'Qora', sizes: { M: '' } }]
     };
-    expect(await apply('CompletePattaBatch', 'patta_batch', 'batch_after_series', newSeriesBatch))
-      .toMatchObject({ status: 'APPLIED' });
+    const afterSeriesResult = await apply('CompletePattaBatch', 'patta_batch', 'batch_after_series', newSeriesBatch);
+    if (afterSeriesResult.status !== 'APPLIED') throw new Error(`CompletePattaBatch after series failed: ${JSON.stringify(afterSeriesResult)}`);
     expect((await pool!.query(`SELECT patta_start_number, patta_end_number FROM parties
       WHERE company_id = $1 AND id = 'party_after_series'`, [companyId])).rows)
       .toEqual([{ patta_start_number: 1, patta_end_number: 2 }]);
@@ -472,6 +475,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const reusedRangeBatch = {
       commandId: 'cmd_reused_archive_range', operationId: 'op_reused_archive_range', companyId,
       batchId: 'batch_reused_archive_range',
+      batchSettingsBaseRevision: 4,
       parties: [{ commandId: 'cmd_reused_archive_range', operationId: 'op_reused_archive_range', companyId,
         partyRecordId: 'party_reused_archive_range', partyNumber: '91', modelId: 'model_2',
         pattaCount: 2, sizes: { M: 2 }, printedAt: '2026-11-02T10:00:00.000Z' }],
@@ -490,6 +494,7 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
   it('rolls back every party when a completed batch contains an invalid model reference', async () => {
     const batch = {
       commandId: 'cmd_bad_batch', operationId: 'op_bad_batch', companyId, batchId: 'batch_bad',
+      batchSettingsBaseRevision: 0, availableSizes: ['M'], configs: [],
       parties: [
         { commandId: 'cmd_bad_batch', operationId: 'op_bad_batch', companyId, partyRecordId: 'party_good', partyNumber: '91', modelId: 'model_2', pattaCount: 1 },
         { commandId: 'cmd_bad_batch', operationId: 'op_bad_batch', companyId, partyRecordId: 'party_bad', partyNumber: '92', modelId: 'missing_model', pattaCount: 1 }

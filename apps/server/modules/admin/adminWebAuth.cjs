@@ -14,13 +14,6 @@ function adminWebAuthError(code, statusCode = 401) {
   return error;
 }
 
-function allowedAdminSet(allowedAdminIds) {
-  const values = allowedAdminIds instanceof Set
-    ? [...allowedAdminIds]
-    : Array.isArray(allowedAdminIds) ? allowedAdminIds : [];
-  return new Set(values.map((value) => String(value).trim()).filter((value) => TELEGRAM_ID_PATTERN.test(value)));
-}
-
 function decodeBase64Url(value) {
   if (typeof value !== 'string' || !BASE64URL_PATTERN.test(value)) {
     throw adminWebAuthError('ADMIN_SESSION_INVALID');
@@ -30,7 +23,7 @@ function decodeBase64Url(value) {
   return decoded;
 }
 
-function verifyAdminWebSession(token, sessionSecret, allowedAdminIds, nowSeconds = Math.floor(Date.now() / 1000)) {
+function verifyAdminWebSession(token, sessionSecret, nowSeconds = Math.floor(Date.now() / 1000)) {
   const secret = typeof sessionSecret === 'string' ? sessionSecret : '';
   if (typeof token !== 'string' || token.length > 4096 || Buffer.byteLength(secret, 'utf8') < 32) {
     throw adminWebAuthError('ADMIN_SESSION_INVALID');
@@ -66,9 +59,6 @@ function verifyAdminWebSession(token, sessionSecret, allowedAdminIds, nowSeconds
   }
   if (nowSeconds >= claims.exp) throw adminWebAuthError('ADMIN_SESSION_EXPIRED');
   const telegramId = String(claims.sub);
-  if (allowedAdminIds !== null && !allowedAdminSet(allowedAdminIds).has(telegramId)) {
-    throw adminWebAuthError('ADMIN_SESSION_NOT_AUTHORIZED', 403);
-  }
   return { telegramId, expiresAt: claims.exp };
 }
 

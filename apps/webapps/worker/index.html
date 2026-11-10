@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Mening Hisobim — Shaxsiy Xodim Portali</title>
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <link rel="stylesheet" href="/worker-app-assets/worker.css" />
+
+</head>
+<body>
+  <!-- WORKER BIND / ONBOARDING SCREEN -->
+  <div id="workerBindContainer" class="worker-bind-container" style="display: none;">
+    <header class="worker-topbar">
+      <button id="workerCloseBtn" class="worker-close-btn" type="button" aria-label="Yopish">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>Yopish</span>
+      </button>
+      <div class="worker-brand">
+        <strong id="workerBrandName">comp_novda</strong>
+        <span class="worker-brand-role">Ishchi</span>
+      </div>
+      <div class="worker-topbar-avatar"></div>
+    </header>
+
+    <main class="worker-bind-main">
+      <div class="worker-bind-heading">
+        <h1>Ulanish</h1>
+        <span id="workerBindSubtitle" class="worker-bind-subtitle">comp_novda ishchi ilovasi</span>
+      </div>
+
+      <article class="worker-bind-card">
+        <label class="worker-bind-label" for="workerIdInput">ID raqamingiz</label>
+        <div class="worker-bind-input-box">
+          <input id="workerIdInput" type="text" inputmode="numeric" pattern="[0-9]*" value="1" autocomplete="off" />
+        </div>
+        <p class="worker-bind-help">ID raqamingizni kompaniya adminidan so'rang</p>
+      </article>
+
+      <article id="workerFoundCard" class="worker-found-card">
+        <div class="worker-found-check">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <div class="worker-found-info">
+          <span class="worker-found-status">Topildi</span>
+          <strong id="workerFoundName" class="worker-found-name">Абдуллаева Мавлуда</strong>
+        </div>
+      </article>
+
+      <p class="worker-bind-caption">Bu siz bo'lsangiz, so'rovni yuboring. Admin tasdiqlagach hisobingiz ochiladi.</p>
+
+      <div class="worker-bind-actions">
+        <button id="workerSubmitRequestBtn" class="worker-bind-submit" type="button">So'rov yuborish</button>
+      </div>
+    </main>
+  </div>
+
+  <div id="dashboardContainer">
+  <!-- Top Bar -->
+  <header class="worker-topbar">
+    <button class="worker-close-btn" id="workerCloseBtn" title="Yopish">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+      <span>Yopish</span>
+    </button>
+    <div class="worker-brand">
+      <div class="worker-brand-company" id="brandCompanyName">comp_novda</div>
+      <div class="worker-brand-role">Ishchi</div>
+    </div>
+    <div class="worker-topbar-avatar" id="avatarBadge"></div>
+    <button id="refreshBtn" style="display: none;" title="Yangilash"></button>
+  </header>
+
+  <main class="container">
+      <div id="tabContentHome">
+      <!-- Greeting & Month -->
+      <div class="worker-greeting-row">
+        <div class="worker-greeting-meta">
+          <div class="worker-greeting-subtitle">Assalomu alaykum,</div>
+          <h1 class="worker-greeting-name" id="workerNameHeader">Абдуллаева<br>Мавлуда</h1>
+        </div>
+        <div class="worker-month-pill" id="periodPillBtn">
+          <span id="periodNameText">2026 — Oktabr</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Hero Net Pay Card -->
+      <section class="hero-kpi-card" id="heroCard">
+        <div class="hero-label">Sof foyda</div>
+        <div class="hero-amount-line">
+          <span class="hero-amount" id="netPayAmount">702 600 <span class="hero-curr">so'm</span></span>
+        </div>
+        <div class="hero-subtitle" id="netPaySubtitle" style="display: none;"></div>
+
+        <div class="hero-subgrid">
+          <div class="hero-subgrid-col">
+            <div class="hero-subgrid-label">Hisoblangan</div>
+            <div class="hero-subgrid-val" id="grossPayAmount">702 600</div>
+          </div>
+          <div class="hero-subgrid-col">
+            <div class="hero-subgrid-label">Avans</div>
+            <div class="hero-subgrid-val" id="avansAmount">—</div>
+          </div>
+          <div class="hero-subgrid-col">
+            <div class="hero-subgrid-label">Jarima</div>
+            <div class="hero-subgrid-val" id="jarimaAmount">—</div>
+          </div>
+        </div>
+
+        <!-- Hidden compat elements for testing -->
+        <div style="display: none;" id="okladAmount">0 so'm</div>
+        <div style="display: none;" id="grossTotalAmount">0 so'm</div>
+        <div style="display: none;" id="magazinAmount">0 so'm</div>
+        <div style="display: none;" id="stajAmount">0 so'm</div><!-- Sof = Jami - Avans - Jarima - Staj -->
+        <div style="display: none;" id="workerIdBadge"></div>
+        <div style="display: none;" id="periodStatusBadge"></div>
+      </section>
+
+      <!-- Stat Cards -->
+      <div class="work-summary">
+        <div class="work-stat-card">
+          <div class="work-stat-label">Jami ish</div>
+          <div class="work-stat-val">
+            <span id="totalPiecesCount">4 684</span>
+            <span class="work-stat-unit">dona</span>
+          </div>
+        </div>
+        <div class="work-stat-card">
+          <div class="work-stat-label">Operatsiyalar</div>
+          <div class="work-stat-val">
+            <span id="operationsCount">49</span>
+            <span class="work-stat-unit">ta</span>
+            <span id="modelsCountBadge" style="display: none;">0</span>
+          </div>
+        </div>
+      </div>
+
+    <!-- Operations Section (OXIRGI ISHLAR) -->
+    <div class="ops-section-block">
+      <div class="ops-section-header">
+        <div class="ops-section-title">OXIRGI ISHLAR</div>
+        <button class="ops-section-link" id="opsViewAllBtn" onclick="switchTab('ops')">Barchasi</button>
+      </div>
+      <div class="ops-list-card" id="modelsBreakdownList">
+        <div class="op-item-row">
+          <div class="op-item-info">
+            <div class="op-item-title">Орка бостирув</div>
+            <div class="op-item-sub">DZ-008-1 · 14.10 16:30</div>
+          </div>
+          <div class="op-item-meta">
+            <div class="op-item-amount">14 850 so'm</div>
+            <div class="op-item-qty">99 dona</div>
+          </div>
+        </div>
+        <div class="op-item-row">
+          <div class="op-item-info">
+            <div class="op-item-title">Орка бостирув</div>
+            <div class="op-item-sub">DZ-008-1 · 10.10 13:35</div>
+          </div>
+          <div class="op-item-meta">
+            <div class="op-item-amount">12 300 so'm</div>
+            <div class="op-item-qty">82 dona</div>
+          </div>
+        </div>
+        <div class="op-item-row">
+          <div class="op-item-info">
+            <div class="op-item-title">Орка бостирув</div>
+            <div class="op-item-sub">DZ-008-1 · 10.10 11:01</div>
+          </div>
+          <div class="op-item-meta">
+            <div class="op-item-amount">12 300 so'm</div>
+            <div class="op-item-qty">82 dona</div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end ops-section-block -->
+  </div><!-- end tabContentHome -->
+
+    <!-- Tab 1: Ishlarim (Operations Page) -->
+    <section id="tabContentOps" style="display: none;">
+      <!-- Summary Card -->
+      <div class="ops-summary-card work-summary" id="opsSummaryCard">
+        <div class="ops-sum-left">
+          <div class="ops-sum-label" id="opsPeriodLabel">Oktabr · jami</div>
+          <div class="ops-sum-val-green" id="opsNetPayTotal">702 600 so'm</div>
+        </div>
+        <div class="ops-sum-right">
+          <div class="ops-sum-sub" id="opsCountBadge">49 ta operatsiya</div>
+          <div class="ops-sum-val-dark" id="opsPiecesTotal">4 684 dona</div>
+        </div>
+      </div>
+
+      <!-- Search Box -->
+      <div class="ops-search-wrap">
+        <svg class="ops-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input class="ops-search-input" id="opsSearchInput" type="text" placeholder="Model yoki sana" autocomplete="off" />
+      </div>
+
+      <!-- Filter Chips -->
+      <div class="ops-filter-chips">
+        <button type="button" class="ops-filter-chip active" id="chipHammasi" onclick="setOpsFilter('all')">Hammasi</button>
+        <button type="button" class="ops-filter-chip" id="chipHafta" onclick="setOpsFilter('week')">Bu hafta</button>
+        <button type="button" class="ops-filter-chip" id="chipModel" onclick="toggleOpsModelDropdown()">Model ▾</button>
+      </div>
+
+      <!-- Grouped Operations List -->
+      <div id="opsFullList">
+        <!-- 14 OKTABR -->
+        <div class="ops-date-header">14 OKTABR</div>
+        <div class="ops-card-block">
+          <div class="op-item-row">
+            <div class="op-item-info">
+              <div class="op-item-title">Орка бостирув</div>
+              <div class="op-item-sub">DZ-008-1 · 14.10 16:30</div>
+            </div>
+            <div class="op-item-meta">
+              <div class="op-item-amount">14 850 so'm</div>
+              <div class="op-item-qty">99 dona</div>
+            </div>
+          </div>
+          <div class="op-item-row">
+            <div class="op-item-info">
+              <div class="op-item-title">Орка бостирув</div>
+              <div class="op-item-sub">DZ-008-1 · 14.10 15:13</div>
+            </div>
+            <div class="op-item-meta">
+              <div class="op-item-amount">18 000 so'm</div>
+              <div class="op-item-qty">120 dona</div>
+            </div>
+          </div>
+          <div class="op-item-row">
+            <div class="op-item-info">
+              <div class="op-item-title">Орка бостирув</div>
+              <div class="op-item-sub">DZ-008-1 · 14.10 14:44</div>
+            </div>
+            <div class="op-item-meta">
+              <div class="op-item-amount">20 850 so'm</div>
+              <div class="op-item-qty">139 dona</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10 OKTABR -->
+        <div class="ops-date-header">10 OKTABR</div>
+        <div class="ops-card-block">
+          <div class="op-item-row">
+            <div class="op-item-info">
+              <div class="op-item-title">Орка бостирув</div>
+              <div class="op-item-sub">DZ-008-1 · 10.10 13:35</div>
+            </div>
+            <div class="op-item-meta">
+              <div class="op-item-amount">12 300 so'm</div>
+              <div class="op-item-qty">82 dona</div>
+            </div>
+          </div>
+          <div class="op-item-row">
+            <div class="op-item-info">
+              <div class="op-item-title">Орка бостирув</div>
+              <div class="op-item-sub">DZ-008-1 · 10.10 13:25</div>
+            </div>
+            <div class="op-item-meta">
+              <div class="op-item-amount">15 450 so'm</div>
+              <div class="op-item-qty">103 dona</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+<!-- Tab 2: Tickets -->
+    <section id="tabContentTickets" style="display: none;">
+      <div class="section-header">
+        <div class="section-title">
+          Topshirilgan pattalar tarixi
+          <span class="badge-count" id="ticketsCountBadge">0</span>
+        </div>
+      </div>
+      <label class="ticket-filter">
+        <span class="ticket-filter-count" id="ticketFilterCount" aria-live="polite">0 ta patta</span>
+        <input id="ticketHistorySearch" type="search" autocomplete="off" aria-label="Patta tarixidan qidirish" placeholder="Partiya, model, rang, razmer yoki chok bo‘yicha qidirish" />
+      </label>
+      <div id="ticketsList">
+        <div class="loading-wrap">
+          <div class="spinner"></div>
+          <div style="font-size: 12px; color: var(--text-secondary);">Pattalar yuklanmoqda...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: About & Privacy -->
+    <section id="tabContentAbout" style="display: none;">
+      <div class="model-card">
+        <div class="model-title" style="margin-bottom: 8px;">🔒 Maxfiylik va Xavfsizlik Kafolati</div>
+        <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;">
+          Ushbu bot va portal faqat sizning shaxsiy ishbay hisob-kitoblaringizni ko'rsatish uchun mo'ljallangan.
+          Boshqa biror xodim sizning oyligingizni, siz esa boshqa ishchilar va korxonaning umumiy ko'rsatkichlarini ko'ra olmaysiz.
+        </p>
+        <div style="border-top: 1px solid var(--border); padding-top: 10px; font-size: 12px;">
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">Sizning ID:</span>
+            <span style="font-weight: 700;" id="aboutWorkerId">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">F.I.O:</span>
+            <span style="font-weight: 700;" id="aboutWorkerName">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">Korxona:</span>
+            <span style="font-weight: 700;" id="aboutCompanyId">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: var(--text-muted);">Oylik formula:</span>
+            <span style="font-weight: 700; color: var(--accent);">Sof = Ishbay + Oklad - Magazin - Avans - Jarima - Staj</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="privacy-banner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div>
+          Agar hisob-kitoblarda noaniqlik sezsangiz yoki patta skaner qilinmagan bo'lsa, korxona ustasi yoki buxgalteriga murojaat qiling.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/worker-app-assets/worker.js"></script>
+  </div>
+  <!-- FIXED BOTTOM NAVIGATION BAR FOR WORKERS -->
+  <nav class="bottom-nav">
+    <a class="nav-item active" id="botNavHome" onclick="switchTab('home')">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </div>
+      <span class="nav-label">Bosh sahifa</span>
+    </a>
+    <a class="nav-item" id="botNavOps" onclick="switchTab('ops')">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/>
+          <line x1="8" y1="12" x2="21" y2="12"/>
+          <line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/>
+          <line x1="3" y1="12" x2="3.01" y2="12"/>
+          <line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </div>
+      <span class="nav-label">Ishlarim</span>
+    </a>
+    <a class="nav-item" id="botNavTickets" onclick="switchTab('tickets')" style="display: none !important;">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="20" height="14" x="2" y="5" rx="3"/>
+          <circle cx="12" cy="12" r="2.5"/>
+        </svg>
+      </div>
+      <span class="nav-label">Pattalar</span>
+    </a>
+    <a class="nav-item" id="botNavAbout" onclick="switchTab('about')">
+      <div class="nav-item-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <span class="nav-label">Profil</span>
+    </a>
+  </nav>
+</body>
+</html>

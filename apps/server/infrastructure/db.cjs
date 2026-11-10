@@ -145,7 +145,11 @@ async function resetServerDatabase() {
     'deploy_company_admin_scope_migration.sql',
     'deploy_worker_telegram_unbind_migration.sql',
     'deploy_production_adjustment_attribution_migration.sql',
-    'deploy_activation_policy_sync_count_migration.sql'
+    'deploy_activation_policy_sync_count_migration.sql',
+    'deploy_worker_adjustment_manual_payroll_types.sql',
+    'deploy_model_batch_size_names_migration.sql',
+    'deploy_party_size_order_migration.sql',
+    'deploy_patta_lifecycle_provenance_migration.sql'
   ];
   for (const filename of migrations) {
     await p.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));

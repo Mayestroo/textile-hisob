@@ -11,17 +11,17 @@ const { isValidCompanyId, validateRequestedCompanyId } = require('./auth/company
 const { rejectRendererCompanyAssignment, rejectRendererLicenseSettings } = require('./security/licenseBoundary.cjs');
 const { registerLicenseIpcHandlers } = require('./ipc/licenseIpcHandlers.cjs');
 const { resolveApiBaseUrl } = require('./config/apiConfig.cjs');
-const databaseManager = require('./database/databaseManager.cjs');
-const migrator = require('./database/migrator.cjs');
-const parityReporter = require('./database/parityReporter.cjs');
-const commandPipeline = require('./database/commandPipeline.cjs');
-const workbookCommandPipeline = require('./database/workbookCommandPipeline.cjs');
-const outboxManager = require('./database/outboxManager.cjs');
+const databaseManager = require('./database/core/databaseManager.cjs');
+const migrator = require('./database/core/migrator.cjs');
+const parityReporter = require('./database/maintenance/parityReporter.cjs');
+const commandPipeline = require('./database/commands/commandPipeline.cjs');
+const workbookCommandPipeline = require('./database/commands/workbookCommandPipeline.cjs');
+const outboxManager = require('./database/outbox/outboxManager.cjs');
 const {
   loadWorkbookProjectionFromSqlite,
   loadAdjustmentSources,
   rebuildCompanyProjections
-} = require('./database/projectionReader.cjs');
+} = require('./database/readers/projectionReader.cjs');
 const { storeOperatorSession, readOperatorSession, deleteOperatorSession } = require('./security/operatorSessionStore.cjs');
 const { readDeviceCredential } = require('./security/deviceCredentialStore.cjs');
 const {
@@ -199,7 +199,7 @@ function getLocalTimestamp() {
 function readDb(companyId) {
   const compId = companyId || getActiveCompanyId();
   const p = getCompanyDbPath(compId);
-  
+
   if (!fs.existsSync(p)) {
     // Migration fallback: if company specific db doesn't exist, check legacy hisob_database.json
     const legacyPath = path.join(getDataDir(), 'hisob_database.json');
@@ -324,7 +324,7 @@ ipcMain.handle('db-read', (event, targetCompanyId) => {
   if (selectedRuntimeMode === 'sync') {
     try {
       const ready = assertRuntimeReady(targetCompanyId);
-      const data = require('./database/workbookPayrollRead.cjs')
+      const data = require('./database/readers/workbookPayrollRead.cjs')
         .readWorkbookPayrollProjection(ready.db, ready.companyId);
       return {
         success: true,
@@ -348,7 +348,7 @@ ipcMain.handle('payroll-read', (event, targetCompanyId, periodId) => {
     if (selectedRuntimeMode !== 'sync') throw new Error('SYNC_MODE_REQUIRED');
     const ready = assertRuntimeReady(targetCompanyId);
     if (typeof periodId !== 'string' || !periodId) throw new Error('PERIOD_ID_REQUIRED');
-    const payrollValuation = require('./database/payrollReader.cjs')
+    const payrollValuation = require('./database/readers/payrollReader.cjs')
       .loadPayrollValuationFromSqlite(ready.db, ready.companyId, periodId);
     return { success: true, companyId: ready.companyId, periodId, payrollValuation };
   } catch (error) { return ErrorResponse(error, 'PAYROLL_READ_FAILED'); }
@@ -706,12 +706,12 @@ if (isSyncEnabled) {
           AND command_type = 'ClosePeriod' AND local_archive_json IS NOT NULL`).all(ready.companyId, period.id);
        const acceptedArchive = ready.db.prepare('SELECT value FROM local_meta WHERE key = ?')
          .get(`accepted_archive_sha256:${period.id}`)?.value;
-       const localArchive = require('./database/projectionReader.cjs').loadPeriodArchiveFromSqlite(
+       const localArchive = require('./database/readers/projectionReader.cjs').loadPeriodArchiveFromSqlite(
          ready.db, ready.companyId, period.id
        );
        if (acceptedArchive && (localArchive?.sha256 !== acceptedArchive ||
-           require('./database/canonicalPayload.cjs').computePayloadHash(
-             require('./database/canonicalPayload.cjs').canonicalStringify(localArchive?.data)) !== acceptedArchive)) {
+           require('./database/core/canonicalPayload.cjs').computePayloadHash(
+             require('./database/core/canonicalPayload.cjs').canonicalStringify(localArchive?.data)) !== acceptedArchive)) {
          throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
        }
        let archiveData = localArchive?.data || null;
@@ -719,7 +719,7 @@ if (isSyncEnabled) {
        if (localArchive && !archiveData) {
          throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
        }
-       const archiveEligibility = require('./database/periodArchiveEligibility.cjs').classifyRetainedPeriodArchive({
+       const archiveEligibility = require('./database/archive/periodArchiveEligibility.cjs').classifyRetainedPeriodArchive({
          outboxRows: closeRows, period, archiveSha256: localArchive?.sha256, acceptedSha256: acceptedArchive
        });
        if (!archiveEligibility.eligible) {
@@ -732,17 +732,17 @@ if (isSyncEnabled) {
          archiveData = typeof rawArchive === 'string' ? JSON.parse(rawArchive) : rawArchive;
          const remoteHash = remoteArchive.sha256;
          archiveSha = remoteHash;
-         if (!/^[a-f0-9]{64}$/.test(remoteHash || '') || require('./database/canonicalPayload.cjs')
-           .computePayloadHash(require('./database/canonicalPayload.cjs').canonicalStringify(archiveData)) !== remoteHash) {
+         if (!/^[a-f0-9]{64}$/.test(remoteHash || '') || require('./database/core/canonicalPayload.cjs')
+           .computePayloadHash(require('./database/core/canonicalPayload.cjs').canonicalStringify(archiveData)) !== remoteHash) {
            throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
          }
        }
        if (localArchive && (!/^[a-f0-9]{64}$/.test(localArchive.sha256 || '') ||
-           require('./database/canonicalPayload.cjs').computePayloadHash(
-             require('./database/canonicalPayload.cjs').canonicalStringify(archiveData)) !== localArchive.sha256)) {
+           require('./database/core/canonicalPayload.cjs').computePayloadHash(
+             require('./database/core/canonicalPayload.cjs').canonicalStringify(archiveData)) !== localArchive.sha256)) {
          throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
        }
-       const archiveValidator = require('./database/periodArchiveValidator.cjs');
+       const archiveValidator = require('./database/archive/periodArchiveValidator.cjs');
        const canonicalTickets = archiveValidator.readCanonicalPeriodTickets(ready.db, ready.companyId, period.id);
        const archiveProblem = archiveValidator.validatePeriodArchive(
          archiveData, archiveSha, ready.companyId, period.id,
@@ -763,7 +763,7 @@ if (isSyncEnabled) {
       if (current.db !== ready.db || current.companyId !== ready.companyId) {
         throw Object.assign(new Error('PERIOD_ARCHIVE_CONTEXT_CHANGED'), { code: 'PERIOD_ARCHIVE_CONTEXT_CHANGED' });
       }
-      const payrollValuation = require('./database/workbookPayrollRead.cjs')
+      const payrollValuation = require('./database/readers/workbookPayrollRead.cjs')
         .readPeriodPayrollProjection(ready.db, ready.companyId, period.id, archiveData);
        return { success: true, data: archiveData, archiveTicketFacts, payrollValuation, periodId: period.id, companyId: ready.companyId,
          archiveProvenance: localArchive ? archiveEligibility.provenance : 'AUTHENTICATED_GET_UNVERIFIED',
@@ -784,7 +784,7 @@ if (isSyncEnabled) {
       if (!['current', 'archive', 'all-time'].includes(args?.mode || 'current')) {
         throw Object.assign(new Error('INVALID_JOURNAL_SCOPE'), { code: 'INVALID_JOURNAL_SCOPE' });
       }
-      const { readPattaJournalFacts } = require('./database/pattaJournalReader.cjs');
+      const { readPattaJournalFacts } = require('./database/readers/pattaJournalReader.cjs');
       const facts = readPattaJournalFacts(ready.db, ready.companyId, args);
       const current = assertRuntimeReady();
       if (current.db !== ready.db || current.companyId !== ready.companyId) {
@@ -969,7 +969,7 @@ ipcMain.handle('backups-list', (event, companyId) => {
         const fullPath = path.join(item.dir, item.filename);
         const stat = fs.statSync(fullPath);
         const raw = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-        
+
         let filledOpsCount = 0;
         for (const m of (raw.models || [])) {
           for (const wOps of Object.values(m.hisobQuantities || {})) {

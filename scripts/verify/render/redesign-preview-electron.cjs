@@ -32,7 +32,7 @@ app.whenReady().then(async () => {
     callback({ cancel: !allowed });
   });
 
-  const manager = require(path.join(root, 'apps/desktop/electron/database/databaseManager.cjs'));
+  const manager = require(path.join(root, 'apps/desktop/electron/database/core/databaseManager.cjs'));
   const db = manager.getCompanyDatabase(fixtureRoot, companyId);
   const now = '2026-11-05T09:00:00.000Z';
   if (preview20w10m) {
@@ -99,7 +99,7 @@ app.whenReady().then(async () => {
     }
   }
   ipcMain.handle('db-read', (_event, requestedCompany) => requestedCompany === companyId
-    ? { success: true, data: require(path.join(root, 'apps/desktop/electron/database/workbookPayrollRead.cjs'))
+    ? { success: true, data: require(path.join(root, 'apps/desktop/electron/database/readers/workbookPayrollRead.cjs'))
       .readWorkbookPayrollProjection(db, companyId) }
     : { success: false, code: 'COMPANY_SCOPE_MISMATCH' });
   ipcMain.handle('payroll-read', () => ({ success: false, code: 'LOCAL_PREVIEW_READ_ONLY' }));

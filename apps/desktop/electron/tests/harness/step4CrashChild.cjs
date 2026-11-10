@@ -9,8 +9,8 @@
  */
 
 const path = require('path');
-const databaseManager = require('../../database/databaseManager.cjs');
-const commandPipeline = require('../../database/commandPipeline.cjs');
+const databaseManager = require('../../database/core/databaseManager.cjs');
+const commandPipeline = require('../../database/commands/commandPipeline.cjs');
 const { SyncClient } = require('../../sync/syncClient.cjs');
 const { dispatchOutbox } = require('../../sync/outboxDispatcher.cjs');
 

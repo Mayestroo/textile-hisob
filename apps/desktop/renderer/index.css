@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'IBM Plex Sans';
-  src: url('./assets/fonts/IBMPlexSans[wdth,wght].ttf') format('truetype');
+  src: url('../../../packages/assets/fonts/IBMPlexSans[wdth,wght].ttf') format('truetype');
   font-style: normal;
   font-weight: 100 700;
   font-stretch: 75% 100%;
@@ -9,7 +9,7 @@
 
 @font-face {
   font-family: 'Onest';
-  src: url('./assets/fonts/Onest[wght].ttf') format('truetype');
+  src: url('../../../packages/assets/fonts/Onest[wght].ttf') format('truetype');
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
@@ -21,29 +21,29 @@
   --primary-hover: #047857;
   --primary-light: #e3f8ee;
   --primary-glow: rgba(5, 150, 105, 0.2);
-  
+
   --accent-indigo: #4f46e5;
   --accent-indigo-light: #eef2ff;
   --accent-blue: #0284c7;
   --accent-blue-light: #f0f9ff;
-  
+
   /* Status Colors (Soft pastels & accents) */
   --status-success: #10b981;
   --status-success-bg: #ecfdf5;
   --status-success-text: #065f46;
-  
+
   --status-warning: #f59e0b;
   --status-warning-bg: #fffbeb;
   --status-warning-text: #92400e;
-  
+
   --status-error: #ef4444;
   --status-error-bg: #fef2f2;
   --status-error-text: #991b1b;
-  
+
   --status-info: #0ea5e9;
   --status-info-bg: #f0f9ff;
   --status-info-text: #075985;
-  
+
   --status-purple: #8b5cf6;
   --status-purple-bg: #f5f3ff;
   --status-purple-text: #5b21b6;
@@ -66,7 +66,7 @@
   --border-default: #d5deea;
   --border-strong: #94a3b8;
   --border-focus: #059669;
-  
+
   /* Radii (Soft, no harsh 90-degree corners) */
   --radius-xs: 6px;
   --radius-sm: 8px;
@@ -101,7 +101,7 @@
   --primary-hover: #10b981;
   --primary-light: rgba(52, 211, 153, 0.15);
   --primary-glow: rgba(52, 211, 153, 0.25);
-  
+
   --accent-indigo: #818cf8;
   --accent-indigo-light: rgba(99, 102, 241, 0.15);
   --accent-blue: #38bdf8;
@@ -111,19 +111,19 @@
   --status-success: #34d399;
   --status-success-bg: rgba(52, 211, 153, 0.15);
   --status-success-text: #6ee7b7;
-  
+
   --status-warning: #fbbf24;
   --status-warning-bg: rgba(245, 158, 11, 0.15);
   --status-warning-text: #fde047;
-  
+
   --status-error: #f87171;
   --status-error-bg: rgba(239, 68, 68, 0.15);
   --status-error-text: #fca5a5;
-  
+
   --status-info: #38bdf8;
   --status-info-bg: rgba(56, 189, 248, 0.15);
   --status-info-text: #7dd3fc;
-  
+
   --status-purple: #a78bfa;
   --status-purple-bg: rgba(139, 92, 246, 0.15);
   --status-purple-text: #c4b5fd;

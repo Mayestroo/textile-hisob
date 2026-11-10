@@ -12,9 +12,9 @@ const Fastify = require('fastify');
 const { Pool } = require('pg');
 const { registerWorkerRoutes } = require('../../apps/server/modules/workers/workerRoutes.cjs');
 const { registerAdminDashboardRoutes } = require('../../apps/server/modules/admin/adminDashboardRoutes.cjs');
-const manager = require('../../apps/desktop/electron/database/databaseManager.cjs');
-const { loadPayrollValuationFromSqlite } = require('../../apps/desktop/electron/database/payrollReader.cjs');
-const { canonicalStringify, computePayloadHash } = require('../../apps/desktop/electron/database/canonicalPayload.cjs');
+const manager = require('../../apps/desktop/electron/database/core/databaseManager.cjs');
+const { loadPayrollValuationFromSqlite } = require('../../apps/desktop/electron/database/readers/payrollReader.cjs');
+const { canonicalStringify, computePayloadHash } = require('../../apps/desktop/electron/database/core/canonicalPayload.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const guard = spawnSync(process.execPath, [path.join(root, '.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')], {
@@ -33,7 +33,6 @@ const tenant = 'hisob_test_bot_a';
 const other = 'hisob_test_bot_b';
 const id = '123456789';
 const companyAdminId = '274466315';
-const globalAdminId = '1526974123';
 const sqlite = manager.getCompanyDatabase(directory, tenant);
 const now = '2026-10-12T12:00:00Z';
 const tid = '00000000-0000-4000-8000-000000000081';
@@ -50,7 +49,7 @@ async function extraTicket(company, ticketId, operation, qty) {
 
 function bot(updates, base, staleBinding = null) {
   return new Promise((resolve, reject) => {
-    const child = spawn('python', ['-B', path.join(root, 'apps/bots/worker/test_worker_acceptance_driver.py')], {
+    const child = spawn('python', ['-B', path.join(root, 'apps/bots/worker/tests/test_worker_acceptance_driver.py')], {
       cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
       env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, PYTHONDONTWRITEBYTECODE: '1',
         PYTHONNOUSERSITE: '1', HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '*' }
@@ -92,14 +91,6 @@ async function main() {
           updated_by_source='TELEGRAM_ADMIN'`, [tenant, other]);
     await pool.query(`INSERT INTO activation_company_admins(company_id,telegram_id,is_active,assignment_source)
       VALUES ($1,$2,TRUE,'OWNER_BOOTSTRAP')`, [tenant, companyAdminId]);
-    await pool.query(`INSERT INTO activation_requests(request_id,machine_id,request_token_hash,client_context)
-      VALUES ($1,'A1B2-C3D4-E5F6-A7B8',$2,'{"source":"synthetic-8b2"}'::jsonb),
-             ($3,'B1C2-D3E4-F5A6-B7C8',$4,'{"source":"synthetic-8b2"}'::jsonb),
-             ($5,'C1D2-E3F4-A5B6-C7D8',$6,'{"source":"synthetic-8b2"}'::jsonb)`, [
-      '00000000-0000-4000-8000-000000000101', crypto.createHash('sha256').update('synthetic-token-a').digest('hex'),
-      '00000000-0000-4000-8000-000000000102', crypto.createHash('sha256').update('synthetic-token-b').digest('hex'),
-      '00000000-0000-4000-8000-000000000103', crypto.createHash('sha256').update('synthetic-token-c').digest('hex')
-    ]);
     await pool.query(`INSERT INTO models(id,company_id,name,operations_json) VALUES
       ('m',$1,'Synthetic model',$3::jsonb),('m',$2,'Foreign model',$4::jsonb)`,
     [tenant, other, JSON.stringify([{ name: 'Sew', rate: 9 }, { name: 'Unknown', rate: null }, { name: 'Zero', rate: 0 }]),
@@ -149,21 +140,16 @@ async function main() {
     registerWorkerRoutes(app, { pool, workerApiToken: token, workerAuthHmacSecret: hmac });
     const adminServiceToken = crypto.randomBytes(24).toString('hex');
     const adminSessionSecret = crypto.randomBytes(32).toString('hex');
-    const activationSigner = crypto.generateKeyPairSync('ed25519');
-    const activationPrivatePem = activationSigner.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-    const activationPublicPem = activationSigner.publicKey.export({ type: 'spki', format: 'pem' }).toString();
     let adminHttpBase = '';
     registerAdminDashboardRoutes(app, {
       pool,
       adminApiToken: adminServiceToken,
-      allowedAdminIds: new Set([globalAdminId]),
       sessionSecret: adminSessionSecret,
-      publicKey: activationPublicPem,
       adminBotInternalUrl: 'http://novda-admin-bot:8080',
       fetchImpl: async (input, init) => {
         const requested = new URL(String(input));
         assert.equal(requested.origin, 'http://novda-admin-bot:8080');
-        assert(['/internal/admin/webapp/session', '/internal/admin/webapp/sign-activation'].includes(requested.pathname));
+        assert.equal(requested.pathname, '/internal/admin/webapp/session');
         const local = new URL(requested.pathname, adminHttpBase);
         assert.equal(local.hostname, '127.0.0.1');
         return fetch(local, init);
@@ -268,8 +254,8 @@ async function main() {
     assert(!JSON.stringify(stale.replies).includes('authToken'));
     assert(!stale.requests.includes('/api/worker/profile'));
 
-    async function adminProcess(telegramId, globalMode, updates = undefined) {
-      const child = spawn('python', ['-B', path.join(root, 'apps/bots/admin/test_admin_acceptance_driver.py')], {
+    async function adminProcess(telegramId, updates = undefined) {
+      const child = spawn('python', ['-B', path.join(root, 'apps/bots/admin/tests/test_admin_acceptance_driver.py')], {
         cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, APPDATA: process.env.APPDATA, PYTHONDONTWRITEBYTECODE: '1',
           HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '*' }
@@ -295,8 +281,7 @@ async function main() {
           if (code !== 0 && code !== null) reject(new Error(stderr || `admin test driver exited ${code}`));
         });
         child.stdin.write(JSON.stringify({ api_base: base, service_token: adminServiceToken,
-          session_secret: adminSessionSecret, telegram_id: telegramId, global_id: globalAdminId,
-          license_private_key: activationPrivatePem, global_mode: globalMode, updates }) + '\n');
+          session_secret: adminSessionSecret, telegram_id: telegramId, updates }) + '\n');
       });
     }
     async function adminRequest(route, sessionToken = null, method = 'GET', body = undefined) {
@@ -308,8 +293,8 @@ async function main() {
       return { status: response.status, body: await response.json() };
     }
     let issuedCompanySessionToken = '';
-    async function exerciseAdmin(telegramId, globalMode) {
-      const running = await adminProcess(telegramId, globalMode);
+    async function exerciseAdmin(telegramId) {
+      const running = await adminProcess(telegramId);
       try {
         const replies = running.result.replies;
         assert.equal(replies.length, 1);
@@ -324,10 +309,9 @@ async function main() {
         assert.equal(sessionResponse.status, 200);
         const session = await sessionResponse.json();
         assert.equal(session.success, true);
-        assert.equal(session.access.isGlobalAdmin, globalMode);
-        assert.deepEqual(session.access.companyIds, globalMode ? null : [tenant]);
+        assert.deepEqual(session.access.companyIds, [tenant]);
         const sessionToken = session.session.token;
-        if (!globalMode) issuedCompanySessionToken = sessionToken;
+        issuedCompanySessionToken = sessionToken;
         const own = await adminRequest(`/api/admin/webapp/payroll?companyId=${tenant}&periodId=P`, sessionToken);
         assert.equal(own.status, 200);
         assert.equal(own.body.payroll.workers[0].gross, 63);
@@ -335,31 +319,19 @@ async function main() {
         assert.equal(own.body.payroll.workers[0].pieces, 14);
         const companies = await adminRequest('/api/admin/webapp/companies', sessionToken);
         assert.equal(companies.status, 200);
-        assert.deepEqual(companies.body.companies.map(c => c.companyId).sort(), globalMode ? [other, tenant].sort() : [tenant]);
+        assert.deepEqual(companies.body.companies.map(c => c.companyId).sort(), [tenant]);
         const foreign = await adminRequest(`/api/admin/webapp/payroll?companyId=${other}&periodId=P`, sessionToken);
-        if (globalMode) {
-          assert.equal(foreign.status, 200);
-          assert.equal(foreign.body.payroll.workers[0].gross, 9000);
-          assert.equal(foreign.body.payroll.workers[0].net, 8993);
-        }
-        else {
-          assert.equal(foreign.status, 403);
-          assert.equal(foreign.body.error.code, 'ADMIN_COMPANY_SCOPE_REQUIRED');
-        }
+        assert.equal(foreign.status, 403);
+        assert.equal(foreign.body.error.code, 'ADMIN_COMPANY_SCOPE_REQUIRED');
         const unauthenticated = await adminRequest(`/api/admin/webapp/payroll?companyId=${tenant}&periodId=P`);
         assert.equal(unauthenticated.status, 401);
         assert.equal(unauthenticated.body.error.code, 'ADMIN_SESSION_REQUIRED');
         const expired = await adminRequest(`/api/admin/webapp/payroll?companyId=${tenant}&periodId=P`, running.result.expired_session);
         assert.equal(expired.status, 401);
         assert.equal(expired.body.error.code, 'ADMIN_SESSION_EXPIRED');
-        if (!globalMode) {
-          const globalOnly = await adminRequest('/api/admin/webapp/companies/' + tenant + '/admins', sessionToken);
-          assert.equal(globalOnly.status, 403);
-          assert.equal(globalOnly.body.error.code, 'ADMIN_GLOBAL_SCOPE_REQUIRED');
-        }
         return { reply: replies[0].payload.text, requests: running.result.api_requests,
           access: session.access, payroll: own.body.payroll.workers[0], companies: companies.body.companies.map(c => c.companyId),
-          foreign: foreign.status === 403 ? foreign.body.error.code : `GLOBAL_HTTP_${foreign.status}`,
+          foreign: foreign.body.error.code,
           unauthenticated: unauthenticated.body.error.code, expired: expired.body.error.code };
       } finally {
         running.finish();
@@ -367,7 +339,7 @@ async function main() {
     }
     async function exerciseAdminWrites() {
       await pool.query(`UPDATE activation_company_admins SET is_active=TRUE WHERE company_id=$1 AND telegram_id=$2`, [tenant, companyAdminId]);
-      const running = await adminProcess(companyAdminId, false);
+      const running = await adminProcess(companyAdminId);
       try {
         const sessionResponse = await fetch(new URL('/api/admin/webapp/session', base), {
           method: 'POST', headers: { 'content-type': 'application/json' },
@@ -497,10 +469,9 @@ async function main() {
           unbindStatus: oldWorkerLink.status, workerStatus: statusReadback.status, staleWrite: staleWrite.body.error.code };
       } finally { running.finish(); }
     }
-    async function exerciseActivationAndCompanyWrites() {
+    async function exerciseFinancialIntentRetry() {
       await pool.query(`UPDATE activation_company_admins SET is_active=TRUE WHERE company_id=$1 AND telegram_id=$2`, [tenant, companyAdminId]);
-      const companyRun = await adminProcess(companyAdminId, false);
-      let companyEvidence;
+      const companyRun = await adminProcess(companyAdminId);
       try {
         const sessionResponse = await fetch(new URL('/api/admin/webapp/session', base), {
           method: 'POST', headers: { 'content-type': 'application/json' },
@@ -515,11 +486,11 @@ async function main() {
             VALUES ('00000000-0000-4000-8000-0000000000f8',$1,'m','R','1','synthetic-party',8,2,'CONFIRMED',$2)`, [tenant, now]);
           await pool.query(`INSERT INTO ticket_entries(id,ticket_id,company_id,op_name,worker_id,rate_snapshot,qty)
             VALUES ('retry-entry','00000000-0000-4000-8000-0000000000f8',$1,'Sew',8,13,2)`, [tenant]);
-          const source = fs.readFileSync(path.join(root, 'apps/server/static/admin-webapp/admin.js'), 'utf8');
+          const source = fs.readFileSync(path.join(root, 'apps/webapps/admin/scripts/admin.js'), 'utf8');
           const boot = '  enforceLightModeTheme();\n  bindEvents();\n  void beginAuthentication();\n})();';
           assert(source.includes(boot), 'actual UI entrypoint changed');
           const script = source.replace(boot, `  window.fixture = { state, companyPanel, submitQuickAdjustment, giveCompanyAdvance };\n})();`);
-          const intentApi = require('../../apps/server/static/admin-webapp/financial-intent.js');
+          const intentApi = require('../../../apps/webapps/admin/scripts/financial-intent.js');
           const cells = new Map();
           const element = (key) => {
             if (!cells.has(key)) cells.set(key, { disabled: false, hidden: false, value: '', fields: {},
@@ -571,7 +542,7 @@ async function main() {
             fixture.state.sessionToken = bearer;
             fixture.state.user = { id: actor };
             fixture.state.sessionActorId = companyAdminId;
-            fixture.state.access = { isGlobalAdmin: false, companyIds: [tenant] };
+            fixture.state.access = { companyIds: [tenant] };
             fixture.companyPanel.companyId = tenant;
             fixture.companyPanel.periods = [{ periodId: 'R', isClosed: false }];
             fixture.companyPanel.selectedWorker = { companyId: tenant, workerId: 8, name: 'Retry Worker', staj: 0, serverRevision: 1 };
@@ -658,154 +629,21 @@ async function main() {
           console.log('FINANCIAL_UI_RETRY quick 26->23->21, advance 21->16; lost responses, exact bodies replayed, 3 facts once');
         }
         await exerciseFinancialUiRetry();
-        const expiredApprove = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000101/approve`,
-          companyRun.result.expired_session, 'POST', { companyId: tenant, role: 'admin' });
-        assert.equal(expiredApprove.status, 401);
-        assert.equal(expiredApprove.body.error.code, 'ADMIN_SESSION_EXPIRED');
-        const crossApprove = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000102/approve`,
-          bearer, 'POST', { companyId: other, role: 'admin' });
-        assert.equal(crossApprove.status, 403);
-        assert.equal(crossApprove.body.error.code, 'ADMIN_COMPANY_SCOPE_REQUIRED');
-        const approveBefore = (await pool.query(`SELECT status,company_id,signed_payload FROM activation_requests
-          WHERE request_id='00000000-0000-4000-8000-000000000101'`)).rows[0];
-        assert.deepEqual(approveBefore, { status: 'PENDING', company_id: null, signed_payload: null });
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_events
-          WHERE request_id='00000000-0000-4000-8000-000000000101'`)).rows[0].n), 0);
-
-        const approve = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000101/approve`,
-          bearer, 'POST', { companyId: tenant, role: 'admin' });
-        assert.equal(approve.status, 200, JSON.stringify(approve.body));
-        assert.equal(approve.body.activation.activation.payload.status, 'active');
-        assert.equal(approve.body.activation.activation.payload.companyId, tenant);
-        const approved = (await pool.query(`SELECT status,company_id,role,signed_payload,signature,approved_by_telegram_id
-          FROM activation_requests WHERE request_id='00000000-0000-4000-8000-000000000101'`)).rows[0];
-        assert.equal(approved.status, 'APPROVED');
-        assert.equal(approved.company_id, tenant);
-        assert.equal(approved.role, 'admin');
-        assert.equal(approved.signed_payload.status, 'active');
-        assert.equal(approved.approved_by_telegram_id, companyAdminId);
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_events
-          WHERE request_id='00000000-0000-4000-8000-000000000101' AND event_type='APPROVED'`)).rows[0].n), 1);
-        assert.deepEqual((await pool.query(`SELECT device_id,company_id,is_revoked FROM server_devices WHERE device_id='A1B2-C3D4-E5F6-A7B8'`)).rows[0],
-          { device_id: 'A1B2-C3D4-E5F6-A7B8', company_id: tenant, is_revoked: false });
-        const duplicateApprove = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000101/approve`,
-          bearer, 'POST', { companyId: tenant, role: 'admin' });
-        assert.equal(duplicateApprove.status, 409);
-        assert.equal(duplicateApprove.body.error.code, 'ACTIVATION_REQUEST_NOT_PENDING');
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_events
-          WHERE request_id='00000000-0000-4000-8000-000000000101'`)).rows[0].n), 1);
-
-        const reject = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000103/reject`,
-          bearer, 'POST', { companyId: tenant, reason: 'synthetic rejection' });
-        assert.equal(reject.status, 200, JSON.stringify(reject.body));
-        assert.deepEqual((await pool.query(`SELECT status,rejection_reason,rejected_by_telegram_id FROM activation_requests
-          WHERE request_id='00000000-0000-4000-8000-000000000103'`)).rows[0],
-          { status: 'REJECTED', rejection_reason: 'synthetic rejection', rejected_by_telegram_id: companyAdminId });
-        const duplicateReject = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000103/reject`,
-          bearer, 'POST', { companyId: tenant, reason: 'duplicate synthetic rejection' });
-        assert.equal(duplicateReject.status, 409);
-        assert.equal(duplicateReject.body.error.code, 'ACTIVATION_REQUEST_NOT_PENDING');
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_events
-          WHERE request_id='00000000-0000-4000-8000-000000000103'`)).rows[0].n), 1);
-
-        const revoke = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000101/revoke`, bearer, 'POST', {});
-        assert.equal(revoke.status, 200, JSON.stringify(revoke.body));
-        assert.equal(revoke.body.activation.activation.payload.status, 'revoked');
-        const revokedRow = (await pool.query(`SELECT status,signed_payload,revoked_by_telegram_id FROM activation_requests
-          WHERE request_id='00000000-0000-4000-8000-000000000101'`)).rows[0];
-        assert.equal(revokedRow.status, 'REVOKED');
-        assert.equal(revokedRow.signed_payload.status, 'revoked');
-        assert.equal(revokedRow.revoked_by_telegram_id, companyAdminId);
-        const duplicateRevoke = await adminRequest(`/api/admin/webapp/activations/00000000-0000-4000-8000-000000000101/revoke`, bearer, 'POST', {});
-        assert.equal(duplicateRevoke.status, 409);
-        assert.equal(duplicateRevoke.body.error.code, 'ACTIVATION_NOT_REVOCABLE');
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_events
-          WHERE request_id='00000000-0000-4000-8000-000000000101'`)).rows[0].n), 2);
-
-        const companyGrantBefore = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_company_admins
-          WHERE company_id=$1 AND telegram_id='778899001'`, [tenant])).rows[0].n);
-        assert.equal(companyGrantBefore, 0);
-        const nonGlobalGrant = await adminRequest(`/api/admin/webapp/companies/${tenant}/admins/778899001`, bearer, 'PUT', { isActive: true });
-        assert.equal(nonGlobalGrant.status, 403);
-        assert.equal(nonGlobalGrant.body.error.code, 'ADMIN_GLOBAL_SCOPE_REQUIRED');
-        const nonGlobalCompanyPolicy = await adminRequest('/api/admin/webapp/companies', bearer, 'POST', {
-          companyId: other, companyName: 'Must not change', allowedRoles: ['admin'], isActive: true
-        });
-        assert.equal(nonGlobalCompanyPolicy.status, 403);
-        assert.equal(nonGlobalCompanyPolicy.body.error.code, 'ADMIN_COMPANY_SCOPE_REQUIRED');
-        const nonGlobalStrictMode = await adminRequest(`/api/admin/webapp/companies/${other}/strict-mode`, bearer, 'PUT', { strictMode: false });
-        assert.equal(nonGlobalStrictMode.status, 403);
-        assert.equal(nonGlobalStrictMode.body.error.code, 'ADMIN_COMPANY_SCOPE_REQUIRED');
-        const foreignPolicy = (await pool.query(`SELECT company_name,is_active,allowed_roles FROM activation_companies WHERE company_id=$1`, [other])).rows[0];
-        assert.equal(foreignPolicy.company_name, 'Synthetic B');
-        assert.equal(foreignPolicy.is_active, true);
-        companyEvidence = { expired: expiredApprove.body.error.code, crossApprove: crossApprove.body.error.code,
-          approve: approved.status, duplicateApprove: duplicateApprove.body.error.code, reject: 'REJECTED',
-          duplicateReject: duplicateReject.body.error.code, revoke: 'REVOKED', duplicateRevoke: duplicateRevoke.body.error.code,
-          companyScopeDenials: [nonGlobalGrant.body.error.code, nonGlobalCompanyPolicy.body.error.code,
-            nonGlobalStrictMode.body.error.code] };
       } finally { companyRun.finish(); }
 
-      const globalRun = await adminProcess(globalAdminId, true);
-      try {
-        const sessionResponse = await fetch(new URL('/api/admin/webapp/session', base), {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ initData: globalRun.result.init_data })
-        });
-        assert.equal(sessionResponse.status, 200);
-        const bearer = (await sessionResponse.json()).session.token;
-        const companyPolicy = await adminRequest('/api/admin/webapp/companies', bearer, 'POST', {
-          companyId: tenant, companyName: 'Synthetic A Policy', allowedRoles: ['admin', 'type', 'print'], isActive: true
-        });
-        assert.equal(companyPolicy.status, 200, JSON.stringify(companyPolicy.body));
-        assert.deepEqual((await pool.query(`SELECT company_name,allowed_roles,is_active,updated_by_telegram_id
-          FROM activation_companies WHERE company_id=$1`, [tenant])).rows[0], {
-          company_name: 'Synthetic A Policy', allowed_roles: ['admin', 'type', 'print'], is_active: true, updated_by_telegram_id: globalAdminId
-        });
-        const strictMode = await adminRequest(`/api/admin/webapp/companies/${tenant}/strict-mode`, bearer, 'PUT', { strictMode: false });
-        assert.equal(strictMode.status, 200, JSON.stringify(strictMode.body));
-        assert.deepEqual((await pool.query(`SELECT require_ticket_validation,policy_revision FROM activation_companies WHERE company_id=$1`, [tenant])).rows[0],
-          { require_ticket_validation: false, policy_revision: 2 });
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_policy_events WHERE company_id=$1`, [tenant])).rows[0].n), 1);
-        const grantPath = `/api/admin/webapp/companies/${tenant}/admins/778899001`;
-        const granted = await adminRequest(grantPath, bearer, 'PUT', { isActive: true });
-        assert.equal(granted.status, 200, JSON.stringify(granted.body));
-        assert.deepEqual((await pool.query(`SELECT telegram_id,is_active,assigned_by_telegram_id,assignment_source
-          FROM activation_company_admins WHERE company_id=$1 AND telegram_id='778899001'`, [tenant])).rows[0], {
-          telegram_id: '778899001', is_active: true, assigned_by_telegram_id: globalAdminId, assignment_source: 'TELEGRAM_ADMIN'
-        });
-        const idempotentGrant = await adminRequest(grantPath, bearer, 'PUT', { isActive: true });
-        assert.equal(idempotentGrant.status, 200);
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_company_admins WHERE telegram_id='778899001'`)).rows[0].n), 1);
-        const conflictingGrant = await adminRequest(`/api/admin/webapp/companies/${other}/admins/778899001`, bearer, 'PUT', { isActive: true });
-        assert.equal(conflictingGrant.status, 409);
-        assert.equal(conflictingGrant.body.error.code, 'COMPANY_ADMIN_ALREADY_ASSIGNED');
-        assert.equal(Number((await pool.query(`SELECT COUNT(*)::int AS n FROM activation_company_admins WHERE company_id=$1 AND telegram_id='778899001'`, [other])).rows[0].n), 0);
-        const disabledGrant = await adminRequest(grantPath, bearer, 'PUT', { isActive: false });
-        assert.equal(disabledGrant.status, 200);
-        assert.deepEqual((await pool.query(`SELECT is_active,assigned_by_telegram_id,assignment_source FROM activation_company_admins
-          WHERE company_id=$1 AND telegram_id='778899001'`, [tenant])).rows[0], {
-          is_active: false, assigned_by_telegram_id: globalAdminId, assignment_source: 'TELEGRAM_ADMIN'
-        });
-        return { company: companyEvidence, global: { companyPolicy: companyPolicy.status, companyPolicyPersisted: true,
-          strictModeApi: strictMode.status, strictModePersisted: false, grantPersisted: true,
-          idempotentGrant: idempotentGrant.status, conflictingGrant: conflictingGrant.body.error.code,
-          deniedConflictNoMutation: true, disabledGrant: disabledGrant.status, targetInactive: true } };
-      } finally { globalRun.finish(); }
     }
-    const companyAdmin = await exerciseAdmin(companyAdminId, false);
+    const companyAdmin = await exerciseAdmin(companyAdminId);
     await pool.query(`UPDATE activation_company_admins SET is_active=FALSE WHERE company_id=$1 AND telegram_id=$2`,
       [tenant, companyAdminId]);
     const revokedSession = await adminRequest(`/api/admin/webapp/payroll?companyId=${tenant}&periodId=P`, issuedCompanySessionToken);
     assert.equal(revokedSession.status, 403);
     assert.equal(revokedSession.body.error.code, 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED');
-    const globalAdmin = await exerciseAdmin(globalAdminId, true);
-    const unauthorisedProcess = await adminProcess('99887766', false);
+    const unauthorisedProcess = await adminProcess('99887766');
     try {
       assert(unauthorisedProcess.result.replies[0].payload.text.includes('Ruxsat berilmagan'));
       assert(!unauthorisedProcess.result.replies[0].payload.reply_markup);
     } finally { unauthorisedProcess.finish(); }
-    const privateGuards = await adminProcess(companyAdminId, false, [
+    const privateGuards = await adminProcess(companyAdminId, [
       { chat_id: -100123, type: 'group', user_id: Number(companyAdminId), text: '/start' },
       { chat_id: 999, type: 'private', user_id: Number(companyAdminId), text: '/start' }
     ]);
@@ -814,7 +652,7 @@ async function main() {
       assert.deepEqual(privateGuards.result.api_requests, []);
     } finally { privateGuards.finish(); }
     const adminWrites = await exerciseAdminWrites();
-    const adminLifecycleWrites = await exerciseActivationAndCompanyWrites();
+    const financialIntentRetry = await exerciseFinancialIntentRetry();
     const desktopAdmin = loadPayrollValuationFromSqlite(sqlite, tenant, 'P').workers[0];
     assert.deepEqual([desktopAdmin.gross, desktopAdmin.net, desktopAdmin.pieces], [63, 54, 14]);
     process.stdout.write(JSON.stringify({ open: shown, requests: open.requests, zero: texts(zero), unknown: texts(unknown),
@@ -822,10 +660,10 @@ async function main() {
         reasons: closed.accountingReasons }, missing: { gross: missing.gross, unknownEntryCount: missing.unknownEntryCount,
         reasons: missing.accountingReasons }, group, foreign: foreign.json().error.code,
       stale: texts(stale), revokedWeb: 'WORKER_BINDING_REQUIRED', admin: { company: companyAdmin,
-        global: globalAdmin, unauthorised: unauthorisedProcess.result.replies[0].payload.text,
+        unauthorised: unauthorisedProcess.result.replies[0].payload.text,
         revokedSession: revokedSession.body.error.code,
         privateGuards: { api_requests: privateGuards.result.api_requests, replies: privateGuards.result.replies } },
-      adminWrites, adminLifecycleWrites, desktop: {
+      adminWrites, financialIntentRetry, desktop: {
         open: [81, 73, 9], closed: [63, 55, 14], missing: [missingDesktop.gross, missingDesktop.unknownEntryCount],
         postAdminP: [desktopAdmin.gross, desktopAdmin.net]
       } }, null, 2) + '\n');

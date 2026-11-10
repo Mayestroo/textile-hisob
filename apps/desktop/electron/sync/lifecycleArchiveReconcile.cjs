@@ -1,7 +1,7 @@
 'use strict';
 
 const { isDeepStrictEqual } = require('node:util');
-const { validatePeriodArchive, readCanonicalPeriodTickets } = require('../database/periodArchiveValidator.cjs');
+const { validatePeriodArchive, readCanonicalPeriodTickets } = require('../database/archive/periodArchiveValidator.cjs');
 
 function captureFirstAcceptanceContext(db, companyId, periodId, operationId) {
   const period = db.prepare('SELECT * FROM periods WHERE company_id = ? AND id = ?').get(companyId, periodId) || null;

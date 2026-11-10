@@ -122,7 +122,7 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
   afterAll(async () => {
     if (app) await app.close();
     await closeServerPool();
-    require('../../desktop/electron/database/databaseManager.cjs').closeAllCompanyDatabases();
+    require('../../desktop/electron/database/core/databaseManager.cjs').closeAllCompanyDatabases();
     for (const dir of localFixtureDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -289,11 +289,11 @@ describePostgresIntegration('authenticated  PostgreSQL bootstrap', () => {
     // production payroll reader. Expected amount is independently 15 × 7 = 105.
     const localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hisob-server-feed-proof-'));
     localFixtureDirs.push(localDir);
-    const localDb = require('../../desktop/electron/database/databaseManager.cjs')
+    const localDb = require('../../desktop/electron/database/core/databaseManager.cjs')
       .getCompanyDatabase(localDir, companyId);
     const { applyBootstrapSnapshot } = require('../../desktop/electron/sync/bootstrapApplier.cjs');
     const { applyChangesBatch } = require('../../desktop/electron/sync/changeFeedApplier.cjs');
-    const { loadPayrollValuationFromSqlite } = require('../../desktop/electron/database/payrollReader.cjs');
+    const { loadPayrollValuationFromSqlite } = require('../../desktop/electron/database/readers/payrollReader.cjs');
     applyBootstrapSnapshot(localDb, companyId, bootstrapResponse.json());
     const beforeFeed = loadPayrollValuationFromSqlite(localDb, companyId, 'period-current');
     expect(beforeFeed.workers.find((worker: any) => worker.workerId === 1)).toMatchObject({ gross: 105 });

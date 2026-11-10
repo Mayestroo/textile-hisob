@@ -1,7 +1,7 @@
 'use strict';
 
-const { updateOperationStatus, getOperation, acknowledgeOutboxOperation } = require('../database/outboxManager.cjs');
-const { rebuildCompanyProjections } = require('../database/projectionReader.cjs');
+const { updateOperationStatus, getOperation, acknowledgeOutboxOperation } = require('../database/outbox/outboxManager.cjs');
+const { rebuildCompanyProjections } = require('../database/readers/projectionReader.cjs');
 const { applyWorkerChange } = require('./changeFeedApplier.cjs');
 
 /**

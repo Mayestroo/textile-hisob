@@ -8,7 +8,7 @@ describe('payroll valuation on the existing workbook read bridge', () => {
     const end = source.indexOf("ipcMain.handle('adjustment-sources'", start);
     const handler = source.slice(start, end);
 
-    expect(handler).toContain("require('./database/workbookPayrollRead.cjs')");
+    expect(handler).toContain("require('./database/readers/workbookPayrollRead.cjs')");
     expect(handler).toContain('readWorkbookPayrollProjection(ready.db, ready.companyId)');
     expect(handler).toContain('data\n');
   });

@@ -234,7 +234,7 @@ async function processSingleOperation(pool, req, op, options = {}) {
 
     // 3. Operations Deduplication & Distributed Idempotency Check
     const dedupRes = await client.query(
-      `SELECT company_id, operation_id, command_type, entity_type, entity_id, 
+      `SELECT company_id, operation_id, command_type, entity_type, entity_id,
               payload_hash, result_json, server_revision, accepted_at
        FROM operations_dedup
        WHERE company_id = $1 AND operation_id = $2
@@ -367,6 +367,9 @@ async function processSingleOperation(pool, req, op, options = {}) {
       }
     }
 
+    if (err?.code === '23505' && err?.constraint === 'idx_tickets_party_patta') {
+      err[Symbol.for('hisob.sync.applicationError')] = true;
+    }
     discardClient = transactionUncertain || rollbackFailed || !err?.[Symbol.for('hisob.sync.applicationError')];
     if (discardClient) throw err;
 
@@ -1113,8 +1116,8 @@ async function executeCloseParty(client, companyId, operationId, payload, canoni
 
   // Re-read and lock the authoritative target row after the number lock is held.
   const partyRes = await client.query(
-    `SELECT id, party_number, status, server_revision FROM parties 
-      WHERE company_id = $1 AND id = $2 
+    `SELECT id, party_number, status, server_revision FROM parties
+      WHERE company_id = $1 AND id = $2
      FOR UPDATE`,
     [companyId, partyRecordId]
   );
@@ -1140,9 +1143,9 @@ async function executeCloseParty(client, companyId, operationId, payload, canoni
 
   // 3. Transition to CLOSED
   const updateRes = await client.query(
-    `UPDATE parties 
-     SET status = 'CLOSED', is_closed = 1, closed_at = NOW(), server_revision = $3, updated_at = NOW() 
-     WHERE company_id = $1 AND id = $2 
+    `UPDATE parties
+     SET status = 'CLOSED', is_closed = 1, closed_at = NOW(), server_revision = $3, updated_at = NOW()
+     WHERE company_id = $1 AND id = $2
      RETURNING closed_at`,
     [companyId, partyRecordId, newRevision]
   );

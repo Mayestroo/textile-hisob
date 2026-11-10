@@ -1,6 +1,6 @@
 'use strict';
 const { cursor, verifyPage, recordAppliedHead, markFeedUnavailable } = require('./feedEvidence.cjs');
-const { acknowledgeOutboxOperation } = require('../database/outboxManager.cjs');
+const { acknowledgeOutboxOperation } = require('../database/outbox/outboxManager.cjs');
 
 /**
  * Applies remote change feed items to local SQLite database.
