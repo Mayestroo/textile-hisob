@@ -113,7 +113,7 @@ export const WorkerManagerModal: React.FC = () => {
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
             <Users size={20} />
-            <span style={{ fontSize: '16px', fontWeight: 800 }}>
+            <span style={{ fontSize: '19px', fontWeight: 800 }}>
               Markaziy Ishchilar & Staj Ro'yxati ({workers.length} ta)
             </span>
           </div>
@@ -127,7 +127,7 @@ export const WorkerManagerModal: React.FC = () => {
                 alignItems: 'center',
                 gap: '6px',
                 padding: '6px 14px',
-                fontSize: '12.5px',
+                fontSize: '15px',
                 fontWeight: 600,
                 borderRadius: 'var(--radius-full)'
               }}
@@ -149,7 +149,7 @@ export const WorkerManagerModal: React.FC = () => {
         <div className="modal-body">
           {/* Info Banner */}
           <div style={{
-            fontSize: '12.5px',
+            fontSize: '15px',
             color: 'var(--text-secondary)',
             background: 'var(--primary-light)',
             padding: '12px 16px',
@@ -250,7 +250,7 @@ export const WorkerManagerModal: React.FC = () => {
                             background: 'var(--bg-surface-subtle)',
                             padding: '2px 8px',
                             borderRadius: 'var(--radius-full)',
-                            fontSize: '11.5px'
+                            fontSize: '14.5px'
                           }}>
                             {w.id}
                           </span>
@@ -320,7 +320,7 @@ export const WorkerManagerModal: React.FC = () => {
                                 <button
                                   onClick={() => saveEditing(w.id)}
                                   className="soft-btn soft-btn-primary"
-                                  style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-full)' }}
+                                  style={{ padding: '3px 8px', fontSize: '14px', borderRadius: 'var(--radius-full)' }}
                                   title="Saqlash"
                                 >
                                   <Check size={12} />
@@ -329,7 +329,7 @@ export const WorkerManagerModal: React.FC = () => {
                                 <button
                                   onClick={() => setEditingWorkerId(null)}
                                   className="soft-btn soft-btn-secondary"
-                                  style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-full)' }}
+                                  style={{ padding: '3px 8px', fontSize: '14px', borderRadius: 'var(--radius-full)' }}
                                 >
                                   Bekor
                                 </button>
@@ -339,7 +339,7 @@ export const WorkerManagerModal: React.FC = () => {
                                 <button
                                   onClick={() => startEditing(w.id, w.name, w.staj)}
                                   className="soft-btn soft-btn-secondary"
-                                  style={{ padding: '3px 8px', fontSize: '11px', borderRadius: 'var(--radius-full)', color: '#4f46e5' }}
+                                  style={{ padding: '3px 8px', fontSize: '14px', borderRadius: 'var(--radius-full)', color: '#4f46e5' }}
                                   title="Tahrirlash"
                                 >
                                   <Edit3 size={12} />
@@ -368,7 +368,7 @@ export const WorkerManagerModal: React.FC = () => {
         </div>
 
         <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>
             Jami: <strong>{workers.length} nafar</strong> (shundan <strong>{stajWorkersCount} nafari</strong> stajli)
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -384,7 +384,7 @@ export const WorkerManagerModal: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                fontSize: '12.5px'
+                fontSize: '15px'
               }}
               title="Ishchilar ro'yxatini Excel (.xlsx) faylida yuklab olish"
             >

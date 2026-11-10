@@ -17,7 +17,7 @@ import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
 import { buildPartyTicketsList, getPartyHealth } from '../../domain/partyAnalytics';
 import { selectLifecycleItems, groupLifecycleCohorts, PattaLifecycle } from '../../domain/pattaLifecycle';
-import { selectPartyHistoryForView, selectPartySeriesTab } from '../../domain/partyHistoryVisibility';
+import { selectPartyHistoryForView } from '../../domain/partyHistoryVisibility';
 import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
 import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
@@ -151,7 +151,36 @@ export const PattaHisobView: React.FC = () => {
     printedPartyHistory: PrintedPartyRecord[];
     submittedTickets: SubmittedTicketRecord[];
   } | null>(null);
+  void allTimeData;
   const [isLoadingAllTime, setIsLoadingAllTime] = useState(false);
+  const isArchiveMode = !!selectedArchiveData && !isAllTimeMode;
+  const [journalRead, setJournalRead] = useState<{ facts: any; error: string | null; loading: boolean }>({ facts: null, error: null, loading: true });
+  const journalRequest = useRef(0);
+
+  // Journal is an independent, authorized read model. Workbook notifications are
+  // its invalidation signal; search/filter edits do not participate in this effect.
+  useEffect(() => {
+    const api = getElectronApi();
+    if (!api?.PattaJournalRead) {
+      setJournalRead({ facts: null, error: 'Patta journal IPC is unavailable', loading: false });
+      return;
+    }
+    const requestId = ++journalRequest.current;
+    let disposed = false;
+    setJournalRead({ facts: null, loading: true, error: null });
+    const mode = isAllTimeMode ? 'all-time' : isArchiveMode ? 'archive' : 'current';
+    const archivePeriodId = selectedArchiveData?.period?.id || selectedArchiveFilename || null;
+    api.PattaJournalRead({ companyId, actorId: authUserId, periodId: isArchiveMode ? archivePeriodId : currentPeriod?.id || null,
+      archivePeriodId, scope: mode, mode }).then((result: any) => {
+      if (disposed || journalRequest.current !== requestId) return;
+      if (!result?.success || !result.facts) throw new Error(result?.code || result?.error || 'PATTA_JOURNAL_READ_FAILED');
+      setJournalRead({ facts: result.facts, error: null, loading: false });
+    }).catch((error: any) => {
+      if (!disposed && journalRequest.current === requestId) setJournalRead({ facts: null, error: error?.message || 'PATTA_JOURNAL_READ_FAILED', loading: false });
+    });
+    return () => { disposed = true; };
+  }, [companyId, authUserId, authRole, currentPeriod?.id, livePrintedPartyHistory, liveSubmittedTickets, periods,
+    isAllTimeMode, isArchiveMode, selectedArchiveData?.period?.id, selectedArchiveFilename]);
 
   const handleSelectAllTime = async () => {
     const runtime = await resolveElectronRuntimeMode(getElectronApi());
@@ -162,6 +191,10 @@ export const PattaHisobView: React.FC = () => {
     setIsAllTimeMode(true);
     loadArchivedPeriod(null);
     setIsLoadingAllTime(true);
+    setAllTimeData(null);
+    setIsLoadingAllTime(false);
+    addNotification('info', 'Butun davr yuklandi', 'Barcha oylar va joriy oy ma\'lumotlari jamlandi.');
+    return;
 
     try {
       const partyMap = new Map<string, PrintedPartyRecord>();
@@ -209,7 +242,7 @@ export const PattaHisobView: React.FC = () => {
               addNotification('warning', 'Arxiv o‘qilmadi', result?.error || `${file.name} arxivi yuklanmadi.`);
             }
           } catch (error) {
-            addNotification('warning', 'Arxiv o‘qilmadi', error instanceof Error ? error.message : `${file.name} arxivi yuklanmadi.`);
+            addNotification('warning', 'Arxiv o‘qilmadi', String((error as Error)?.message || `${file.name} arxivi yuklanmadi.`));
           }
         }
       } else if (runtime.mode !== 'sync' && eAPI && eAPI.archiveRead && filesToRead.length > 0) {
@@ -254,21 +287,11 @@ export const PattaHisobView: React.FC = () => {
   };
 
   // Determine active data source (live vs archived vs all-time)
-  const isArchiveMode = !!selectedArchiveData && !isAllTimeMode;
-  const sourcePrintedPartyHistory: PrintedPartyRecord[] = isAllTimeMode
-    ? (allTimeData?.printedPartyHistory || livePrintedPartyHistory || [])
-    : isArchiveMode
-    ? (selectedArchiveData?.printedPartyHistory || [])
-    : (livePrintedPartyHistory || []);
+  const sourcePrintedPartyHistory: PrintedPartyRecord[] = journalRead.facts?.parties || [];
   const partyHistoryViewMode = isAllTimeMode ? 'all-time' : isArchiveMode ? 'archive' : 'live';
   const printedPartyHistory = selectPartyHistoryForView(sourcePrintedPartyHistory, partyHistoryViewMode);
-  const visiblePartyHistory = selectPartySeriesTab(printedPartyHistory, seriesTab, partyHistoryViewMode);
 
-  const submittedTickets: SubmittedTicketRecord[] = isAllTimeMode
-    ? (allTimeData?.submittedTickets || liveSubmittedTickets || [])
-    : isArchiveMode
-    ? (selectedArchiveData?.submittedTickets || [])
-    : (liveSubmittedTickets || []);
+  const submittedTickets: SubmittedTicketRecord[] = journalRead.facts?.tickets || [];
 
   const activePeriodName = isAllTimeMode
     ? "Butun davr bo'yicha (Barcha oylar)"
@@ -279,18 +302,68 @@ export const PattaHisobView: React.FC = () => {
   const activeSizes = availableSizes && availableSizes.length > 0 ? availableSizes : DEFAULT_BATCH_SIZES;
 
   // Compute item-level lifecycle facts
-  const { lifecycleItems } = useMemo(() => {
+  const { lifecycleItems, lifecycleDiagnostics, excludedAttempts } = useMemo(() => {
     const mode = isAllTimeMode ? 'all-time' : isArchiveMode ? 'archive' : 'current';
     const periodId = selectedArchiveData?.period?.id || selectedArchiveFilename;
     const res = selectLifecycleItems({
       parties: sourcePrintedPartyHistory,
       tickets: submittedTickets,
-      periods,
+      periods: journalRead.facts?.periods || periods,
       mode,
       archivePeriodId: periodId || undefined
     });
-    return { lifecycleItems: res.items };
-  }, [sourcePrintedPartyHistory, submittedTickets, periods, isAllTimeMode, isArchiveMode, selectedArchiveData, selectedArchiveFilename]);
+    return { lifecycleItems: res.items, lifecycleDiagnostics: res.incomplete, excludedAttempts: res.excludedAttempts };
+  }, [sourcePrintedPartyHistory, submittedTickets, periods, isAllTimeMode, isArchiveMode, selectedArchiveData, selectedArchiveFilename, journalRead.facts]);
+  // Expected slot metadata may come from the print template; submission identity,
+  // accepted state and actual quantity always come from the journal selector.
+  const journalPartyRows = useMemo(() => {
+    const rows = new Map<string, ReturnType<typeof buildPartyTicketsList>>();
+    for (const party of printedPartyHistory) {
+      const template = buildPartyTicketsList(party, [], activeSizes, true, false);
+      const byNumber = new Map(template.map((row) => [row.pattaNumber, row]));
+      rows.set(party.id, lifecycleItems.filter((item) => item.partyId === party.id).map((item) => {
+        const expected = byNumber.get(item.pattaNumber);
+        return { ...expected, pattaNumber: item.pattaNumber, id: item.ticketId || undefined,
+          isSubmitted: item.accepted, enteredQty: item.accepted ? item.actualQuantity ?? 0 : 0,
+          expectedQty: expected?.expectedQty ?? 0, size: expected?.size || '', deficit: item.accepted ? (expected?.expectedQty ?? 0) - (item.actualQuantity ?? 0) : (expected?.expectedQty ?? 0) };
+      }));
+    }
+    return rows;
+  }, [printedPartyHistory, activeSizes, lifecycleItems]);
+
+  // Search and health filtering happen on canonical cohort items before tabs,
+  // badges, aggregates, pagination, or expanded rows consume the result.
+  const filteredLifecycleItems = useMemo(() => {
+    const partyById = new Map(printedPartyHistory.map((party) => [party.id, party]));
+    const q = searchQuery.trim().toLocaleLowerCase();
+    return lifecycleItems.filter((item) => {
+      const party = item.partyId ? partyById.get(item.partyId) : undefined;
+      const ticket = submittedTickets.find((candidate) => candidate.id === item.ticketId);
+      if (q && ![party?.modelName, party?.partyNumber, party?.color, item.pattaNumber, ticket?.id, ticket?.konveyer]
+        .some((value) => String(value ?? '').toLocaleLowerCase().includes(q))) return false;
+      if (!item.partyId) {
+        if (statusFilter === 'mismatch') return false;
+        if (statusFilter === 'complete') return item.accepted;
+        if (statusFilter === 'in_progress') return !item.accepted;
+        return true;
+      }
+      const slot = item.partyId ? lifecycleItems.filter((candidate) => candidate.partyId === item.partyId && candidate.lifecycle === item.lifecycle) : [item];
+      const cohortNumbers = new Set(slot.map((entry) => entry.pattaNumber));
+      const tickets = party ? (journalPartyRows.get(party.id) || [])
+        .filter((candidate) => cohortNumbers.has(candidate.pattaNumber)) : [];
+      const health = getPartyHealth(tickets);
+      if (statusFilter === 'mismatch') return health.hasMismatch || health.isError;
+      if (statusFilter === 'complete') return health.status === 'complete' && !health.hasMismatch;
+      if (statusFilter === 'in_progress') return health.status !== 'complete' && !health.hasMismatch;
+      return true;
+    });
+  }, [lifecycleItems, printedPartyHistory, searchQuery, statusFilter, submittedTickets, journalPartyRows]);
+  const selectedCohortItems = useMemo(() => filteredLifecycleItems.filter((item) => item.lifecycle === seriesTab), [filteredLifecycleItems, seriesTab]);
+  const freeTicketItems = selectedCohortItems.filter((item) => item.partyId === null && item.ticketId);
+  const visiblePartyHistory = useMemo(() => {
+    const ids = new Set(selectedCohortItems.map((item) => item.partyId).filter(Boolean));
+    return printedPartyHistory.filter((party) => ids.has(party.id));
+  }, [printedPartyHistory, selectedCohortItems]);
 
   // Tab badges: distinct cohorts and pattas for each lifecycle state
   const lifecycleTabBadges = useMemo(() => {
@@ -301,7 +374,7 @@ export const PattaHisobView: React.FC = () => {
       legacy: { groups: 0, pattas: 0 }
     };
     for (const tab of ['active', 'closed', 'ended', 'legacy'] as const) {
-      const itemsInTab = lifecycleItems.filter((item) => item.lifecycle === tab);
+      const itemsInTab = filteredLifecycleItems.filter((item) => item.lifecycle === tab);
       const cohorts = groupLifecycleCohorts(itemsInTab);
       counts[tab] = {
         groups: cohorts.length,
@@ -309,7 +382,7 @@ export const PattaHisobView: React.FC = () => {
       };
     }
     return counts;
-  }, [lifecycleItems]);
+  }, [filteredLifecycleItems]);
 
   const toggleAccordion = (partyId: string) => {
     setExpandedPartyIds((prev) => {
@@ -363,6 +436,7 @@ export const PattaHisobView: React.FC = () => {
       totalIshSoni: number;
       submittedIshSoni: number;
       unsubmittedIshSoni: number;
+      unknownActualCount: number;
       hasMismatch: boolean;
       isComplete: boolean;
       statusLabel: string;
@@ -382,16 +456,18 @@ export const PattaHisobView: React.FC = () => {
           totalIshSoni: 0,
           submittedIshSoni: 0,
           unsubmittedIshSoni: 0,
+          unknownActualCount: 0,
           hasMismatch: false,
           isComplete: true,
           statusLabel: 'Jarayonda'
         };
       }
 
-      const partySlotsInTab = lifecycleItems.filter((item) => item.partyId === record.id && item.lifecycle === seriesTab);
+      const partySlotsInTab = selectedCohortItems.filter((item) => item.partyId === record.id);
       if (partySlotsInTab.length === 0) continue;
+      grouped[mId].unknownActualCount += partySlotsInTab.filter((item) => item.lifecycle === 'legacy' && !item.accepted && item.actualQuantity === null).length;
       const validPattaNumbersInTab = new Set(partySlotsInTab.map((s) => s.pattaNumber));
-      const allTickets = buildPartyTicketsList(record, submittedTickets, activeSizes, true, isArchiveMode);
+      const allTickets = journalPartyRows.get(record.id) || [];
       const tickets = allTickets.filter((t) => validPattaNumbersInTab.has(t.pattaNumber));
       if (isArchiveMode && tickets.length === 0) {
         continue;
@@ -461,7 +537,7 @@ export const PattaHisobView: React.FC = () => {
     }
 
     return groups;
-  }, [visiblePartyHistory, submittedTickets, activeSizes, searchQuery, statusFilter, isArchiveMode]);
+  }, [visiblePartyHistory, selectedCohortItems, journalPartyRows, searchQuery, statusFilter]);
 
   // Flatten all parties for pagination
   const allPartiesFlat = useMemo(() => {
@@ -498,13 +574,17 @@ export const PattaHisobView: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, isArchiveMode]);
+  }, [searchQuery, statusFilter, seriesTab, isArchiveMode, isAllTimeMode, selectedArchiveFilename, companyId]);
 
   // Overall KPIs
-  const visiblePartyIds = useMemo(() => new Set(visiblePartyHistory.map((party) => party.id)), [visiblePartyHistory]);
-  const totalActualSubmittedIshCount = submittedTickets
-    ?.filter((ticket) => ticket.partyRecordId && visiblePartyIds.has(ticket.partyRecordId))
-    .reduce((acc, ticket) => acc + (ticket.qty || 0), 0) || 0;
+  const totalActualSubmittedIshCount = selectedCohortItems
+    .reduce((acc, item) => acc + (item.accepted ? (item.actualQuantity || 0) : 0), 0);
+  const totalPartyActualSubmittedIshCount = selectedCohortItems
+    .reduce((acc, item) => acc + (item.partyId && item.accepted ? (item.actualQuantity || 0) : 0), 0);
+  const totalFreeActualSubmittedIshCount = selectedCohortItems
+    .reduce((acc, item) => acc + (!item.partyId && item.accepted ? (item.actualQuantity || 0) : 0), 0);
+  const unknownExpectedWorkCount = freeTicketItems.length;
+  const unknownPartyActualCount = selectedCohortItems.filter((item) => item.partyId && item.lifecycle === 'legacy' && !item.accepted && item.actualQuantity === null).length;
 
   const { totalPartiesCount, totalPattasCount, totalExpectedIshCount, totalSubmittedPattasCount, totalUnsubmittedPattasCount, totalUnsubmittedIshCount } = useMemo(() => {
     let totalP = 0;
@@ -515,8 +595,10 @@ export const PattaHisobView: React.FC = () => {
     let unsubIsh = 0;
 
     for (const p of visiblePartyHistory || []) {
-      const tickets = buildPartyTicketsList(p, submittedTickets, activeSizes, true, isArchiveMode);
-      if (isArchiveMode && tickets.length === 0) continue;
+      const cohortNumbers = new Set(selectedCohortItems.filter((item) => item.partyId === p.id).map((item) => item.pattaNumber));
+      const tickets = (journalPartyRows.get(p.id) || [])
+        .filter((ticket) => cohortNumbers.has(ticket.pattaNumber));
+      if (tickets.length === 0) continue;
 
       partyCount += 1;
       const count = tickets.length;
@@ -532,16 +614,18 @@ export const PattaHisobView: React.FC = () => {
     }
     return {
       totalPartiesCount: partyCount,
-      totalPattasCount: totalP,
+      totalPattasCount: totalP + freeTicketItems.length,
       totalExpectedIshCount: expectedIsh,
-      totalSubmittedPattasCount: sub,
-      totalUnsubmittedPattasCount: unsub,
+      totalSubmittedPattasCount: sub + freeTicketItems.filter((item) => item.accepted).length,
+      totalUnsubmittedPattasCount: unsub + freeTicketItems.filter((item) => !item.accepted).length,
       totalUnsubmittedIshCount: unsubIsh
     };
-  }, [visiblePartyHistory, submittedTickets, activeSizes, isArchiveMode]);
+  }, [visiblePartyHistory, selectedCohortItems, freeTicketItems, journalPartyRows]);
 
   const ticketProgress = totalPattasCount > 0 ? Math.min(100, (totalSubmittedPattasCount / totalPattasCount) * 100) : 0;
-  const workProgress = totalExpectedIshCount > 0 ? Math.min(100, (totalActualSubmittedIshCount / totalExpectedIshCount) * 100) : 0;
+  const workProgress = unknownExpectedWorkCount > 0 || unknownPartyActualCount > 0
+    ? null
+    : totalExpectedIshCount > 0 ? Math.min(100, (totalActualSubmittedIshCount / totalExpectedIshCount) * 100) : 0;
 
   // Closed periods list for selection
   const closedPeriodsList = useMemo(() => {
@@ -652,10 +736,10 @@ export const PattaHisobView: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Globe size={14} color="#7c3aed" />
                     <div>
-                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: isAllTimeMode ? '#7c3aed' : '#0f172a' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: isAllTimeMode ? '#7c3aed' : '#0f172a' }}>
                         Butun davr bo'yicha
                       </div>
-                      <div style={{ fontSize: '10.5px', color: '#64748b' }}>Barcha oylar jamlanmasi</div>
+                      <div style={{ fontSize: '13.5px', color: '#64748b' }}>Barcha oylar jamlanmasi</div>
                     </div>
                   </div>
                   {isAllTimeMode && <Check size={13} color="#7c3aed" />}
@@ -682,10 +766,10 @@ export const PattaHisobView: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
                     <div>
-                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: (!isArchiveMode && !isAllTimeMode) ? '#059669' : '#0f172a' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: (!isArchiveMode && !isAllTimeMode) ? '#059669' : '#0f172a' }}>
                         Joriy oy (Faol)
                       </div>
-                      <div style={{ fontSize: '10.5px', color: '#64748b' }}>{currentPeriod?.name || 'Joriy davr'}</div>
+                      <div style={{ fontSize: '13.5px', color: '#64748b' }}>{currentPeriod?.name || 'Joriy davr'}</div>
                     </div>
                   </div>
                   {(!isArchiveMode && !isAllTimeMode) && <Check size={13} color="#059669" />}
@@ -693,7 +777,7 @@ export const PattaHisobView: React.FC = () => {
 
                 {/* Archives List */}
                 {closedPeriodsList.length > 0 && (
-                  <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0', padding: '4px 10px 2px', fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
+                  <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0', padding: '4px 10px 2px', fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
                     Yopilgan oylar arxivi ({closedPeriodsList.length})
                   </div>
                 )}
@@ -721,10 +805,10 @@ export const PattaHisobView: React.FC = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Archive size={13} color={isSelected ? '#7c3aed' : '#94a3b8'} />
                         <div>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: isSelected ? '#7c3aed' : '#334155' }}>
+                          <div style={{ fontSize: '15px', fontWeight: 600, color: isSelected ? '#7c3aed' : '#334155' }}>
                             {cp.name}
                           </div>
-                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                          <div style={{ fontSize: '13px', color: '#94a3b8' }}>
                             {formatUzbekDate(cp.startDate)} — {formatUzbekDate(cp.endDate) || '—'}
                           </div>
                         </div>
@@ -740,23 +824,23 @@ export const PattaHisobView: React.FC = () => {
 
         {/* Informative Banners for Special Modes */}
         {isAllTimeMode && (
-          <div style={{ padding: '8px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '12px' }}>
+          <div style={{ padding: '8px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '15px' }}>
             <span>🌐 Siz <strong>Butun davr bo'yicha</strong> barcha oylar monitoringini ko'rmoqdasiz.</span>
-            <button onClick={() => setIsAllTimeMode(false)} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 10px', fontSize: '11px', cursor: 'pointer' }}>
+            <button onClick={() => setIsAllTimeMode(false)} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 10px', fontSize: '14px', cursor: 'pointer' }}>
               Joriy oyga qaytish
             </button>
           </div>
         )}
         {isArchiveMode && (
-          <div style={{ padding: '8px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '12px' }}>
+          <div style={{ padding: '8px 14px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '15px' }}>
             <span>📁 Siz <strong>{activePeriodName}</strong> yopilgan oyining arxivlangan partiyalar hisobotini ko'rmoqdasiz.</span>
-            <button onClick={() => loadArchivedPeriod(null)} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 10px', fontSize: '11px', cursor: 'pointer' }}>
+            <button onClick={() => loadArchivedPeriod(null)} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '3px 10px', fontSize: '14px', cursor: 'pointer' }}>
               Chiqish
             </button>
           </div>
         )}
         {duplicatePartyNumbers.size > 0 && !isArchiveMode && (
-          <div style={{ padding: '8px 14px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', fontSize: '12px', color: '#b91c1c' }}>
+          <div style={{ padding: '8px 14px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', fontSize: '15px', color: '#b91c1c' }}>
             <span>⚠️ Diqqat: Partiya {Array.from(duplicatePartyNumbers).map(n => `«${n}»`).join(', ')} raqami takrorlangan (dublikat)!</span>
           </div>
         )}
@@ -799,21 +883,35 @@ export const PattaHisobView: React.FC = () => {
           </div>
 
           {/* Card 3: Kiritilgan ish */}
-          <div className="patta-hisob-kpi-card journal-kpi">
+          <div className="patta-hisob-kpi-card journal-kpi" data-kpi="work" data-actual-work={totalActualSubmittedIshCount} data-known-party-actual={totalPartyActualSubmittedIshCount} data-free-actual={totalFreeActualSubmittedIshCount} data-known-expected-work={totalExpectedIshCount} data-unknown-expected-count={unknownExpectedWorkCount} data-unknown-actual-count={unknownPartyActualCount} data-work-progress={workProgress === null ? 'unknown' : workProgress}>
             <div className="patta-hisob-kpi-icon amber">
               <FileText size={22} strokeWidth={2.2} />
             </div>
             <div className="patta-hisob-kpi-content">
               <div className="patta-hisob-kpi-label journal-kpi-label">Kiritilgan ish</div>
               <div className="patta-hisob-kpi-val amber journal-kpi-value">
-                {totalActualSubmittedIshCount.toLocaleString('ru-RU')} <span className="patta-hisob-kpi-unit">/ {totalExpectedIshCount.toLocaleString('ru-RU')} dona</span>
+                {totalActualSubmittedIshCount.toLocaleString('ru-RU')} <span className="patta-hisob-kpi-unit">{workProgress === null
+                  ? unknownPartyActualCount > 0 ? 'dona qabul qilingan; haqiqiy son noma\'lum' : 'dona kiritilgan'
+                  : `/ ${totalExpectedIshCount.toLocaleString('ru-RU')} dona`}</span>
               </div>
-              <div className="patta-hisob-kpi-progress journal-progress">
-                <div className="patta-hisob-kpi-progress-bar amber" style={{ width: `${workProgress}%` }} />
-              </div>
-              <div className="patta-hisob-kpi-sub journal-kpi-sub">
-                {Math.round(workProgress)}% kiritilgan · {totalUnsubmittedIshCount.toLocaleString('ru-RU')} dona qoldi
-              </div>
+              {workProgress === null ? (
+                <div className="patta-hisob-kpi-sub journal-kpi-sub journal-work-progress-unknown" data-progress-state="unknown">
+                  Reja/foiz noma'lum — {unknownPartyActualCount > 0
+                    ? `${unknownPartyActualCount} ta tarixiy patta haqiqiy soni noma'lum; qabul qilingan subtotal ${totalPartyActualSubmittedIshCount.toLocaleString('ru-RU')} dona`
+                    : totalPartiesCount > 0
+                    ? `partiya: ${totalPartyActualSubmittedIshCount.toLocaleString('ru-RU')}/${totalExpectedIshCount.toLocaleString('ru-RU')} dona`
+                    : 'partiyali ish yo‘q'}; erkin: {totalFreeActualSubmittedIshCount.toLocaleString('ru-RU')} dona ({unknownExpectedWorkCount} ta patta rejasi noma'lum)
+                </div>
+              ) : (
+                <>
+                  <div className="patta-hisob-kpi-progress journal-progress">
+                    <div className="patta-hisob-kpi-progress-bar amber" style={{ width: `${workProgress}%` }} />
+                  </div>
+                  <div className="patta-hisob-kpi-sub journal-kpi-sub">
+                    {Math.round(workProgress)}% kiritilgan · {totalUnsubmittedIshCount.toLocaleString('ru-RU')} dona qoldi
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -881,13 +979,17 @@ export const PattaHisobView: React.FC = () => {
             )}
           </div>
 
+          {journalRead.loading && !isAllTimeMode && !isArchiveMode && <div role="status">Patta jurnali yuklanmoqda…</div>}
+          {journalRead.error && !isAllTimeMode && !isArchiveMode && <div role="alert">Patta jurnali o‘qilmadi: {journalRead.error}</div>}
+          {journalRead.facts?.incomplete && !isAllTimeMode && !isArchiveMode && <div role="status">Tarix to‘liq emas — arxiv yaxlitligini tekshiring.</div>}
+          {journalRead.facts?.pendingEffects && (journalRead.facts.pendingEffects.hasPendingClose || journalRead.facts.pendingEffects.hasPendingFinish) && !isAllTimeMode && !isArchiveMode && <div role="status">Mahalliy lifecycle o‘zgarishlari sinxronlash kutilmoqda.</div>}
           <div className="patta-hisob-filter-pills journal-filter-pills">
             <button
               type="button"
               onClick={() => updateJournalFilters({ status: 'all' })}
               className={`patta-hisob-filter-pill soft-btn ${statusFilter === 'all' ? 'active soft-btn-primary' : 'soft-btn-secondary'}`}
             >
-              Barchasi · {visiblePartyHistory?.length || 0}
+              Barchasi · {selectedCohortItems.length}
             </button>
             <button
               type="button"
@@ -914,8 +1016,14 @@ export const PattaHisobView: React.FC = () => {
         </div>
 
         {/* Main Table Card (3-Level Hierarchical Accordion) */}
-        {(!modelHistoryGroups || modelHistoryGroups.length === 0) ? (
-          <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', color: '#64748b', fontSize: '13.5px' }}>
+        {(lifecycleDiagnostics.length > 0 || excludedAttempts.length > 0) && (
+          <div className="journal-incomplete-notice" role="status" style={{ padding: '10px 14px', marginBottom: 10, borderRadius: 8 }}>
+            {lifecycleDiagnostics.length > 0 && <div>Jurnal ogohlantirishlari: {lifecycleDiagnostics.join(', ')}</div>}
+            {excludedAttempts.length > 0 && <div>Qabul qilinmagan urinishlar: {excludedAttempts.length} (qabul qilingan jami hisobiga kiritilmagan)</div>}
+          </div>
+        )}
+        {(!modelHistoryGroups || modelHistoryGroups.length === 0) && freeTicketItems.length === 0 ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', color: '#64748b', fontSize: '15px' }}>
             <Layers size={36} color="#94a3b8" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.5 }} />
             <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
               {isArchiveMode
@@ -927,6 +1035,20 @@ export const PattaHisobView: React.FC = () => {
             <div>«Patta» varag'ida yangi partiyalarni chop etishingiz mumkin.</div>
           </div>
         ) : (
+          <>
+          {freeTicketItems.length > 0 && (
+            <div className="patta-hisob-table-card journal-model-list" aria-label="Partiyaga biriktirilmagan pattalar">
+              <strong style={{ display: 'block', padding: '12px 16px' }}>Erkin pattalar · partiyaga biriktirilmagan</strong>
+              {freeTicketItems.map((item) => {
+                const ticket = submittedTickets.find((candidate) => candidate.id === item.ticketId);
+                return <div key={item.key} className="patta-hisob-model-row journal-model-row" data-ticket-id={item.ticketId}>
+                  <span>Erkin patta № {item.pattaNumber}</span><span>{ticket?.modelId || item.modelId}</span>
+                  <span>{item.accepted ? `${item.actualQuantity ?? '—'} dona kiritilgan` : 'Kutilmoqda'}</span>
+                  <span>Partiya biriktirilmagan</span>
+                </div>;
+              })}
+            </div>
+          )}
           <div className="patta-hisob-table-card journal-model-list">
             {/* Level 1: Model Header Columns */}
             <div className="patta-hisob-model-cols journal-model-columns" aria-hidden="true">
@@ -988,7 +1110,7 @@ export const PattaHisobView: React.FC = () => {
                         <div className="mini-progress-fill amber" style={{ width: `${ishPct}%` }} />
                       </div>
                       <div className="metric-remaining">
-                        {remainingIshSoni.toLocaleString('ru-RU')} ta qoldi
+                        {group.unknownActualCount > 0 ? `${group.unknownActualCount} ta patta haqiqiy soni noma'lum` : `${remainingIshSoni.toLocaleString('ru-RU')} ta qoldi`}
                       </div>
                     </div>
 
@@ -1024,7 +1146,9 @@ export const PattaHisobView: React.FC = () => {
                           {parties.map((item) => {
                             const row = item.party;
                             const isPartyExpanded = expandedPartyIds.has(row.id);
-                            const partyTickets = buildPartyTicketsList(row, submittedTickets, activeSizes, true, isArchiveMode);
+                            const eligibleNumbers = new Set(selectedCohortItems.filter((entry) => entry.partyId === row.id).map((entry) => entry.pattaNumber));
+                            const partyTickets = (journalPartyRows.get(row.id) || [])
+                              .filter((ticket) => eligibleNumbers.has(ticket.pattaNumber));
                             const partyHealth = getPartyHealth(partyTickets);
 
                             const partyPattaCount = partyTickets.length;
@@ -1032,11 +1156,13 @@ export const PattaHisobView: React.FC = () => {
                             const totalIsh = partyTickets.reduce((sum, t) => sum + t.expectedQty, 0);
                             const partyActualIsh = partyTickets.filter((t) => t.isSubmitted).reduce((sum, t) => sum + t.enteredQty, 0);
                             const remainingIsh = Math.max(0, totalIsh - partyActualIsh);
+                            const hasUnknownLegacyActual = partyTickets.some((ticket) => selectedCohortItems.some((entry) => entry.partyId === row.id && entry.pattaNumber === ticket.pattaNumber && entry.lifecycle === 'legacy' && !entry.accepted && entry.actualQuantity === null));
 
                             return (
                               <React.Fragment key={row.id}>
                                 <tr
                                   className={`patta-hisob-partiya-row ${isPartyExpanded ? 'expanded' : ''}`}
+                                  data-party-id={row.id}
                                   style={{ display: 'grid' }}
                                   onClick={() => toggleAccordion(row.id)}
                                 >
@@ -1046,7 +1172,7 @@ export const PattaHisobView: React.FC = () => {
                                     </span>
                                     <span className="party-title">Partiya {row.partyNumber}</span>
                                     {duplicatePartyNumbers.has(String(row.partyNumber).trim()) && !row.isClosed && (
-                                      <span style={{ fontSize: '10px', background: '#fee2e2', color: '#ef4444', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                      <span style={{ fontSize: '13px', background: '#fee2e2', color: '#ef4444', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
                                         Dublikat
                                       </span>
                                     )}
@@ -1109,7 +1235,9 @@ export const PattaHisobView: React.FC = () => {
                                           </div>
                                           <div className="tickets-header-right">
                                             <span className="stat-pill">Reja: {totalIsh.toLocaleString('ru-RU')} dona</span>
-                                            <span className="stat-pill">Kiritilgan: {partyActualIsh.toLocaleString('ru-RU')} dona</span>
+                                            <span className="stat-pill">{hasUnknownLegacyActual
+                                              ? `Qabul qilingan subtotal: ${partyActualIsh.toLocaleString('ru-RU')} dona; haqiqiy son noma'lum`
+                                              : `Kiritilgan: ${partyActualIsh.toLocaleString('ru-RU')} dona`}</span>
                                             <span className="stat-pill highlight">Qoldi: {remainingIsh.toLocaleString('ru-RU')} dona</span>
 
                                             {!isArchiveMode && !isAllTimeMode && partyHealth.hasMismatch && (
@@ -1127,7 +1255,7 @@ export const PattaHisobView: React.FC = () => {
                                                 }}
                                                 style={{
                                                   padding: '3px 10px',
-                                                  fontSize: '11px',
+                                                  fontSize: '14px',
                                                   borderRadius: '6px',
                                                   background: '#059669',
                                                   color: '#ffffff',
@@ -1165,7 +1293,7 @@ export const PattaHisobView: React.FC = () => {
                                               const diff = t.isSubmitted ? t.enteredQty - t.expectedQty : 0;
 
                                               return (
-                                                <tr key={t.pattaNumber}>
+                                                <tr key={t.pattaNumber} data-ticket-id={t.id || undefined} data-patta-number={t.pattaNumber}>
                                                   <td style={{ textAlign: 'left' }}>
                                                     <span className="ticket-num-badge">№ {t.actualPattaNumber || t.pattaNumber}</span>
                                                   </td>
@@ -1262,6 +1390,7 @@ export const PattaHisobView: React.FC = () => {
               );
             })}
           </div>
+          </>
         )}
 
         {/* Pagination Controls */}
@@ -1293,7 +1422,7 @@ export const PattaHisobView: React.FC = () => {
               <ChevronLeft size={16} />
             </button>
 
-            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569', minWidth: '120px', textAlign: 'center' }}>
+            <span style={{ fontSize: '15px', fontWeight: 600, color: '#475569', minWidth: '120px', textAlign: 'center' }}>
               Sahifa {currentPage} / {totalPages}
             </span>
 

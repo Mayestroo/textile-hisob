@@ -51,11 +51,11 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
         <ShieldAlert size={32} color="#ef4444" />
       </div>
 
-      <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>
+      <h2 style={{ fontSize: '23px', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>
         Ruxsat Cheklangan
       </h2>
 
-      <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '460px', lineHeight: 1.5, marginBottom: '16px' }}>
+      <p style={{ fontSize: '17px', color: 'var(--text-muted)', maxWidth: '460px', lineHeight: 1.5, marginBottom: '16px' }}>
         {message}
       </p>
 
@@ -66,7 +66,7 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
           borderRadius: 'var(--radius-md)',
           padding: '12px 18px',
           marginBottom: '20px',
-          fontSize: '12.5px'
+          fontSize: '15px'
         }}
       >
         <span>Sizning joriy rolingiz: </span>
@@ -74,7 +74,7 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
           {role ? ROLE_LABELS_UZ[role] : 'Noma\'lum'}
         </strong>
         {requiredPermission && (
-          <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+          <div style={{ marginTop: '4px', fontSize: '14px', color: 'var(--text-muted)' }}>
             Talab qilingan huquq: <code>{requiredPermission}</code>
           </div>
         )}
@@ -83,7 +83,7 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
       <button
         onClick={() => setActiveSheet(role === 'print' ? 'Patta' : 'Umumiy')}
         className="soft-btn soft-btn-primary"
-        style={{ padding: '8px 18px', borderRadius: 'var(--radius-full)', fontSize: '13px' }}
+        style={{ padding: '8px 18px', borderRadius: 'var(--radius-full)', fontSize: '15px' }}
       >
         <ArrowLeft size={15} />
         <span>Ruxsat etilgan sahifaga qaytish</span>

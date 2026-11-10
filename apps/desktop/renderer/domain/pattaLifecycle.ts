@@ -1,4 +1,5 @@
 /** Pure journal-only classifier. It does not mutate payroll or reservation state. */
+import { buildPartyTicketsList } from './partyAnalytics';
 export type PattaLifecycle = 'active' | 'closed' | 'ended' | 'legacy';
 
 export interface LifecycleParty {
@@ -47,6 +48,7 @@ export interface LifecycleItem {
   accepted: boolean;
   actualQuantity: number | null;
   hidden: boolean;
+  pendingClose?: boolean;
 }
 
 export function selectLifecycleItems(input: {
@@ -55,8 +57,9 @@ export function selectLifecycleItems(input: {
   periods: readonly LifecyclePeriod[];
   mode?: 'current' | 'all-time' | 'archive';
   archivePeriodId?: string;
+  pendingClosePeriodIds?: readonly string[];
 }): { items: LifecycleItem[]; excludedAttempts: LifecycleTicket[]; incomplete: string[] } {
-  const { parties, tickets, periods, mode = 'all-time', archivePeriodId } = input;
+  const { parties, tickets, periods, mode = 'all-time', archivePeriodId, pendingClosePeriodIds = [] } = input;
   const partyById = new Map(parties.map(p => [p.id, p]));
   const periodById = new Map(periods.map(p => [p.id, p]));
   const archived = new Map(periods.map(p => [p.id, new Set(p.archivedTicketIds || [])]));
@@ -66,15 +69,66 @@ export function selectLifecycleItems(input: {
   const excludedAttempts: LifecycleTicket[] = [];
   const incomplete: string[] = [];
   const ended = (party?: LifecycleParty) => Boolean(party?.endedAt && party?.endedOperationId);
-  for (const ticket of tickets) {
+  const normalizedNumber = new Map<string, number>();
+  const unresolvedPartyTicketIds = new Set<string>();
+  for (const party of parties) {
+    const partyTickets = tickets.filter((ticket) => ticket.partyRecordId === party.id && ticket.modelId === party.modelId &&
+      (ticket.status === 'CONFIRMED' || (!ticket.status && Boolean(ticket.periodId && archived.get(ticket.periodId)?.has(ticket.id)))));
+    const slots = buildPartyTicketsList({ id: party.id, companyId: party.companyId, modelId: party.modelId,
+      partyNumber: '', pattaCount: party.pattaCount, cumulativePattaCount: (party.pattaStartNumber || 1) + party.pattaCount - 1,
+      pattaStartNumber: party.pattaStartNumber || 1, pattaEndNumber: (party.pattaStartNumber || 1) + party.pattaCount - 1,
+      sizes: { __slot: String(party.pattaCount) }, ishSoniPerPatta: 0, totalIshSoni: 0, ishSoni: 0,
+      cumulativeIshSoni: 0, printedAt: '', archivedPattaNumbers: [], isClosed: false } as any,
+    partyTickets.map((ticket) => ({ id: ticket.id, partyRecordId: ticket.partyRecordId, partyNumber: '', modelId: ticket.modelId,
+      pattaNumber: ticket.pattaNumber, qty: Number(ticket.qty || 0), status: ticket.status as any,
+      isClosed: false, submittedAt: '' } as any)), ['__slot'], true);
+    for (const slot of slots) if (slot.id) normalizedNumber.set(slot.id, slot.pattaNumber);
+    for (const ticket of partyTickets) if (!normalizedNumber.has(ticket.id)) unresolvedPartyTicketIds.add(ticket.id);
+  }
+  for (const ticketId of [...unresolvedPartyTicketIds]) {
+    const ticket = tickets.find((candidate) => candidate.id === ticketId);
+    const party = ticket?.partyRecordId ? partyById.get(ticket.partyRecordId) : undefined;
+    if (!ticket || !party) continue;
+    const start = party.pattaStartNumber || 1;
+    const absoluteEnd = start + party.pattaCount - 1;
+    const target = ticket.pattaNumber >= start && ticket.pattaNumber <= absoluteEnd
+      ? ticket.pattaNumber
+      : ticket.pattaNumber >= 1 && ticket.pattaNumber <= party.pattaCount ? start + ticket.pattaNumber - 1 : undefined;
+    if (target !== undefined && [...normalizedNumber.values()].includes(target)) {
+      normalizedNumber.set(ticket.id, target);
+      unresolvedPartyTicketIds.delete(ticket.id);
+    }
+  }
+  const normalizedTickets = tickets.map((ticket) => {
+    const pattaNumber = normalizedNumber.get(ticket.id);
+    if (pattaNumber === undefined || pattaNumber === ticket.pattaNumber) return ticket;
+    return { ...ticket, pattaNumber };
+  });
+  const absoluteTicketIds = new Set(tickets.filter((ticket) => {
+    const party = ticket.partyRecordId ? partyById.get(ticket.partyRecordId) : undefined;
+    const start = party?.pattaStartNumber || 1;
+    return Boolean(party && ticket.pattaNumber >= start && ticket.pattaNumber <= start + party.pattaCount - 1);
+  }).map(ticket => ticket.id));
+  const candidatesBySlot = new Map<string, LifecycleTicket[]>();
+  for (const ticket of normalizedTickets) {
     const old = seenTickets.get(ticket.id);
     if (old) {
-      if (old.periodId !== ticket.periodId || old.partyRecordId !== ticket.partyRecordId || old.qty !== ticket.qty) incomplete.push(`CONFLICTING_TICKET:${ticket.id}`);
+      if (old.companyId !== ticket.companyId || old.modelId !== ticket.modelId || old.periodId !== ticket.periodId ||
+          old.partyRecordId !== ticket.partyRecordId || old.pattaNumber !== ticket.pattaNumber || old.qty !== ticket.qty) {
+        incomplete.push(`CONFLICTING_TICKET:${ticket.id}`);
+      }
       continue;
     }
     seenTickets.set(ticket.id, ticket);
-    if (ticket.status === 'VOIDED' || ticket.status === 'PENDING_DELETE' || ticket.status === 'CONFLICT') {
+    const isInArchive = Boolean(ticket.periodId && archived.get(ticket.periodId)?.has(ticket.id));
+    if ((ticket.status === 'UNKNOWN' || !ticket.status) && !isInArchive) incomplete.push(`UNKNOWN_ACCEPTANCE:${ticket.id}`);
+    if (ticket.status !== 'CONFIRMED' && !( !ticket.status && Boolean(ticket.periodId && archived.get(ticket.periodId)?.has(ticket.id)))) {
       excludedAttempts.push(ticket); continue;
+    }
+    if (unresolvedPartyTicketIds.has(ticket.id)) {
+      incomplete.push(`OUT_OF_RANGE_TICKET:${ticket.id}`);
+      excludedAttempts.push(ticket);
+      continue;
     }
     const party = ticket.partyRecordId ? partyById.get(ticket.partyRecordId) : undefined;
     const ticketCompany = ticket.companyId || party?.companyId || 'company_main';
@@ -83,15 +137,14 @@ export function selectLifecycleItems(input: {
     const period = ticket.periodId ? periodById.get(ticket.periodId) : undefined;
     const inArchive = Boolean(ticket.periodId && archived.get(ticket.periodId)?.has(ticket.id));
     const accepted = ticket.status === 'CONFIRMED' || (!ticket.status && inArchive);
-    if (!ticket.status && !inArchive) incomplete.push(`UNKNOWN_ACCEPTANCE:${ticket.id}`);
     if (mode === 'archive' && (!accepted || archivePeriodId !== ticket.periodId || !inArchive)) continue;
     if (mode === 'current' && party?.isArchived) continue;
     const slotKey = exact ? `${ticketCompany}:${party.id}:${ticket.pattaNumber}` : null;
     if (slotKey && accepted) {
-      if (occupied.has(slotKey)) { incomplete.push(`DUPLICATE_SLOT:${slotKey}`); continue; }
-      occupied.add(slotKey);
+      candidatesBySlot.set(slotKey, [...(candidatesBySlot.get(slotKey) || []), ticket]);
+      continue;
     }
-    const closed = accepted && Boolean((period?.isClosed && period.closeOperationId) || (period?.isClosed && inArchive));
+    const closed = accepted && Boolean(period?.isClosed && inArchive);
     const legacy = !exact && Boolean(ticket.partyRecordId) || (ticket.isClosed && !closed) || (party?.isClosed && !closed);
     const lifecycle: PattaLifecycle = exact && ended(party) ? 'ended' : closed ? 'closed' : legacy ? 'legacy' : 'active';
     items.push({ key: slotKey || `${ticketCompany}:free:${ticket.id}`, companyId: ticketCompany,
@@ -99,7 +152,23 @@ export function selectLifecycleItems(input: {
       ticketId: ticket.id, periodId: ticket.periodId || null, lifecycle,
       evidence: lifecycle === 'ended' ? 'finish' : closed ? inArchive ? 'archive' : 'period' : legacy ? 'unknown' : 'open',
       accepted, actualQuantity: accepted && Number.isFinite(ticket.qty) ? Number(ticket.qty) : null,
-      hidden: Boolean(party?.isArchived) });
+      hidden: Boolean(party?.isArchived), pendingClose: Boolean(ticket.periodId && pendingClosePeriodIds.includes(ticket.periodId)) });
+  }
+  for (const [slotKey, slotTickets] of candidatesBySlot) {
+    const ordered = [...slotTickets].sort((a, b) => Number(absoluteTicketIds.has(b.id)) - Number(absoluteTicketIds.has(a.id)) || a.id.localeCompare(b.id));
+    const ticket = ordered[0];
+    if (ordered.length > 1) incomplete.push(`DUPLICATE_SLOT:${slotKey}`);
+    occupied.add(slotKey);
+    const party = ticket.partyRecordId ? partyById.get(ticket.partyRecordId) : undefined;
+    const period = ticket.periodId ? periodById.get(ticket.periodId) : undefined;
+    const inArchive = Boolean(ticket.periodId && archived.get(ticket.periodId)?.has(ticket.id));
+    const closed = Boolean(period?.isClosed && inArchive);
+    const lifecycle: PattaLifecycle = ended(party) ? 'ended' : closed ? 'closed' : (party?.isClosed ? 'legacy' : 'active');
+    items.push({ key: slotKey, companyId: ticket.companyId || party?.companyId || 'company_main', partyId: party?.id || null,
+      modelId: ticket.modelId, pattaNumber: ticket.pattaNumber, ticketId: ticket.id, periodId: ticket.periodId || null,
+      lifecycle, evidence: lifecycle === 'ended' ? 'finish' : closed ? inArchive ? 'archive' : 'period' : 'open',
+      accepted: true, actualQuantity: Number.isFinite(ticket.qty) ? Number(ticket.qty) : null,
+      hidden: Boolean(party?.isArchived), pendingClose: Boolean(ticket.periodId && pendingClosePeriodIds.includes(ticket.periodId)) });
   }
   if (mode !== 'archive') for (const party of parties) {
     if (mode === 'current' && party.isArchived) continue;

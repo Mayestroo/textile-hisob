@@ -933,8 +933,8 @@ describe(' workbook local command pipeline', () => {
     const db = seedModel();
     db.prepare(`INSERT INTO periods(id,company_id,name,start_date,is_closed,status,closed_at,close_operation_id,created_at)
       VALUES('P',?,'P','2026-09-01',1,'CLOSED','2026-09-30T00:00:00.000Z','closeP','2026-09-01')`).run(companyId);
-    const local = { period: { id: 'P' }, gross: 100 };
-    const server = { period: { id: 'P' }, gross: 119, tariff: 7 };
+    const local = { companyId, period: { id: 'P', companyId }, submittedTickets: [], printedPartyHistory: [], gross: 100 };
+    const server = { companyId, period: { id: 'P', companyId }, submittedTickets: [], printedPartyHistory: [], gross: 119, tariff: 7 };
     const localHash = computePayloadHash(canonicalStringify(local));
     const serverHash = computePayloadHash(canonicalStringify(server));
     db.prepare(`INSERT INTO period_archives(company_id,period_id,archive_json,sha256,archived_at) VALUES(?,'P',?,?,?)`)
@@ -945,6 +945,7 @@ describe(' workbook local command pipeline', () => {
       status: 'SYNCED', created_at: '2026-09-30', local_archive_json: JSON.stringify({ version: 1,
         kind: 'period-close-effects', operationId: 'closeP', periodArchive: local,
         effects: { provisionalArchiveSha256: localHash } }) });
+    db.prepare(`UPDATE local_outbox SET accepted_change_id = 'change-closeP' WHERE operation_id = 'closeP'`).run();
     const { reconcileLifecycleArchives } = require('../sync/lifecycleArchiveReconcile.cjs');
     const client = { getPeriodArchive: async () => ({ archive_json: server, sha256: serverHash, archived_at: '2026-09-30' }) };
     expect(await reconcileLifecycleArchives(db, companyId, client)).toEqual({ reconciled: 1, incomplete: 0 });

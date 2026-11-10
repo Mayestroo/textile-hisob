@@ -138,6 +138,21 @@ function registerWorkerRoutes(app, options = {}) {
     return input;
   }
 
+  app.get('/api/worker/enrollment-check', async (request, reply) => {
+    try {
+      const companyId = String(request.query?.companyId || 'comp_novda').trim();
+      const workerId = Number(request.query?.workerId);
+      if (!workerId || !Number.isSafeInteger(workerId)) {
+        return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_ID' } });
+      }
+      const worker = await workerService.getWorkerForEnrollment(pool, companyId, workerId, { pinRequired: false });
+      return reply.header('Cache-Control', 'no-store').send({
+        success: true,
+        worker: { worker_id: worker.worker_id, worker_name: worker.worker_name }
+      });
+    } catch (error) { return sendWorkerError(reply, error); }
+  });
+
   app.get('/api/worker/profile', async (request, reply) => {
     try {
       const input = await authorizeWorkerRead(request);

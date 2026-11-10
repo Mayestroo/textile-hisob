@@ -28,6 +28,8 @@ import { SheetTabs } from '../../../apps/desktop/renderer/components/layout/Shee
 import { PattaBatchView } from '../../../apps/desktop/renderer/features/patta/PattaBatchView';
 import { PattaView } from '../../../apps/desktop/renderer/features/patta/PattaView';
 import { PattaHisobView } from '../../../apps/desktop/renderer/features/patta/PattaHisobView';
+import { AmallarJurnaliView } from '../../../apps/desktop/renderer/features/journal/AmallarJurnaliView';
+import { ModelSizesView } from '../../../apps/desktop/renderer/features/models/ModelSizesView';
 import { ModellarJamiView } from '../../../apps/desktop/renderer/features/models/ModellarJamiView';
 import { WorkerManagerModal } from '../../../apps/desktop/renderer/features/workers/modals/WorkerManagerModal';
 import { WorkerDetailModal } from '../../../apps/desktop/renderer/features/workers/modals/WorkerDetailModal';
@@ -51,6 +53,10 @@ import { useAuthStore, applyRolePermissions } from '../../../apps/desktop/render
 import XLSX from 'xlsx-js-style';
 import '../../../apps/desktop/renderer/index.css';
 
+if (typeof window !== 'undefined') {
+  (window as any).__workbookStore = useWorkbookStore;
+}
+
 const root = createRoot(document.getElementById('root')!);
 const LocalPreviewSurface: React.FC = () => {
   const activeSheet = useWorkbookStore((s) => s.activeSheet);
@@ -59,6 +65,7 @@ const LocalPreviewSurface: React.FC = () => {
   const model = models.find((item) => item.name === activeSheet || item.hisobSheetName === activeSheet) || models[0];
   const isModellarJami = activeSheet === 'Modellar-jami' || activeSheet === 'Modellar' || activeSheet === 'Modellar kesimida jami' || activeSheet === 'Modellar kesimi jami';
   const isOperatsiyaNarxlari = activeSheet === 'Operatsiya-narxlari' || activeSheet === 'Operatsiya narxlari';
+  const isModelOlchamlari = activeSheet === 'Model-olchamlari' || activeSheet === 'Model o\'lchamlari';
 
   React.useEffect(() => {
     if (!modalType) return;
@@ -74,9 +81,11 @@ const LocalPreviewSurface: React.FC = () => {
   const view = activeSheet === 'Umumiy' ? <UmumiyView />
     : isModellarJami ? <ModellarJamiView />
     : isOperatsiyaNarxlari ? <OperationRatesView />
+    : isModelOlchamlari ? <ModelSizesView />
     : activeSheet === 'Patta' ? <PattaBatchView />
     : activeSheet === 'Patta-hisob' ? <PattaHisobView />
     : activeSheet === 'Konveyer' ? <KonveyerView />
+    : activeSheet === 'Amallar-jurnali' || activeSheet === 'Amallar jurnali' ? <AmallarJurnaliView />
     : model && activeSheet === model.hisobSheetName ? <HisobView key={model.id} model={model} />
     : model ? <PattaView key={model.id} model={model} /> : <div className="phase-b-view">Sintetik fixture model yuklanmadi.</div>;
   return <div className="excel-app">
@@ -84,7 +93,7 @@ const LocalPreviewSurface: React.FC = () => {
     <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
       <SheetTabs />
       <main style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ minHeight: 24, padding: '4px 12px', background: '#fff7d6', color: '#714f00', borderBottom: '1px solid #eadca7', fontSize: 11, fontWeight: 700 }}>
+        <div style={{ minHeight: 24, padding: '4px 12px', background: '#fff7d6', color: '#714f00', borderBottom: '1px solid #eadca7', fontSize: 14, fontWeight: 700 }}>
           LOCAL TEST FIXTURE · Sintetik ma’lumotlar · Tashqi serverga ulanmagan
         </div>
         {view}
@@ -524,7 +533,7 @@ switchPayrollContext: (companyId: string, periodId?: string) => {
     : modalName === 'loading' ? <LoadingOverlay /> : null;
   flushSync(() => root.render(<div className="excel-app"><TitleBar /><div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
     <SheetTabs key={`phase-c-${modalName}`} /><main style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '4px 12px', background: '#fff7d6', color: '#714f00', fontSize: 11, fontWeight: 700 }}>LOCAL TEST FIXTURE · Sintetik ma’lumotlar</div>
+      <div style={{ padding: '4px 12px', background: '#fff7d6', color: '#714f00', fontSize: 14, fontWeight: 700 }}>LOCAL TEST FIXTURE · Sintetik ma’lumotlar</div>
       <UmumiyView />
     </main></div>{overlay}</div>));
   return { modalName, ticketId: ticket?.id, workerId: state.workers[0]?.id, modelId: model?.id };
@@ -953,7 +962,7 @@ if (typeof window !== 'undefined') {
             { id: 9, name: 'Акбарова Дилдора', staj: 0, avans: 0, jarima: 0 }
           ],
           submittedTickets: syntheticTickets,
-          activeSheet: 'Patta-hisob',
+          activeSheet: 'Amallar-jurnali',
           currentPeriod: { id: 'p1', name: '2026-Oktabr', startDate: '2026-10-01', isClosed: false },
           periods: [{ id: 'p1', name: '2026-Oktabr', startDate: '2026-10-01', isClosed: false }],
           licenseStatus: {
@@ -980,10 +989,25 @@ if (typeof window !== 'undefined') {
               { id: 'm3', name: 'DZ-008-1', operations: [{ id: 'op-orka', name: 'Орка бостирув', rate: 150 }] }
             ]
           },
-          pattaBatchConfigs: {},
+          pattaBatchConfigs: {
+            'm1': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm2': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm3': { sizeNames: ['XS', 'S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm4': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm10': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm6': { sizeNames: ['XS', 'S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm-body-long': { sizeNames: ['XS', 'S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm7': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm8': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm9': { sizeNames: ['S', 'M', 'L', 'XL', 'XXL'], scaleType: 'letters', isConfigured: true },
+            'm-lasina': { sizeNames: [], scaleType: 'letters', isConfigured: false },
+            'm-kapalak': { sizeNames: [], scaleType: 'letters', isConfigured: false },
+            'm5': { sizeNames: [], scaleType: 'letters', isConfigured: false },
+          },
           isServerConnected: false,
           modalState: { type: null }
         } as any);
+        (window as any).__store = useWorkbookStore;
         flushSync(() => {
           root.render(<LocalPreviewSurface />);
         });

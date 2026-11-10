@@ -5,7 +5,7 @@ import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 import { ModelConfig } from '../../types/workbook';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { calculateBatchWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
-import { getPattaSizesForSystem, isDefaultPattaSize, PattaSizeSystem } from '../../domain/pattaSizeSystem';
+import { isDefaultPattaSize, PattaSizeSystem, sortPattaSizes, DEFAULT_NUMERIC_BATCH_SIZES } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { selectPartyDashboardRecords } from '../../store/selectors';
 
@@ -58,11 +58,29 @@ export const PattaBatchView: React.FC = () => {
   
   const getModelSizes = (modelId: string) => {
     const config = pattaBatchConfigs[modelId];
-    const names = config?.sizeNames ?? [...new Set([...(availableSizes?.length ? availableSizes : DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
-    const safe = [...new Set([...names, ...Object.entries(config?.sizes || {}).filter(([, n]) => Number(n) > 0).map(([n]) => n)])];
-    return getPattaSizesForSystem(safe, sizeSystem);
+    if (config && config.isConfigured !== false && Array.isArray(config.sizeNames) && config.sizeNames.length > 0) {
+      // Model has explicitly configured sizes in ModelSizesView!
+      const activeFromConfig = config.sizeNames;
+      const withCounts = Object.entries(config.sizes || {})
+        .filter(([, count]) => Number(count) > 0)
+        .map(([size]) => size);
+      return sortPattaSizes(Array.from(new Set([...activeFromConfig, ...withCounts])));
+    }
+
+    // Fallback for unconfigured models:
+    const scale = config?.scaleType || (sizeSystem === 'numbers' ? 'numbers' : 'letters');
+    if (scale === 'numbers') {
+      const withCounts = Object.entries(config?.sizes || {})
+        .filter(([, count]) => Number(count) > 0)
+        .map(([size]) => size);
+      return sortPattaSizes(Array.from(new Set([...DEFAULT_NUMERIC_BATCH_SIZES, ...withCounts])));
+    }
+    const withCounts = Object.entries(config?.sizes || {})
+      .filter(([, count]) => Number(count) > 0)
+      .map(([size]) => size);
+    return sortPattaSizes(Array.from(new Set([...(availableSizes?.length ? availableSizes : DEFAULT_BATCH_SIZES), ...withCounts])));
   };
-  const allKnownSizes = useMemo(() => [...new Set(models.flatMap((model) => getModelSizes(model.id)))], [models, pattaBatchConfigs, availableSizes, sizeSystem]);
+  const allKnownSizes = useMemo(() => sortPattaSizes([...new Set(models.flatMap((model) => getModelSizes(model.id)))]), [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
   const getActiveSizeValues = (modelId: string) => {
     const savedSizes = pattaBatchConfigs[modelId]?.sizes || {};
@@ -313,11 +331,14 @@ export const PattaBatchView: React.FC = () => {
       .map((m) => {
         const cfg = pattaBatchConfigs[m.id] || { sizes: {}, totalIshSoni: '', color: '' };
         const normalizedSizes = normalizedSizesByModelId.get(m.id)!.sizes;
+        const modelOrderedSizes = sortPattaSizes(
+          getModelSizes(m.id).filter((size) => Number(normalizedSizes[size] || 0) > 0)
+        );
         return {
           model: m,
           partyNumber: effectiveParties[m.id] || '1',
-          sizes: Object.fromEntries(Object.entries(normalizedSizes).map(([size, count]) => [size, String(count)])),
-          sizeOrder: getModelSizes(m.id).filter((size) => Number(normalizedSizes[size] || 0) > 0),
+          sizes: Object.fromEntries(modelOrderedSizes.map((size) => [size, String(normalizedSizes[size])])),
+          sizeOrder: modelOrderedSizes,
           ishSoniPerPatta: cfg.totalIshSoni || '',
           color: cfg.color?.trim() || ''
         };
@@ -705,7 +726,7 @@ export const PattaBatchView: React.FC = () => {
       </div>
 
       {filteredModels.length === 0 && (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+        <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '17px' }}>
           Mos model topilmadi
         </div>
       )}
@@ -726,7 +747,7 @@ export const PattaBatchView: React.FC = () => {
 
             <form onSubmit={handleAddCustomSizeSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '15px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
                   Razmer nomi (masalan: 4XL, 5XL, 40-42, Standart):
                 </label>
                 <input 
@@ -739,7 +760,7 @@ export const PattaBatchView: React.FC = () => {
                 />
               </div>
 
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
                  Ushbu razmer faqat {models.find((model) => model.id === addSizeModelId)?.name || 'tanlangan model'} jadvaliga qo'shiladi.
               </div>
 
@@ -780,7 +801,7 @@ export const PattaBatchView: React.FC = () => {
               });
               setRenameSize(null);
             }} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 700 }}>Yangi razmer nomi
+              <label style={{ fontSize: 15, fontWeight: 700 }}>Yangi razmer nomi
                 <input autoFocus value={renameSizeInput} onChange={(e) => setRenameSizeInput(e.target.value)} className="soft-input" />
               </label>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -837,7 +858,7 @@ export const PattaBatchView: React.FC = () => {
                 }}>
                   <CheckCircle2 size={20} />
                 </div>
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
                   Partiyani yakunlash
                 </h3>
               </div>
@@ -850,7 +871,7 @@ export const PattaBatchView: React.FC = () => {
               </button>
             </div>
 
-            <div style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               Haqiqatan ham joriy partiyalar turkumini yakunlab, yangi turkumni <strong>Partiya 1</strong> va <strong>Patta 1</strong> dan boshlamoqchimisiz?
             </div>
 
@@ -862,7 +883,7 @@ export const PattaBatchView: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               gap: '8px',
-              fontSize: '12.5px'
+              fontSize: '15px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
                 <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span>
@@ -891,7 +912,7 @@ export const PattaBatchView: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                fontSize: '12.5px',
+                fontSize: '15px',
                 color: '#b45309'
               }}>
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
@@ -907,7 +928,7 @@ export const PattaBatchView: React.FC = () => {
                 onClick={() => setIsClosePartyModalOpen(false)} 
                 disabled={isClosingParty}
                 className="soft-btn soft-btn-secondary"
-                style={{ padding: '8px 16px', fontSize: '13px' }}
+                style={{ padding: '8px 16px', fontSize: '15px' }}
               >
                 Bekor qilish
               </button>
@@ -928,7 +949,7 @@ export const PattaBatchView: React.FC = () => {
                 className="soft-btn"
                 style={{
                   padding: '8px 20px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   fontWeight: 700,
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   color: '#ffffff',

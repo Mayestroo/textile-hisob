@@ -758,7 +758,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                       {workerName ? (
                         <span className="patta-worker-name">{workerName}</span>
                       ) : isInvalidWorker ? (
-                        <span style={{ fontSize: '11.5px', color: '#dc2626', fontStyle: 'italic' }}>
+                        <span style={{ fontSize: '14.5px', color: '#dc2626', fontStyle: 'italic' }}>
                           Ishchi topilmadi! ({workerIdVal})
                         </span>
                       ) : (
@@ -812,7 +812,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                       style={{ height: '32px', width: '100%', textAlign: 'center' }}
                     />
                   </td>
-                  <td colSpan={2} style={{ fontSize: '12px', color: '#64748b', paddingLeft: '14px' }}>
+                  <td colSpan={2} style={{ fontSize: '15px', color: '#64748b', paddingLeft: '14px' }}>
                     Enter bosing → hisobga qo'shiladi
                   </td>
                   <td style={{ textAlign: 'center' }}>
@@ -821,7 +821,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                         type="button"
                         onClick={handleSaveInlineOperation}
                         className="patta-btn-submit"
-                        style={{ height: '28px', padding: '0 8px', fontSize: '11.5px', borderRadius: '6px' }}
+                        style={{ height: '28px', padding: '0 8px', fontSize: '14.5px', borderRadius: '6px' }}
                       >
                         <Check size={13} />
                       </button>
@@ -829,7 +829,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                         type="button"
                         onClick={() => setIsAddingInline(false)}
                         className="patta-btn-cancel"
-                        style={{ height: '28px', padding: '0 8px', fontSize: '11.5px', borderRadius: '6px' }}
+                        style={{ height: '28px', padding: '0 8px', fontSize: '14.5px', borderRadius: '6px' }}
                       >
                         <X size={13} />
                       </button>

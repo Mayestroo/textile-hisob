@@ -5,11 +5,13 @@ import {
   Edit3,
   FileText,
   Folder,
+  History,
   Layers,
   LayoutGrid,
   MoreVertical,
   Plus,
   Printer,
+  Ruler,
   Search,
   Table,
   Tag,
@@ -537,6 +539,42 @@ export const SheetTabs: React.FC = () => {
               <Tag size={16} strokeWidth={2} className="excel-sidebar-nav-icon" />
               <span className="excel-sidebar-nav-label">Operatsiya narxlari</span>
             </button>
+
+            {/* 6. Amallar jurnali */}
+            <button
+              type="button"
+              className={`excel-sidebar-nav-item ${
+                activeSheet === SYSTEM_SHEETS.AMALLAR_JURNALI ||
+                activeSheet === 'Amallar-jurnali' ||
+                activeSheet === 'Amallar jurnali'
+                  ? 'active'
+                  : ''
+              }`}
+              onClick={() => handleSheetClick(SYSTEM_SHEETS.AMALLAR_JURNALI)}
+              onContextMenu={(e) => handleTabContextMenu(e, SYSTEM_SHEETS.AMALLAR_JURNALI)}
+              title="Kim qachon nimani qilgan — amallar jurnali"
+            >
+              <History size={16} strokeWidth={2} className="excel-sidebar-nav-icon" />
+              <span className="excel-sidebar-nav-label">Amallar jurnali</span>
+            </button>
+
+            {/* 7. Model o'lchamlari */}
+            <button
+              type="button"
+              className={`excel-sidebar-nav-item ${
+                activeSheet === SYSTEM_SHEETS.MODEL_OLCHAMLARI ||
+                activeSheet === 'Model-olchamlari' ||
+                activeSheet === 'Model o\'lchamlari'
+                  ? 'active'
+                  : ''
+              }`}
+              onClick={() => handleSheetClick(SYSTEM_SHEETS.MODEL_OLCHAMLARI)}
+              onContextMenu={(e) => handleTabContextMenu(e, SYSTEM_SHEETS.MODEL_OLCHAMLARI)}
+              title="Har model uchun razmerlarni sozlash"
+            >
+              <Ruler size={16} strokeWidth={2} className="excel-sidebar-nav-icon" />
+              <span className="excel-sidebar-nav-label">Model o'lchamlari</span>
+            </button>
           </div>
 
           {/* Section: MODELLAR */}
@@ -661,7 +699,7 @@ export const SheetTabs: React.FC = () => {
             })}
 
             {filteredModels.length === 0 && (
-              <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: '13px', color: '#94a3b8' }}>
+              <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: '15px', color: '#94a3b8' }}>
                 Model topilmadi
               </div>
             )}
@@ -701,7 +739,7 @@ export const SheetTabs: React.FC = () => {
             {/* Header pill indicator */}
             <div style={{
               padding: '6px 10px 8px',
-              fontSize: '11px',
+              fontSize: '14px',
               fontWeight: 700,
               color: 'var(--text-muted, #64748b)',
               borderBottom: '1px solid var(--border-subtle, #f1f5f9)',
@@ -714,7 +752,7 @@ export const SheetTabs: React.FC = () => {
                 Varaq: {contextMenu.sheetName}
               </span>
               <span style={{
-                fontSize: '10px',
+                fontSize: '13px',
                 padding: '1px 6px',
                 borderRadius: '9999px',
                 background: isSystemSheet(contextMenu.sheetName) ? '#f1f5f9' : '#ecfdf5',
@@ -738,7 +776,7 @@ export const SheetTabs: React.FC = () => {
                 border: 'none',
                 borderRadius: '8px',
                 color: 'var(--text-primary, #1e293b)',
-                fontSize: '12.5px',
+                fontSize: '15px',
                 fontWeight: 600,
                 cursor: 'pointer',
                 textAlign: 'left'
@@ -765,7 +803,7 @@ export const SheetTabs: React.FC = () => {
                   border: 'none',
                   borderRadius: '8px',
                   color: 'var(--text-primary, #1e293b)',
-                  fontSize: '12.5px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   textAlign: 'left'
@@ -796,7 +834,7 @@ export const SheetTabs: React.FC = () => {
                 border: 'none',
                 borderRadius: '8px',
                 color: 'var(--text-primary, #1e293b)',
-                fontSize: '12.5px',
+                fontSize: '15px',
                 fontWeight: 500,
                 cursor: 'pointer',
                 textAlign: 'left'
@@ -823,7 +861,7 @@ export const SheetTabs: React.FC = () => {
                   border: 'none',
                   borderRadius: '8px',
                   color: 'var(--text-primary, #1e293b)',
-                  fontSize: '12.5px',
+                  fontSize: '15px',
                   fontWeight: 500,
                   cursor: 'pointer',
                   textAlign: 'left'
@@ -851,7 +889,7 @@ export const SheetTabs: React.FC = () => {
                   border: 'none',
                   borderRadius: '8px',
                   color: 'var(--text-primary, #1e293b)',
-                  fontSize: '12.5px',
+                  fontSize: '15px',
                   fontWeight: 500,
                   cursor: 'pointer',
                   textAlign: 'left'
@@ -881,7 +919,7 @@ export const SheetTabs: React.FC = () => {
                   border: 'none',
                   borderRadius: '8px',
                   color: '#ef4444',
-                  fontSize: '12.5px',
+                  fontSize: '15px',
                   fontWeight: 500,
                   cursor: 'pointer',
                   textAlign: 'left'
@@ -935,7 +973,7 @@ export const SheetTabs: React.FC = () => {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Edit3 size={16} color="#047857" />
-                  <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary, #111827)' }}>
+                  <span style={{ fontWeight: 700, fontSize: '17px', color: 'var(--text-primary, #111827)' }}>
                     Model nomini o'zgartirish
                   </span>
                 </div>
@@ -949,7 +987,7 @@ export const SheetTabs: React.FC = () => {
               </div>
 
               <form onSubmit={submitRename} style={{ padding: '18px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #475569)', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '15px', fontWeight: 600, color: 'var(--text-secondary, #475569)', marginBottom: '6px' }}>
                   Yangi model nomi:
                 </label>
                 <input
@@ -959,7 +997,7 @@ export const SheetTabs: React.FC = () => {
                   onChange={(e) => setRenameValue(e.target.value)}
                   placeholder="Masalan: M-12 yoki Ko'ylak-2026"
                   className="soft-input"
-                  style={{ width: '100%', height: '36px', fontSize: '13px', padding: '0 12px', marginBottom: '16px' }}
+                  style={{ width: '100%', height: '36px', fontSize: '15px', padding: '0 12px', marginBottom: '16px' }}
                 />
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -967,14 +1005,14 @@ export const SheetTabs: React.FC = () => {
                     type="button"
                     onClick={() => setRenameTargetModel(null)}
                     className="soft-btn"
-                    style={{ padding: '6px 14px', fontSize: '13px' }}
+                    style={{ padding: '6px 14px', fontSize: '15px' }}
                   >
                     Bekor qilish
                   </button>
                   <button
                     type="submit"
                     className="soft-btn soft-btn-primary"
-                    style={{ padding: '6px 18px', fontSize: '13px', fontWeight: 700 }}
+                    style={{ padding: '6px 18px', fontSize: '15px', fontWeight: 700 }}
                   >
                     Saqlash
                   </button>

@@ -67,24 +67,24 @@ export const NewOperationModal: React.FC = () => {
               border: '1px solid rgba(16, 185, 129, 0.25)',
               padding: '12px 14px',
               borderRadius: 'var(--radius-md)',
-              fontSize: '12.5px'
+              fontSize: '15px'
             }}>
               <div style={{ fontWeight: 700, color: 'var(--primary)', marginBottom: '6px' }}>
                 Operatsiya qo'shiladigan varaqlar:
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                <span style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-full)', fontSize: '11.5px' }}>
+                <span style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-full)', fontSize: '14.5px' }}>
                   📋 Patta: {currentModel.name}
                 </span>
                 <ArrowRight size={14} color="var(--primary)" />
-                <span style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-full)', fontSize: '11.5px' }}>
+                <span style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '3px 10px', borderRadius: 'var(--radius-full)', fontSize: '14.5px' }}>
                   📊 Hisob: {currentModel.hisobSheetName}
                 </span>
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
                 Modelni tanlang:
               </label>
               <CustomSelect
@@ -99,7 +99,7 @@ export const NewOperationModal: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
                 Operatsiya nomi:
               </label>
               <input
@@ -115,7 +115,7 @@ export const NewOperationModal: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
                 Dona narxi (so'm):
               </label>
               <input

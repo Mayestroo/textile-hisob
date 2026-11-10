@@ -699,16 +699,13 @@ if (isSyncEnabled) {
       const filename = typeof args?.filename === 'string' ? args.filename : '';
       if (!filename || filename.length > 256) throw Object.assign(new Error('INVALID_PERIOD_ARCHIVE'), { code: 'INVALID_PERIOD_ARCHIVE' });
        const period = ready.db.prepare(`
-         SELECT id, close_operation_id FROM periods WHERE company_id = ? AND (id = ? OR archive_filename = ?) AND is_closed = 1
+         SELECT id, close_operation_id, is_closed, server_revision FROM periods WHERE company_id = ? AND (id = ? OR archive_filename = ?) AND is_closed = 1
        `).get(ready.companyId, filename, filename);
        if (!period) throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
-       const provisionalClose = ready.db.prepare(`SELECT 1 FROM local_outbox WHERE company_id = ? AND entity_id = ?
-         AND command_type = 'ClosePeriod' AND local_archive_json IS NOT NULL LIMIT 1`).get(ready.companyId, period.id);
+        const closeRows = ready.db.prepare(`SELECT operation_id, local_archive_json, status FROM local_outbox WHERE company_id = ? AND entity_id = ?
+          AND command_type = 'ClosePeriod' AND local_archive_json IS NOT NULL`).all(ready.companyId, period.id);
        const acceptedArchive = ready.db.prepare('SELECT value FROM local_meta WHERE key = ?')
          .get(`accepted_archive_sha256:${period.id}`)?.value;
-       if (provisionalClose && (!period.close_operation_id || !acceptedArchive)) {
-         throw Object.assign(new Error('PERIOD_ARCHIVE_AWAITING_AUTHORITY'), { code: 'PERIOD_ARCHIVE_AWAITING_AUTHORITY' });
-       }
        const localArchive = require('./database/projectionReader.cjs').loadPeriodArchiveFromSqlite(
          ready.db, ready.companyId, period.id
        );
@@ -717,16 +714,49 @@ if (isSyncEnabled) {
              require('./database/canonicalPayload.cjs').canonicalStringify(localArchive?.data)) !== acceptedArchive)) {
          throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
        }
-      let archiveData = localArchive?.data || null;
-      if (!archiveData) {
-        const remoteArchive = await createSyncClient(ready.companyId, false).getPeriodArchive(period.id);
-        if (!remoteArchive || typeof remoteArchive !== 'object') throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
-        const rawArchive = remoteArchive.archive_json || remoteArchive.data || remoteArchive;
-        archiveData = typeof rawArchive === 'string' ? JSON.parse(rawArchive) : rawArchive;
-      }
-      if (archiveData?.period?.id && archiveData.period.id !== period.id) {
-        throw Object.assign(new Error('PERIOD_ARCHIVE_CONTEXT_MISMATCH'), { code: 'PERIOD_ARCHIVE_CONTEXT_MISMATCH' });
-      }
+       let archiveData = localArchive?.data || null;
+       let archiveSha = localArchive?.sha256 || null;
+       if (localArchive && !archiveData) {
+         throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
+       }
+       const archiveEligibility = require('./database/periodArchiveEligibility.cjs').classifyRetainedPeriodArchive({
+         outboxRows: closeRows, period, archiveSha256: localArchive?.sha256, acceptedSha256: acceptedArchive
+       });
+       if (!archiveEligibility.eligible) {
+         throw Object.assign(new Error(archiveEligibility.problem), { code: archiveEligibility.problem });
+       }
+       if (!localArchive) {
+         const remoteArchive = await createSyncClient(ready.companyId, false).getPeriodArchive(period.id);
+         if (!remoteArchive || typeof remoteArchive !== 'object') throw Object.assign(new Error('PERIOD_ARCHIVE_NOT_FOUND'), { code: 'PERIOD_ARCHIVE_NOT_FOUND' });
+         const rawArchive = remoteArchive.archive_json || remoteArchive.data || remoteArchive;
+         archiveData = typeof rawArchive === 'string' ? JSON.parse(rawArchive) : rawArchive;
+         const remoteHash = remoteArchive.sha256;
+         archiveSha = remoteHash;
+         if (!/^[a-f0-9]{64}$/.test(remoteHash || '') || require('./database/canonicalPayload.cjs')
+           .computePayloadHash(require('./database/canonicalPayload.cjs').canonicalStringify(archiveData)) !== remoteHash) {
+           throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
+         }
+       }
+       if (localArchive && (!/^[a-f0-9]{64}$/.test(localArchive.sha256 || '') ||
+           require('./database/canonicalPayload.cjs').computePayloadHash(
+             require('./database/canonicalPayload.cjs').canonicalStringify(archiveData)) !== localArchive.sha256)) {
+         throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
+       }
+       const archiveValidator = require('./database/periodArchiveValidator.cjs');
+       const canonicalTickets = archiveValidator.readCanonicalPeriodTickets(ready.db, ready.companyId, period.id);
+       const archiveProblem = archiveValidator.validatePeriodArchive(
+         archiveData, archiveSha, ready.companyId, period.id,
+         { binding: localArchive ? 'retained-local-owner' : 'authenticated-request-scope', canonicalTickets });
+       if (archiveProblem) throw Object.assign(new Error(archiveProblem), { code: archiveProblem,
+         ...(archiveProblem === 'ARCHIVE_TICKET_PERIOD_UNKNOWN' ? { details: {
+           incomplete: true, factCompleteness: 'UNKNOWN',
+           unresolvedTicketIds: (archiveData.submittedTickets || []).filter((ticket) =>
+             ticket?.periodId === undefined || ticket?.periodId === null).map((ticket) => ticket?.id).filter(Boolean)
+         } } : {}) });
+       const canonicalById = new Map(canonicalTickets.map((ticket) => [ticket.id, ticket]));
+       const archiveTicketFactsById = new Map(archiveData.submittedTickets.map((ticket) => [ticket.id,
+         archiveValidator.classifyArchiveTicket(ticket, ready.companyId, period.id, canonicalById.get(ticket.id))]));
+       const archiveTicketFacts = Array.from(archiveTicketFactsById.values());
       // Revalidate authorization after any remote archive request. The valuation is read
       // for this exact closed period and uses its archive roster/tariff, never active UI state.
       const current = assertRuntimeReady(ready.companyId);
@@ -735,7 +765,9 @@ if (isSyncEnabled) {
       }
       const payrollValuation = require('./database/workbookPayrollRead.cjs')
         .readPeriodPayrollProjection(ready.db, ready.companyId, period.id, archiveData);
-      return { success: true, data: archiveData, payrollValuation, periodId: period.id, companyId: ready.companyId };
+       return { success: true, data: archiveData, archiveTicketFacts, payrollValuation, periodId: period.id, companyId: ready.companyId,
+         archiveProvenance: localArchive ? archiveEligibility.provenance : 'AUTHENTICATED_GET_UNVERIFIED',
+         closeCertificate: localArchive ? archiveEligibility.closeCertificate : 'UNKNOWN' };
     } catch (error) {
       return ErrorResponse(error, 'PERIOD_ARCHIVE_READ_FAILED');
     }
@@ -743,9 +775,21 @@ if (isSyncEnabled) {
 
   ipcMain.handle('patta-journal-read', async (_event, args) => {
     try {
-      const ready = assertRuntimeReady(args?.companyId);
+      // Resolve authority from the selected runtime; a renderer-supplied company
+      // is only a consistency assertion and can never select another tenant.
+      const ready = assertRuntimeReady();
+      if (args?.companyId && args.companyId !== ready.companyId) {
+        throw Object.assign(new Error('COMPANY_CONTEXT_MISMATCH'), { code: 'COMPANY_CONTEXT_MISMATCH' });
+      }
+      if (!['current', 'archive', 'all-time'].includes(args?.mode || 'current')) {
+        throw Object.assign(new Error('INVALID_JOURNAL_SCOPE'), { code: 'INVALID_JOURNAL_SCOPE' });
+      }
       const { readPattaJournalFacts } = require('./database/pattaJournalReader.cjs');
       const facts = readPattaJournalFacts(ready.db, ready.companyId, args);
+      const current = assertRuntimeReady();
+      if (current.db !== ready.db || current.companyId !== ready.companyId) {
+        throw Object.assign(new Error('JOURNAL_CONTEXT_CHANGED'), { code: 'JOURNAL_CONTEXT_CHANGED' });
+      }
       return { success: true, facts, companyId: ready.companyId };
     } catch (error) {
       return ErrorResponse(error, 'PATTA_JOURNAL_READ_FAILED');

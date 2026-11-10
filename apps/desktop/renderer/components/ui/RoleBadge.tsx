@@ -53,7 +53,7 @@ export const RoleBadge: React.FC<{ style?: React.CSSProperties; compact?: boolea
         gap: '6px',
         padding: compact ? '2px 6px' : '4px 10px',
         borderRadius: 'var(--radius-full)',
-        fontSize: '11.5px',
+        fontSize: '14.5px',
         fontWeight: 600,
         backgroundColor: config.bg,
         color: config.color,

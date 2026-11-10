@@ -5,11 +5,13 @@ import { useWorkbookStore } from '../../../store/workbookStore';
 import { buildPattaPreviewStarts } from '../../../store/pattaBatch';
 import { buildPartyWorkSummary, buildPattaWorkTickets, calculateBatchWorkQuantities } from '../../../domain/pattaQuantity';
 import { formatDateOnly } from '../../../utils/formatters';
+import { sortPattaSizes, comparePattaSizes } from '../../../domain/pattaSizeSystem';
 
 export interface PrintBatchItem {
   model: ModelConfig;
   partyNumber: string;
   sizes: Record<string, string>;
+  sizeOrder?: string[];
   ishSoniPerPatta?: string;
   color?: string;
 }
@@ -24,6 +26,7 @@ interface PattaPrintModalProps {
     totalIshSoni?: number;
     ishSoni: number;
     sizes?: Record<string, string>;
+    sizeOrder?: string[];
     color: string;
   }>) => void;
   onClose: () => void;
@@ -55,12 +58,22 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
   const addNotification = useWorkbookStore((s) => s.addNotification);
 
   const printableItems = React.useMemo(() => items.map((item) => {
-    const workTickets = buildPattaWorkTickets(Number(item.ishSoniPerPatta), item.sizes);
+    const orderedSizes = item.sizeOrder && item.sizeOrder.length > 0
+      ? sortPattaSizes(item.sizeOrder)
+      : sortPattaSizes(Object.keys(item.sizes || {}));
+
+    const workTickets = buildPattaWorkTickets(
+      Number(item.ishSoniPerPatta),
+      item.sizes,
+      orderedSizes
+    );
     const sizeCounts = new Map<string, number>();
     for (const ticket of workTickets) {
       sizeCounts.set(ticket.size, (sizeCounts.get(ticket.size) || 0) + 1);
     }
-    const sizeEntries = Array.from(sizeCounts.entries());
+    const sizeEntries = Array.from(sizeCounts.entries()).sort(
+      ([sizeA], [sizeB]) => comparePattaSizes(sizeA, sizeB)
+    );
 
     return {
       item,
@@ -243,12 +256,14 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
     const printedSummary = printableItems
       .map(({ item, workTickets, sizeEntries }) => {
         const pattaCount = workTickets.length;
+        const sortedSizes = sizeEntries.map(([size]) => size);
         return {
           modelId: item.model.id,
           partyNumber: item.partyNumber,
           pattaCount,
           ...buildPartyWorkSummary(calculateBatchWorkQuantities(Number(item.ishSoniPerPatta), pattaCount).totalIshSoni, pattaCount),
           sizes: Object.fromEntries(sizeEntries.map(([size, count]) => [size, String(count)])),
+          sizeOrder: sortedSizes,
           color: item.color || item.model.color || 'Кора'
         };
       })

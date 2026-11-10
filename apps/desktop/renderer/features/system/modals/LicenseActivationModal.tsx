@@ -149,7 +149,7 @@ export const LicenseActivationModal: React.FC = () => {
             </div>
 
             <div>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, letterSpacing: '-0.3px' }}>
+              <h2 style={{ margin: 0, fontSize: '21px', fontWeight: 800, letterSpacing: '-0.3px' }}>
                 {isBlocked
                   ? 'Qurilma Bloklangan'
                   : isActivated && !isTrial
@@ -160,7 +160,7 @@ export const LicenseActivationModal: React.FC = () => {
                   ? 'Sinov Muddati (Trial)'
                   : 'Dastur Aktivatsiyasi'}
               </h2>
-              <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', opacity: 0.9 }}>
+              <p style={{ margin: '4px 0 0 0', fontSize: '15px', opacity: 0.9 }}>
                 {isBlocked
                   ? 'Ushbu qurilma administrator tomonidan bloklangan'
                   : isActivated && !isTrial
@@ -191,14 +191,14 @@ export const LicenseActivationModal: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+              <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                 Sizning Qurilma ID raqamingiz:
               </span>
               <button
                 type="button"
                 onClick={handleCopy}
                 className="soft-btn soft-btn-secondary"
-                style={{ padding: '4px 10px', fontSize: '11.5px', borderRadius: 'var(--radius-full)' }}
+                style={{ padding: '4px 10px', fontSize: '14.5px', borderRadius: 'var(--radius-full)' }}
               >
                 {copied ? <Check size={12} color="var(--primary)" /> : <Copy size={12} />}
                 <span>{copied ? 'Nusxalandi!' : 'Nusxa olish'}</span>
@@ -208,7 +208,7 @@ export const LicenseActivationModal: React.FC = () => {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 700,
                 color: 'var(--text-primary)',
                 wordBreak: 'break-all',
@@ -230,7 +230,7 @@ export const LicenseActivationModal: React.FC = () => {
               color: '#dc2626',
               padding: '10px 14px',
               borderRadius: 'var(--radius-md)',
-              fontSize: '12.5px',
+              fontSize: '15px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
@@ -248,7 +248,7 @@ export const LicenseActivationModal: React.FC = () => {
               color: '#059669',
               padding: '10px 14px',
               borderRadius: 'var(--radius-md)',
-              fontSize: '12.5px',
+              fontSize: '15px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
@@ -270,7 +270,7 @@ export const LicenseActivationModal: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                fontSize: '12.5px'
+                fontSize: '15px'
               }}
             >
               <div>
@@ -278,7 +278,7 @@ export const LicenseActivationModal: React.FC = () => {
                 <span style={{ fontWeight: 700, color: '#34d399', textTransform: 'uppercase' }}>
                   {licenseStatus.role || 'admin'}
                 </span>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '14.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                   Litsenziya faol
                 </div>
               </div>
@@ -287,7 +287,7 @@ export const LicenseActivationModal: React.FC = () => {
 
           {!isActivated && !isTrial && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 Qurilma so'rovi  serveriga yuboriladi. Administrator Telegram orqali korxona va rolni tasdiqlagach,
                 imzolangan aktivatsiya shu dasturga avtomatik keladi.
                 {licenseStatus.message ? <div style={{ marginTop: '6px', fontWeight: 700 }}>{licenseStatus.message}</div> : null}
@@ -297,7 +297,7 @@ export const LicenseActivationModal: React.FC = () => {
                 onClick={handleCheckStatus}
                 disabled={isChecking || isRequesting}
                 className="soft-btn soft-btn-primary"
-                style={{ height: '40px', fontSize: '13px', justifyContent: 'center' }}
+                style={{ height: '40px', fontSize: '15px', justifyContent: 'center' }}
               >
                 <RefreshCw size={15} className={isChecking ? 'spin-animation' : ''} />
                 <span>{isChecking ? 'Tekshirilmoqda...' : 'Holatni tekshirish'}</span>
@@ -308,7 +308,7 @@ export const LicenseActivationModal: React.FC = () => {
                   onClick={handleResubmit}
                   disabled={isChecking || isRequesting}
                   className="soft-btn soft-btn-secondary"
-                  style={{ height: '38px', fontSize: '12.5px', justifyContent: 'center' }}
+                  style={{ height: '38px', fontSize: '15px', justifyContent: 'center' }}
                 >
                   <Send size={14} />
                   <span>{isRequesting ? 'Yuborilmoqda...' : 'Yangi so\'rov yuborish'}</span>
@@ -332,10 +332,10 @@ export const LicenseActivationModal: React.FC = () => {
             }}
           >
             <div>
-              <div style={{ fontWeight: 700, fontSize: '12.5px', color: '#0369a1' }}>
+              <div style={{ fontWeight: 700, fontSize: '15px', color: '#0369a1' }}>
                  Aktivatsiya tasdig\'i:
               </div>
-              <div style={{ fontSize: '11.5px', color: '#0284c7', marginTop: '2px' }}>
+              <div style={{ fontSize: '14.5px', color: '#0284c7', marginTop: '2px' }}>
                  Qurilma ID administrator so\'rovida ko\'rinadi
               </div>
             </div>
@@ -348,7 +348,7 @@ export const LicenseActivationModal: React.FC = () => {
               style={{
                 background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                 padding: '6px 14px',
-                fontSize: '12px',
+                fontSize: '15px',
                 textDecoration: 'none',
                 borderRadius: 'var(--radius-full)'
               }}

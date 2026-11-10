@@ -38,6 +38,7 @@ function createDashboard() {
     listModels: vi.fn().mockResolvedValue({ models: [] }),
     listParties: vi.fn().mockResolvedValue({ parties: [] }),
     listTickets: vi.fn().mockResolvedValue({ tickets: [] }),
+    dailyProductionReport: vi.fn().mockResolvedValue({ date: '2026-11-10', report: { companyId: 'comp_novda' }, reports: [{ companyId: 'comp_novda' }] }),
     getBalances: vi.fn().mockResolvedValue({ companyId: 'comp_novda', facts: [] }),
     getSystemHealth: vi.fn().mockResolvedValue({ api: 'available', database: 'available' }),
     updateCompanyStrictMode: vi.fn().mockResolvedValue({ companyId: 'comp_novda', strictMode: false, policyRevision: 2 }),
@@ -467,5 +468,56 @@ describe(' Admin WebApp routes', () => {
       expect(font.rawPayload).toEqual(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../desktop/renderer/assets/fonts', name)));
     }
     expect((await server.inject({ method: 'GET', url: '/admin-app/private.txt' })).statusCode).toBe(404);
+  });
+  it('serves daily production report to authorized service callers and rejects unauthenticated requests', async () => {
+    const dashboard = createDashboard();
+    const { app: server } = startApp({ dashboard });
+    await server.ready();
+
+    const unauthorized = await server.inject({
+      method: 'GET',
+      url: '/internal/admin/daily-report'
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    const authorized = await server.inject({
+      method: 'GET',
+      url: '/internal/admin/daily-report?date=2026-11-10&companyId=comp_novda',
+      headers: { 'x-novda-admin-token': 'internal-admin-service-token' }
+    });
+    expect(authorized.statusCode).toBe(200);
+    expect(authorized.json().success).toBe(true);
+    expect(dashboard.dailyProductionReport).toHaveBeenCalledWith({
+      date: '2026-11-10',
+      companyId: 'comp_novda'
+    });
+  });
+
+  it('serves daily production report to authenticated webapp sessions with company scope', async () => {
+    const dashboard = createDashboard();
+    const pool = { query: vi.fn(async (_sql: string, params: unknown[]) => ({
+      rows: params[0] === '274466315' ? [{ company_id: 'comp_novda' }] : []
+    })) };
+    const { app: server } = startApp({ dashboard, pool });
+    await server.ready();
+
+    const unauth = await server.inject({
+      method: 'GET',
+      url: '/api/admin/webapp/daily-report'
+    });
+    expect(unauth.statusCode).toBe(401);
+
+    const sessionToken = createSession('274466315');
+    const auth = await server.inject({
+      method: 'GET',
+      url: '/api/admin/webapp/daily-report?date=2026-11-10',
+      headers: { authorization: `Bearer ${sessionToken}` }
+    });
+    expect(auth.statusCode).toBe(200);
+    expect(auth.json().success).toBe(true);
+    expect(dashboard.dailyProductionReport).toHaveBeenCalledWith({
+      companyId: 'comp_novda',
+      date: '2026-11-10'
+    });
   });
 });

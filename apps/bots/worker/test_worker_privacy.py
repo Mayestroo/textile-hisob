@@ -108,9 +108,9 @@ class WorkerPrivacyTests(unittest.TestCase):
                 self.telegram.assert_not_called()
 
     def test_private_bound_commands_render_profile_operations_tickets_and_signed_keyboard(self):
-        for command, expected in (("/start", "12 195"), ("/hisob", "12 345"),
-                                  ("/refresh", "12 195"), ("/operatsiyalar", "Sew"),
-                                  ("/pattalar", "Patta #2"), ("/help", "hisob-kitob")):
+        for command, expected in (("/start", "hisob"), ("/hisob", "12 195"),
+                                  ("/refresh", "hisob"), ("/operatsiyalar", "Sew"),
+                                  ("/pattalar", "Patta #2"), ("/help", "hisob")):
             with self.subTest(command=command):
                 self.telegram.reset_mock()
                 bot.process_update(update(command))

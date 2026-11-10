@@ -132,10 +132,10 @@ export const AppUpdateModal: React.FC = () => {
             <Sparkles size={28} color="#ffffff" />
           </div>
 
-          <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.01em' }}>
+          <h2 style={{ fontSize: '23px', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.01em' }}>
             Dastur Yangilanishi
           </h2>
-          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>
+          <p style={{ margin: 0, fontSize: '15px', opacity: 0.9 }}>
             Yangi imkoniyatlar va yaxshilanishlar tayyor
           </p>
         </div>
@@ -158,10 +158,10 @@ export const AppUpdateModal: React.FC = () => {
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>
                     Joriy versiya
                   </div>
-                  <div style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: '17.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
                     v{CURRENT_APP_VERSION}
                   </div>
                 </div>
@@ -171,10 +171,10 @@ export const AppUpdateModal: React.FC = () => {
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
+                  <div style={{ fontSize: '14px', color: '#10b981', fontWeight: 600 }}>
                     Yangi versiya
                   </div>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#10b981' }}>
+                  <div style={{ fontSize: '19px', fontWeight: 800, color: '#10b981' }}>
                     v{availableUpdate.version}
                   </div>
                 </div>
@@ -183,7 +183,7 @@ export const AppUpdateModal: React.FC = () => {
               {/* Release Notes */}
               {availableUpdate.releaseNotes && (
                 <div style={{ marginBottom: '20px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
                     YANGILANISH TAFSILOTLARI:
                   </div>
                   <div
@@ -192,7 +192,7 @@ export const AppUpdateModal: React.FC = () => {
                       border: '1px solid var(--border-subtle)',
                       borderRadius: 'var(--radius-md)',
                       padding: '12px 14px',
-                      fontSize: '13px',
+                      fontSize: '15px',
                       color: 'var(--text-primary)',
                       whiteSpace: 'pre-line',
                       maxHeight: '140px',
@@ -217,7 +217,7 @@ export const AppUpdateModal: React.FC = () => {
                     border: '1px solid rgba(239, 68, 68, 0.3)',
                     borderRadius: 'var(--radius-md)',
                     color: '#ef4444',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     marginBottom: '16px'
                   }}
                 >
@@ -229,7 +229,7 @@ export const AppUpdateModal: React.FC = () => {
               {/* Progress Bar (when downloading) */}
               {isDownloading && (
                 <div style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', marginBottom: '6px', fontWeight: 600 }}>
                     <span style={{ color: 'var(--text-primary)' }}>
                       {isDone ? 'O\'rnatishga tayyor...' : 'Yuklanmoqda...'}
                     </span>
@@ -259,7 +259,7 @@ export const AppUpdateModal: React.FC = () => {
                   </div>
 
                   {progress && progress.totalBytes > 0 && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '4px' }}>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'right', marginTop: '4px' }}>
                       {formatMb(progress.downloadedBytes)} MB / {formatMb(progress.totalBytes)} MB
                     </div>
                   )}
@@ -326,10 +326,10 @@ export const AppUpdateModal: React.FC = () => {
               >
                 <CheckCircle2 size={26} />
               </div>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>
+              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>
                 Sizda eng so'nggi versiya o'rnatilgan
               </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
+              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
                 Joriy versiya: <strong>v{CURRENT_APP_VERSION}</strong>. Yangilanishlar mavjud emas.
               </p>
               <button

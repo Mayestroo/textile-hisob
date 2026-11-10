@@ -266,6 +266,7 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
         ...party,
         isClosed: isComplete,
         closedAt: isComplete ? cleanDate : undefined,
+        ...(isComplete ? { monthClosedPeriodId: state.currentPeriod.id } : {}),
         archivedPattaNumbers
       };
     });
@@ -293,10 +294,12 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
     const companyId = state.licenseStatus?.companyId;
     if (eAPI && eAPI.archiveSave) {
       try {
-        await eAPI.archiveSave(archiveFilename, archivePayload, companyId);
+        const archiveResult = await eAPI.archiveSave(archiveFilename, archivePayload, companyId);
+        if (archiveResult?.success === false) throw new Error(archiveResult.error || archiveResult.code || 'PERIOD_ARCHIVE_SAVE_FAILED');
         if (!isCurrentPeriodSession()) return rejectStalePeriodSession();
       } catch (err) {
-        console.warn('Failed to save archive in Electron', err);
+        state.addNotification('error', 'PERIOD_ARCHIVE_SAVE_FAILED', err instanceof Error ? err.message : 'Period archive could not be saved.');
+        return false;
       }
     }
 
@@ -337,6 +340,18 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
 
     const cleanForms = createInitialTicketForms(cleanModels);
 
+    if (!(await state.saveToDisk({
+      models: cleanModels,
+      workers: cleanWorkers,
+      currentPeriod: nextPeriod,
+      periods: updatedPeriods,
+      ticketForms: cleanForms,
+      printedPartyHistory: updatedPartyHistory,
+      submittedTickets: cleanSubmittedTickets,
+      companyId: initialLicenseStatus?.companyId
+    }, { forceBackup: true }))) return false;
+    if (!isCurrentPeriodSession()) return rejectStalePeriodSession();
+
     set({
       models: cleanModels,
       workers: cleanWorkers,
@@ -349,18 +364,6 @@ export const createPeriodSlice: StateCreator<WorkbookStore, [], [], PeriodSlice>
       selectedArchiveFilename: null,
       selectedArchiveData: null
     });
-
-    if (!(await state.saveToDisk({
-      models: cleanModels,
-      workers: cleanWorkers,
-      currentPeriod: nextPeriod,
-      periods: updatedPeriods,
-      ticketForms: cleanForms,
-      printedPartyHistory: updatedPartyHistory,
-      submittedTickets: cleanSubmittedTickets,
-      companyId: initialLicenseStatus?.companyId
-    }, { forceBackup: true }))) return false;
-    if (!isCurrentPeriodSession()) return rejectStalePeriodSession();
 
     state.addNotification(
       'success',

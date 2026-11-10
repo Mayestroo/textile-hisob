@@ -93,8 +93,12 @@ export function buildPartyTicketsList(
   const usedTicketIds = new Set<string>();
   // Reserve absolute matches first, independent of input order; fallback cannot
   // overwrite an absolute ticket or assign the same ticket identity twice.
+  const resolutionOrder = [...relevantTickets].sort((a, b) => {
+    const accepted = (ticket: SubmittedTicketRecord) => ticket.status === 'CONFIRMED' || !ticket.status;
+    return Number(accepted(b)) - Number(accepted(a)) || a.id.localeCompare(b.id);
+  });
   for (const absolutePass of [true, false]) {
-    for (const ticket of relevantTickets) {
+    for (const ticket of resolutionOrder) {
       if (actualNumbers.has(ticket.pattaNumber) !== absolutePass) continue;
       const actual = resolveNumber(ticket.pattaNumber);
       if (actual === undefined || ticketByPattaNumber.has(actual) || usedTicketIds.has(ticket.id)) continue;

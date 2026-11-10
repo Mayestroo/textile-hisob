@@ -11,6 +11,8 @@ import { OperationRatesView } from './features/models/OperationRatesView';
 const PattaHisobView = React.lazy(() => import('./features/patta/PattaHisobView').then(m => ({ default: m.PattaHisobView })));
 const KonveyerView = React.lazy(() => import('./features/models/KonveyerView').then(m => ({ default: m.KonveyerView })));
 const ModellarJamiView = React.lazy(() => import('./features/models/ModellarJamiView').then(m => ({ default: m.ModellarJamiView })));
+const AmallarJurnaliView = React.lazy(() => import('./features/journal/AmallarJurnaliView').then(m => ({ default: m.AmallarJurnaliView })));
+const ModelSizesView = React.lazy(() => import('./features/models/ModelSizesView').then(m => ({ default: m.ModelSizesView })));
 
 import { NewOperationModal } from './features/models/modals/NewOperationModal';
 import { DeleteOperationModal } from './features/models/modals/DeleteOperationModal';
@@ -104,7 +106,13 @@ export const App: React.FC = () => {
         activeSheet === 'Modellar kesimi jami' ||
         activeSheet === 'Operatsiya-narxlari' ||
         activeSheet === 'Operatsiya narxlari' ||
-        activeSheet === SYSTEM_SHEETS.OPERATSIYA_NARXLARI;
+        activeSheet === SYSTEM_SHEETS.OPERATSIYA_NARXLARI ||
+        activeSheet === SYSTEM_SHEETS.AMALLAR_JURNALI ||
+        activeSheet === 'Amallar-jurnali' ||
+        activeSheet === 'Amallar jurnali' ||
+        activeSheet === SYSTEM_SHEETS.MODEL_OLCHAMLARI ||
+        activeSheet === 'Model-olchamlari' ||
+        activeSheet === 'Model o\'lchamlari';
       const isModelSheet = models.some(
         (m) => m.name === activeSheet || m.id === activeSheet || m.hisobSheetName === activeSheet
       );
@@ -283,6 +291,46 @@ export const App: React.FC = () => {
       );
     }
 
+    if (
+      activeSheet === SYSTEM_SHEETS.AMALLAR_JURNALI ||
+      activeSheet === 'Amallar-jurnali' ||
+      activeSheet === 'Amallar jurnali'
+    ) {
+      return (
+        <PermissionGuard
+          permission="view:audit-log"
+          fallback={
+            <AccessDenied
+              requiredPermission="view:audit-log"
+              message="Amallar jurnalini ko'rish faqat Administrator uchun ruxsat etilgan."
+            />
+          }
+        >
+          <AmallarJurnaliView />
+        </PermissionGuard>
+      );
+    }
+
+    if (
+      activeSheet === SYSTEM_SHEETS.MODEL_OLCHAMLARI ||
+      activeSheet === 'Model-olchamlari' ||
+      activeSheet === 'Model o\'lchamlari'
+    ) {
+      return (
+        <PermissionGuard
+          permission="edit:hisob"
+          fallback={
+            <AccessDenied
+              requiredPermission="edit:hisob"
+              message="Model o'lchamlarini ko'rish va sozlash faqat Administrator uchun ruxsat etilgan."
+            />
+          }
+        >
+          <ModelSizesView />
+        </PermissionGuard>
+      );
+    }
+
     if (activeSheet.endsWith('-hisob')) {
       const hisobTarget = activeSheet;
       const modelIdOrName = activeSheet.replace(/-hisob$/i, '');
@@ -371,8 +419,8 @@ export const App: React.FC = () => {
         <main style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <React.Suspense
             fallback={
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '14px', gap: '8px' }}>
-                <span className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: '18px' }} />
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '17px', gap: '8px' }}>
+                <span className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: '21px' }} />
                 Yuklanmoqda...
               </div>
             }

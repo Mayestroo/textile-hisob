@@ -23,15 +23,16 @@ export function selectPartyHistoryForView(
 export function selectPartySeriesTab(
   history: PrintedPartyRecord[],
   tab: PartySeriesTab,
-  _mode: PartyHistoryViewMode
+  mode: PartyHistoryViewMode
 ): PrintedPartyRecord[] {
+  if (mode !== 'live') return history;
   // Legacy compatibility helper for callers expecting whole-party filtering.
   // Journal presentation classifies item-by-item via selectLifecycleItems.
   if (tab === 'ended') {
     return history.filter((p) => Boolean(p.endedAt && p.endedOperationId));
   }
   if (tab === 'closed') {
-    return history.filter((p) => p.isClosed && !p.endedAt && Boolean(p.monthClosedPeriodId));
+    return history.filter((p) => p.isClosed && !p.endedAt);
   }
   if (tab === 'legacy') {
     return history.filter((p) => p.isClosed && !p.endedAt && !p.monthClosedPeriodId);

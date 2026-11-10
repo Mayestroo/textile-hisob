@@ -108,7 +108,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
           )}
         </div>
 
-        <h1 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '10px' }}>
+        <h1 style={{ fontSize: '23px', fontWeight: 800, marginBottom: '10px' }}>
           {isBlocked
             ? "Qurilma Bloklangan"
             : isMissingCompany
@@ -116,7 +116,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
             : "Tasdiq Kutilmoqda..."}
         </h1>
 
-        <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '22px' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '22px' }}>
           {isBlocked ? (
             <>
               {licenseStatus?.message || "Ushbu qurilma administrator tomonidan bloklangan. Dasturdan foydalanish uchun adminga murojaat qiling."}
@@ -146,10 +146,10 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
           }}
         >
           <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
+            <div style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>
               Qurilma identifikatori (HWID):
             </div>
-            <code style={{ fontSize: '13px', fontWeight: 700, color: 'var(--primary)' }}>
+            <code style={{ fontSize: '15px', fontWeight: 700, color: 'var(--primary)' }}>
               {deviceId}
             </code>
           </div>
@@ -157,7 +157,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
           <button
             onClick={handleCopy}
             className="soft-btn soft-btn-secondary"
-            style={{ padding: '6px 10px', fontSize: '11.5px', borderRadius: 'var(--radius-sm)' }}
+            style={{ padding: '6px 10px', fontSize: '14.5px', borderRadius: 'var(--radius-sm)' }}
             title="Nusxalash"
           >
             {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
@@ -173,7 +173,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
             className="soft-btn soft-btn-primary"
             style={{
               padding: '10px 16px',
-              fontSize: '13px',
+              fontSize: '15px',
               borderRadius: 'var(--radius-full)',
               justifyContent: 'center',
               width: '100%'
@@ -188,7 +188,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
             className="soft-btn soft-btn-secondary"
             style={{
               padding: '8px 16px',
-              fontSize: '12.5px',
+              fontSize: '15px',
               borderRadius: 'var(--radius-full)',
               justifyContent: 'center',
               width: '100%'
@@ -237,7 +237,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ isBlocked: pro
                 style={{
                   width: '100%',
                   padding: '9px 16px',
-                  fontSize: '12.5px',
+                  fontSize: '15px',
                   fontWeight: 700,
                   backgroundColor: 'rgba(245, 158, 11, 0.12)',
                   color: '#d97706',

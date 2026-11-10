@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { createAdminDashboardService } = require('./adminDashboard.cjs');
+const { createAdminDashboardService, getTashkentDateString } = require('./adminDashboard.cjs');
 
 function serviceFor(query: ReturnType<typeof vi.fn>, overrides = {}) {
   return createAdminDashboardService({
@@ -367,5 +367,66 @@ describe(' admin dashboard PostgreSQL projections', () => {
       .rejects.toMatchObject({ code: 'ADMIN_TELEGRAM_ID_NOT_AUTHORIZED', statusCode: 403 });
     await expect(service.updateCompanyStrictMode('1526974123', { companyId: 'comp_novda', strictMode: 'false' }))
       .rejects.toMatchObject({ code: 'INVALID_STRICT_MODE', statusCode: 400 });
+  });
+  it('generates daily production report with Tashkent date and model breakdowns', async () => {
+    const query = vi.fn()
+      // 1. cut query
+      .mockResolvedValueOnce({
+        rows: [
+          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm1', model_name: 'DZ-008-1', ticket_count: 5, qty: '800' },
+          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm2', model_name: 'Брайс-Турси', ticket_count: 2, qty: '200' }
+        ]
+      })
+      // 2. entry query
+      .mockResolvedValueOnce({
+        rows: [
+          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm1', model_name: 'DZ-008-1', entry_count: 12, qty: '500' }
+        ]
+      })
+      // 3. admins query
+      .mockResolvedValueOnce({
+        rows: [
+          { company_id: 'comp_novda', telegram_id: '274466315' }
+        ]
+      })
+      // 4. companies query
+      .mockResolvedValueOnce({
+        rows: [
+          { company_id: 'comp_novda', company_name: 'Novda Textile' }
+        ]
+      });
+
+    const service = serviceFor(query);
+    const result = await service.dailyProductionReport({ companyId: 'comp_novda', date: '2026-11-10' });
+
+    expect(result.date).toBe('2026-11-10');
+    expect(result.companyId).toBe('comp_novda');
+    expect(result.report).toBeDefined();
+    expect(result.report.companyName).toBe('Novda Textile');
+    expect(result.report.adminTelegramIds).toEqual(['274466315']);
+    
+    // Bichilgan son: total 1000 dona (7 ta patta)
+    expect(result.report.cutProduction.totalQty).toBe(1000);
+    expect(result.report.cutProduction.totalTickets).toBe(7);
+    expect(result.report.cutProduction.byModel).toEqual([
+      { modelId: 'm1', modelName: 'DZ-008-1', qty: 800, ticketCount: 5 },
+      { modelId: 'm2', modelName: 'Брайс-Турси', qty: 200, ticketCount: 2 }
+    ]);
+
+    // Kiritilgan son: total 500 dona (12 ta operatsiya)
+    expect(result.report.enteredProduction.totalQty).toBe(500);
+    expect(result.report.enteredProduction.totalEntries).toBe(12);
+    expect(result.report.enteredProduction.byModel).toEqual([
+      { modelId: 'm1', modelName: 'DZ-008-1', qty: 500, entryCount: 12 }
+    ]);
+
+    expect(query).toHaveBeenCalledTimes(4);
+    expect(query.mock.calls[0][1]).toEqual(['comp_novda', '2026-11-10']);
+  });
+
+  it('computes Tashkent date string helper properly', () => {
+    // 2026-11-09T20:00:00Z is 2026-11-10 01:00:00 in Tashkent (UTC+5)
+    const dt = new Date('2026-11-09T20:00:00.000Z');
+    expect(getTashkentDateString(dt)).toBe('2026-11-10');
   });
 });

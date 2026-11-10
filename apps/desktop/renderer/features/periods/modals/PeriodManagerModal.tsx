@@ -424,10 +424,10 @@ export const PeriodManagerModal: React.FC = () => {
               <Calendar size={22} color="#059669" strokeWidth={2.2} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--text-primary, #0f172a)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+              <h2 style={{ margin: 0, fontSize: '23px', fontWeight: 800, color: 'var(--text-primary, #0f172a)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                 Oyni yopish
               </h2>
-              <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--text-muted, #64748b)', fontWeight: 500 }}>
+              <p style={{ margin: '3px 0 0', fontSize: '15px', color: 'var(--text-muted, #64748b)', fontWeight: 500 }}>
                 Joriy oyni arxivga o'tkazing va yangisini boshlang
               </p>
             </div>
@@ -471,7 +471,7 @@ export const PeriodManagerModal: React.FC = () => {
             <div className="period-summary-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
+                  <span style={{ fontSize: '21px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
                     {currentPeriod.name || 'Joriy oylik'}
                   </span>
                   <span
@@ -483,7 +483,7 @@ export const PeriodManagerModal: React.FC = () => {
                       color: '#15803d',
                       padding: '2px 10px',
                       borderRadius: '9999px',
-                      fontSize: '12px',
+                      fontSize: '15px',
                       fontWeight: 700
                     }}
                   >
@@ -500,7 +500,7 @@ export const PeriodManagerModal: React.FC = () => {
                     border: 'none',
                     color: '#047857',
                     fontWeight: 700,
-                    fontSize: '13px',
+                    fontSize: '15px',
                     cursor: 'pointer',
                     padding: '2px 6px'
                   }}
@@ -509,7 +509,7 @@ export const PeriodManagerModal: React.FC = () => {
                 </button>
               </div>
 
-              <div style={{ fontSize: '12.5px', color: 'var(--text-muted, #64748b)', marginTop: '4px' }}>
+              <div style={{ fontSize: '15px', color: 'var(--text-muted, #64748b)', marginTop: '4px' }}>
                 {formatPeriodStartDate(currentPeriod.startDate)} dan boshlangan
               </div>
 
@@ -527,7 +527,7 @@ export const PeriodManagerModal: React.FC = () => {
                     gap: '10px'
                   }}
                 >
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary, #475569)' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-secondary, #475569)' }}>
                     Joriy oy nomi va boshlanish sanasini tuzatish:
                   </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -553,7 +553,7 @@ export const PeriodManagerModal: React.FC = () => {
                       disabled={isProcessing}
                       onClick={handleSaveCurrentEdit}
                       className="period-btn-primary"
-                      style={{ padding: '0 14px', height: '36px', fontSize: '12.5px' }}
+                      style={{ padding: '0 14px', height: '36px', fontSize: '15px' }}
                     >
                       <Check size={14} />
                       <span>Saqlash</span>
@@ -562,7 +562,7 @@ export const PeriodManagerModal: React.FC = () => {
                       type="button"
                       onClick={() => setIsEditingCurrent(false)}
                       className="period-btn-secondary"
-                      style={{ padding: '0 12px', height: '36px', fontSize: '12.5px' }}
+                      style={{ padding: '0 12px', height: '36px', fontSize: '15px' }}
                     >
                       Bekor qilish
                     </button>
@@ -576,44 +576,44 @@ export const PeriodManagerModal: React.FC = () => {
               {/* 4 Stats Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                 <div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
+                  <div style={{ fontSize: '15px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
                     Ishchilar
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
+                  <div style={{ fontSize: '21px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
                     {workers.length}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
+                  <div style={{ fontSize: '15px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
                     Jami hisoblangan
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
+                  <div style={{ fontSize: '21px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
                     {displayedMoney(payroll.totalUmumiy, currentDisplay.ready, currentDisplay.incomplete)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
+                  <div style={{ fontSize: '15px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
                     Avans
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
+                  <div style={{ fontSize: '21px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
                     {formatMoney(totalAvans)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
+                  <div style={{ fontSize: '15px', color: 'var(--text-muted, #64748b)', fontWeight: 500, marginBottom: '4px' }}>
                     To'lanadigan
                   </div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: '#047857' }}>
+                  <div style={{ fontSize: '21px', fontWeight: 800, color: '#047857' }}>
                     {displayedMoney(Math.max(0, payroll.totalSofFoyda), currentDisplay.ready, currentDisplay.incomplete)}
                   </div>
                 </div>
               </div>
 
               {currentDisplay.label && (
-                <div role="status" style={{ marginTop: '10px', padding: '6px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.1)', color: '#b45309', fontSize: '11px', fontWeight: 650 }}>
+                <div role="status" style={{ marginTop: '10px', padding: '6px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.1)', color: '#b45309', fontSize: '14px', fontWeight: 650 }}>
                   {currentDisplay.label}
                 </div>
               )}
@@ -621,11 +621,11 @@ export const PeriodManagerModal: React.FC = () => {
 
             {/* Section: Yopilganda nima bo'ladi */}
             <div style={{ marginTop: '22px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary, #0f172a)', margin: '0 0 12px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)', margin: '0 0 12px' }}>
                 Yopilganda nima bo'ladi
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-secondary, #334155)', lineHeight: 1.45 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', color: 'var(--text-secondary, #334155)', lineHeight: 1.45 }}>
                   <span
                     style={{
                       width: '18px',
@@ -646,7 +646,7 @@ export const PeriodManagerModal: React.FC = () => {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-secondary, #334155)', lineHeight: 1.45 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', color: 'var(--text-secondary, #334155)', lineHeight: 1.45 }}>
                   <span
                     style={{
                       width: '18px',
@@ -667,7 +667,7 @@ export const PeriodManagerModal: React.FC = () => {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-secondary, #334155)', lineHeight: 1.45 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', color: 'var(--text-secondary, #334155)', lineHeight: 1.45 }}>
                   <span
                     style={{
                       width: '18px',
@@ -693,7 +693,7 @@ export const PeriodManagerModal: React.FC = () => {
             {/* Input Fields (2 columns) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary, #0f172a)', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary, #0f172a)', marginBottom: '6px' }}>
                   Yopish sanasi
                 </label>
                 <input
@@ -703,14 +703,14 @@ export const PeriodManagerModal: React.FC = () => {
                   required
                   className="period-modal-input"
                 />
-                <span style={{ display: 'block', fontSize: '11.5px', color: 'var(--text-muted, #64748b)', marginTop: '5px' }}>
+                <span style={{ display: 'block', fontSize: '14.5px', color: 'var(--text-muted, #64748b)', marginTop: '5px' }}>
                   Yangi oy shu sanadan boshlanadi
                 </span>
               </div>
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
+                  <label style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
                     Yangi oy nomi
                   </label>
                   <button
@@ -724,7 +724,7 @@ export const PeriodManagerModal: React.FC = () => {
                       background: 'none',
                       border: 'none',
                       color: '#047857',
-                      fontSize: '12px',
+                      fontSize: '15px',
                       fontWeight: 700,
                       cursor: 'pointer',
                       padding: 0
@@ -744,7 +744,7 @@ export const PeriodManagerModal: React.FC = () => {
                   required
                   className="period-modal-input"
                 />
-                <span style={{ display: 'block', fontSize: '11.5px', color: 'var(--text-muted, #64748b)', marginTop: '5px' }}>
+                <span style={{ display: 'block', fontSize: '14.5px', color: 'var(--text-muted, #64748b)', marginTop: '5px' }}>
                   Keyinroq o'zgartirish mumkin
                 </span>
               </div>
@@ -789,7 +789,7 @@ export const PeriodManagerModal: React.FC = () => {
                 >
                   {confirmed && <Check size={14} strokeWidth={3} />}
                 </div>
-                <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
                   Barcha partiya va avanslar kiritilganini tekshirdim
                 </span>
               </div>
@@ -823,7 +823,7 @@ export const PeriodManagerModal: React.FC = () => {
                   onChange={(e) => setSearchHistory(e.target.value)}
                   placeholder="Arxivlangan oylardan qidirish..."
                   className="period-modal-input"
-                  style={{ height: '38px', fontSize: '13px' }}
+                  style={{ height: '38px', fontSize: '15px' }}
                 />
               </div>
             )}
@@ -854,10 +854,10 @@ export const PeriodManagerModal: React.FC = () => {
                 >
                   <Archive size={24} color="#64748b" />
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary, #0f172a)', marginBottom: '4px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary, #0f172a)', marginBottom: '4px' }}>
                   Hozircha yopilgan oylar yo'q
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted, #64748b)', maxWidth: '380px', margin: '0 auto', lineHeight: 1.5 }}>
+                <div style={{ fontSize: '15px', color: 'var(--text-muted, #64748b)', maxWidth: '380px', margin: '0 auto', lineHeight: 1.5 }}>
                   Oy yakunida «Joriy oy» bo'limida oyni yopganingizda, barcha arxiv Excel hisobotlari va ma'lumotlari shu yerda saqlanadi.
                 </div>
               </div>
@@ -880,12 +880,12 @@ export const PeriodManagerModal: React.FC = () => {
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ fontWeight: 800, fontSize: '17px', color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileSpreadsheet size={16} />
                         <span>{item.period.name || 'Arxivlangan Oylik'}</span>
                         <span
                           style={{
-                            fontSize: '10.5px',
+                            fontSize: '13.5px',
                             background: '#dcfce7',
                             color: '#15803d',
                             padding: '2px 8px',
@@ -896,7 +896,7 @@ export const PeriodManagerModal: React.FC = () => {
                           YOPILGAN
                         </span>
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
+                      <div style={{ fontSize: '15px', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
                         Davr: <strong>{formatUzbekDate(item.period.startDate)}</strong> — <strong>{formatUzbekDate(item.period.endDate) || '—'}</strong> ({item.workersCount || 0} nafar ishchi)
                       </div>
                     </div>
@@ -907,7 +907,7 @@ export const PeriodManagerModal: React.FC = () => {
                         onClick={() => handleShowArchiveSummary(item)}
                         disabled={isArchiveReading}
                         className="period-btn-secondary"
-                        style={{ height: '34px', padding: '0 12px', fontSize: '12px', borderRadius: '8px' }}
+                        style={{ height: '34px', padding: '0 12px', fontSize: '15px', borderRadius: '8px' }}
                         title="Arxiv davrining umumiy ish haqi qiymatini ko‘rish"
                       >
                         <span>{isArchiveReading ? 'O‘qilmoqda…' : 'Hisobni ko‘rish'}</span>
@@ -920,7 +920,7 @@ export const PeriodManagerModal: React.FC = () => {
                           closeModal();
                         }}
                         className="period-btn-secondary"
-                        style={{ height: '34px', padding: '0 12px', fontSize: '12px', borderRadius: '8px' }}
+                        style={{ height: '34px', padding: '0 12px', fontSize: '15px', borderRadius: '8px' }}
                         title="Ushbu oyning barcha partiyalari va statistikalarini ko'rish"
                       >
                         <span>Patta-hisobda ko'rish</span>
@@ -929,7 +929,7 @@ export const PeriodManagerModal: React.FC = () => {
                         type="button"
                         onClick={() => handleDownloadArchiveExcel(item)}
                         className="period-btn-primary"
-                        style={{ height: '34px', padding: '0 14px', fontSize: '12px', borderRadius: '8px' }}
+                        style={{ height: '34px', padding: '0 14px', fontSize: '15px', borderRadius: '8px' }}
                         title="Shu oyning to'liq Excel (.xlsx) hisobotini yuklab olish"
                       >
                         <Download size={13} />
@@ -942,7 +942,7 @@ export const PeriodManagerModal: React.FC = () => {
             )}
 
             {archiveSummaryError && (
-              <div role="status" style={{ marginTop: '12px', color: '#b91c1c', fontSize: '12px' }}>
+              <div role="status" style={{ marginTop: '12px', color: '#b91c1c', fontSize: '15px' }}>
                 {archiveSummaryError}
               </div>
             )}
@@ -959,7 +959,7 @@ export const PeriodManagerModal: React.FC = () => {
                 }}
               >
                 <strong>{archiveSummary.periodName} — tarixiy ish haqi</strong>
-                <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '6px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '6px', fontSize: '15px' }}>
                   <span>
                     Hisoblangan: <strong>{displayedMoney(archiveSummary.display.masterReport.totalUmumiy, archiveSummary.display.ready, archiveSummary.display.incomplete)} so‘m</strong>
                   </span>
@@ -968,7 +968,7 @@ export const PeriodManagerModal: React.FC = () => {
                   </span>
                 </div>
                 {archiveSummary.display.label && (
-                  <div style={{ marginTop: '6px', color: '#b45309', fontSize: '11px' }}>
+                  <div style={{ marginTop: '6px', color: '#b45309', fontSize: '14px' }}>
                     {archiveSummary.display.label}
                   </div>
                 )}

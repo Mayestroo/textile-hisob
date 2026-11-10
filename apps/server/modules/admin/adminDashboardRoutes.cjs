@@ -175,6 +175,22 @@ function registerAdminDashboardRoutes(app, options = {}) {
     }
   });
 
+  app.get('/internal/admin/daily-report', {
+    preHandler: serviceTokenGuard('x-novda-admin-token', adminApiToken)
+  }, async (request, reply) => {
+    try {
+      const date = request.query?.date;
+      const companyId = request.query?.companyId;
+      const result = await dashboard.dailyProductionReport({ date, companyId });
+      return reply.header('Cache-Control', 'no-store').send({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      return sendAdminDashboardError(reply, error);
+    }
+  });
+
   app.post('/internal/admin/webapp/unbind-worker', {
     preHandler: serviceTokenGuard('x-novda-admin-token', adminApiToken)
   }, async (request, reply) => {
@@ -364,6 +380,12 @@ function registerAdminDashboardRoutes(app, options = {}) {
     invoke(request, reply, async () => dashboard.listParties(scopeCompanyFilters(request.adminAccess, request.query || {}))));
   app.get('/api/admin/webapp/tickets', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => dashboard.listTickets(scopeCompanyFilters(request.adminAccess, request.query || {}))));
+  app.get('/api/admin/webapp/daily-report', { preHandler: adminSessionGuard }, async (request, reply) =>
+    invoke(request, reply, async () => {
+      const filters = scopeCompanyFilters(request.adminAccess, request.query || {});
+      const date = request.query?.date;
+      return dashboard.dailyProductionReport({ ...filters, date });
+    }));
   app.get('/api/admin/webapp/balances', { preHandler: adminSessionGuard }, async (request, reply) =>
     invoke(request, reply, async () => dashboard.getBalances(scopeCompanyFilters(request.adminAccess, request.query || {}))));
   app.get('/api/admin/webapp/system', { preHandler: adminSessionGuard }, async (request, reply) =>

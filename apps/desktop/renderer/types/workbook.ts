@@ -61,6 +61,8 @@ export interface ModelPattaBatchConfig {
   sizes: Record<string, string>; // size -> count
   /** Null/absent is legacy-uninitialized; [] is an explicit empty definition. */
   sizeNames?: string[] | null;
+  scaleType?: string;
+  isConfigured?: boolean;
 }
 
 export interface PrintedPartyRecord {
@@ -115,7 +117,7 @@ export interface SubmittedTicketRecord {
   submittedAt: string;
 }
 
-export type SheetType = 'patta' | 'hisob' | 'umumiy' | 'patta_batch' | 'konveyer';
+export type SheetType = 'patta' | 'hisob' | 'umumiy' | 'patta_batch' | 'konveyer' | 'amallar_jurnali' | 'model_sizes';
 
 export interface SheetConfig {
   id: string;

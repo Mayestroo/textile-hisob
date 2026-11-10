@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from cryptography.hazmat.primitives import serialization
@@ -35,6 +36,8 @@ LICENSE_PRIVATE_KEY = None
 API_BASE_URL = ""
 ADMIN_WEBAPP_URL = ""
 ADMIN_WEBAPP_SESSION_SECRET = ""
+TASHKENT_TZ = timezone(timedelta(hours=5))
+LAST_DAILY_REPORT_DATE = None
 PORT = int(os.environ.get("PORT", "8080"))
 LAST_TELEGRAM_SUCCESS = 0.0
 CONFIGURATION_READY = False
@@ -275,24 +278,167 @@ def api_request(method, route, payload=None):
     return result
 
 
+
+def format_number(val):
+    if val is None:
+        return "0"
+    try:
+        num = float(val)
+        if num.is_integer():
+            return f"{int(num):,}".replace(",", " ")
+        return f"{num:,.2f}".replace(",", " ")
+    except (ValueError, TypeError):
+        return str(val)
+
+
+def format_daily_report_message(report, date_str=None):
+    company_name = report.get("companyName") or report.get("companyId") or "Kompaniya"
+    date_display = date_str or report.get("date") or datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y")
+    if isinstance(date_display, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_display):
+        parts = date_display.split("-")
+        date_display = f"{parts[2]}.{parts[1]}.{parts[0]}"
+
+    cut = report.get("cutProduction") or {}
+    cut_qty = format_number(cut.get("totalQty", 0))
+    cut_tickets = cut.get("totalTickets", 0)
+    cut_models = cut.get("byModel", [])
+
+    entered = report.get("enteredProduction") or {}
+    entered_qty = format_number(entered.get("totalQty", 0))
+    entered_ops = entered.get("totalEntries", 0)
+    entered_models = entered.get("byModel", [])
+
+    lines = [
+        "📊 <b>Kunlik ishlab chiqarish hisoboti</b>",
+        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (18:00)",
+        f"🏢 <b>Kompaniya:</b> {html.escape(str(company_name))}",
+        "",
+        f"✂️ <b>Bichilgan son:</b> {cut_qty} dona" + (f" ({cut_tickets} ta patta)" if cut_tickets else ""),
+        "<i>(Bugun chiqarilgan pattalardagi umumiy ish soni)</i>",
+    ]
+
+    if cut_models:
+        lines.append("<b>Modellar bo'yicha ish sonlari:</b>")
+        for item in cut_models:
+            m_name = html.escape(str(item.get("modelName") or "Noma'lum"))
+            m_qty = format_number(item.get("qty", 0))
+            m_pattas = item.get("ticketCount", 0)
+            patta_str = f" ({m_pattas} ta patta)" if m_pattas else ""
+            lines.append(f"  • {m_name}: <b>{m_qty}</b> dona{patta_str}")
+    else:
+        lines.append("<i>(Bugun bichilgan modellar yo'q)</i>")
+
+    lines.append("")
+    lines.append(f"📥 <b>Kiritilgan umumiy ish soni:</b> {entered_qty} dona" + (f" ({entered_ops} ta operatsiya)" if entered_ops else ""))
+
+    if entered_models:
+        lines.append("<b>Modellar bo'yicha kiritilgan ish sonlari:</b>")
+        for item in entered_models:
+            m_name = html.escape(str(item.get("modelName") or "Noma'lum"))
+            m_qty = format_number(item.get("qty", 0))
+            m_ops = item.get("entryCount", 0)
+            op_str = f" ({m_ops} ta operatsiya)" if m_ops else ""
+            lines.append(f"  • {m_name}: <b>{m_qty}</b> dona{op_str}")
+    else:
+        lines.append("<i>(Bugun kiritilgan ishlar yo'q)</i>")
+
+    return "\n".join(lines)
+
+
+def send_daily_production_reports(target_date=None, target_company_id=None, target_telegram_id=None):
+    today_tashkent = datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d")
+    date_query = target_date or today_tashkent
+    route = f"/internal/admin/daily-report?date={date_query}"
+    if target_company_id:
+        route += f"&companyId={urllib.parse.quote(target_company_id)}"
+
+    try:
+        response = api_request("GET", route)
+    except Exception as error:
+        print(f"DAILY_REPORT_FETCH_FAILED code={html.escape(str(error))}", flush=True)
+        return 0
+
+    reports = response.get("reports") or []
+    if not reports and response.get("report"):
+        reports = [response.get("report")]
+
+    sent_count = 0
+    date_display = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y") if not target_date else target_date
+    keyboard = admin_webapp_keyboard()
+
+    for report in reports:
+        admin_ids = set(report.get("adminTelegramIds") or [])
+        if target_telegram_id:
+            target_ids = {str(target_telegram_id)}
+        else:
+            target_ids = set(admin_ids)
+            if not target_ids:
+                target_ids = set(ADMIN_IDS)
+            else:
+                target_ids.update(ADMIN_IDS)
+
+        msg_text = format_daily_report_message(report, date_display)
+        for admin_id in target_ids:
+            try:
+                send_message(admin_id, msg_text, keyboard)
+                sent_count += 1
+            except Exception as error:
+                print(f"DAILY_REPORT_SEND_FAILED admin_id={admin_id} error={html.escape(str(error))}", flush=True)
+
+    return sent_count
+
+
+def check_and_send_daily_reports(now=None):
+    global LAST_DAILY_REPORT_DATE
+    now_dt = datetime.now(TASHKENT_TZ) if now is None else now
+    today_str = now_dt.strftime("%Y-%m-%d")
+    if now_dt.hour >= 18 and LAST_DAILY_REPORT_DATE != today_str:
+        sent = send_daily_production_reports(target_date=today_str)
+        LAST_DAILY_REPORT_DATE = today_str
+        return sent
+    return 0
+
+
 def handle_admin_command(telegram_id, text, access=None):
     parts = str(text or "").strip().split()
     if not parts:
         return None
     command = parts[0].split("@", 1)[0].lower()
-    if command not in ("/start", "/help"):
+    if command not in ("/start", "/help", "/hisobot", "/bugun"):
         return None
     if access is None:
         access = get_admin_access(telegram_id)
     if not isinstance(access, dict):
         return None
+
+    if command in ("/hisobot", "/bugun"):
+        is_global = access.get("isGlobalAdmin") is True
+        company_ids = access.get("companyIds") or []
+        today_tashkent = datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d")
+        company_id = company_ids[0] if (not is_global and company_ids) else None
+        route = f"/internal/admin/daily-report?date={today_tashkent}"
+        if company_id:
+            route += f"&companyId={urllib.parse.quote(company_id)}"
+        try:
+            data = api_request("GET", route)
+            reports = data.get("reports") or []
+            if not reports and data.get("report"):
+                reports = [data.get("report")]
+            if not reports:
+                return "Bugun uchun ishlab chiqarish ma'lumotlari topilmadi."
+            msgs = [format_daily_report_message(r) for r in reports]
+            return "\n\n───────────────\n\n".join(msgs)
+        except Exception as error:
+            return f"Hisobotni yuklab bo'lmadi: <code>{html.escape(str(error))}</code>"
+
     is_global_admin = access.get("isGlobalAdmin") is True
     scope_text = 'барча компаниялар' if is_global_admin else 'бириктирилган компаниянгиз'
     return (
         "✨ <b>Novda Admin WebApp</b>\n\n"
         "Админ амаллари WebApp панелида бажарилади.\n"
         f"Рухсат доираси: {scope_text}.\n"
-        "Пастдаги <b>Boshqaruv panelini ochish</b> тугмасини босинг."
+        "Пастдаги <b>Boshqaruv panelini ochish</b> тугмасини босинг.\n\n"
+        "📊 Kunlik hisobotni ko'rish: /hisobot yoki /bugun"
     )
 
 
@@ -345,7 +491,7 @@ def process_update(update):
             or str(chat_id) != str(telegram_id)):
         return
     command = str(text).strip().split(maxsplit=1)[0].split("@", 1)[0].lower()
-    if command not in ("/start", "/help"):
+    if command not in ("/start", "/help", "/hisobot", "/bugun"):
         return
     try:
         access = get_admin_access(telegram_id)
@@ -432,6 +578,17 @@ class HealthHandler(BaseHTTPRequestHandler):
             if request_path == "/internal/admin/webapp/session":
                 result = issue_admin_webapp_session(request_body.get("initData"))
                 self._send_json(200, {"success": True, **result})
+                return
+            if request_path == "/internal/admin/trigger-daily-report":
+                target_date = request_body.get("date")
+                target_company_id = request_body.get("companyId")
+                target_telegram_id = request_body.get("telegramId")
+                sent_count = send_daily_production_reports(
+                    target_date=target_date,
+                    target_company_id=target_company_id,
+                    target_telegram_id=target_telegram_id
+                )
+                self._send_json(200, {"success": True, "sentCount": sent_count})
                 return
             if request_path == "/internal/admin/webapp/sign-activation":
                 result = sign_activation_for_admin_session(
@@ -602,6 +759,7 @@ def run_polling():
                 process_update(update)
             if time.time() - last_pending_poll >= 20:
                 notify_new_pending_requests()
+                check_and_send_daily_reports()
                 last_pending_poll = time.time()
         except Exception as error:
             TELEGRAM_CONNECTED = False

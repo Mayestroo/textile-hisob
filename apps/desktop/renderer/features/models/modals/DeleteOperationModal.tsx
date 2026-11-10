@@ -51,7 +51,7 @@ export const DeleteOperationModal: React.FC = () => {
 
         <div className="modal-body">
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
               Model:
             </label>
             <CustomSelect
@@ -72,7 +72,7 @@ export const DeleteOperationModal: React.FC = () => {
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '15px', color: 'var(--text-secondary)' }}>
               O'chiriladigan operatsiyani tanlang:
             </label>
             <CustomSelect
@@ -87,7 +87,7 @@ export const DeleteOperationModal: React.FC = () => {
           </div>
 
           <div style={{
-            fontSize: '12.5px',
+            fontSize: '15px',
             color: '#991b1b',
             background: '#fef2f2',
             border: '1px solid #fee2e2',

@@ -182,11 +182,6 @@ def main_keyboard(binding, telegram_id):
     webapp_url = get_webapp_full_url(company_id, worker_id, telegram_id)
     if webapp_url:
         keyboard.append([{"text": "📱 Mening hisobim (Web App)", "web_app": {"url": webapp_url}}])
-    keyboard.extend([
-        [{"text": "💰 Sof foyda va oylik"}, {"text": "📋 Bajargan ishlarim"}],
-        [{"text": "🎫 Oxirgi pattalarim"}, {"text": "🔄 Yangilash"}],
-        [{"text": "ℹ️ Yordam"}],
-    ])
     return {"keyboard": keyboard, "resize_keyboard": True, "is_persistent": True}
 
 
@@ -203,7 +198,6 @@ def send_profile(chat_id, telegram_id, binding):
         f"👤 {escape(profile['worker_name'])} (ID: #{profile['worker_id']})\n"
         f"📅 Davr: {escape(profile['period_name'])}\n\n"
         f"💵 {'Hisoblangan oraliq summa' if incomplete else 'Jami ishlangan'}: {format_money(profile['gross'])}\n"
-        f"➖ Avans: {format_money(profile['avans'])}\n"
         f"➖ Jarima: {format_money(profile['jarima'])}\n"
         f"✅ <b>{'Sof oraliq summa' if incomplete else 'Sof foyda'}: {format_money(profile['net'])}</b>\n"
         f"{warning}"
@@ -260,16 +254,30 @@ def begin_registration(chat_id, user):
     if binding:
         state = {"step": "BOUND", "binding": binding}
         USER_STATES[telegram_id] = state
-        send_message(chat_id, f"Xush kelibsiz, <b>{escape(binding['worker_name'])}</b>!", main_keyboard(binding, telegram_id))
-        send_profile(chat_id, telegram_id, binding)
+        send_message(
+            chat_id,
+            f"Assalomu alaykum, <b>{escape(binding['worker_name'])}</b>!\n\n"
+            "Barcha hisob-kitoblar va bajargan ishlaringiz Web App orqali ko'rsatiladi.\n"
+            "Ko'rish uchun pastdagi <b>Mening hisobim</b> tugmasini bosing:",
+            main_keyboard(binding, telegram_id),
+        )
         return
     if DEFAULT_COMPANY_ID:
         USER_STATES[telegram_id] = {"step": "WAITING_WORKER_ID", "company_id": DEFAULT_COMPANY_ID}
-        prompt = f"Ishchi ID raqamingizni yuboring (korxona kodi: <code>{escape(DEFAULT_COMPANY_ID)}</code>)."
     else:
         USER_STATES[telegram_id] = {"step": "WAITING_COMPANY_ID"}
-        prompt = "Korxona ID kodini yuboring. Uni korxona ma'muriyatidan oling."
-    send_message(chat_id, prompt, {"remove_keyboard": True})
+
+    keyboard = []
+    if WORKER_WEBAPP_URL:
+        keyboard.append([{"text": "🔗 Hisobga ulanish (Web App)", "web_app": {"url": WORKER_WEBAPP_URL}}])
+    reply_markup = {"keyboard": keyboard, "resize_keyboard": True} if keyboard else {"remove_keyboard": True}
+    send_message(
+        chat_id,
+        "Assalomu alaykum!\n\n"
+        "Hisobingizga ulanish va ma'lumotlaringizni ko'rish uchun "
+        "quyidagi <b>Hisobga ulanish</b> tugmasini bosing:",
+        reply_markup,
+    )
 
 
 def start_worker_id_check(chat_id, user, telegram_id, state, text):
@@ -325,16 +333,33 @@ def handle_text(chat_id, user, text, message_id=None):
     if binding:
         USER_STATES[telegram_id] = {"step": "BOUND", "binding": binding}
         lowered = text.strip().lower()
-        if lowered in ("💰 sof foyda va oylik", "/hisob", "/start", "🔄 yangilash", "/refresh"):
+        if lowered in ("/start", "🔄 yangilash", "/refresh"):
+            send_message(
+                chat_id,
+                f"Assalomu alaykum, <b>{escape(binding['worker_name'])}</b>!\n\n"
+                "Hisob-kitoblar va ishlaringizni ko'rish uchun "
+                "quyidagi <b>Mening hisobim</b> tugmasini bosing:",
+                main_keyboard(binding, telegram_id)
+            )
+        elif lowered in ("💰 sof foyda va oylik", "/hisob"):
             send_profile(chat_id, telegram_id, binding)
         elif lowered in ("📋 bajargan ishlarim", "/operatsiyalar"):
             send_operations(chat_id, telegram_id, binding)
         elif lowered in ("🎫 oxirgi pattalarim", "/pattalar"):
             send_tickets(chat_id, telegram_id, binding)
         elif lowered in ("ℹ️ yordam", "/help"):
-            send_message(chat_id, "Siz faqat o'zingizning hisob-kitobingiz va ishlaringizni ko'rishingiz mumkin.", main_keyboard(binding, telegram_id))
+            send_message(
+                chat_id,
+                "Barcha hisob-kitoblar va ma'lumotlar Web App orqali ko'rsatiladi.\n"
+                "Ko'rish uchun pastdagi <b>Mening hisobim</b> tugmasini bosing.",
+                main_keyboard(binding, telegram_id)
+            )
         else:
-            send_message(chat_id, "Kerakli bo'limni menyudan tanlang.", main_keyboard(binding, telegram_id))
+            send_message(
+                chat_id,
+                "Hisob-kitoblarni ko'rish uchun <b>Mening hisobim</b> tugmasini bosing.",
+                main_keyboard(binding, telegram_id)
+            )
         return
 
     if not state:
@@ -377,6 +402,32 @@ def process_update(update):
             or not re.fullmatch(r"[1-9][0-9]{0,23}", telegram_id)
             or str(chat_id) != telegram_id):
         return
+    web_app_data = message.get("web_app_data")
+    if web_app_data and chat_id:
+        try:
+            payload = json.loads(web_app_data.get("data", "{}"))
+            if payload.get("action") == "bind_request":
+                worker_id = int(payload.get("workerId"))
+                company_id = payload.get("companyId") or DEFAULT_COMPANY_ID or "comp_novda"
+                binding = save_worker_binding(
+                    telegram_id,
+                    worker_id,
+                    company_id,
+                    user.get("username", ""),
+                    None,
+                )
+                USER_STATES[telegram_id] = {"step": "BOUND", "binding": binding}
+                send_message(
+                    chat_id,
+                    f"✅ <b>Profil muvaffaqiyatli bog'landi: {escape(binding['worker_name'])}!</b>\n\n"
+                    "Endi barcha hisob-kitoblaringizni Web App orqali ko'rishingiz mumkin:",
+                    main_keyboard(binding, telegram_id),
+                )
+                return
+        except Exception as error:
+            send_message(chat_id, f"Bog'lanishda xatolik yuz berdi: <code>{escape(str(error))}</code>")
+            return
+
     text = message.get("text")
     if chat_id and text:
         try:

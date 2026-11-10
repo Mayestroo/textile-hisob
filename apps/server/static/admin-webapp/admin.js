@@ -2673,7 +2673,15 @@
 
   function handleNavigateBack() {
     if (document.body.classList.contains('company-admin-session')) {
-      if (document.querySelector('[data-co-screen="tickets"].is-active')) coShowScreen('worker-detail', 'workers');
+      if (document.querySelector('[data-co-screen="advance-success"].is-active')) {
+        if (companyPanel.selectedWorker) openCompanyWorker(companyPanel.selectedWorker);
+        else coShowScreen('workers');
+      }
+      else if (document.querySelector('[data-co-screen="advance"].is-active')) {
+        if (companyPanel.selectedWorker) coShowScreen('worker-detail', 'workers');
+        else coShowScreen('workers');
+      }
+      else if (document.querySelector('[data-co-screen="tickets"].is-active')) coShowScreen('worker-detail', 'workers');
       else if (document.querySelector('[data-co-screen="worker-detail"].is-active')) coShowScreen('workers');
       else if (!document.querySelector('[data-co-screen="home"].is-active')) coShowScreen('home');
       else { try { telegram?.close?.(); } catch { } }
@@ -2914,14 +2922,58 @@
   function coShowScreen(name, tab = null) {
     for (const screen of document.querySelectorAll('.co-screen')) screen.classList.toggle('is-active', screen.dataset.coScreen === name);
     for (const button of document.querySelectorAll('.co-bottom-nav [data-co-tab]')) button.classList.toggle('selected', button.dataset.coTab === (tab || name));
-    const isSubscreen = name === 'models' || name === 'worker-detail' || name === 'tickets';
+    const isSubscreen = name === 'models' || name === 'worker-detail' || name === 'tickets' || name === 'advance' || name === 'advance-success';
     const bottomNav = document.querySelector('.co-bottom-nav');
     if (bottomNav) bottomNav.hidden = isSubscreen;
     const app = document.querySelector('.company-app');
     if (app) app.classList.toggle('co-subscreen-view', isSubscreen);
     const backBtn = byId('companyClose');
+    const avatar = byId('companyAvatar');
     if (backBtn) {
       backBtn.classList.toggle('is-hidden', !isSubscreen);
+      if (name === 'advance' || name === 'advance-success') {
+        backBtn.classList.add('co-close-advance');
+        backBtn.setAttribute('aria-label', 'Yopish');
+        const closeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        closeSvg.setAttribute('width', '14');
+        closeSvg.setAttribute('height', '14');
+        closeSvg.setAttribute('viewBox', '0 0 24 24');
+        closeSvg.setAttribute('fill', 'none');
+        closeSvg.setAttribute('stroke', 'currentColor');
+        closeSvg.setAttribute('stroke-width', '2.5');
+        closeSvg.setAttribute('stroke-linecap', 'round');
+        closeSvg.setAttribute('stroke-linejoin', 'round');
+        const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l1.setAttribute('x1', '18'); l1.setAttribute('y1', '6'); l1.setAttribute('x2', '6'); l1.setAttribute('y2', '18');
+        const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l2.setAttribute('x1', '6'); l2.setAttribute('y1', '6'); l2.setAttribute('x2', '18'); l2.setAttribute('y2', '18');
+        closeSvg.append(l1, l2);
+        const closeSpan = document.createElement('span');
+        closeSpan.textContent = 'Yopish';
+        backBtn.replaceChildren(closeSvg, closeSpan);
+      } else {
+        backBtn.classList.remove('co-close-advance');
+        backBtn.setAttribute('aria-label', 'Ortga');
+        const backSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        backSvg.setAttribute('class', 'co-close-icon');
+        backSvg.setAttribute('width', '16');
+        backSvg.setAttribute('height', '16');
+        backSvg.setAttribute('viewBox', '0 0 24 24');
+        backSvg.setAttribute('fill', 'none');
+        backSvg.setAttribute('stroke', 'currentColor');
+        backSvg.setAttribute('stroke-width', '2.5');
+        backSvg.setAttribute('stroke-linecap', 'round');
+        backSvg.setAttribute('stroke-linejoin', 'round');
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', 'm15 18-6-6 6-6');
+        backSvg.append(p);
+        const backSpan = document.createElement('span');
+        backSpan.textContent = 'Ortga';
+        backBtn.replaceChildren(backSvg, backSpan);
+      }
+    }
+    if (avatar) {
+      avatar.classList.toggle('co-avatar-advance', name === 'advance' || name === 'advance-success');
     }
     if (telegram?.BackButton) {
       if (isSubscreen) {
@@ -3120,7 +3172,14 @@
       row.type = 'button';
       row.setAttribute('role', 'button');
       row.setAttribute('aria-label', `${worker.name || `Ishchi #${worker.workerId}`} hisoboti`);
-      row.addEventListener('click', () => openCompanyWorker(worker));
+      row.addEventListener('click', () => {
+        if (companyPanel.advanceTargetMode) {
+          companyPanel.advanceTargetMode = false;
+          openCompanyAdvance(worker);
+        } else {
+          openCompanyWorker(worker);
+        }
+      });
 
       const left = coText('span', 'co-worker-left');
       left.appendChild(coText('strong', 'co-worker-name', worker.name || `Ishchi #${worker.workerId}`));
@@ -3800,8 +3859,7 @@
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     link.download = `hisobot-${companyPanel.periodId || 'davr'}.csv`; link.click(); URL.revokeObjectURL(link.href);
   }
-  async function giveCompanyAdvance(worker) {
-    const target = worker || companyPanel.selectedWorker;
+  async function submitCompanyAdvanceAction(target, amount, description) {
     if (!target) { coShowScreen('workers'); return coToast('Avans berish uchun ishchini tanlang.'); }
     const period = companyPanel.periods.find((item) => !item.isClosed);
     if (!period) return coToast('Avans kiritish uchun ochiq davr topilmadi.');
@@ -3809,17 +3867,6 @@
     let scope;
     try { scope = financialScope(companyPanel.companyId, 'company-advance'); }
     catch (error) { return coToast(`Avans saqlanmadi: ${error.message}`); }
-    let pending;
-    try { pending = financialIntents.pending(scope); }
-    catch (error) { return coToast(`Avans saqlanmadi: ${error.message}`); }
-    if (pending?.resolved) pending = null;
-    const raw = window.prompt(`${target.name} uchun avans summasi (so‘m):`,
-      pending?.draft.workerId === target.workerId ? String(pending.draft.amountDelta) : '');
-    if (raw === null) return;
-    const amount = Number(raw);
-    if (!Number.isSafeInteger(amount) || amount <= 0) return coToast('Summani butun musbat son ko‘rinishida kiriting.');
-    const description = window.prompt('Avans izohi:', pending?.draft.workerId === target.workerId ? pending.draft.description : 'Avans');
-    if (description === null || !description.trim()) return coToast('Izoh kiritilmadi.');
     companyPanel.advanceSubmitting = true;
     try {
       await sendFinancialIntent(scope,
@@ -3834,9 +3881,101 @@
             adjustment: { adjustmentId: crypto.randomUUID(), type: 'AVANS', periodId: period.periodId, amountDelta: amount, description: description.trim() } };
         },
         target.workerId);
-      coToast('Avans saqlandi.'); await loadCompanyAdminData();
-    } catch (error) { coToast(`Avans saqlanmadi: ${error.code || error.message || 'API_UNAVAILABLE'}`); }
-    finally { companyPanel.advanceSubmitting = false; }
+      coToast('Avans saqlandi.');
+      await loadCompanyAdminData();
+      const updated = (companyPanel.workers || []).find((w) => Number(w.workerId) === Number(target.workerId)) || target;
+      const net = Number(updated.net || 0);
+      openCompanyAdvanceSuccess(updated, amount, net);
+    } catch (error) {
+      coToast(`Avans saqlanmadi: ${error.code || error.message || 'API_UNAVAILABLE'}`);
+    } finally {
+      companyPanel.advanceSubmitting = false;
+    }
+  }
+
+  function formatCoDate(date = new Date()) {
+    const d = date instanceof Date ? date : new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}`;
+  }
+
+  function openCompanyAdvanceSuccess(worker, amount, remainingNet, dateStr) {
+    const target = worker || companyPanel.advanceWorker || companyPanel.selectedWorker;
+    if (!target) return coShowScreen('workers');
+
+    companyPanel.advanceWorker = target;
+    companyPanel.selectedWorker = target;
+
+    setText('companySuccessWorkerName', target.name || `Ishchi #${target.workerId}`);
+    setText('companySuccessAmount', `${coMoney(amount)} so'm`);
+    setText('companySuccessDate', dateStr || formatCoDate());
+    const sign = remainingNet < 0 ? '− ' : '';
+    setText('companySuccessRemaining', `${sign}${coMoney(Math.abs(remainingNet))} so'm`);
+
+    coShowScreen('advance-success');
+  }
+  window.openCompanyAdvanceSuccess = openCompanyAdvanceSuccess;
+
+  function openCompanyAdvance(worker) {
+    const target = worker || companyPanel.selectedWorker;
+    if (!target) { coShowScreen('workers'); return coToast('Avans berish uchun ishchini tanlang.'); }
+    companyPanel.advanceWorker = target;
+    companyPanel.selectedWorker = target;
+
+    setText('companyAdvanceWorkerName', target.name || `Ishchi #${target.workerId}`);
+    const net = Number(target.net || 0);
+    setText('companyAdvanceWorkerMeta', `ID ${target.workerId} · sof foyda ${coMoney(net)} so'm`);
+    setText('companyAdvancePeriod', selectedPeriod()?.name || '2026 — Oktabr');
+
+    let currentAmount = 200000;
+    const amountInput = byId('companyAdvanceAmountInput');
+    const noteInput = byId('companyAdvanceNoteInput');
+    if (noteInput) noteInput.value = '';
+
+    function updateAdvanceCalc(val) {
+      currentAmount = Math.max(0, Number(val) || 0);
+      if (amountInput) amountInput.value = `${coMoney(currentAmount)} so'm`;
+      setText('companyAdvanceCurrentNet', coMoney(net));
+      setText('companyAdvanceDelta', currentAmount > 0 ? `− ${coMoney(currentAmount)}` : '0');
+      const afterNet = net - currentAmount;
+      const sign = afterNet < 0 ? '−' : '';
+      setText('companyAdvanceAfterNet', `${sign}${coMoney(Math.abs(afterNet))} so'm`);
+
+      const chips = document.querySelectorAll('#companyAdvanceChips button');
+      for (const chip of chips) {
+        chip.classList.toggle('selected', Number(chip.dataset.amount) === currentAmount);
+      }
+    }
+
+    updateAdvanceCalc(200000);
+    coShowScreen('advance', 'workers');
+  }
+
+  async function giveCompanyAdvance(worker, amountOverride = null, descriptionOverride = null) {
+    const target = worker || companyPanel.selectedWorker;
+    if (!target) { coShowScreen('workers'); return coToast('Avans berish uchun ishchini tanlang.'); }
+    if (amountOverride != null) {
+      return submitCompanyAdvanceAction(target, Number(amountOverride), descriptionOverride || 'Avans');
+    }
+    const inputEl = byId('companyAdvanceAmountInput');
+    if (!inputEl || !inputEl.isConnected) {
+      let scope;
+      try { scope = financialScope(companyPanel.companyId, 'company-advance'); } catch { }
+      let pending;
+      try { pending = scope ? financialIntents.pending(scope) : null; } catch { }
+      if (pending?.resolved) pending = null;
+      const raw = window.prompt(`${target.name} uchun avans summasi (so‘m):`,
+        pending?.draft.workerId === target.workerId ? String(pending.draft.amountDelta) : '');
+      if (raw === null) return;
+      const amount = Number(raw);
+      if (!Number.isSafeInteger(amount) || amount <= 0) return coToast('Summani butun musbat son ko‘rinishida kiriting.');
+      const description = window.prompt('Avans izohi:', pending?.draft.workerId === target.workerId ? pending.draft.description : 'Avans');
+      if (description === null || !description.trim()) return coToast('Izoh kiritilmadi.');
+      return submitCompanyAdvanceAction(target, amount, description);
+    }
+    openCompanyAdvance(target);
   }
 
   async function refreshWorkerBotStatus() {
@@ -3929,8 +4068,80 @@
       companyPanel.partyFilter = button.dataset.filter;
       byId('companyPartyFilters').querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button)); renderCompanyParties();
     });
-    byId('companyAdvanceAction').addEventListener('click', () => { coShowScreen('workers'); coToast('Avans beriladigan ishchini tanlang.'); });
-    byId('companyDetailAdvance').addEventListener('click', () => giveCompanyAdvance(companyPanel.selectedWorker));
+    byId('companyAdvanceAction').addEventListener('click', () => {
+      if (companyPanel.selectedWorker) openCompanyAdvance(companyPanel.selectedWorker);
+      else { companyPanel.advanceTargetMode = true; coShowScreen('workers'); coToast('Avans beriladigan ishchini tanlang.'); }
+    });
+    byId('companyDetailAdvance').addEventListener('click', () => openCompanyAdvance(companyPanel.selectedWorker));
+
+    const chipsHost = byId('companyAdvanceChips');
+    if (chipsHost) {
+      chipsHost.addEventListener('click', (event) => {
+        const btn = event.target.closest('button[data-amount]');
+        if (!btn) return;
+        const val = Number(btn.dataset.amount);
+        const target = companyPanel.advanceWorker || companyPanel.selectedWorker;
+        if (target) {
+          const net = Number(target.net || 0);
+          const amountInput = byId('companyAdvanceAmountInput');
+          if (amountInput) amountInput.value = `${coMoney(val)} so'm`;
+          setText('companyAdvanceDelta', `− ${coMoney(val)}`);
+          const afterNet = net - val;
+          const sign = afterNet < 0 ? '−' : '';
+          setText('companyAdvanceAfterNet', `${sign}${coMoney(Math.abs(afterNet))} so'm`);
+          for (const b of chipsHost.querySelectorAll('button')) b.classList.toggle('selected', b === btn);
+        }
+      });
+    }
+
+    const advanceAmountInput = byId('companyAdvanceAmountInput');
+    if (advanceAmountInput) {
+      advanceAmountInput.addEventListener('input', () => {
+        const rawDigits = advanceAmountInput.value.replace(/\D/g, '');
+        const val = Number(rawDigits) || 0;
+        const target = companyPanel.advanceWorker || companyPanel.selectedWorker;
+        if (target) {
+          const net = Number(target.net || 0);
+          setText('companyAdvanceDelta', val > 0 ? `− ${coMoney(val)}` : '0');
+          const afterNet = net - val;
+          const sign = afterNet < 0 ? '−' : '';
+          setText('companyAdvanceAfterNet', `${sign}${coMoney(Math.abs(afterNet))} so'm`);
+          const chips = document.querySelectorAll('#companyAdvanceChips button');
+          for (const chip of chips) chip.classList.toggle('selected', Number(chip.dataset.amount) === val);
+        }
+      });
+      advanceAmountInput.addEventListener('blur', () => {
+        const rawDigits = advanceAmountInput.value.replace(/\D/g, '');
+        const val = Number(rawDigits) || 0;
+        advanceAmountInput.value = val > 0 ? `${coMoney(val)} so'm` : '';
+      });
+    }
+
+    byId('companyAdvanceSubmit')?.addEventListener('click', () => {
+      const target = companyPanel.advanceWorker || companyPanel.selectedWorker;
+      if (!target) return coToast('Ishchi tanlanmagan.');
+      const rawVal = byId('companyAdvanceAmountInput')?.value || '';
+      const amount = Number(rawVal.replace(/\D/g, ''));
+      if (!Number.isSafeInteger(amount) || amount <= 0) return coToast('Summani butun musbat son ko‘rinishida kiriting.');
+      const note = byId('companyAdvanceNoteInput')?.value?.trim() || 'Avans';
+      submitCompanyAdvanceAction(target, amount, note);
+    });
+
+    byId('companyAdvanceWorkerCard')?.addEventListener('click', () => {
+      companyPanel.advanceTargetMode = true;
+      coShowScreen('workers');
+      coToast('Ishchini tanlang.');
+    });
+
+    byId('companySuccessReturnWorker')?.addEventListener('click', () => {
+      const target = companyPanel.advanceWorker || companyPanel.selectedWorker;
+      if (target) openCompanyWorker(target);
+      else coShowScreen('workers');
+    });
+
+    byId('companySuccessGoHome')?.addEventListener('click', () => {
+      coShowScreen('home');
+    });
     byId('companyExport').addEventListener('click', downloadCompanyCsv);
     byId('companySettingsExport').addEventListener('click', downloadCompanyCsv);
     byId('companyDetailExport').addEventListener('click', downloadCompanyCsv);

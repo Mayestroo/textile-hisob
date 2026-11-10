@@ -140,6 +140,7 @@ export interface PattaBatchSlice {
       totalIshSoni?: number;
       ishSoni: number;
       sizes?: Record<string, string>;
+      sizeOrder?: string[];
       color: string;
     }>
   ) => Promise<void> | void;

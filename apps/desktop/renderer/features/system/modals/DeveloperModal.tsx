@@ -71,17 +71,17 @@ export const DeveloperModal: React.FC = () => {
             <Code2 size={28} color="#ffffff" />
           </div>
 
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, letterSpacing: '-0.3px' }}>
+          <h2 style={{ margin: 0, fontSize: '23px', fontWeight: 800, letterSpacing: '-0.3px' }}>
             Dasturchi & IT Xizmatlari
           </h2>
-          <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'rgba(255, 255, 255, 0.85)' }}>
+          <p style={{ margin: '6px 0 0 0', fontSize: '15px', color: 'rgba(255, 255, 255, 0.85)' }}>
             Biznesingizni zamonaviy texnologiyalar bilan avtomatlashtiring
           </p>
         </div>
 
         {/* Body */}
         <div style={{ padding: '24px' }}>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.5', textAlign: 'center' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.5', textAlign: 'center' }}>
             Sizning biznesingiz, ishlab chiqarish yoki savdo jarayonlaringiz uchun <strong>istalgan murakkablikdagi</strong> dasturlarni yuqori sifat va kafolat bilan tayyorlab beramiz:
           </div>
 
@@ -110,8 +110,8 @@ export const DeveloperModal: React.FC = () => {
                 <Globe size={18} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Veb-saytlar</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Landing page, do'kon va portallar</div>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Veb-saytlar</div>
+                <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '2px' }}>Landing page, do'kon va portallar</div>
               </div>
             </div>
 
@@ -131,8 +131,8 @@ export const DeveloperModal: React.FC = () => {
                 <Bot size={18} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Telegram Botlar</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Savdo, buyurtma va to'lov tizimlari</div>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Telegram Botlar</div>
+                <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '2px' }}>Savdo, buyurtma va to'lov tizimlari</div>
               </div>
             </div>
 
@@ -152,8 +152,8 @@ export const DeveloperModal: React.FC = () => {
                 <Smartphone size={18} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Mobil Ilovalar</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Android va iOS uchun dasturlar</div>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Mobil Ilovalar</div>
+                <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '2px' }}>Android va iOS uchun dasturlar</div>
               </div>
             </div>
 
@@ -173,8 +173,8 @@ export const DeveloperModal: React.FC = () => {
                 <Cpu size={18} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Hisob & ERP</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Maxsus boshqaruv tizimlari</div>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>Hisob & ERP</div>
+                <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '2px' }}>Maxsus boshqaruv tizimlari</div>
               </div>
             </div>
           </div>
@@ -189,11 +189,11 @@ export const DeveloperModal: React.FC = () => {
               marginBottom: '20px'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', fontWeight: 700, fontSize: '12.5px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', fontWeight: 700, fontSize: '15px', marginBottom: '6px' }}>
               <Sparkles size={15} />
               <span>Nega aynan biz?</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#065f46' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '15px', color: '#065f46' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <CheckCircle2 size={13} color="var(--primary)" />
                 <span>Qulay, tushunarli va zamonaviy interfeys</span>
@@ -224,7 +224,7 @@ export const DeveloperModal: React.FC = () => {
                 background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                 padding: '12px 20px',
                 borderRadius: 'var(--radius-full)',
-                fontSize: '14px',
+                fontSize: '17px',
                 textDecoration: 'none',
                 width: '100%'
               }}

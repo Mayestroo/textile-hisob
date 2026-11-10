@@ -61,6 +61,17 @@ function dateOnly(value) {
   return String(value).match(/^\d{4}-\d{2}-\d{2}/)?.[0] || null;
 }
 
+function getTashkentDateString(date = new Date()) {
+  const d = date instanceof Date && Number.isFinite(date.getTime()) ? date : new Date(date);
+  const valid = Number.isFinite(d.getTime()) ? d : new Date();
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tashkent',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(valid);
+}
+
 function createAdminDashboardService(options = {}) {
   const { pool } = options;
   const allowedAdminIds = options.allowedAdminIds || new Set();
@@ -462,6 +473,137 @@ function createAdminDashboardService(options = {}) {
       effectiveAt: row.submitted_at, workerId: row.worker_id == null ? null : Number(row.worker_id),
       workerName: row.worker_name || null, operation: row.op_name || null
     })), limit, offset };
+  }
+
+  async function dailyProductionReport(filters = {}) {
+    const companyId = filters.companyId ? validateCompanyId(filters.companyId) : null;
+    const targetDate = typeof filters.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(filters.date.trim())
+      ? filters.date.trim()
+      : getTashkentDateString();
+
+    const [cutResult, entryResult, adminsResult, companiesResult] = await Promise.all([
+      pool.query(`
+        SELECT 
+          t.company_id,
+          COALESCE(c.company_name, t.company_id) AS company_name,
+          t.model_id,
+          COALESCE(m.name, t.model_id, 'Noma''lum') AS model_name,
+          COUNT(t.id)::int AS ticket_count,
+          COALESCE(SUM(t.qty), 0)::numeric AS qty
+        FROM tickets t
+        LEFT JOIN activation_companies c ON c.company_id = t.company_id
+        LEFT JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
+        WHERE ($1::VARCHAR IS NULL OR t.company_id = $1)
+          AND (COALESCE(t.submitted_at, t.created_at) AT TIME ZONE 'Asia/Tashkent')::date = $2::date
+        GROUP BY t.company_id, c.company_name, t.model_id, m.name
+        ORDER BY t.company_id, qty DESC, model_name ASC
+      `, [companyId, targetDate]),
+      pool.query(`
+        SELECT 
+          e.company_id,
+          COALESCE(c.company_name, e.company_id) AS company_name,
+          t.model_id,
+          COALESCE(m.name, t.model_id, 'Noma''lum') AS model_name,
+          COUNT(e.id)::int AS entry_count,
+          COALESCE(SUM(e.qty), 0)::numeric AS qty
+        FROM ticket_entries e
+        LEFT JOIN tickets t ON t.company_id = e.company_id AND t.id = e.ticket_id
+        LEFT JOIN activation_companies c ON c.company_id = e.company_id
+        LEFT JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
+        WHERE ($1::VARCHAR IS NULL OR e.company_id = $1)
+          AND (COALESCE(e.created_at, NOW()) AT TIME ZONE 'Asia/Tashkent')::date = $2::date
+        GROUP BY e.company_id, c.company_name, t.model_id, m.name
+        ORDER BY e.company_id, qty DESC, model_name ASC
+      `, [companyId, targetDate]),
+      pool.query(`
+        SELECT company_id, telegram_id
+        FROM activation_company_admins
+        WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+          AND is_active = TRUE
+        ORDER BY company_id, telegram_id
+      `, [companyId]),
+      pool.query(`
+        SELECT company_id, company_name
+        FROM activation_companies
+        WHERE ($1::VARCHAR IS NULL OR company_id = $1)
+          AND is_active = TRUE
+        ORDER BY company_id
+      `, [companyId])
+    ]);
+
+    const companyMap = new Map();
+
+    function getOrCreateCompany(cId, cName) {
+      if (!companyMap.has(cId)) {
+        companyMap.set(cId, {
+          companyId: cId,
+          companyName: cName || cId,
+          adminTelegramIds: [],
+          cutProduction: {
+            totalQty: 0,
+            totalTickets: 0,
+            byModel: []
+          },
+          enteredProduction: {
+            totalQty: 0,
+            totalEntries: 0,
+            byModel: []
+          }
+        });
+      }
+      const existing = companyMap.get(cId);
+      if (cName && (!existing.companyName || existing.companyName === cId)) {
+        existing.companyName = cName;
+      }
+      return existing;
+    }
+
+    if (companyId) {
+      getOrCreateCompany(companyId, companiesResult.rows[0]?.company_name || companyId);
+    }
+    for (const row of companiesResult.rows) {
+      getOrCreateCompany(row.company_id, row.company_name);
+    }
+    for (const row of adminsResult.rows) {
+      const comp = getOrCreateCompany(row.company_id, null);
+      if (!comp.adminTelegramIds.includes(row.telegram_id)) {
+        comp.adminTelegramIds.push(row.telegram_id);
+      }
+    }
+    for (const row of cutResult.rows) {
+      const comp = getOrCreateCompany(row.company_id, row.company_name);
+      const qty = normalizeNumeric(row.qty);
+      const ticketCount = parseCount(row.ticket_count);
+      comp.cutProduction.totalQty += qty;
+      comp.cutProduction.totalTickets += ticketCount;
+      comp.cutProduction.byModel.push({
+        modelId: row.model_id,
+        modelName: row.model_name,
+        qty,
+        ticketCount
+      });
+    }
+    for (const row of entryResult.rows) {
+      const comp = getOrCreateCompany(row.company_id, row.company_name);
+      const qty = normalizeNumeric(row.qty);
+      const entryCount = parseCount(row.entry_count);
+      comp.enteredProduction.totalQty += qty;
+      comp.enteredProduction.totalEntries += entryCount;
+      comp.enteredProduction.byModel.push({
+        modelId: row.model_id,
+        modelName: row.model_name,
+        qty,
+        entryCount
+      });
+    }
+
+    const reports = Array.from(companyMap.values());
+    return {
+      date: targetDate,
+      companyId: companyId || null,
+      report: companyId ? (reports[0] || null) : null,
+      reports
+    };
   }
 
   async function getBalances(filters = {}) {
@@ -908,6 +1050,7 @@ function createAdminDashboardService(options = {}) {
     listModels,
     listParties,
     listTickets,
+    dailyProductionReport,
     getBalances,
     getSystemHealth,
     updateCompanyStrictMode,
@@ -921,6 +1064,7 @@ function createAdminDashboardService(options = {}) {
 
 module.exports = {
   createAdminDashboardService,
+  getTashkentDateString,
   parseCount,
   safeLimit,
   safeOffset,

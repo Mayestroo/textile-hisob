@@ -396,7 +396,7 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
         gap: '6px',
         padding: '4px 10px',
         borderRadius: 'var(--radius-full)',
-        fontSize: '11.5px',
+        fontSize: '14.5px',
         fontWeight: 600,
          backgroundColor: statusBackground,
          color: statusColor,
@@ -418,12 +418,12 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
             : <Wifi size={13} color={statusColor} />}
       <span>{syncing ? 'Sinxron...' : !online ? 'Oflayn' : hasSyncError ? 'Sync xatosi' : hasPendingChanges ? 'Navbatda' : isServerConnected ? 'Sinxron' : 'VPS?'}</span>
       {pendingChanges > 0 && (
-        <span style={{ marginLeft: '2px', background: '#d97706', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
+        <span style={{ marginLeft: '2px', background: '#d97706', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '13px', fontWeight: 700 }}>
           {pendingChanges}
         </span>
       )}
       {failedChanges > 0 && (
-        <span style={{ marginLeft: '2px', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '10px', fontWeight: 700 }}>
+        <span style={{ marginLeft: '2px', background: '#dc2626', color: '#fff', borderRadius: '10px', padding: '1px 5px', fontSize: '13px', fontWeight: 700 }}>
           !{failedChanges}
         </span>
       )}

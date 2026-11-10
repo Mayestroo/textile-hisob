@@ -251,6 +251,14 @@ async function main() {
     assert.match(await text('#companyWorkerTickets'), /Narx noma’lum/);
     await capture('company-desktop-detail.png');
     await viewport(390, 844, true); await capture('company-mobile-detail.png');
+    await click('#companyDetailAdvance');
+    await waitFor(() => evaluate(`document.querySelector('[data-co-screen="advance"]').classList.contains('is-active')`), 'advance screen');
+    await capture('company-mobile-advance.png');
+    await evaluate(`window.openCompanyAdvanceSuccess && window.openCompanyAdvanceSuccess({ name: 'Абдуллаева Мавлуда', workerId: 1, net: 702600 }, 200000, 502600, '15.10.2026')`);
+    await waitFor(() => evaluate(`document.querySelector('[data-co-screen="advance-success"]').classList.contains('is-active')`), 'advance success screen');
+    await capture('company-mobile-advance-success.png');
+    await click('#companyClose');
+    await waitFor(() => evaluate(`document.querySelector('[data-co-screen="worker-detail"]').classList.contains('is-active')`), 'return to detail');
     await click('[data-co-tab="home"]'); await capture('company-mobile-home.png');
     const mobileFontStress = await evaluate(`(()=>{const name=document.querySelector('#companyBrandName'),value=document.querySelector('#companyNet');
       const original=[name.textContent,value.textContent];name.textContent='Шаҳноза Абдуллаева';value.textContent='12 345 678 901 (oraliq)';

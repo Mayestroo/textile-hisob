@@ -2,6 +2,7 @@ import { StateCreator } from 'zustand';
 import { WorkbookStore, PattaBatchSlice } from '../types';
 import { ModelPattaBatchConfig, PrintedPartyRecord } from '../../types/workbook';
 import { DEFAULT_BATCH_SIZES } from '../../constants/batchConstants';
+import { sortPattaSizes } from '../../domain/pattaSizeSystem';
 import { formatDateTime } from '../../utils/formatters';
 import { triggerDebouncedSave } from '../helpers/debounceSave';
 import { createRecordId, findAvailablePattaStart, findNextPartyNumber } from '../pattaBatch';
@@ -25,7 +26,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       state.addNotification('warning', 'Mavjud razmer', `«${clean}» razmeri allaqachon mavjud.`);
       return;
     }
-    const updated = [...current, clean];
+    const updated = sortPattaSizes([...current, clean]);
     const pattaBatchConfigs = { ...state.pattaBatchConfigs, [modelId]: { ...config, partyNumber: config?.partyNumber || '', totalIshSoni: config?.totalIshSoni || '', sizes: config?.sizes || {}, sizeNames: updated } };
     set({ pattaBatchConfigs });
     get().saveToDisk({ pattaBatchConfigs });
@@ -236,6 +237,7 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
         ishSoni: p.totalIshSoni || p.ishSoni,
         cumulativeIshSoni: 0,
         sizes: p.sizes ? { ...p.sizes } : undefined,
+        sizeOrder: p.sizeOrder ? [...p.sizeOrder] : (p.sizes ? sortPattaSizes(Object.keys(p.sizes)) : undefined),
         printedAt: formattedDate
       };
 
@@ -428,7 +430,9 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
 
     // 1. Mark eligible printed parties as ended (both active and certified month-closed)
     const updatedHistory = (state.printedPartyHistory || []).map((r) => {
-      const isEligible = !r.isArchived && !r.endedAt && (!r.isClosed || Boolean(r.monthClosedPeriodId));
+      const certifiedPeriod = r.monthClosedPeriodId && (state.periods || []).some((period) =>
+        period.id === r.monthClosedPeriodId && period.isClosed && Boolean(period.closeOperationId));
+      const isEligible = !r.isArchived && !r.endedAt && (!r.isClosed || Boolean(certifiedPeriod));
       if (isEligible) {
         return {
           ...r,
@@ -471,16 +475,16 @@ export const createPattaBatchSlice: StateCreator<WorkbookStore, [], [], PattaBat
       };
     }
 
-    // 4. Update state: nextPartyNumber resets to 1!
-    set({
+    // 5. Persist through the local database and canonical VPS sync pipeline
+    if (!(await get().saveToDisk({
       nextPartyNumber: 1,
       pattaBatchConfigs: resetConfigs,
       printedPartyHistory: updatedHistory,
       submittedTickets: updatedTickets
-    });
+    }))) return;
 
-    // 5. Persist through the local database and canonical VPS sync pipeline
-    await get().saveToDisk({
+    // Publish success state only after the authoritative local save succeeds.
+    set({
       nextPartyNumber: 1,
       pattaBatchConfigs: resetConfigs,
       printedPartyHistory: updatedHistory,

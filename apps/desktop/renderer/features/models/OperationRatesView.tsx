@@ -503,7 +503,7 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
                             );
                           })}
                         {models.filter((m) => m.id !== selectedModel.id && (m.operations || []).some((o) => Number(o.rate) > 0)).length === 0 && (
-                          <div style={{ padding: '12px', fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+                          <div style={{ padding: '12px', fontSize: '15px', color: '#94a3b8', textAlign: 'center' }}>
                             Narxi bor boshqa model topilmadi
                           </div>
                         )}

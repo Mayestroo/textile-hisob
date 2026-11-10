@@ -57,10 +57,10 @@ export const LoadingOverlay: React.FC = () => {
           />
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
             {loadingMessage}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Iltimos, kuting...
           </div>
         </div>

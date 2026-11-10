@@ -356,7 +356,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         }}
       >
         {w.umumiy > 0 ? (
-          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: isCompact ? '12px' : '13px' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: isCompact ? '15px' : '15px' }}>
             {money(w.umumiy)}
           </span>
         ) : (
@@ -1005,7 +1005,7 @@ export const UmumiyView: React.FC = () => {
                         textAlign: 'center',
                         padding: '36px',
                         color: 'var(--text-muted, #94a3b8)',
-                        fontSize: '13.5px'
+                        fontSize: '15px'
                       }}
                     >
                       Ishchi topilmadi
@@ -1027,7 +1027,7 @@ export const UmumiyView: React.FC = () => {
                   textAlign: 'center',
                   color: '#065f46',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12px' : '13px',
+                  fontSize: isCompact ? '15px' : '15px',
                   position: 'sticky',
                   left: 0,
                   bottom: 0,
@@ -1041,7 +1041,7 @@ export const UmumiyView: React.FC = () => {
                   textAlign: 'left',
                   paddingLeft: '16px',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12.5px' : '13.5px',
+                  fontSize: isCompact ? '15px' : '15px',
                   color: '#065f46',
                   whiteSpace: 'nowrap',
                   position: 'sticky',
@@ -1056,7 +1056,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 800,
-                  fontSize: isCompact ? '13px' : '14px',
+                  fontSize: isCompact ? '15px' : '17px',
                   paddingRight: '14px',
                   color: '#065f46',
                   cursor: 'pointer',
@@ -1072,7 +1072,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12px' : '13px',
+                  fontSize: isCompact ? '15px' : '15px',
                   paddingRight: '12px',
                   color: '#065f46',
                   cursor: 'pointer',
@@ -1088,7 +1088,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12px' : '13px',
+                  fontSize: isCompact ? '15px' : '15px',
                   paddingRight: '12px',
                   color: '#065f46',
                   cursor: 'pointer',
@@ -1104,7 +1104,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12px' : '13px',
+                  fontSize: isCompact ? '15px' : '15px',
                   paddingRight: '12px',
                   color: '#065f46',
                   cursor: 'pointer',
@@ -1120,7 +1120,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12px' : '13px',
+                  fontSize: isCompact ? '15px' : '15px',
                   paddingRight: '12px',
                   color: '#065f46',
                   cursor: 'pointer',
@@ -1136,7 +1136,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 700,
-                  fontSize: isCompact ? '12px' : '13px',
+                  fontSize: isCompact ? '15px' : '15px',
                   paddingRight: '12px',
                   color: '#065f46',
                   cursor: 'pointer',
@@ -1152,7 +1152,7 @@ export const UmumiyView: React.FC = () => {
                 style={{
                   textAlign: 'right',
                   fontWeight: 800,
-                  fontSize: isCompact ? '13.5px' : '14.5px',
+                  fontSize: isCompact ? '15px' : '17.5px',
                   paddingRight: '16px',
                   color: '#065f46',
                   cursor: 'pointer',

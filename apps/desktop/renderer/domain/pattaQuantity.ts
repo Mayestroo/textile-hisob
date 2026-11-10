@@ -1,3 +1,5 @@
+import { sortPattaSizes } from './pattaSizeSystem';
+
 export interface PartyWorkQuantities {
   partyTotal: number;
   pattaCount: number;
@@ -106,7 +108,14 @@ export function buildPattaWorkTickets(
 
   const entries = Object.entries(normalizedSizes.sizes);
   const byName = new Map(entries);
-  const orderedNames = sizeOrder ? [...new Set([...sizeOrder, ...entries.map(([size]) => size)])] : entries.map(([size]) => size);
+  let orderedNames: string[];
+  if (sizeOrder && sizeOrder.length > 0) {
+    const explicitSet = new Set(sizeOrder);
+    const unlisted = sortPattaSizes(entries.map(([size]) => size).filter((s) => !explicitSet.has(s)));
+    orderedNames = [...sizeOrder, ...unlisted];
+  } else {
+    orderedNames = sortPattaSizes(entries.map(([size]) => size));
+  }
   for (const size of orderedNames) {
     const count = byName.get(size) || 0;
     for (let index = 0; index < count; index += 1) {

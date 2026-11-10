@@ -125,7 +125,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           backgroundColor: 'var(--bg-surface, #ffffff)',
           border: isOpen ? '1px solid var(--primary, #059669)' : '1px solid var(--border-subtle, #e2e8f0)',
           borderRadius,
-          fontSize: '12px',
+          fontSize: '15px',
           fontWeight: 600,
           color: 'var(--text-primary, #0f172a)',
           display: 'flex',
@@ -187,7 +187,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 style={{
                   padding: size === 'sm' ? '7px 12px' : '8px 14px',
                   borderRadius: '6px',
-                  fontSize: buttonStyle?.fontSize || (size === 'sm' ? '13px' : '14px'),
+                  fontSize: buttonStyle?.fontSize || (size === 'sm' ? '15px' : '17px'),
                   fontWeight: isSelected ? 700 : 500,
                   color: isSelected ? 'var(--primary, #059669)' : 'var(--text-primary, #0f172a)',
                   backgroundColor: isSelected ? 'var(--primary-light, #ecfdf5)' : 'transparent',

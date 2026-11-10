@@ -83,11 +83,11 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle size={32} color="#ef4444" />
             </div>
 
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '12px', color: '#fff' }}>
+            <h2 style={{ fontSize: '23px', fontWeight: 700, marginBottom: '12px', color: '#fff' }}>
               Dasturda kutilmagan xatolik yuz berdi
             </h2>
 
-            <p style={{ fontSize: '13.5px', color: '#94a3b8', lineHeight: 1.6, marginBottom: '20px' }}>
+            <p style={{ fontSize: '15px', color: '#94a3b8', lineHeight: 1.6, marginBottom: '20px' }}>
               Xavotir olmang, barcha ma'lumotlar bazada xavfsiz saqlangan. Quyidagi tugma orqali dasturni qayta yuklashingiz mumkin.
             </p>
 
@@ -98,7 +98,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   border: '1px solid #334155',
                   borderRadius: '8px',
                   padding: '12px 14px',
-                  fontSize: '12px',
+                  fontSize: '15px',
                   fontFamily: 'monospace',
                   color: '#f87171',
                   textAlign: 'left',
@@ -124,7 +124,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   backgroundColor: '#059669',
                   color: '#fff',
                   fontWeight: 600,
-                  fontSize: '13px',
+                  fontSize: '15px',
                   border: 'none',
                   cursor: 'pointer'
                 }}
@@ -144,7 +144,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   backgroundColor: '#334155',
                   color: '#cbd5e1',
                   fontWeight: 600,
-                  fontSize: '13px',
+                  fontSize: '15px',
                   border: '1px solid #475569',
                   cursor: 'pointer'
                 }}

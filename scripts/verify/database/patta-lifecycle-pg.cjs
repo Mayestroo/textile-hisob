@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const path = require('node:path');
+const http = require('node:http');
 const { spawnSync } = require('node:child_process');
 const { Pool } = require('pg');
 
@@ -29,6 +30,8 @@ const { processSingleOperation } = require(path.join(root, 'apps/server/modules/
 const { readPeriodArchiveSource } = require(path.join(root, 'apps/server/modules/sync/workbookOperations.cjs'));
 const { readCompanySnapshot } = require(path.join(root, 'apps/server/modules/sync/bootstrapSnapshot.cjs'));
 const { finishScopeHash } = require(path.join(root, 'packages/domain/pattaFinishScope.cjs'));
+const { loadPayroll } = require(path.join(root, 'apps/server/modules/workers/payrollValuation.cjs'));
+const { createOperationsHandler } = require(path.join(root, 'apps/server/modules/sync/handlers/operations.cjs'));
 
 function docker(args, input) {
   const result = spawnSync('docker', args, { input, encoding: 'utf8', env: safeEnv, timeout: 30000 });
@@ -55,6 +58,37 @@ function makeOp(commandType, entityType, entityId, payload, baseRevision, opId) 
     payloadHash: computePayloadHash(canonicalStringify(value)),
     payload: value
   };
+}
+
+async function invokeLocalOperationsHttp(pool, companyId, operations) {
+  const handler = createOperationsHandler(pool);
+  const server = http.createServer(async (request, response) => {
+    if (request.method !== 'POST' || request.url !== '/injected-sync-operations') {
+      response.writeHead(404).end();
+      return;
+    }
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    const reply = {
+      code(status) { response.statusCode = status; return this; },
+      send(value) { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(value)); return value; }
+    };
+    await handler({ body: JSON.parse(body), auth: { companyId, deviceId: 'synthetic-d2-http' } }, reply);
+  });
+  await new Promise((resolve, reject) => server.listen(0, '127.0.0.1', error => error ? reject(error) : resolve()));
+  try {
+    const address = server.address();
+    assert.equal(address.address, '127.0.0.1');
+    const response = await fetch(`http://127.0.0.1:${address.port}/injected-sync-operations`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ operations })
+    });
+    const result = await response.json();
+    assert.equal(response.status, 200, 'injected production operations handler HTTP response');
+    assert.equal(result.success, true, JSON.stringify(result));
+    return result.results;
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
 }
 
 async function main() {
@@ -94,14 +128,15 @@ async function main() {
     assert.equal(periodCols.rows.length, 1, 'periods table must have close_operation_id column');
 
     // Test finish pair constraint
-    let constraintViolated = false;
+    let constraintError;
     try {
-      await client.query(`INSERT INTO parties (id, company_id, party_number, model_id, ended_at)
-        VALUES ('invalid_party', 'comp_test', '99', 'mod_1', NOW())`);
+      await client.query(`INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, ended_at)
+        VALUES ('invalid_party', 'comp_constraint_test', '99', '99', 'mod_1', NOW())`);
     } catch (e) {
-      constraintViolated = true;
+      constraintError = e;
     }
-    assert.equal(constraintViolated, true, 'finish pair constraint must reject ended_at without ended_operation_id');
+    assert.equal(constraintError?.code, '23514', 'expected check-constraint SQLSTATE');
+    assert.equal(constraintError?.constraint, 'patta_lifecycle_finish_pair', 'expected exact finish-pair constraint');
 
     console.log('Step 1 PASS: 4 columns and constraints verified.');
 
@@ -200,18 +235,27 @@ async function main() {
     assert.deepEqual(dbAAfterP.rows[0].archived_patta_numbers_json, [1]);
 
     // Read stored frozen P archive from period_archives table
-    const pArchiveRow = await client.query('SELECT archive_json, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodPId]);
+    const pArchiveRow = await client.query('SELECT archive_json, archive_json::text AS archive_bytes, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodPId]);
     assert.ok(pArchiveRow.rows.length, 'P archive must be stored in period_archives table');
     const archiveP = pArchiveRow.rows[0].archive_json;
     assert.equal(archiveP.submittedTickets.length, 2);
-    const pGross = archiveP.submittedTickets.reduce((sum, t) => sum + (t.qty * 7), 0);
-    assert.equal(pGross, 119, 'P gross must be exactly 119 (10*7 + 7*7)');
+    const payrollPBeforeFinish = await loadPayroll(client, companyId, periodPId);
+    const pGross = payrollPBeforeFinish.workers.reduce((sum, worker) => sum + worker.gross, 0);
+    assert.equal(pGross, 119, 'production payroll valuation must report P gross 119');
 
     const J_P = canonicalStringify(archiveP);
     const H_P = pArchiveRow.rows[0].sha256;
     assert.equal(computePayloadHash(J_P), H_P, 'Stored hash must match canonical payload hash');
 
     console.log(`P Archive verified from storage: 2 tickets, gross = ${pGross}, sha256 = ${H_P}`);
+
+    // Change Q tariff through the accepted production model command.
+    const tariffQ = makeOp('UpsertModel', 'model', modelId, {
+      companyId, modelId, name: 'Model Test', operations: [{ id: 'op1', name: 'Tikish', rate: 9 }],
+      pattaOpsOrder: ['Tikish'], baseRevision: 1
+    }, 1, `op_tariff_Q_${name}`);
+    const [tariffQResult] = await invokeLocalOperationsHttp(client, companyId, [tariffQ]);
+    assert.equal(tariffQResult.status, 'APPLIED', JSON.stringify(tariffQResult));
 
     // Enter Q: Submit ticket A2 in Period Q with qty = 5
     const ticketA2Id = crypto.randomUUID();
@@ -223,6 +267,8 @@ async function main() {
     }, 0);
     const resA2 = await processSingleOperation(client, req, submitA2);
     assert.equal(resA2.status, 'APPLIED');
+    assert.equal((await loadPayroll(client, companyId, periodQId)).workers.reduce((sum, worker) => sum + worker.gross, 0), 45,
+      'Q production payroll 45 before finish');
 
     // Test Stale Scope Rejection: CompletePartySeries with invalid finishScopeHash
     const badScopeHash = '0000000000000000000000000000000000000000000000000000000000000000';
@@ -264,6 +310,8 @@ async function main() {
     }, 0, finishOpId);
     const resFinish = await processSingleOperation(client, req, finishOp);
     assert.equal(resFinish.status, 'APPLIED');
+    assert.equal((await loadPayroll(client, companyId, periodQId)).workers.reduce((sum, worker) => sum + worker.gross, 0), 45,
+      'Q production payroll 45 after finish');
 
     // Verify Party A and Party B are both ENDED
     const dbAEnded = await client.query('SELECT status, is_closed, ended_at, ended_operation_id, month_closed_period_id FROM parties WHERE company_id = $1 AND id = $2', [companyId, partyAId]);
@@ -296,7 +344,7 @@ async function main() {
     assert.equal(resCloseQ.status, 'APPLIED');
 
     // Read Period Q Archive from storage
-    const qArchiveRow = await client.query('SELECT archive_json, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodQId]);
+    const qArchiveRow = await client.query('SELECT archive_json, archive_json::text AS archive_bytes, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodQId]);
     assert.ok(qArchiveRow.rows.length, 'Q archive must be stored in period_archives table');
     const archiveQ = qArchiveRow.rows[0].archive_json;
 
@@ -305,27 +353,50 @@ async function main() {
     assert.ok(partyAInQ, 'Party A must be included in Q archive via ticket linkage');
     assert.equal(archiveQ.submittedTickets.length, 1);
     assert.equal(archiveQ.submittedTickets[0].id, ticketA2Id);
-    const qGross = archiveQ.submittedTickets[0].qty * 9;
-    assert.equal(qGross, 45, 'Q gross must be 5 * 9 = 45');
+    const payrollQAfterClose = await loadPayroll(client, companyId, periodQId);
+    const qGross = payrollQAfterClose.workers.reduce((sum, worker) => sum + worker.gross, 0);
+    assert.equal(qGross, 45, 'production payroll valuation must report Q gross 45');
 
     // Total gross combined = 119 + 45 = 164
     assert.equal(pGross + qGross, 164, 'Combined gross must be exactly 164');
 
     // Integrity Check: Read P Archive again from storage and verify digest has NOT changed!
-    const pArchiveRowAfter = await client.query('SELECT archive_json, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodPId]);
+    const pArchiveRowAfter = await client.query('SELECT archive_json, archive_json::text AS archive_bytes, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodPId]);
     const J_P_After = canonicalStringify(pArchiveRowAfter.rows[0].archive_json);
     const H_P_After = pArchiveRowAfter.rows[0].sha256;
     assert.equal(J_P_After, J_P, 'Period P archive contents must be byte-for-byte identical');
     assert.equal(H_P_After, H_P, 'Period P archive SHA-256 hash must be identical');
+    assert.equal(pArchiveRowAfter.rows[0].archive_bytes, pArchiveRow.rows[0].archive_bytes, 'Period P exact stored JSON text unchanged after finish/Q close');
 
-    // Change current model tariff to 99 afterwards
-    await client.query(`UPDATE models SET operations_json = '[{"id":"op1","name":"Tikish","rate":99}]' WHERE company_id = $1 AND id = $2`, [companyId, modelId]);
+    // Change the current model tariff to 99 through the accepted production command.
+    const tariff99 = makeOp('UpsertModel', 'model', modelId, {
+      companyId, modelId, name: 'Model Test', operations: [{ id: 'op1', name: 'Tikish', rate: 99 }],
+      pattaOpsOrder: ['Tikish'], baseRevision: 2
+    }, 2, `op_tariff_99_${name}`);
+    const [tariff99Result] = await invokeLocalOperationsHttp(client, companyId, [tariff99]);
+    assert.equal(tariff99Result.status, 'APPLIED', JSON.stringify(tariff99Result));
 
     // Verify changing current tariff to 99 does NOT change stored archives or their hashes!
     const pArchiveRowAfterTariff = await client.query('SELECT archive_json, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodPId]);
     assert.equal(pArchiveRowAfterTariff.rows[0].sha256, H_P, 'Period P archive hash remains immutable after tariff change');
     const qArchiveRowAfterTariff = await client.query('SELECT archive_json, sha256 FROM period_archives WHERE company_id = $1 AND period_id = $2', [companyId, periodQId]);
     assert.equal(qArchiveRowAfterTariff.rows[0].sha256, qArchiveRow.rows[0].sha256, 'Period Q archive hash remains immutable after tariff change');
+    const payrollPAfterTariff = await loadPayroll(client, companyId, periodPId);
+    const payrollQAfterTariff = await loadPayroll(client, companyId, periodQId);
+    assert.equal(payrollPAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0), 119);
+    assert.equal(payrollQAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0), 45);
+    assert.equal(payrollPAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0)
+      + payrollQAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0), 164);
+    for (const [periodId, expectedHash] of [[periodPId, H_P], [periodQId, qArchiveRow.rows[0].sha256]]) {
+      const saved = (await client.query('SELECT archive_json, sha256 FROM period_archives WHERE company_id=$1 AND period_id=$2', [companyId, periodId])).rows[0];
+      const parsed = typeof saved.archive_json === 'string' ? JSON.parse(saved.archive_json) : saved.archive_json;
+      assert.equal(saved.sha256, expectedHash);
+      assert.equal(computePayloadHash(canonicalStringify(parsed)), expectedHash, 'archive SHA recomputed independently');
+    }
+    const bytesAfterTariff = await client.query('SELECT period_id, archive_json::text AS archive_bytes FROM period_archives WHERE company_id=$1 AND period_id=ANY($2::varchar[])', [companyId, [periodPId, periodQId]]);
+    const bytesByPeriod = new Map(bytesAfterTariff.rows.map(row => [row.period_id, row.archive_bytes]));
+    assert.equal(bytesByPeriod.get(periodPId), pArchiveRow.rows[0].archive_bytes);
+    assert.equal(bytesByPeriod.get(periodQId), qArchiveRow.rows[0].archive_bytes);
 
     // Next Month Close must NOT downgrade ENDED to CLOSED
     const dbAFinal = await client.query('SELECT status, is_closed, ended_at, ended_operation_id FROM parties WHERE company_id = $1 AND id = $2', [companyId, partyAId]);
@@ -338,6 +409,29 @@ async function main() {
     }, 3);
     const closePartyRes = await processSingleOperation(client, req, genericClose);
     assert.equal(closePartyRes.status, 'REJECTED', 'Generic CloseParty on already-closed party must be rejected');
+
+    console.log(JSON.stringify({
+      evidence: 'PATTA_CLOSED_ENDED_D2_PG',
+      containerId: identity,
+      databaseName: name,
+      expected: { periodP: 119, periodQ: 45, combined: 164, acceptedQTariff: 9, laterTariff: 99 },
+      observed: {
+        periodPBeforeAndAfterTariff99: payrollPAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0),
+        periodQBeforeFinish: 45,
+        periodQAfterFinish: 45,
+        periodQAfterCloseAndTariff99: payrollQAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0),
+        combinedAfterTariff99: payrollPAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0)
+          + payrollQAfterTariff.workers.reduce((sum, worker) => sum + worker.gross, 0),
+        qTariffCommand: tariffQResult.status,
+        laterTariffCommand: tariff99Result.status,
+        localHttpRoute: '127.0.0.1 injected production createOperationsHandler',
+        intendedConstraint: { sqlstate: constraintError.code, name: constraintError.constraint },
+        archiveHashes: { P: H_P, Q: qArchiveRow.rows[0].sha256 },
+        independentlyRecomputedArchiveDigests: true,
+        exactJsonTextUnchanged: true,
+        endedAfterFinishAndSubsequentMonthClose: true
+      }
+    }));
 
     console.log('ALL GUARDED PG STAGE 1 ACCEPTANCE CHECKS PASSED:');
     console.log('- 4 nullable columns & triggers');

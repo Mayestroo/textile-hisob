@@ -258,7 +258,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '17px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
                 Patta #{ticket.pattaNumber} ni tahrirlash
               </h2>
               <span style={{
@@ -266,13 +266,13 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 color: '#ffffff',
                 padding: '2px 8px',
                 borderRadius: 'var(--radius-full)',
-                fontSize: '11.5px',
+                fontSize: '14.5px',
                 fontWeight: 700
               }}>
                 Partiya {ticket.partyNumber}
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span>Model: <strong style={{ color: 'var(--text-primary)' }}>{model.name}</strong></span>
               <span>•</span>
               <span>Konveyer: <strong style={{ color: '#818cf8' }}>{ticket.konveyer ? `${ticket.konveyer}-Konveyer` : 'Noma\'lum'}</strong></span>
@@ -310,7 +310,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
             border: '1px solid rgba(239, 68, 68, 0.35)',
             borderRadius: 'var(--radius-md)',
             color: '#ef4444',
-            fontSize: '12.5px',
+            fontSize: '15px',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
@@ -323,11 +323,11 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
         {/* 1 Column Operations Table */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginBottom: '10px' }}>
             ℹ️ Xato kiritilgan operatsiyalarda kerakli <strong>Ishchi ID raqamini</strong> o'zgartiring. Saqlanganda ish sonlari va summalar butun tizim bo'ylab avtomatik yangilanadi.
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px' }}>
             <thead>
               <tr style={{ background: 'var(--bg-surface-subtle)', borderBottom: '2px solid var(--border-subtle)', height: '34px' }}>
                 <th style={{ width: '45px', textAlign: 'center', color: 'var(--text-secondary)' }}>№</th>
@@ -357,7 +357,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                     }}
                   >
                     {/* № */}
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)', fontSize: '11px' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-muted)', fontSize: '14px' }}>
                       {idx + 1}
                     </td>
 
@@ -367,7 +367,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                     </td>
 
                     {/* Dona narxi */}
-                    <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '12px' }}>
+                    <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '15px' }}>
                       {op.rate === null ? 'Noma’lum' : `${op.rate.toLocaleString()} so'm`}
                     </td>
 
@@ -384,7 +384,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                           height: '28px',
                           textAlign: 'center',
                           fontWeight: 700,
-                          fontSize: '13px',
+                          fontSize: '15px',
                           borderColor: hasId ? (isFound ? 'var(--primary)' : '#ef4444') : 'var(--border-subtle)',
                           backgroundColor: hasId ? (isFound ? 'var(--primary-light)' : 'rgba(239, 68, 68, 0.12)') : 'var(--bg-surface)'
                         }}
@@ -403,18 +403,18 @@ export const EditSubmittedTicketModal: React.FC = () => {
                             color: 'var(--primary)',
                             padding: '2px 8px',
                             borderRadius: 'var(--radius-full)',
-                            fontSize: '12px'
+                            fontSize: '15px'
                           }}>
                             <span style={{ fontWeight: 800 }}>#{wId}</span>
                             <span>{workerName}</span>
                           </span>
                         ) : (
-                          <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '11.5px' }}>
+                          <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '14.5px' }}>
                             Ishchi topilmadi! ({valStr})
                           </span>
                         )
                       ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>—</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '14.5px' }}>—</span>
                       )}
                     </td>
 
@@ -441,10 +441,10 @@ export const EditSubmittedTicketModal: React.FC = () => {
           gap: '12px'
         }}>
           <div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '14.5px', color: 'var(--text-muted)' }}>
               Tanlangan operatsiyalar: <strong>{assignedOpsCount} ta</strong>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--primary)' }}>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--primary)' }}>
               Jami summa: {formatMoney(liveTotalAmount)} so'm{unknownRateCount > 0 ? ` (${unknownRateCount} narx noma’lum)` : ''}
             </div>
           </div>
@@ -457,7 +457,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
               style={{
                 padding: '7px 16px',
                 borderRadius: 'var(--radius-md)',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 600,
                 cursor: 'pointer'
               }}
@@ -472,7 +472,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
               style={{
                 padding: '7px 20px',
                 borderRadius: 'var(--radius-md)',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 700,
                 backgroundColor: 'var(--primary)',
                 color: '#ffffff',

@@ -260,6 +260,100 @@
         </div>
       </section>
 
+      <section class="co-screen" data-co-screen="advance">
+        <div class="co-heading co-heading-stack co-advance-heading">
+          <div>
+            <h1>Avans berish</h1>
+            <span id="companyAdvancePeriod" class="co-muted">2026 — Oktabr</span>
+          </div>
+        </div>
+
+        <article id="companyAdvanceWorkerCard" class="co-advance-worker-card" role="button" tabindex="0">
+          <div class="co-advance-worker-info">
+            <span class="co-advance-worker-label">Ishchi</span>
+            <strong id="companyAdvanceWorkerName" class="co-advance-worker-name">Ishchi</strong>
+            <span id="companyAdvanceWorkerMeta" class="co-advance-worker-meta">ID 1 · sof foyda 0 so'm</span>
+          </div>
+          <svg class="co-advance-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a97a6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </article>
+
+        <article class="co-advance-inputs-card">
+          <label class="co-advance-label" for="companyAdvanceAmountInput">Avans miqdori</label>
+          <div class="co-advance-amount-box">
+            <input id="companyAdvanceAmountInput" type="text" inputmode="numeric" placeholder="0 so'm" value="200 000 so'm" autocomplete="off" />
+          </div>
+          <div id="companyAdvanceChips" class="co-advance-chips">
+            <button type="button" data-amount="100000">100 000</button>
+            <button type="button" data-amount="200000" class="selected">200 000</button>
+            <button type="button" data-amount="500000">500 000</button>
+          </div>
+          <label class="co-advance-label" for="companyAdvanceNoteInput">Izoh (ixtiyoriy)</label>
+          <div class="co-advance-note-box">
+            <input id="companyAdvanceNoteInput" type="text" placeholder="Izoh" value="" />
+          </div>
+        </article>
+
+        <article class="co-advance-summary-card">
+          <div class="co-advance-summary-row">
+            <span>Hozirgi sof foyda</span>
+            <strong id="companyAdvanceCurrentNet">0</strong>
+          </div>
+          <div class="co-advance-summary-row">
+            <span>Avans</span>
+            <strong id="companyAdvanceDelta">− 200 000</strong>
+          </div>
+          <div class="co-advance-summary-row co-advance-summary-total">
+            <span>Avansdan keyin</span>
+            <strong id="companyAdvanceAfterNet">0 so'm</strong>
+          </div>
+        </article>
+        <div class="co-advance-caption">Summa namuna</div>
+
+        <div class="co-sticky-actions">
+          <button id="companyAdvanceSubmit" class="co-primary-button" type="button">Avans berish</button>
+        </div>
+      </section>
+
+      <section class="co-screen" data-co-screen="advance-success">
+        <div class="co-advance-success-hero">
+          <div class="co-advance-success-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h1 class="co-advance-success-title">Avans<br>berildi</h1>
+          <p class="co-advance-success-subtitle">Ishchiga xabar yuborildi</p>
+        </div>
+
+        <article class="co-advance-summary-card co-advance-success-card">
+          <div class="co-advance-summary-row">
+            <span>Ishchi</span>
+            <strong id="companySuccessWorkerName">—</strong>
+          </div>
+          <div class="co-advance-summary-row">
+            <span>Miqdor</span>
+            <strong id="companySuccessAmount">0 so'm</strong>
+          </div>
+          <div class="co-advance-summary-row">
+            <span>Sana</span>
+            <strong id="companySuccessDate">—</strong>
+          </div>
+          <div class="co-advance-summary-row co-advance-summary-total">
+            <span>Qolgan sof foyda</span>
+            <strong id="companySuccessRemaining">0 so'm</strong>
+          </div>
+        </article>
+
+        <div class="co-advance-success-caption">Summa namuna</div>
+
+        <div class="co-sticky-actions co-advance-success-actions">
+          <button id="companySuccessReturnWorker" class="co-advance-btn-primary" type="button">Ishchiga qaytish</button>
+          <button id="companySuccessGoHome" class="co-advance-btn-secondary" type="button">Bosh sahifa</button>
+        </div>
+      </section>
+
       <section class="co-screen" data-co-screen="tickets">
         <div class="co-heading"><h1>Operatsiyalar</h1><button id="companyTicketBack" class="co-text-button" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg><span>Orqaga</span></button></div>
         <div id="companyAllWorkerTickets" class="co-list"></div>

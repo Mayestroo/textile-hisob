@@ -834,11 +834,11 @@ export const WorkerDetailModal: React.FC = () => {
                         {idx + 1}
                       </td>
 
-                      <td style={{ textAlign: 'left', color: 'var(--text-primary)', fontSize: '12.5px' }}>
+                      <td style={{ textAlign: 'left', color: 'var(--text-primary)', fontSize: '15px' }}>
                         {r.submittedAt}
                       </td>
 
-                      <td style={{ textAlign: 'left', fontSize: '12.5px' }}>
+                      <td style={{ textAlign: 'left', fontSize: '15px' }}>
                         {isPayroll ? (
                           <span style={{ color: 'var(--text-secondary)' }}>
                             Davr hisobi (davr ish haqi)
@@ -860,15 +860,15 @@ export const WorkerDetailModal: React.FC = () => {
                         )}
                       </td>
 
-                      <td style={{ textAlign: 'left', fontWeight: 600, color: 'var(--text-primary)', fontSize: '12.5px' }}>
+                      <td style={{ textAlign: 'left', fontWeight: 600, color: 'var(--text-primary)', fontSize: '15px' }}>
                         {r.modelName}
                       </td>
 
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)', fontSize: '12.5px' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)', fontSize: '15px' }}>
                         {r.qty === null ? '—' : r.qty.toLocaleString()}
                       </td>
 
-                      <td style={{ textAlign: 'right', paddingRight: '20px', fontWeight: 800, color: 'var(--text-primary)', fontSize: '13px' }}>
+                      <td style={{ textAlign: 'right', paddingRight: '20px', fontWeight: 800, color: 'var(--text-primary)', fontSize: '15px' }}>
                         {!isPayroll && <span style={{ display: 'none' }}>Ish haqiga qo‘shilmaydi</span>}
                         {lineSum === null ? '—' : formatMoney(lineSum)}
                       </td>

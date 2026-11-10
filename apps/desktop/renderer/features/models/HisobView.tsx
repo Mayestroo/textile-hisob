@@ -131,17 +131,17 @@ export function AdjustmentSourceDialog({
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
       }}
     >
-      <strong style={{ fontSize: '14px', color: '#0f172a' }}>
+      <strong style={{ fontSize: '17px', color: '#0f172a' }}>
         Asl kiritilgan ishni tanlang: {selection.opName}, ishchi #{selection.workerId}, o‘zgarish {selection.qty - currentQty}
       </strong>
-      <p style={{ margin: '6px 0', fontSize: '12.5px', color: '#64748b' }}>
+      <p style={{ margin: '6px 0', fontSize: '15px', color: '#64748b' }}>
         Faqat kiritilgan pattalar. Asl davr va saqlangan narxni tekshiring; noma’lum narx to‘lov hisoblanganini bildirmaydi.
       </p>
-      <p style={{ margin: '4px 0 10px', fontSize: '12px', color: '#94a3b8' }}>
+      <p style={{ margin: '4px 0 10px', fontSize: '15px', color: '#94a3b8' }}>
         {HISTORICAL_TOTAL_WARNING}
       </p>
       <AdjustmentSourceSelection sources={selection.sources} selectedEntry={selectedEntry} onSelect={onSelect} />
-      {selectionError && <p role="alert" style={{ color: '#ef4444', fontSize: '12.5px', marginTop: '6px' }}>{selectionError}</p>}
+      {selectionError && <p role="alert" style={{ color: '#ef4444', fontSize: '15px', marginTop: '6px' }}>{selectionError}</p>}
       <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
         <button
           type="button"
@@ -516,7 +516,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
 
       {/* Source Loading & Adjustment Dialog */}
       {sourceLoading && (
-        <div style={{ padding: '8px 16px', background: '#ecfdf5', borderRadius: '8px', marginBottom: '12px', fontSize: '13px', color: '#047857' }}>
+        <div style={{ padding: '8px 16px', background: '#ecfdf5', borderRadius: '8px', marginBottom: '12px', fontSize: '15px', color: '#047857' }}>
           Asl ishlar yuklanmoqda...
         </div>
       )}
@@ -601,7 +601,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                             background: '#fef3c7',
                             color: '#b45309',
                             fontWeight: 700,
-                            fontSize: '11px',
+                            fontSize: '14px',
                             width: '74px',
                             height: '20px',
                             borderRadius: '9999px',
@@ -683,7 +683,7 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                               background: qty > 0 ? '#e8f8f0' : 'transparent',
                               color: qty > 0 ? '#059669' : '#cbd5e1',
                               fontWeight: qty > 0 ? 800 : 700,
-                              fontSize: qty > 0 ? '13px' : '16px',
+                              fontSize: qty > 0 ? '15px' : '19px',
                               width: '100%',
                               height: '32px',
                               borderRadius: '6px'
@@ -724,10 +724,10 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                 <td className="hisob-tf-sticky" style={{ textAlign: 'center' }} />
                 <td className="hisob-tf-fio">
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontWeight: 800, fontSize: '13px', color: '#064e3b' }}>
+                    <span style={{ fontWeight: 800, fontSize: '15px', color: '#064e3b' }}>
                       Jami · {filteredWorkers.length}
                     </span>
-                    <span style={{ fontWeight: 700, fontSize: '11px', color: '#047857' }}>
+                    <span style={{ fontWeight: 700, fontSize: '14px', color: '#047857' }}>
                       ishchi
                     </span>
                   </div>
@@ -746,10 +746,10 @@ export const HisobView: React.FC<HisobViewProps> = ({ model }) => {
                     >
                       {hasOpWork ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontWeight: 800, fontSize: '13px', color: '#047857' }}>
+                          <span style={{ fontWeight: 800, fontSize: '15px', color: '#047857' }}>
                             {formatNumber(opTot.totalQuantity)}
                           </span>
-                          <span style={{ fontWeight: 600, fontSize: '10.5px', color: '#064e3b', marginTop: '1px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '13.5px', color: '#064e3b', marginTop: '1px' }}>
                             {displayedMoney(opTot.totalAmount, display.ready, display.incomplete)} so'm
                           </span>
                         </div>

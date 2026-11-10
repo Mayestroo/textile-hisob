@@ -159,5 +159,78 @@ describe('PattaJournalReader', () => {
     expect(facts.parties[0].endedAt).toBe('2026-11-09T00:00:00Z');
     expect(facts.parties[0].endedOperationId).toBe('op_fin');
   });
-});
 
+  function putBoundArchive(periodId: string, submittedTickets: any[], printedPartyHistory: any[] = []) {
+    const archive = { companyId, period: { id: periodId, companyId }, submittedTickets, printedPartyHistory };
+    const sha = computePayloadHash(canonicalStringify(archive));
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed)
+      VALUES (?, ?, 'Closed', '2026-11-01', 1)`).run(periodId, companyId);
+    db.prepare(`INSERT INTO period_archives (company_id, period_id, archive_json, sha256, archived_at)
+      VALUES (?, ?, ?, ?, '2026-11-30')`).run(companyId, periodId, JSON.stringify(archive), sha);
+    return archive;
+  }
+
+  it('rejects valid-digest archives with foreign identity or mismatched contained periods', () => {
+    const archive = { companyId: 'foreign', period: { id: 'P', companyId: 'foreign' },
+      submittedTickets: [{ id: 'foreign-ticket', companyId: 'foreign', periodId: 'P', partyRecordId: 'p1', pattaNumber: 1, qty: 9 }] };
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed) VALUES ('P', ?, 'P', '2026-11-01', 1)`).run(companyId);
+    db.prepare(`INSERT INTO period_archives (company_id, period_id, archive_json, sha256, archived_at) VALUES (?, 'P', ?, ?, 'now')`)
+      .run(companyId, JSON.stringify(archive), computePayloadHash(canonicalStringify(archive)));
+    const facts = readPattaJournalFacts(db, companyId);
+    expect(facts.tickets).toHaveLength(0);
+    expect(facts.integrityProblems).toContainEqual({ code: 'ARCHIVE_IDENTITY_MISMATCH', periodId: 'P' });
+  });
+
+  it('reports corrupt archive digests and conflicting immutable ticket copies', () => {
+    putBoundArchive('P', [{ id: 't1', companyId, periodId: 'P', partyRecordId: 'p1', pattaNumber: 1, qty: 10 }]);
+    db.prepare(`UPDATE period_archives SET sha256 = ? WHERE period_id = 'P'`).run('0'.repeat(64));
+    let facts = readPattaJournalFacts(db, companyId);
+    expect(facts.incomplete).toBe(true);
+    expect(facts.integrityProblems).toContainEqual({ code: 'ARCHIVE_DIGEST_MISMATCH', periodId: 'P' });
+
+    db.prepare(`UPDATE period_archives SET sha256 = ? WHERE period_id = 'P'`).run(
+      computePayloadHash(canonicalStringify({ companyId, period: { id: 'P', companyId },
+        submittedTickets: [{ id: 't1', companyId, periodId: 'P', partyRecordId: 'p1', pattaNumber: 1, qty: 10 }], printedPartyHistory: [] })));
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_record_id, patta_number, period_id, qty, submitted_at)
+      VALUES ('t1', ?, 'm1', 'p2', 2, 'P', 99, 'now')`).run(companyId);
+    facts = readPattaJournalFacts(db, companyId);
+    expect(facts.integrityProblems.some((problem: any) => problem.code === 'ARCHIVE_TICKET_CONFLICT')).toBe(true);
+  });
+
+  it('borrows a missing archive status only from the exact canonical ticket', () => {
+    const ticket = { id: 't1', companyId, periodId: 'P', partyRecordId: 'p1', pattaNumber: 1, qty: 10 };
+    putBoundArchive('P', [ticket]);
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_record_id, patta_number, period_id, status, qty, submitted_at)
+      VALUES ('t1', ?, 'm1', 'p1', 1, 'P', 'PENDING_SYNC', 10, 'now')`).run(companyId);
+    const facts = readPattaJournalFacts(db, companyId);
+    expect(facts.tickets.find((row: any) => row.id === 't1')?.status).toBe('PENDING_SYNC');
+  });
+
+  it('retains archive-only party metadata separately from canonical lifecycle rows', () => {
+    const frozenParty = { id: 'archive-only', companyId, partyNumber: '8', modelId: 'm1' };
+    putBoundArchive('P', [], [frozenParty]);
+    const facts = readPattaJournalFacts(db, companyId);
+    expect(facts.parties.find((party: any) => party.id === 'archive-only')?.frozenArchiveMetadata).toBe(true);
+  });
+
+  it('withholds a tagged pending close archive from accepted membership', () => {
+    putBoundArchive('P', []);
+    db.prepare(`INSERT INTO local_outbox (operation_id, company_id, command_type, entity_id, local_archive_json, status)
+      VALUES ('close-p', ?, 'ClosePeriod', 'P', ?, 'PENDING')`).run(companyId, JSON.stringify({ kind: 'period-close-effects' }));
+    const facts = readPattaJournalFacts(db, companyId);
+    expect(facts.periods.find((period: any) => period.id === 'P')?.archivedTicketIds).toEqual([]);
+    expect(facts.pendingEffects.hasPendingClose).toBe(true);
+  });
+
+  it('keeps a validated legacy SYNCED close archive readable without new provenance markers', () => {
+    const archived = { id: 'legacy-ticket', companyId, periodId: 'P', partyRecordId: 'p1',
+      pattaNumber: 1, qty: 5, status: 'CONFIRMED' };
+    putBoundArchive('P', [archived]);
+    db.prepare(`INSERT INTO local_outbox (operation_id, company_id, command_type, entity_id, local_archive_json, status)
+      VALUES ('old-close', ?, 'ClosePeriod', 'P', ?, 'SYNCED')`).run(companyId, JSON.stringify({ submittedTickets: [archived] }));
+    const facts = readPattaJournalFacts(db, companyId);
+    expect(facts.periods.find((period: any) => period.id === 'P')?.archivedTicketIds).toEqual(['legacy-ticket']);
+    expect(facts.tickets.find((ticket: any) => ticket.id === 'legacy-ticket')?.qty).toBe(5);
+    expect(facts.integrityProblems).toEqual([]);
+  });
+});

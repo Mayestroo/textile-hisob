@@ -78,7 +78,7 @@ describe('exact-ID lifecycle cohorts separate from payroll', () => {
   it('Case 7: Old archive pre-close party.isClosed=false with confirmed P ticket shows CLOSED', () => {
     const oldParty: LifecycleParty = { id: 'OldP', companyId: 'own', modelId: 'M', pattaCount: 1, isClosed: false };
     const oldTicket: LifecycleTicket = { id: 'tOld', companyId: 'own', modelId: 'M', partyRecordId: 'OldP', pattaNumber: 1, periodId: 'P', status: 'CONFIRMED', qty: 15 };
-    const res = selectLifecycleItems({ parties: [oldParty], tickets: [oldTicket], periods: [P] });
+    const res = selectLifecycleItems({ parties: [oldParty], tickets: [oldTicket], periods: [{ ...P, archivedTicketIds: ['tOld'] }] });
     expect(res.items[0].lifecycle).toBe('closed');
     expect(res.items[0].actualQuantity).toBe(15);
   });
@@ -98,9 +98,79 @@ describe('exact-ID lifecycle cohorts separate from payroll', () => {
       id: 'free_1', companyId: 'own', modelId: 'M', partyRecordId: null, pattaNumber: 0,
       periodId: 'P', status: 'CONFIRMED', qty: 25
     };
-    const res = selectLifecycleItems({ parties: [], tickets: [freeTicket], periods: [P] });
+    const res = selectLifecycleItems({ parties: [], tickets: [freeTicket], periods: [{ ...P, archivedTicketIds: ['free_1'] }] });
     expect(res.items[0].lifecycle).toBe('closed');
     expect(res.items[0].partyId).toBe(null);
     expect(counts(res.items).closed).toEqual({ groups: 0, pattas: 1, actual: 25 });
+  });
+
+  it('keeps prior accepted ACTIVE slot during pending close and decorates it without promoting CLOSED', () => {
+    const pendingClose = selectLifecycleItems({ parties: [parties[0]], tickets: [tickets[0]],
+      periods: [{ id: 'P', isClosed: false }], pendingClosePeriodIds: ['P'] });
+    expect(pendingClose.items.filter((item) => item.lifecycle === 'active').map((item) => [item.pattaNumber, item.accepted, item.pendingClose]))
+      .toEqual([[1, true, true], [2, false, undefined]]);
+    expect(pendingClose.items.some((item) => item.lifecycle === 'closed')).toBe(false);
+  });
+
+  it('deduplicates pending and accepted attempts for one slot in both input orders', () => {
+    const party: LifecycleParty = { id: 'R', companyId: 'own', modelId: 'M', pattaCount: 1, pattaStartNumber: 11 };
+    const accepted: LifecycleTicket = { id: 'accepted', companyId: 'own', modelId: 'M', partyRecordId: 'R', pattaNumber: 11, status: 'CONFIRMED', qty: 12 };
+    const pending: LifecycleTicket = { ...accepted, id: 'pending', status: 'PENDING_SYNC', qty: 12 };
+    for (const rows of [[pending, accepted], [accepted, pending]]) {
+      const result = selectLifecycleItems({ parties: [party], tickets: rows, periods: [Q] });
+      expect(result.items.filter((item) => item.ticketId)).toHaveLength(1);
+      expect(result.items.find((item) => item.ticketId)?.ticketId).toBe('accepted');
+      expect(result.items.filter((item) => item.pattaNumber === 11)).toHaveLength(1);
+      expect(result.excludedAttempts.map((ticket) => ticket.id)).toContain('pending');
+    }
+  });
+
+  it('maps legacy relative patta 1 to absolute slot 11 without inventing slot 1', () => {
+    const party: LifecycleParty = { id: 'R', companyId: 'own', modelId: 'M', pattaCount: 1, pattaStartNumber: 11 };
+    const relative: LifecycleTicket = { id: 'relative', companyId: 'own', modelId: 'M', partyRecordId: 'R', pattaNumber: 1, status: 'CONFIRMED', qty: 7 };
+    const result = selectLifecycleItems({ parties: [party], tickets: [relative], periods: [Q] });
+    expect(result.items.map((item) => [item.pattaNumber, item.ticketId, item.actualQuantity])).toEqual([[11, 'relative', 7]]);
+    expect(result.incomplete).toEqual([]);
+  });
+
+  it('reserves absolute before relative in ambiguous ranges and flags multiple accepted slot facts', () => {
+    const party: LifecycleParty = { id: 'R', companyId: 'own', modelId: 'M', pattaCount: 2, pattaStartNumber: 11 };
+    const absolute: LifecycleTicket = { id: 'absolute', companyId: 'own', modelId: 'M', partyRecordId: 'R', pattaNumber: 11, status: 'CONFIRMED', qty: 10 };
+    const relative: LifecycleTicket = { ...absolute, id: 'relative-11', pattaNumber: 1, qty: 20 };
+    const result = selectLifecycleItems({ parties: [party], tickets: [relative, absolute], periods: [Q] });
+    expect(result.items.filter((item) => item.pattaNumber === 11)).toHaveLength(1);
+    expect(result.items.find((item) => item.pattaNumber === 11)?.ticketId).toBe('absolute');
+    expect(result.incomplete).toContain('DUPLICATE_SLOT:own:R:11');
+
+    const secondAccepted = { ...absolute, id: 'conflict', qty: 99 };
+    const conflict = selectLifecycleItems({ parties: [party], tickets: [absolute, secondAccepted], periods: [Q] });
+    expect(conflict.items.filter((item) => item.pattaNumber === 11)).toHaveLength(1);
+    expect(conflict.incomplete).toContain('DUPLICATE_SLOT:own:R:11');
+    expect(conflict.items.find((item) => item.pattaNumber === 11)?.actualQuantity).toBe(10);
+  });
+
+  it('does not turn out-of-range accepted ticket numbers into additional work', () => {
+    const party: LifecycleParty = { id: 'R', companyId: 'own', modelId: 'M', pattaCount: 1, pattaStartNumber: 11 };
+    const outOfRange: LifecycleTicket = { id: 'outside', companyId: 'own', modelId: 'M', partyRecordId: 'R', pattaNumber: 99, status: 'CONFIRMED', qty: 123 };
+    const result = selectLifecycleItems({ parties: [party], tickets: [outOfRange], periods: [Q] });
+    expect(result.items.map((item) => [item.pattaNumber, item.ticketId, item.actualQuantity])).toEqual([[11, null, null]]);
+    expect(result.incomplete).toContain('OUT_OF_RANGE_TICKET:outside');
+    expect(result.excludedAttempts).toContain(outOfRange);
+  });
+
+  it('keeps exact accepted journal facts through legacy, pending, and absolute-first collision projections', () => {
+    const party: LifecycleParty = { id: 'A', companyId: 'own', modelId: 'M', pattaCount: 1, pattaStartNumber: 11, isClosed: true };
+    const legacy = selectLifecycleItems({ parties: [party], tickets: [], periods: [Q] });
+    expect(legacy.items.map(item => [item.ticketId, item.accepted, item.actualQuantity])).toEqual([[null, false, null]]);
+    const pending: LifecycleTicket = { id: 'pending', companyId: 'own', modelId: 'M', partyRecordId: 'A', pattaNumber: 11, status: 'PENDING_SYNC', qty: 10 };
+    const pendingResult = selectLifecycleItems({ parties: [party], tickets: [pending], periods: [Q] });
+    expect(pendingResult.items.map(item => [item.accepted, item.actualQuantity])).toEqual([[false, null]]);
+    expect(pendingResult.excludedAttempts.map(ticket => ticket.id)).toEqual(['pending']);
+    const absolute: LifecycleTicket = { ...pending, id: 'z_absolute', status: 'CONFIRMED', qty: 10 };
+    const relative: LifecycleTicket = { ...pending, id: 'a_relative', pattaNumber: 1, status: 'CONFIRMED', qty: 99 };
+    const duplicate = selectLifecycleItems({ parties: [{ ...party, isClosed: false }], tickets: [relative, absolute], periods: [Q] });
+    expect(duplicate.items.filter(item => item.ticketId)).toHaveLength(1);
+    expect(duplicate.items.map(item => [item.ticketId, item.accepted, item.actualQuantity])).toContainEqual(['z_absolute', true, 10]);
+    expect(duplicate.incomplete).toContain('DUPLICATE_SLOT:own:A:11');
   });
 });

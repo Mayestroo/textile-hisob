@@ -177,7 +177,7 @@ export const TitleBar: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
-                fontSize: '11px',
+                fontSize: '14px',
                 padding: '4px 8px',
                 borderRadius: 'var(--radius-full)',
                 cursor: 'pointer',
