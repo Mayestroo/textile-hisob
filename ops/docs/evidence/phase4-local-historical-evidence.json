@@ -1,0 +1,4869 @@
+{
+  "scope": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData",
+  "sourceWrites": 0,
+  "credentialsRead": false,
+  "sqliteFiles": [
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\companies\\comp_novda\\hisob.sqlite",
+      "sha256": "8627ab8560e400786c7e78aa72589e2d83e245b389db9a012e064f8a6d315b17",
+      "matchesOriginalBaseline": false,
+      "sidecars": {
+        "hisob.sqlite-wal": "51cea4812c9ea289b5e840d19fd1ef0685bd643e5c89253e456cfbcb8b4d4b54",
+        "hisob.sqlite-shm": "4b10c4b728b5062b9f1e843f588e295bfaeac89255a37d7a8ea381d23c79435c"
+      },
+      "stableCopy": true,
+      "integrity": "ok",
+      "schemaVersion": 25,
+      "counts": {
+        "workers": 222,
+        "models": 28,
+        "tickets": 1977,
+        "ticket_entries": 28715,
+        "production_adjustments": 216,
+        "period_archives": 1,
+        "local_outbox": 605
+      },
+      "productionMatches": [
+        {
+          "adjustmentId": "f2d1cff9-55d4-4c1b-a90f-27e1610e97c8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "135b543c-8c88-4de9-81c3-7565cefed52e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2372cfcf-8cec-4447-a4d7-faa4edd766e2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4b9e6ef4-63dc-47fe-a0eb-b54f6f153e92",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1db95d9e-1342-421d-b98e-a3950c388de9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "333310c1-4b2d-4b17-8ae3-5b30978e8902",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70f68fee-2260-4806-8b1d-1dde28b111e8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6fb0b874-b6b1-4064-9203-5de623ade3cc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f1838857-f996-4b2f-aebf-8324e51c6f91",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "16a88d60-9d1b-480e-aced-c184db529fbc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e68f3f4-5923-4a5c-9613-1d4f88dd3183",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "325f898a-b506-46dd-b69e-39bd265149bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35b6e9ed-8c9d-421a-95d7-a0f5bcaacc1a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "406f53d1-58b6-40f9-93f4-235bf62f8dc5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4311b5be-b1b4-4c5f-86ae-fb6b492dc96c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5e58d002-c3ab-4907-a90a-0196c9dc3aff",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6040011e-e95e-4c39-aeeb-dcd3a3a3b34e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "640a07a8-af9f-483f-9e11-d1740a2f0a95",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "818740df-3f52-4df4-b806-c2de64db632b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bbeee5d9-ffab-4c72-a655-6637da6b59f9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "beaa406b-e153-4df4-82c3-36d0f4800185",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0c5ce84-8a4f-4e9f-8f9d-039bdc0bfd90",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b2727c26-a0ad-4777-bc2c-8ae5bcae66db",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "60ed5df9-1686-47ff-8dce-48bce33f8373",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a8687f45-a8cc-4c39-a364-ca8781839f6e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f0781c00-f006-4238-b266-51bd3fc4312a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b9f11d6b-4ae5-4e76-9389-fbacf4017840",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "eafbaba0-7757-4759-bafb-22e90860533d",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "107ee1cf-e2bd-4416-bb34-108ac1013698",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1a21d943-3b6e-4069-82ea-dc5c05299a96",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d48795a9-2bac-4a53-9e6b-dcd5beb19da9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "01f7c143-51b8-44d6-90cd-6f7b29eb1c2c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "26a415ed-ed17-4556-91d3-1d4cfc41e343",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "282f087b-8e51-4176-b7ce-47391795a8f1",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4e0618df-f9dc-4cb2-be1d-6e3b4652f7bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c46ccb22-cf7a-4504-9726-212835753644",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "27d20850-265f-41b3-99a2-b63be8e66bbe",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "38357b45-f44d-4092-8d65-5bd718caea07",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3264eef0-9c35-468a-8796-16f40dcdb51e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1b69a6ee-2376-4d14-b831-0149de078698",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bb891fbe-bd6e-4ac0-b2fc-3a1040ee1e84",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1e6587f2-cdd8-41db-84c9-15d81e468bf2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "52376182-6a47-4c3b-8514-37fe5b0f2a70",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1ffc5e04-1441-45c5-9d13-958298b5df10",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5ddbaac5-0434-4d61-94cd-383e1fdef732",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "7dbe803a-5d19-448a-9187-19ba4be22d78",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e787528f-74bc-4c1c-826a-b9a19e2e3b4d",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9d19fcf0-5d4e-40ae-8a96-13df1ba214c3",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9aae759e-946c-4d78-a7bf-55acb710a27a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d6339cb9-bc9c-4d8c-b287-a8d8a2307da7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4f340c2d-0cd3-4cb0-b9ce-a1b24d36008e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e33ff2cc-fc73-4d62-9355-35d100975314",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "973aa6e8-1228-4964-bd1a-1d78f2a8ef56",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0d2ae6ae-431c-4508-862f-f5160295f41e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b4c2eaf2-e0b0-4d61-8cae-dc5c6a04b19f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6c32280a-af79-4fd2-887b-c1821b4694f7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2a3311fa-fc10-46e3-b831-8f7ceb8e4f9e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c99a7b26-de6d-4edb-aac5-c6e261776c62",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "369e2aec-a93b-4530-a3a2-0439960bc990",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "7ea01a58-57f1-4dd2-a2b6-aa4ed782e29e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "13988f1d-e2a0-4486-9f64-beb734f25faa",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "50824840-3a66-45bd-8716-4236b4b24ba6",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "472e95ae-121c-48d8-8be9-59eb3820ffd0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "14a09ba6-6e27-4edc-88d3-19c688f6ff78",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cf9f3b73-80cd-41a8-9b5e-bd65f6440ebc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "66dcc194-751c-4f86-9a32-977cbd012f26",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cc219d75-93f4-4c84-8692-4a5ee795f35c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "22b094ce-2a9f-479d-adc8-00d8a42e24db",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "24822c42-6cce-49eb-b6f3-2134b19b67ba",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "7e7a3009-60b1-47f7-ab2f-5b4fb5b77eca",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6e09b2b7-2efe-4de6-9277-9fe795214dce",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bf293cd2-c04d-4349-a50b-b1feebeaf66e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b871cf06-877a-4828-9071-a26f0808dfc9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1ba50aab-29d2-4e6f-85a1-0aa332b5bc9f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3170f9de-80b8-4c65-909f-4c806c81a202",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6c4eef3e-e843-4815-8d2b-367372975cd1",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9f617026-ff40-4a6a-86f3-e201b8e0e6cb",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e53bab4-b94a-42ca-9ed1-e57da9bd953f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a63b343f-eaca-4734-94fa-823b2b19d1c8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "41d274bb-3e00-468b-8667-78af60cb76a9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "03de9c0c-22d7-409c-a81a-ee95ca8f4ba5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3ca0c116-81a3-4c29-8ef3-99d30cb62c90",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e6804e5b-a579-452b-a32a-21ea91e00530",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0dea6a64-c0b4-4412-a4c1-6d8a157e227a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3ee7ada3-0e6a-40ec-9f96-29b41822386c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b37941be-b5f6-42c8-b07b-ce9360d84eee",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "dbf2bbba-c94d-4e2b-bb06-ddf007a3cc67",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9aef4bec-cfe0-4d03-91e7-59e104abc9e2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "96f8683d-4a2e-43d0-8f0a-fefd00d6b478",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "eba1e8bb-ac44-4d54-95e1-c508cc6a8355",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a6e533ad-9173-4ec9-b044-107630b1479f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "386643bf-0b8b-4f93-97c3-feed493d5b98",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d203c6ae-90b8-4ccd-96d4-3c5c038c8df2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d8c1d3fa-4e3d-4a60-b0a6-31c5c2520f66",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "18568a3c-b770-4b03-808a-e83bee8fadb2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5ab1b102-3c48-48bd-819b-9d28c58267b9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "46d0df0a-4c77-4f7a-8561-89d33bddc5ab",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "006a5ed7-227b-4cb1-91f0-edcce1b3cf83",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "38d9f97d-e1b8-4566-bedf-2323abf2e160",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "ea5b8142-61ce-4288-b93a-d22d6c6cf68f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0fb80c15-6460-4512-93df-378164a507e8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "aa53fe30-073d-4200-a701-64cc68318936",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4ff5c208-e2c3-4e33-a54f-ea5aeae37611",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "06d4c30d-12aa-4e47-98d1-85b92b7db7d2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "34464f77-2a3f-4119-b073-35c45e2a2487",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f28f57d8-d852-4f43-a4b4-95a34678c4b9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4a1d6eaf-c1e9-4e1e-8421-5b0ac6b67abb",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9da6e269-e020-4583-9ff8-75291db47ed9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b1066be4-8e84-483c-82a5-552111200894",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "425007f0-bae5-45cb-8059-c74d90a5d191",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "ef80242d-5133-4c30-955f-d3107ea343bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "439b1064-c682-4a3a-95e5-13a24d7eb845",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c0ebcf2b-a376-4cf6-8c6e-7cd6800c13d2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e8af8a99-5b37-4b2a-9e64-56a470a04f1e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b3e05138-58e4-4689-859a-e12d895d881a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "12ca497f-14d0-46d0-b3f7-94f0cb9bfc07",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5ad068f0-dedd-4f36-8d4d-09fb23a1eb8b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a7557b13-5279-4d14-9906-53aa34557963",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f045b10b-99fe-418b-b562-158026b026f4",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9abf700e-0b3a-4d14-8db3-0ffbc3631920",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b0e44157-6fab-43b3-a020-8109c1116ef5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bbbcc7f6-8e02-474f-a000-236cc81dff3f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "53c03f83-5744-46f9-b461-95264e219d93",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b208cd2d-47b2-4579-a7d3-fe077bcb158e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "42a8f40b-5bb0-4a76-8b22-76db780ed5fa",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "98b7120e-4a85-4236-a283-a03693accc6a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "efe0f346-d0dc-4982-a11c-630fb5c7b8c2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "475ca860-441e-475d-8111-fbac73e6b3cd",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e0130488-33f9-471c-9c44-bd42c8edcf17",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "8ef70bc1-7371-465e-94a2-73b881878007",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "8bc8206f-168f-4d6e-ba3a-e2b69bdbdcce",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29996fbe-6d8b-4fb0-b90b-e830c847dc51",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "69759599-fc67-44b7-950f-68a3d6368aed",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d6325ac9-665d-461c-a0f2-8c9b7978d307",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bc80477a-1869-4ec5-a590-d580c72b530b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a567024f-c8b2-4a84-8c59-576253f5ad4a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b45d2738-3a43-4109-a563-fbac5c14e362",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e8cfe096-f59f-4396-b507-b6801030c5d3",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "aad175ca-94ac-4fca-929e-f3342c5afb57",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b62845b-26ec-4550-9bef-fbd2f4316b7a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70131c5e-5c56-4537-a01d-14716ce3a206",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "02a72a8f-3cf5-4713-9f35-ea3a7d926306",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "82b08dee-877b-4709-9e92-748d6c10756e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c7d428e9-578e-4973-be1a-af4d817a2106",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0a4327b1-d3a8-4434-9f35-6f9ed02e0254",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "21e669fb-51de-4472-9ee4-23cd3babad76",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "fa775e58-c54d-450b-8906-4c1559e10eb0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "8c7595c2-e09f-4d7c-b8a8-6307b490aa14",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "584e1ac8-6da9-4e29-bed8-15ea5200d4dc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b48a376-71a8-42eb-bb49-faf29c1af078",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cbbdb8e6-9b2f-42ff-8079-7a42418e9094",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f4dc0b04-b74b-4490-9f01-3d5a36d3fde9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0397a4fd-753c-47d7-b9fa-7c3e70a22f99",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0786f51-a8ab-4fd0-b0c4-47354b6d240d",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "81be9d7d-9760-4b81-997d-704bc8532cc3",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "ae364a9a-cb89-407d-a580-682a98af3030",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "be1bda0a-d1bb-40ac-a1f2-cf7df3ec0b98",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "7ba7c407-2861-4d12-8104-d6d34630547c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d2f98234-98bb-4b1a-8944-eb5bb2f67a2e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e8b75f7-178e-48eb-9b78-245020de03f0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "601d1247-247a-4ea6-b2d8-71c6ce634c46",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bf7e5b84-56d4-4208-bb54-e73b4ff94b54",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3e1a4caf-7d51-4917-950e-5ac8a851ab8f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "706bd524-aa32-4433-9fbc-87634db7aaff",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f9e28f35-2147-4df6-8ddc-f114aa7e829d",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "69b6ad33-b746-48c6-8d79-06578f39a7a6",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "acebe42e-9d46-4085-b29d-313ff0142806",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bf7298a1-73e4-4572-813c-6a3c310abbe2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "ef93bd2e-a911-486c-aefb-64872f3ce576",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4d950693-d8b4-41a0-94f1-f42ff8759c65",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2f6d0f77-07ea-426d-883d-49afeecd05df",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "10052f3e-0821-4ae3-a663-a95f08c6ccbf",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9652c9ec-8f9c-4058-b9b9-c862ab7a0768",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "676cfcb8-9a9c-4421-b293-5a0041adabd8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f474772b-493f-47e9-891f-f0e71e5c92b7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6869dea0-c179-46c8-8513-9eb60919d68e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "31f922d5-4dee-41fc-b33c-f3ac268d6625",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "36ebd923-de07-4e2d-974f-4519bf29bd3e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "25b27b74-7afc-4784-9eba-c80301b6ed32",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "443ede70-cf4d-4423-a673-e46ac148a3c3",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35cb8ecd-8741-4d0e-9f9f-7c37f8fbaf05",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5af3d7c8-a8e5-4e99-9490-c9c8558f9751",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4e0e29e9-9e3b-4135-835b-8460e0164990",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cd45f043-898f-42c2-b396-dfb18687e6da",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9ea2afec-2bb9-4ac9-ab4e-5dca0895f043",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "87586af6-0001-474d-a04f-2306ce7bc195",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "11682971-1c80-45da-9e22-852862283ae1",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c3f82312-044e-4a17-bf9c-d1c1c45d4cf2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c5ca191f-bd0d-4c22-87ee-3c96ec4f0584",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "96659b62-d9cf-40fc-b6a6-c9dc27099d29",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9e95d269-d80a-4852-99e4-8fa79b630cdc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3c606ae6-6e84-448b-91a9-6e87914ae445",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "27c97506-40c2-49d8-b3b6-097997015a21",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cabf60c8-3bd5-467d-8bcd-3d157f45e160",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9f1da7b7-3a9c-469a-9b7b-2553df746c75",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "11acb4c6-1b6b-4f39-b83e-4d9c248ed124",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5610dfc1-b63e-427a-8075-21fb79bca623",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "90778a70-69c7-4b72-9bab-fd6c8668b760",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "60fec56f-b426-464e-82a2-dc2e4491fe3f",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0852ebd1-ead3-4e5d-8f49-8abc4b7f571d",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a4135a5e-f6c7-4523-bd08-2006725411cf",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4e00f88c-dbf1-480f-b73c-dadde1585859",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "856e8435-5ad0-43bc-8ab7-feb5b2736ff4",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c0af119e-74f2-440b-91aa-fd66ca37657a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "82c719aa-553a-4686-b420-fc1e41f67b7d",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5af018a1-e2b8-43c9-987e-fee7c386bb57",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f062dbf9-23ed-44fc-a832-6f16e2ff4678",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "retainedCommandMatches": [
+        {
+          "adjustmentId": "b2727c26-a0ad-4777-bc2c-8ae5bcae66db",
+          "payloadHash": "8fb698a252766e8c4162ccd1d89079e58baae752c4b8ddbfb22118bf783853af",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "60ed5df9-1686-47ff-8dce-48bce33f8373",
+          "payloadHash": "386fc18353b565097697d66e1cfe5b7da0af509318e3380d3e77f713112fd097",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a8687f45-a8cc-4c39-a364-ca8781839f6e",
+          "payloadHash": "b0093b2dffa9db380a05cd6032a8dae875bee0f0122898a3cb6a993dee183fcc",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "8ef70bc1-7371-465e-94a2-73b881878007",
+          "payloadHash": "15b413fc36cf175d8fbe59cc7e6b49bc36bf49a586f1d8ca4426f6e2438c3f50",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "8bc8206f-168f-4d6e-ba3a-e2b69bdbdcce",
+          "payloadHash": "edb45bbe400a4ee891f570e21cab630b689450fb6a3bf7cc0f18ce05dcb8d058",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29996fbe-6d8b-4fb0-b90b-e830c847dc51",
+          "payloadHash": "3c1ab9b2aa8020520d39603eb5f3bf31ac5dcaa3ecc669499fec0a387128c3ef",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "69759599-fc67-44b7-950f-68a3d6368aed",
+          "payloadHash": "21b2c27e11abad7572a4bef8f44a6428f93d6f14e23a2150bcd8ad7b54ca71d3",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d6325ac9-665d-461c-a0f2-8c9b7978d307",
+          "payloadHash": "b223dea7f89c5adb24b5c21c22e67e4f08ea6646c1a82a4b2bbc27bef23107ea",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bc80477a-1869-4ec5-a590-d580c72b530b",
+          "payloadHash": "07fee22814e1d0d68c803af991a76904ca0f829ec8045df8d3e3519ee2e852a8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a567024f-c8b2-4a84-8c59-576253f5ad4a",
+          "payloadHash": "3ac84c31fded0ef05449e2dabbfcef83a1f8b17d058b77e3bdff41fea420d70b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "b45d2738-3a43-4109-a563-fbac5c14e362",
+          "payloadHash": "94053e54278fa4686ca4af0017f81c2147e65f5f0f3be469bf3ee87e0cfeb248",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "e8cfe096-f59f-4396-b507-b6801030c5d3",
+          "payloadHash": "1c1413addf8e9886eab6d85ddc54f26724cd02e27d154d32a8c8197fcb181e53",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "aad175ca-94ac-4fca-929e-f3342c5afb57",
+          "payloadHash": "671ab2a9b77eb084df63a3a13d2978ad7ff0a5efae835633495ae8baa8e5a1c9",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b62845b-26ec-4550-9bef-fbd2f4316b7a",
+          "payloadHash": "c48a9df94532a4780c3fd04de1bb561fe86e07a609a3dd7bbd8a6934a7953597",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70131c5e-5c56-4537-a01d-14716ce3a206",
+          "payloadHash": "81f4e29416ffa66ee11afa8e6a791a91bbd659ab8f943383d27e23e543e89058",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "02a72a8f-3cf5-4713-9f35-ea3a7d926306",
+          "payloadHash": "17e5a99999e4718107dbfce76212442495819bf490fba662ca8844fa354bec44",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "82b08dee-877b-4709-9e92-748d6c10756e",
+          "payloadHash": "5f8feeae0a597de4fa533d92ce87358298df4d8e53fa6fe0cbb1bb822fb4944e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c7d428e9-578e-4973-be1a-af4d817a2106",
+          "payloadHash": "8bac0743666fe5017d490fadefdcf13f14ff544b2416968977913f84d2e2a5f5",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0a4327b1-d3a8-4434-9f35-6f9ed02e0254",
+          "payloadHash": "9b97eda076b27f66c23a1f604ad66d4784ab7919c1b9dd39e591216c033c2a18",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "21e669fb-51de-4472-9ee4-23cd3babad76",
+          "payloadHash": "ef6a2bf759439e357dcc5e98d5446300520692139d5d7bc65c0edb518bdc9cc0",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "fa775e58-c54d-450b-8906-4c1559e10eb0",
+          "payloadHash": "6d05d60942e32e8f283fddffa01e409cf2bc830badcb71f58a1551b0d54f624b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "8c7595c2-e09f-4d7c-b8a8-6307b490aa14",
+          "payloadHash": "80aae00e1d0fbb641e4ec06a1d3ea3763879aa7623a1f435da244c1750f710d0",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "584e1ac8-6da9-4e29-bed8-15ea5200d4dc",
+          "payloadHash": "4363f9af45876102e29ea101b76964ea7bb47309008959db08d2ce4eb950ccb5",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b48a376-71a8-42eb-bb49-faf29c1af078",
+          "payloadHash": "3bf378537f799417e42f21fc9d8bf5873575672b86dc97b3314112c014c5d822",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cbbdb8e6-9b2f-42ff-8079-7a42418e9094",
+          "payloadHash": "9fd1a3c59f7ceb7ffd6f2959a672da3dcdd7982b517eb52e4b1347d0384687f6",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f4dc0b04-b74b-4490-9f01-3d5a36d3fde9",
+          "payloadHash": "592a77cd2ba0579a66d695e3a8f356d95a42c93a8a30b2c87dba866082f9b471",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0397a4fd-753c-47d7-b9fa-7c3e70a22f99",
+          "payloadHash": "b9f16b851b62440c2c4748e6408deb083e874e6f1698ff9111dd436559555a95",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0786f51-a8ab-4fd0-b0c4-47354b6d240d",
+          "payloadHash": "4b099e2bbeb5e27db67ccfb79575aaf1b5cb9137cca48a11d46f6748abc2f751",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "81be9d7d-9760-4b81-997d-704bc8532cc3",
+          "payloadHash": "81c25100fe424c46e072f0a30e18545a32e8d08214ea6597062c982796346c8e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "ae364a9a-cb89-407d-a580-682a98af3030",
+          "payloadHash": "378d42943d211f30fbd5df11e8182a4a393d9f9c3c69d453f9c5b417cbe722a2",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "be1bda0a-d1bb-40ac-a1f2-cf7df3ec0b98",
+          "payloadHash": "c69e970101fc0427ddb82bb40eeeb251e6b8631ccf35504267bcc62e9362e5c0",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "7ba7c407-2861-4d12-8104-d6d34630547c",
+          "payloadHash": "a9bc48d69afc84f3f8ad44b0590f25a38c0acf320c1775f33c3ed9a198023b25",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "d2f98234-98bb-4b1a-8944-eb5bb2f67a2e",
+          "payloadHash": "f9c487d6c98481cb35fbc662280f2aca1d3683be5423a78b72a69444ff53f157",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e8b75f7-178e-48eb-9b78-245020de03f0",
+          "payloadHash": "e7abd7f53cce4f53597ba5784e1d81dc4f19091cb249b7b141eefe4795463d8f",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "601d1247-247a-4ea6-b2d8-71c6ce634c46",
+          "payloadHash": "800100420d35907d4dfcff0de007008ea56e773a3d7bccfe3cbe777d46e54954",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bf7e5b84-56d4-4208-bb54-e73b4ff94b54",
+          "payloadHash": "d96b8042ffee015a07192cb54346b0758485eab2c971d082702caa4240de2b0a",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3e1a4caf-7d51-4917-950e-5ac8a851ab8f",
+          "payloadHash": "5c10ad07d71aea49b0624d0812f5104c375c9a66a3c1633d7b1b560924604c37",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "706bd524-aa32-4433-9fbc-87634db7aaff",
+          "payloadHash": "d7b683c7ea166cef433acffd271914304230cfb26d16908d6998859be84c882a",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f9e28f35-2147-4df6-8ddc-f114aa7e829d",
+          "payloadHash": "c6f64ec451b9f21deefa584d3443cd01da149c5b02d5c7e69bc127aea3631352",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "69b6ad33-b746-48c6-8d79-06578f39a7a6",
+          "payloadHash": "5e6fb46085c6aecd96b77e650079890e2bc93a37c40b951942b4f51e6b3866f2",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "acebe42e-9d46-4085-b29d-313ff0142806",
+          "payloadHash": "5ff34a1c13e3c20575788684e21a06fad3ed2f647af94bdfcd4615b8dbde8ee8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bf7298a1-73e4-4572-813c-6a3c310abbe2",
+          "payloadHash": "510fd52effb815b6c04dd20508683c359cef0de30bb805e464e4a791b7bcc917",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "ef93bd2e-a911-486c-aefb-64872f3ce576",
+          "payloadHash": "facce8f89f08809027fdff18571bcb050dff1aa2e93664d7b133d38f57a47d0b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4d950693-d8b4-41a0-94f1-f42ff8759c65",
+          "payloadHash": "b7152ab43e18c2ba9cf6ea6375cb63336accbf1b6a272a6f484f4656be3e45c7",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2f6d0f77-07ea-426d-883d-49afeecd05df",
+          "payloadHash": "e048c501f9a9bc2947070e8bfdd4a4cc420b4fe82c07bd357d674f61cf674167",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "10052f3e-0821-4ae3-a663-a95f08c6ccbf",
+          "payloadHash": "572375b2dcf3ece5da573f36bed4fa0cf18574e210c20da57cb28604c3dca2df",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9652c9ec-8f9c-4058-b9b9-c862ab7a0768",
+          "payloadHash": "0a2a6f6d23629ba33b3cecac3d393132205c883a5ba6198fdab5cf0c793ea31b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "676cfcb8-9a9c-4421-b293-5a0041adabd8",
+          "payloadHash": "ecf729735bbd25f08b616fd090298acc8d282ff26588a5485c02aa53b78718f1",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f474772b-493f-47e9-891f-f0e71e5c92b7",
+          "payloadHash": "9948a85191ab9767e744007cb453b696cc03983ded21c96ec1d9539192c7d96e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6869dea0-c179-46c8-8513-9eb60919d68e",
+          "payloadHash": "dd22c1593659eeefb54e871dd61db038b6b458be2c9ca6869c30cba367c53ed1",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "31f922d5-4dee-41fc-b33c-f3ac268d6625",
+          "payloadHash": "11cb9d263681cba26c347ed5f252d1e75bc229ecfc4332a65a44e6f607c4d99d",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "36ebd923-de07-4e2d-974f-4519bf29bd3e",
+          "payloadHash": "e70f80e420872f6136d32691b5f0f57fabb991573f7de675aa4e4845044d8dc4",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "25b27b74-7afc-4784-9eba-c80301b6ed32",
+          "payloadHash": "d0f437650ba8e98d59cf08e755300615d11c8956d89ef1c71e3311f5016d3d66",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "443ede70-cf4d-4423-a673-e46ac148a3c3",
+          "payloadHash": "e1ad2983cf96457b2dccd3051c6374ad6832278f0a448a699663734a421072d3",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35cb8ecd-8741-4d0e-9f9f-7c37f8fbaf05",
+          "payloadHash": "974458d3dbbb5e09dff13a77ad011a8470d09dcb02f439d0dc7fec0f155a0a99",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5af3d7c8-a8e5-4e99-9490-c9c8558f9751",
+          "payloadHash": "07152343b6fa717858b37f2b562234791a278e3fc56565516baaaace0ee9e7b6",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4e0e29e9-9e3b-4135-835b-8460e0164990",
+          "payloadHash": "ea1930d9c0f00429e90067c586ac2b4e7d10744b526bd24fc954ca98ba76d792",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cd45f043-898f-42c2-b396-dfb18687e6da",
+          "payloadHash": "f3538ef21db685f92940d65a5b1f0ad51209b085f288b02aff66358889e858d8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9ea2afec-2bb9-4ac9-ab4e-5dca0895f043",
+          "payloadHash": "5f33d8acec8d118c808947bd7d4708249a69e105d3fc76733d5ec39266cd9e4e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "87586af6-0001-474d-a04f-2306ce7bc195",
+          "payloadHash": "8a50ea41bd03ae364030fa8de24e7941791b8b206fd093e834079abeac283fb2",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "11682971-1c80-45da-9e22-852862283ae1",
+          "payloadHash": "692222962abfb8bc2bc06ba525a5ae606d4059e06283a6a449fa2075805507e3",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c3f82312-044e-4a17-bf9c-d1c1c45d4cf2",
+          "payloadHash": "99e8bf827f746e472a0c90cf5f2761a32056644057b7964c6d336c1bd78a4257",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c5ca191f-bd0d-4c22-87ee-3c96ec4f0584",
+          "payloadHash": "c1aa5cbf5a353caedb90265c5deec266e34b5fcf1b39a014359ee0942a2a2edd",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "96659b62-d9cf-40fc-b6a6-c9dc27099d29",
+          "payloadHash": "550e9ebca061993d2b6a3faef277f37569a37d6d53f27ef581ddc0e6fdf591af",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9e95d269-d80a-4852-99e4-8fa79b630cdc",
+          "payloadHash": "97ffec24e56ebb072713c256632fff05a9c425b482a7f85eea51962ddd83a9a3",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3c606ae6-6e84-448b-91a9-6e87914ae445",
+          "payloadHash": "a268dbaf2d0f5a25d664545e9430c3e565b405a3f433c161863f1207fe6bdc39",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "27c97506-40c2-49d8-b3b6-097997015a21",
+          "payloadHash": "1253153f6de7e7ed28a63504955f23cbb72a5bd7339bd3d0214a309db78f0e5e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "cabf60c8-3bd5-467d-8bcd-3d157f45e160",
+          "payloadHash": "1ffb05df4b7978d6a6c5b69f9c8e140bb393230876776688dfdc75d758b84f8b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "9f1da7b7-3a9c-469a-9b7b-2553df746c75",
+          "payloadHash": "015a9dc55dff0533efe33b00861dd8ff5a26aebfaa1ac5583db5359243a8f22e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "11acb4c6-1b6b-4f39-b83e-4d9c248ed124",
+          "payloadHash": "f4371aca2d596bd9edb85aa6cfe8e3040fa32bc3bc6976e53a2adb3f068ac0a9",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5610dfc1-b63e-427a-8075-21fb79bca623",
+          "payloadHash": "d7835ddf6f438529bb2b94558d2853e4b9e0438f60dc04aa4b2f4b6f276d5c85",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "90778a70-69c7-4b72-9bab-fd6c8668b760",
+          "payloadHash": "7d631887b20aa6a4854511240f52b9066e5496de04affeefcdc7687f7ecbec3f",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "60fec56f-b426-464e-82a2-dc2e4491fe3f",
+          "payloadHash": "d2d897922e028510f78a74fcd13f16c08293ae8a33c32bd6e898c940975860a8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "0852ebd1-ead3-4e5d-8f49-8abc4b7f571d",
+          "payloadHash": "54fbecb2646a35658a4fcdb3d0ced3525a6bdb5ae24d1e648bd80c968ae210cb",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a4135a5e-f6c7-4523-bd08-2006725411cf",
+          "payloadHash": "d25df27d9cab059f1cf1ef13a8df903ef84e19fb1246bd7b22f1e954141c53f4",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4e00f88c-dbf1-480f-b73c-dadde1585859",
+          "payloadHash": "a5f60731221db010f97847ccbf485a7db66a52d8f6106ecf230f23370dc984a6",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "856e8435-5ad0-43bc-8ab7-feb5b2736ff4",
+          "payloadHash": "0d9bf0ef8261ad6e29ca74b03bf524aaf6508e67b4ee4152d62c6e07ec6c2ce3",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "c0af119e-74f2-440b-91aa-fd66ca37657a",
+          "payloadHash": "dc3e89e469b1e391c2902e4f105748e10e1d70884f625cbc5083f1cb1cb12dce",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "82c719aa-553a-4686-b420-fc1e41f67b7d",
+          "payloadHash": "0cc939ce9d0e23711e487e6f95bfad09143fdf9dd4821a2c400e29e60f108b6c",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5af018a1-e2b8-43c9-987e-fee7c386bb57",
+          "payloadHash": "48e4570cae5913e28e3340ac83cc6ac6293f52d1f4f0d2b72a2647f460556d52",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f062dbf9-23ed-44fc-a832-6f16e2ff4678",
+          "payloadHash": "1f66889083f4007b3079e6e1dfe49ad1f9e1d7b7b2417b5f3b86ce664fdfb677",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "archives": [
+        {
+          "company_id": "comp_novda",
+          "period_id": "period_1788768267439",
+          "sha256": "f3d8c8348d51a6bd28e4e1dd2f5ddcfd6b11d1997e08708720f9c47f0dfe8d71"
+        }
+      ],
+      "sourceUnchangedAfterInspection": true
+    },
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\companies\\comp_novda_before_1.1.7\\hisob.sqlite",
+      "sha256": "f0082d7114975f60fc664e23896ac61336579c14baefefc84859cf1fdf358e92",
+      "matchesOriginalBaseline": false,
+      "sidecars": {},
+      "stableCopy": true,
+      "integrity": "ok",
+      "schemaVersion": 19,
+      "counts": {
+        "workers": 0,
+        "models": 0,
+        "tickets": 0,
+        "ticket_entries": 0,
+        "production_adjustments": 0,
+        "period_archives": 0,
+        "local_outbox": 0
+      },
+      "productionMatches": [],
+      "retainedCommandMatches": [],
+      "archives": [],
+      "sourceUnchangedAfterInspection": true
+    },
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\companies\\comp_novda_before_reset\\hisob.sqlite",
+      "sha256": "d239149b9401e39b20e1caa3d886970f9fad3fbf2a4e668359b6c25368579ba2",
+      "matchesOriginalBaseline": false,
+      "sidecars": {},
+      "stableCopy": true,
+      "integrity": "ok",
+      "schemaVersion": 19,
+      "counts": {
+        "workers": 210,
+        "models": 20,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "period_archives": 0,
+        "local_outbox": 417
+      },
+      "productionMatches": [
+        {
+          "adjustmentId": "f2d1cff9-55d4-4c1b-a90f-27e1610e97c8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "135b543c-8c88-4de9-81c3-7565cefed52e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2372cfcf-8cec-4447-a4d7-faa4edd766e2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4b9e6ef4-63dc-47fe-a0eb-b54f6f153e92",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1db95d9e-1342-421d-b98e-a3950c388de9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "333310c1-4b2d-4b17-8ae3-5b30978e8902",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70f68fee-2260-4806-8b1d-1dde28b111e8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6fb0b874-b6b1-4064-9203-5de623ade3cc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f1838857-f996-4b2f-aebf-8324e51c6f91",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "16a88d60-9d1b-480e-aced-c184db529fbc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e68f3f4-5923-4a5c-9613-1d4f88dd3183",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "325f898a-b506-46dd-b69e-39bd265149bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35b6e9ed-8c9d-421a-95d7-a0f5bcaacc1a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "406f53d1-58b6-40f9-93f4-235bf62f8dc5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4311b5be-b1b4-4c5f-86ae-fb6b492dc96c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5e58d002-c3ab-4907-a90a-0196c9dc3aff",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6040011e-e95e-4c39-aeeb-dcd3a3a3b34e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "640a07a8-af9f-483f-9e11-d1740a2f0a95",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "818740df-3f52-4df4-b806-c2de64db632b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bbeee5d9-ffab-4c72-a655-6637da6b59f9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "beaa406b-e153-4df4-82c3-36d0f4800185",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0c5ce84-8a4f-4e9f-8f9d-039bdc0bfd90",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "retainedCommandMatches": [
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "payloadHash": "43719eec5d1d9d97c105389036bdb348306ff8d639d46aae221fc9fd05dad535",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "payloadHash": "cc573e9f6a87778e4d356b325df290b91ed4b14c9b908e616ee7f831823ffd1b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "payloadHash": "c9d25a4fa025ac2db03c3759e84866a43f73646d01107ab44a5892ce50c16fa8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "payloadHash": "a1a895a3ec4678c497ee9538babd73335225c842b7a87fc06649e93aec4ca23b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "payloadHash": "68937ea3243f9355eaa0cf7669eed9c3c80a33bb949e2c4b8a8bd26f8b914a5e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "payloadHash": "f005ca7927854e995ec79b652c7f3a6444a8c1f56122f5ba3162b9700d37918c",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "payloadHash": "2161ba1e68daade0c53d175b057ccedee51b239672303f11217d6319f4ccd4f5",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "payloadHash": "43d8551d172f01a51c92f1eac5ca7bf0721307f41fb8275ae077cddec1e6d490",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "payloadHash": "66be625371302ab8b807c075bf0e4e1ad15210435a87447d57ffc62171c69a3b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "archives": [],
+      "sourceUnchangedAfterInspection": true
+    },
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\companies\\comp_novda_before_reset\\hisob.sqlite.before-baseline-fix-20261006T044259Z.bak",
+      "sha256": "adf5c1840a04fc3a0608f382677f1c4591dd2d05448ab343f01a717f61f48d51",
+      "matchesOriginalBaseline": false,
+      "sidecars": {
+        "hisob.sqlite.before-baseline-fix-20261006T044259Z.bak-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hisob.sqlite.before-baseline-fix-20261006T044259Z.bak-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+      },
+      "stableCopy": true,
+      "integrity": "ok",
+      "schemaVersion": 18,
+      "counts": {
+        "workers": 209,
+        "models": 20,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "period_archives": 0,
+        "local_outbox": 383
+      },
+      "productionMatches": [
+        {
+          "adjustmentId": "f2d1cff9-55d4-4c1b-a90f-27e1610e97c8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "135b543c-8c88-4de9-81c3-7565cefed52e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2372cfcf-8cec-4447-a4d7-faa4edd766e2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4b9e6ef4-63dc-47fe-a0eb-b54f6f153e92",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1db95d9e-1342-421d-b98e-a3950c388de9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "333310c1-4b2d-4b17-8ae3-5b30978e8902",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70f68fee-2260-4806-8b1d-1dde28b111e8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6fb0b874-b6b1-4064-9203-5de623ade3cc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f1838857-f996-4b2f-aebf-8324e51c6f91",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "16a88d60-9d1b-480e-aced-c184db529fbc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e68f3f4-5923-4a5c-9613-1d4f88dd3183",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "325f898a-b506-46dd-b69e-39bd265149bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35b6e9ed-8c9d-421a-95d7-a0f5bcaacc1a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "406f53d1-58b6-40f9-93f4-235bf62f8dc5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4311b5be-b1b4-4c5f-86ae-fb6b492dc96c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5e58d002-c3ab-4907-a90a-0196c9dc3aff",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6040011e-e95e-4c39-aeeb-dcd3a3a3b34e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "640a07a8-af9f-483f-9e11-d1740a2f0a95",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "818740df-3f52-4df4-b806-c2de64db632b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bbeee5d9-ffab-4c72-a655-6637da6b59f9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "beaa406b-e153-4df4-82c3-36d0f4800185",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0c5ce84-8a4f-4e9f-8f9d-039bdc0bfd90",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "retainedCommandMatches": [
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "payloadHash": "43719eec5d1d9d97c105389036bdb348306ff8d639d46aae221fc9fd05dad535",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "payloadHash": "cc573e9f6a87778e4d356b325df290b91ed4b14c9b908e616ee7f831823ffd1b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "payloadHash": "c9d25a4fa025ac2db03c3759e84866a43f73646d01107ab44a5892ce50c16fa8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "payloadHash": "a1a895a3ec4678c497ee9538babd73335225c842b7a87fc06649e93aec4ca23b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "payloadHash": "68937ea3243f9355eaa0cf7669eed9c3c80a33bb949e2c4b8a8bd26f8b914a5e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "payloadHash": "f005ca7927854e995ec79b652c7f3a6444a8c1f56122f5ba3162b9700d37918c",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "payloadHash": "2161ba1e68daade0c53d175b057ccedee51b239672303f11217d6319f4ccd4f5",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "payloadHash": "43d8551d172f01a51c92f1eac5ca7bf0721307f41fb8275ae077cddec1e6d490",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "payloadHash": "66be625371302ab8b807c075bf0e4e1ad15210435a87447d57ffc62171c69a3b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "archives": [],
+      "sourceUnchangedAfterInspection": true
+    },
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\companies\\comp_novda_before_reset\\hisob.sqlite.before-erkin-92-20261006T0405Z.bak",
+      "sha256": "e667ee895ce4321f671a91ccb68b21331bc120f5192628f733d8d0830020fdf6",
+      "matchesOriginalBaseline": false,
+      "sidecars": {
+        "hisob.sqlite.before-erkin-92-20261006T0405Z.bak-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hisob.sqlite.before-erkin-92-20261006T0405Z.bak-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+      },
+      "stableCopy": true,
+      "integrity": "ok",
+      "schemaVersion": 18,
+      "counts": {
+        "workers": 209,
+        "models": 20,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "period_archives": 0,
+        "local_outbox": 289
+      },
+      "productionMatches": [
+        {
+          "adjustmentId": "f2d1cff9-55d4-4c1b-a90f-27e1610e97c8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "135b543c-8c88-4de9-81c3-7565cefed52e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2372cfcf-8cec-4447-a4d7-faa4edd766e2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4b9e6ef4-63dc-47fe-a0eb-b54f6f153e92",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1db95d9e-1342-421d-b98e-a3950c388de9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "333310c1-4b2d-4b17-8ae3-5b30978e8902",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70f68fee-2260-4806-8b1d-1dde28b111e8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6fb0b874-b6b1-4064-9203-5de623ade3cc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f1838857-f996-4b2f-aebf-8324e51c6f91",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "16a88d60-9d1b-480e-aced-c184db529fbc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e68f3f4-5923-4a5c-9613-1d4f88dd3183",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "325f898a-b506-46dd-b69e-39bd265149bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35b6e9ed-8c9d-421a-95d7-a0f5bcaacc1a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "406f53d1-58b6-40f9-93f4-235bf62f8dc5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4311b5be-b1b4-4c5f-86ae-fb6b492dc96c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5e58d002-c3ab-4907-a90a-0196c9dc3aff",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6040011e-e95e-4c39-aeeb-dcd3a3a3b34e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "640a07a8-af9f-483f-9e11-d1740a2f0a95",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "818740df-3f52-4df4-b806-c2de64db632b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bbeee5d9-ffab-4c72-a655-6637da6b59f9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "beaa406b-e153-4df4-82c3-36d0f4800185",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0c5ce84-8a4f-4e9f-8f9d-039bdc0bfd90",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "retainedCommandMatches": [
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "payloadHash": "43719eec5d1d9d97c105389036bdb348306ff8d639d46aae221fc9fd05dad535",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "payloadHash": "cc573e9f6a87778e4d356b325df290b91ed4b14c9b908e616ee7f831823ffd1b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "payloadHash": "c9d25a4fa025ac2db03c3759e84866a43f73646d01107ab44a5892ce50c16fa8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "payloadHash": "a1a895a3ec4678c497ee9538babd73335225c842b7a87fc06649e93aec4ca23b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "payloadHash": "68937ea3243f9355eaa0cf7669eed9c3c80a33bb949e2c4b8a8bd26f8b914a5e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "payloadHash": "f005ca7927854e995ec79b652c7f3a6444a8c1f56122f5ba3162b9700d37918c",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "payloadHash": "2161ba1e68daade0c53d175b057ccedee51b239672303f11217d6319f4ccd4f5",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "payloadHash": "43d8551d172f01a51c92f1eac5ca7bf0721307f41fb8275ae077cddec1e6d490",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "payloadHash": "66be625371302ab8b807c075bf0e4e1ad15210435a87447d57ffc62171c69a3b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "archives": [],
+      "sourceUnchangedAfterInspection": true
+    },
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\companies\\comp_novda_before_reset\\hisob.sqlite.before-final-erkin-20261006T0435Z.bak",
+      "sha256": "378b9ed341c8a1a912d9266eafd3ce42b7863ebec83488a09447e860e1b99038",
+      "matchesOriginalBaseline": false,
+      "sidecars": {
+        "hisob.sqlite.before-final-erkin-20261006T0435Z.bak-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hisob.sqlite.before-final-erkin-20261006T0435Z.bak-shm": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+      },
+      "stableCopy": true,
+      "integrity": "ok",
+      "schemaVersion": 18,
+      "counts": {
+        "workers": 209,
+        "models": 20,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "period_archives": 0,
+        "local_outbox": 382
+      },
+      "productionMatches": [
+        {
+          "adjustmentId": "f2d1cff9-55d4-4c1b-a90f-27e1610e97c8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "135b543c-8c88-4de9-81c3-7565cefed52e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2372cfcf-8cec-4447-a4d7-faa4edd766e2",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4b9e6ef4-63dc-47fe-a0eb-b54f6f153e92",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "1db95d9e-1342-421d-b98e-a3950c388de9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "333310c1-4b2d-4b17-8ae3-5b30978e8902",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "70f68fee-2260-4806-8b1d-1dde28b111e8",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6fb0b874-b6b1-4064-9203-5de623ade3cc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f1838857-f996-4b2f-aebf-8324e51c6f91",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "16a88d60-9d1b-480e-aced-c184db529fbc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "2e68f3f4-5923-4a5c-9613-1d4f88dd3183",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "325f898a-b506-46dd-b69e-39bd265149bc",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "35b6e9ed-8c9d-421a-95d7-a0f5bcaacc1a",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "406f53d1-58b6-40f9-93f4-235bf62f8dc5",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "4311b5be-b1b4-4c5f-86ae-fb6b492dc96c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5e58d002-c3ab-4907-a90a-0196c9dc3aff",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "6040011e-e95e-4c39-aeeb-dcd3a3a3b34e",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "640a07a8-af9f-483f-9e11-d1740a2f0a95",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "818740df-3f52-4df4-b806-c2de64db632b",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "bbeee5d9-ffab-4c72-a655-6637da6b59f9",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "beaa406b-e153-4df4-82c3-36d0f4800185",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a0c5ce84-8a4f-4e9f-8f9d-039bdc0bfd90",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "explicitOriginalFields": {
+            "original_ticket_id": null,
+            "original_entry_id": null,
+            "original_period_id": null,
+            "original_rate_snapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "retainedCommandMatches": [
+        {
+          "adjustmentId": "5b22edd0-2b29-4dbd-9b53-1e5d27b3d83c",
+          "payloadHash": "43719eec5d1d9d97c105389036bdb348306ff8d639d46aae221fc9fd05dad535",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "a943a90f-bca0-42d0-99db-347839d36669",
+          "payloadHash": "cc573e9f6a87778e4d356b325df290b91ed4b14c9b908e616ee7f831823ffd1b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "845f584a-f0b5-4c74-86dd-5d6be203cc15",
+          "payloadHash": "c9d25a4fa025ac2db03c3759e84866a43f73646d01107ab44a5892ce50c16fa8",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "f2a6d60f-ba22-4b7a-8165-cce35fa4cea0",
+          "payloadHash": "a1a895a3ec4678c497ee9538babd73335225c842b7a87fc06649e93aec4ca23b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "633f9125-8908-4b27-ad7e-ae0022109aa7",
+          "payloadHash": "68937ea3243f9355eaa0cf7669eed9c3c80a33bb949e2c4b8a8bd26f8b914a5e",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "29154438-158e-485b-99b5-a0f56001ac38",
+          "payloadHash": "f005ca7927854e995ec79b652c7f3a6444a8c1f56122f5ba3162b9700d37918c",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3b6f6735-4c43-42cd-9d28-b62b6aa3c088",
+          "payloadHash": "2161ba1e68daade0c53d175b057ccedee51b239672303f11217d6319f4ccd4f5",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "3a1802c3-0919-4f16-b56a-a5940557c347",
+          "payloadHash": "43d8551d172f01a51c92f1eac5ca7bf0721307f41fb8275ae077cddec1e6d490",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        },
+        {
+          "adjustmentId": "5875c24c-cc4e-4e3f-ba19-da2cfad45d08",
+          "payloadHash": "66be625371302ab8b807c075bf0e4e1ad15210435a87447d57ffc62171c69a3b",
+          "explicitOriginalFields": {
+            "originalTicketId": null,
+            "originalEntryId": null,
+            "originalPeriodId": null,
+            "originalRateSnapshot": null
+          },
+          "completeExplicitAttribution": false
+        }
+      ],
+      "archives": [],
+      "sourceUnchangedAfterInspection": true
+    }
+  ],
+  "jsonFiles": [
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\backups\\comp_novda\\backup_2026-11-09_08-35-36_w235.json",
+      "sha256": "9ca4bc48c2cc9303daded05c56af28ebc8a73e7271b2fb7287082a6c3921c669",
+      "matchingAdjustments": []
+    },
+    {
+      "path": "C:\\Users\\bekbo\\AppData\\Roaming\\novda-hisob-kitob\\NovdaData\\hisob_database_comp_novda.json",
+      "sha256": "9ca4bc48c2cc9303daded05c56af28ebc8a73e7271b2fb7287082a6c3921c669",
+      "matchingAdjustments": []
+    }
+  ],
+  "originalBaselineHashMatches": 0,
+  "completeDirectAttributionCandidates": [],
+  "policy": "Discovery only. A candidate still requires tenant/fact/hash/immutable-work corroboration; classifications are NOT automatically promoted."
+}

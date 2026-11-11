@@ -1,0 +1,161 @@
+{
+  "status": "PASS",
+  "electronVersion": "44.10.2",
+  "appAsarSha256": "a4320c45d153df33cae944d7174b94a889e6a970ad19cf614ee49c1ed5666b8e",
+  "profiles": [
+    {
+      "sourceSha256": "8627ab8560e400786c7e78aa72589e2d83e245b389db9a012e064f8a6d315b17",
+      "fromVersion": 25,
+      "toVersion": 25,
+      "businessRowsPreserved": {
+        "models": 28,
+        "workers": 222,
+        "periods": 3,
+        "parties": 255,
+        "tickets": 1977,
+        "ticket_entries": 28715,
+        "production_adjustments": 216,
+        "worker_adjustments": 73,
+        "period_archives": 1
+      },
+      "outboxBodiesPreserved": 605,
+      "permittedMigration19RetryTransitions": 0,
+      "automaticBackupVerified": false,
+      "reopenVerified": true,
+      "onlineBackupRestoreVerified": true,
+      "health": {
+        "integrityCheck": "ok",
+        "foreignKeyCheck": []
+      }
+    },
+    {
+      "sourceSha256": "f0082d7114975f60fc664e23896ac61336579c14baefefc84859cf1fdf358e92",
+      "fromVersion": 19,
+      "toVersion": 25,
+      "businessRowsPreserved": {
+        "models": 0,
+        "workers": 0,
+        "periods": 0,
+        "parties": 0,
+        "tickets": 0,
+        "ticket_entries": 0,
+        "production_adjustments": 0,
+        "worker_adjustments": 0,
+        "period_archives": 0
+      },
+      "outboxBodiesPreserved": 0,
+      "permittedMigration19RetryTransitions": 0,
+      "automaticBackupVerified": true,
+      "reopenVerified": true,
+      "onlineBackupRestoreVerified": true,
+      "health": {
+        "integrityCheck": "ok",
+        "foreignKeyCheck": []
+      }
+    },
+    {
+      "sourceSha256": "d239149b9401e39b20e1caa3d886970f9fad3fbf2a4e668359b6c25368579ba2",
+      "fromVersion": 19,
+      "toVersion": 25,
+      "businessRowsPreserved": {
+        "models": 20,
+        "workers": 210,
+        "periods": 1,
+        "parties": 59,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "worker_adjustments": 63,
+        "period_archives": 0
+      },
+      "outboxBodiesPreserved": 417,
+      "permittedMigration19RetryTransitions": 0,
+      "automaticBackupVerified": true,
+      "reopenVerified": true,
+      "onlineBackupRestoreVerified": true,
+      "health": {
+        "integrityCheck": "ok",
+        "foreignKeyCheck": []
+      }
+    },
+    {
+      "sourceSha256": "adf5c1840a04fc3a0608f382677f1c4591dd2d05448ab343f01a717f61f48d51",
+      "fromVersion": 18,
+      "toVersion": 25,
+      "businessRowsPreserved": {
+        "models": 20,
+        "workers": 209,
+        "periods": 1,
+        "parties": 54,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "worker_adjustments": 63,
+        "period_archives": 0
+      },
+      "outboxBodiesPreserved": 383,
+      "permittedMigration19RetryTransitions": 0,
+      "automaticBackupVerified": true,
+      "reopenVerified": true,
+      "onlineBackupRestoreVerified": true,
+      "health": {
+        "integrityCheck": "ok",
+        "foreignKeyCheck": []
+      }
+    },
+    {
+      "sourceSha256": "e667ee895ce4321f671a91ccb68b21331bc120f5192628f733d8d0830020fdf6",
+      "fromVersion": 18,
+      "toVersion": 25,
+      "businessRowsPreserved": {
+        "models": 20,
+        "workers": 209,
+        "periods": 1,
+        "parties": 54,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "worker_adjustments": 63,
+        "period_archives": 0
+      },
+      "outboxBodiesPreserved": 289,
+      "permittedMigration19RetryTransitions": 0,
+      "automaticBackupVerified": true,
+      "reopenVerified": true,
+      "onlineBackupRestoreVerified": true,
+      "health": {
+        "integrityCheck": "ok",
+        "foreignKeyCheck": []
+      }
+    },
+    {
+      "sourceSha256": "378b9ed341c8a1a912d9266eafd3ce42b7863ebec83488a09447e860e1b99038",
+      "fromVersion": 18,
+      "toVersion": 25,
+      "businessRowsPreserved": {
+        "models": 20,
+        "workers": 209,
+        "periods": 1,
+        "parties": 54,
+        "tickets": 204,
+        "ticket_entries": 3002,
+        "production_adjustments": 31,
+        "worker_adjustments": 63,
+        "period_archives": 0
+      },
+      "outboxBodiesPreserved": 382,
+      "permittedMigration19RetryTransitions": 0,
+      "automaticBackupVerified": true,
+      "reopenVerified": true,
+      "onlineBackupRestoreVerified": true,
+      "health": {
+        "integrityCheck": "ok",
+        "foreignKeyCheck": []
+      }
+    }
+  ],
+  "originalFilesOpened": 0,
+  "credentialsRead": false,
+  "networkCalls": 0,
+  "scope": "Six discovered original-profile snapshots, copied and upgraded offline with actual packaged modules; NOT an old-binary/activated desktop/Windows installer or server-replay acceptance"
+}

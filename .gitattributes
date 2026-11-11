@@ -1,1 +1,3 @@
 apps/desktop/renderer/store/slices/createPattaBatchSlice.ts text eol=lf
+# Raw acceptance receipts retain exact Windows/stdout bytes and artifact hashes.
+ops/docs/evidence/phase4-* -text whitespace=cr-at-eol,-blank-at-eof,-blank-at-eol

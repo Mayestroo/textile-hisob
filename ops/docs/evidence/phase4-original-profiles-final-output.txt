@@ -1,0 +1,2 @@
+
+ENOENT ENOENT,  not found in C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked\resources\app.asar     at createError (node:electron/js2c/node_init:1:3024)

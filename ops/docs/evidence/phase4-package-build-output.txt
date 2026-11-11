@@ -1,0 +1,19 @@
+  • electron-builder  version=26.18.0 os=10.0.26300
+  • loaded configuration  file=package.json ("build" field)
+  • executing @electron/rebuild  electronVersion=44.10.2 arch=x64 buildFromSource=false workspaceRoot=D:\hisob-new projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • preparing       moduleName=better-sqlite3 arch=x64
+  • finished        moduleName=better-sqlite3 arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=44.10.2 appOutDir=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked
+  • searching for node modules  pm=npm searchDir=D:\hisob-new
+  • duplicate dependency references  dependencies=["ajv@8.20.0","fast-json-stringify@7.0.1","ajv-formats@3.0.1","ajv@8.20.0","pg@8.23.0"]
+  • updating asar integrity executable resource  executablePath=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked\Novda-hisob-kitob.exe
+  • no code signing certificate configured, signing is skipped  path=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked\Novda-hisob-kitob.exe
+  • building        target=nsis file=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\Novda-hisob-kitob-Setup-2.0.0-win10-11-x64.exe archs=x64 oneClick=true perMachine=false
+  • no code signing certificate configured, signing is skipped  path=C:\Users\bekbo\AppData\Local\Temp\t-Oh7eyP\elevate-staging-1\resources\elevate.exe
+  • no code signing certificate configured, signing is skipped  path=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\Novda-hisob-kitob-Setup-2.0.0-win10-11-x64.__uninstaller.exe
+  • no code signing certificate configured, signing is skipped  path=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\Novda-hisob-kitob-Setup-2.0.0-win10-11-x64.exe
+  • building block map  blockMapFile=C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\Novda-hisob-kitob-Setup-2.0.0-win10-11-x64.exe.blockmap

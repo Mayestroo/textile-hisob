@@ -1,0 +1,103 @@
+
+ RUN  v5.1.0 D:/hisob-new
+
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts (6 tests | 6 failed) 647ms
+   ❯ upgrade/restore boundaries, no silent tenant or data replacement (6)
+     × rejects future profiles even on the skipMigration path without changing bytes 73ms
+     × retains an integrity-verified pre-upgrade snapshot before changing an existing profile 88ms
+     × fails startup before migration when the pre-upgrade backup cannot be created 86ms
+     × rejects cross-company restore, not merely cross-company queries after restore 97ms
+     × refuses to overwrite an existing target and preserves its live handle and WAL 198ms
+     × does not accept a backup destination equal to the active SQLite file 104ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desktop/electron/database/tests/recoveryBoundaries.test.ts > upgrade/restore boundaries, no silent tenant or data replacement > rejects future profiles even on the skipMigration path without changing bytes
+AssertionError: expected function to throw an error, but it didn't
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts:27:89
+     25|     db.exec(`CREATE TABLE schema_meta(version INTEGER PRIMARY KEY); IN…
+     26|     const before = fs.readFileSync(file);
+     27|     expect(() => manager.getCompanyDatabase(profile, company, { skipMi…
+       |                                                                                         ^
+     28|     expect(fs.readFileSync(file)).toEqual(before);
+     29|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  apps/desktop/electron/database/tests/recoveryBoundaries.test.ts > upgrade/restore boundaries, no silent tenant or data replacement > retains an integrity-verified pre-upgrade snapshot before changing an existing profile
+Error: ENOENT: no such file or directory, scandir 'C:\Users\bekbo\AppData\Local\Temp\novda-recovery-boundary-7bKxhg\NovdaData\companies\recovery-company\pre-upgrade'
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts:35:24
+     33|     expect(getPragmaUserVersion(upgraded)).toBe(MIGRATIONS.at(-1).vers…
+     34|     const parent = path.join(path.dirname(upgraded.name), 'pre-upgrade…
+     35|     const folders = fs.readdirSync(parent);
+       |                        ^
+     36|     expect(folders).toHaveLength(1);
+     37|     const backup = new Database(path.join(parent, folders[0], 'profile…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  apps/desktop/electron/database/tests/recoveryBoundaries.test.ts > upgrade/restore boundaries, no silent tenant or data replacement > fails startup before migration when the pre-upgrade backup cannot be created
+AssertionError: expected [Function] to throw an error
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts:47:64
+     45|     const profile = root(), db = legacy(profile), file = db.name; db.c…
+     46|     fs.writeFileSync(path.join(path.dirname(file), 'pre-upgrade'), 'no…
+     47|     expect(() => manager.getCompanyDatabase(profile, company)).toThrow…
+       |                                                                ^
+     48|     const original = new Database(file, { readonly: true });
+     49|     try { expect(getPragmaUserVersion(original)).toBe(15); expect(orig…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  apps/desktop/electron/database/tests/recoveryBoundaries.test.ts > upgrade/restore boundaries, no silent tenant or data replacement > rejects cross-company restore, not merely cross-company queries after restore
+AssertionError: expected function to throw an error, but it didn't
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts:58:82
+     56|     await backupCompanyDatabase(profile, company, backup);
+     57|     const destination = root();
+     58|     expect(() => restoreCompanyDatabase(backup, destination, 'another-…
+       |                                                                                  ^
+     59|     expect(fs.existsSync(sanitizeCompanyDbPath(destination, 'another-c…
+     60|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  apps/desktop/electron/database/tests/recoveryBoundaries.test.ts > upgrade/restore boundaries, no silent tenant or data replacement > refuses to overwrite an existing target and preserves its live handle and WAL
+AssertionError: expected function to throw an error, but it didn't
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts:66:72
+     64|     const destination = root(), existing = manager.getCompanyDatabase(…
+     65|     existing.prepare("INSERT INTO workers(id,company_id,name,created_a…
+     66|     expect(() => restoreCompanyDatabase(backup, destination, company))…
+       |                                                                        ^
+     67|     expect(existing.open).toBe(true);
+     68|     expect(existing.prepare('SELECT name FROM workers').get().name).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  apps/desktop/electron/database/tests/recoveryBoundaries.test.ts > upgrade/restore boundaries, no silent tenant or data replacement > does not accept a backup destination equal to the active SQLite file
+AssertionError: expected Error: EBUSY: resource busy or locked, re… { …(5) } to match object { Object (code) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "BACKUP_DESTINATION_IS_SOURCE",
++ Error {
++   "code": "EBUSY",
+  }
+
+ ❯ apps/desktop/electron/database/tests/recoveryBoundaries.test.ts:72:67
+     70|   it('does not accept a backup destination equal to the active SQLite …
+     71|     const profile = root(), db = manager.getCompanyDatabase(profile, c…
+     72|     await expect(backupCompanyDatabase(profile, company, db.name)).rej…
+       |                                                                   ^
+     73|     expect(db.open).toBe(true);
+     74|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  09:03:37
+   Duration  881ms (tests 91%, transform 4%, import 4%, worker 1%)
+

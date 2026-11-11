@@ -1,0 +1,8 @@
+
+ENOENT ENOENT,  not found in C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked\resources\app.asar     at createError (node:electron/js2c/node_init:1:3024)
+Error: ENOENT,  not found in C:\Users\bekbo\AppData\Local\Temp\opencode\phase4-package\win-unpacked\resources\app.asar
+    at createError (node:electron/js2c/node_init:1:3024)
+    at readFileFromArchiveSync (node:electron/js2c/node_init:1:11664)
+    at Object.readFileSync (node:electron/js2c/node_init:1:12448)
+    at digest (D:\hisob-new\scripts\verify\release\original-profile-upgrades-electron.cjs:20:64)
+    at D:\hisob-new\scripts\verify\release\original-profile-upgrades-electron.cjs:83:97

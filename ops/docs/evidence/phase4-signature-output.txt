@@ -1,0 +1,1 @@
+{"Status":"FAIL","File":"Novda-hisob-kitob-Setup-2.0.0-win10-11-x64.exe","Sha256":"412A6E2FA620920A0C24BE35BCC8A3F88DF6F1EE8B5D5F6B7AA3C3580860128F","HashMatches":true,"AuthenticodeStatus":"NotSigned","SignerThumbprint":null,"ExpectedSignerMatches":false,"TimestampPresent":false}

@@ -1,0 +1,214 @@
+FINANCIAL_UI_PASS Electron 44.10.2: actual DOM 26->23->21->16; invalid amount, double click, lost response, reload, concurrent/stale tabs, late period response, unknown/zero tariff
+{
+  "open": [
+    "Assalomu alaykum, <b>Synthetic Worker</b>!\n\nBarcha hisob-kitoblar va bajargan ishlaringiz Web App orqali ko'rsatiladi.\nKo'rish uchun pastdagi <b>Mening hisobim</b> tugmasini bosing:",
+    "📊 <b>SHAXSIY HISOB-KITOB</b>\n👤 Synthetic Worker (ID: #7)\n📅 Davr: Open P\n\n💵 Jami ishlangan: 81 so'm\n➖ Jarima: 3 so'm\n✅ <b>Sof foyda: 73 so'm</b>\n🏷 Bajarilgan ish: 9 dona",
+    "<b>BAJARILGAN ISHLAR</b>\n\n👗 <b>Synthetic model</b>: 81 so'm\n  • Sew: 9 dona × 9 so'm = <b>81 so'm</b>\n\nJami: <b>81 so'm</b>",
+    "<b>OXIRGI PATTALAR</b>\n🏷 m · Patta #1\nPartiya: 1 · Razmer: - · Rang: -\nChok: Sew · Soni: 10 dona\n2026-10-12T12:00:00.000Z"
+  ],
+  "requests": [
+    "/api/worker/bindings/by-telegram/123456789",
+    "/api/worker/bindings/by-telegram/123456789",
+    "/api/worker/profile",
+    "/api/worker/bindings/by-telegram/123456789",
+    "/api/worker/profile",
+    "/api/worker/bindings/by-telegram/123456789",
+    "/api/worker/tickets"
+  ],
+  "zero": [
+    "📊 <b>SHAXSIY HISOB-KITOB</b>\n👤 Synthetic Worker (ID: #7)\n📅 Davr: Open P\n\n💵 Jami ishlangan: 81 so'm\n➖ Jarima: 3 so'm\n✅ <b>Sof foyda: 73 so'm</b>\n🏷 Bajarilgan ish: 12 dona",
+    "<b>BAJARILGAN ISHLAR</b>\n\n👗 <b>Synthetic model</b>: 81 so'm\n  • Sew: 9 dona × 9 so'm = <b>81 so'm</b>\n  • Zero: 3 dona × 0 so'm = <b>0 so'm</b>\n\nJami: <b>81 so'm</b>"
+  ],
+  "unknown": [
+    "📊 <b>SHAXSIY HISOB-KITOB</b>\n👤 Synthetic Worker (ID: #7)\n📅 Davr: Open P\n\n💵 Hisoblangan summa: 81 so'm\n➖ Jarima: 3 so'm\n✅ <b>Sof summa: 73 so'm</b>\n\n⚠️ Hisob to‘liq emas: 1 ta ish narxi noma’lum, 0 ta tuzatish aniqlanmagan. Ko‘rsatilgan summa faqat aniqlangan ishlar bo‘yicha hisoblangan; yakuniy oylik emas.\n🏷 Bajarilgan ish: 14 dona",
+    "<b>BAJARILGAN ISHLAR</b>\n\n👗 <b>Synthetic model</b>: 81 so'm\n  • Sew: 9 dona × 9 so'm = <b>81 so'm</b>\n  • Zero: 3 dona × 0 so'm = <b>0 so'm</b>\n  • Unknown: 2 dona × narx noma’lum = <b>summa noma’lum</b>\n\nNarxi ma’lum ishlar bo‘yicha jami: <b>81 so'm</b>\n⚠️ Hisob to‘liq emas: 1 ta ish narxi noma’lum, 0 ta tuzatish aniqlanmagan. Yakuniy oylik emas."
+  ],
+  "closed": {
+    "gross": 63,
+    "net": 55,
+    "pieces": 14,
+    "status": "INCOMPLETE",
+    "reasons": [
+      "UNKNOWN_HISTORICAL_RATE",
+      "HISTORICAL_BASELINE_UNVERIFIED"
+    ]
+  },
+  "missing": {
+    "gross": 0,
+    "unknownEntryCount": 3,
+    "reasons": [
+      "CLOSED_TARIFF_UNAVAILABLE",
+      "UNKNOWN_HISTORICAL_RATE",
+      "HISTORICAL_BASELINE_UNVERIFIED"
+    ]
+  },
+  "group": {
+    "requests": [],
+    "replies": []
+  },
+  "foreign": "WORKER_BINDING_REQUIRED",
+  "stale": [
+    "Assalomu alaykum!\n\nDavom etish uchun telefon raqamingizni ulashing. Keyingi bosqichlar — suratga olish va Ishchi ID kiritish — Web App ichida bajariladi:"
+  ],
+  "revokedWeb": "WORKER_BINDING_REQUIRED",
+  "admin": {
+    "company": {
+      "reply": "✨ <b>Novda Admin WebApp</b>\n\nАдмин амаллари WebApp панелида бажарилади.\nРухсат доираси: бириктирилган компаниянгиз.\nПастдаги <b>Boshqaruv panelini ochish</b> тугмасини босинг.\n\n📊 Kunlik hisobotni ko'rish: /hisobot yoki /bugun",
+      "requests": [
+        "/internal/admin/webapp/authorize"
+      ],
+      "access": {
+        "companyIds": [
+          "hisob_test_bot_a"
+        ]
+      },
+      "payroll": {
+        "workerId": 7,
+        "name": "Synthetic Worker",
+        "staj": 1,
+        "avans": 4,
+        "jarima": 3,
+        "oklad": 0,
+        "magazin": 0,
+        "pieceworkGross": 63,
+        "gross": 63,
+        "net": 55,
+        "pieces": 14,
+        "rawQuantity": 14,
+        "unknownEntryCount": 1,
+        "unknownQuantity": 2,
+        "unresolvedAdjustmentCount": 0,
+        "accountingReasons": [
+          "UNKNOWN_HISTORICAL_RATE",
+          "HISTORICAL_BASELINE_UNVERIFIED"
+        ],
+        "models_breakdown": {
+          "m": {
+            "id": "m",
+            "name": "Synthetic model",
+            "earnings": 63,
+            "pieces": 14,
+            "operations": [
+              {
+                "name": "Sew",
+                "rate": 7,
+                "qty": 9,
+                "amount": 63,
+                "rawQty": 9
+              },
+              {
+                "name": "Zero",
+                "rate": 0,
+                "qty": 3,
+                "amount": 0,
+                "rawQty": 3
+              },
+              {
+                "name": "Unknown",
+                "rate": null,
+                "qty": 2,
+                "amount": null,
+                "rawQty": 2
+              }
+            ]
+          }
+        },
+        "accountingStatus": "INCOMPLETE",
+        "syncStatus": "CURRENT",
+        "earningsLabel": "RESOLVED_SUBTOTAL"
+      },
+      "companies": [
+        "hisob_test_bot_a"
+      ],
+      "foreign": "ADMIN_COMPANY_SCOPE_REQUIRED",
+      "unauthenticated": "ADMIN_SESSION_REQUIRED",
+      "expired": "ADMIN_SESSION_EXPIRED"
+    },
+    "unauthorised": "Ruxsat berilmagan.",
+    "revokedSession": "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED",
+    "privateGuards": {
+      "api_requests": [],
+      "replies": []
+    }
+  },
+  "adminWrites": {
+    "denied": [
+      "ADMIN_COMPANY_SCOPE_REQUIRED",
+      "ADMIN_COMPANY_SCOPE_REQUIRED",
+      "ADMIN_COMPANY_SCOPE_REQUIRED",
+      "ADMIN_COMPANY_SCOPE_REQUIRED",
+      "ADMIN_COMPANY_SCOPE_REQUIRED"
+    ],
+    "deniedScopeNoMutation": true,
+    "modelRates": [
+      9,
+      11,
+      13
+    ],
+    "qBefore": [
+      36,
+      32
+    ],
+    "qAt11": [
+      44,
+      40
+    ],
+    "qAfterWorkerEdit": [
+      44,
+      37
+    ],
+    "adminAdjustment": [
+      2,
+      "Q",
+      "ADMIN_WEBAPP"
+    ],
+    "qCloseRate": 11,
+    "qClosedAfterCurrent13": [
+      44,
+      37,
+      4
+    ],
+    "pAfterCurrent13": [
+      63,
+      54
+    ],
+    "desktopQ": [
+      44,
+      37,
+      4
+    ],
+    "desktopP": [
+      63,
+      54
+    ],
+    "unbindStatus": 403,
+    "workerStatus": "INACTIVE",
+    "staleWrite": "ADMIN_TELEGRAM_ID_NOT_AUTHORIZED"
+  },
+  "financialIntentRetry": {
+    "output": "FINANCIAL_UI_PASS Electron 44.10.2: actual DOM 26->23->21->16; invalid amount, double click, lost response, reload, concurrent/stale tabs, late period response, unknown/zero tariff",
+    "writes": 5,
+    "distinctFinancialIntents": 3,
+    "explicitRateUpdates": 1
+  },
+  "desktop": {
+    "open": [
+      81,
+      73,
+      9
+    ],
+    "closed": [
+      63,
+      55,
+      14
+    ],
+    "missing": [
+      0,
+      3
+    ],
+    "postAdminP": [
+      63,
+      54
+    ]
+  }
+}

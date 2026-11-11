@@ -1,0 +1,12 @@
+
+ RUN  v5.1.0 D:/hisob-new
+
+
+ Test Files  4 passed (4)
+      Tests  13 passed (13)
+   Start at  09:04:59
+   Duration  2.15s (tests 90%, import 6%, transform 3%, worker 2%)
+
+    Isolate  4 workers spawned · ~158ms startup each (spawn + environment, per file)
+             at least ~475ms faster with isolate: false — reuses workers across files instead of one per file
+

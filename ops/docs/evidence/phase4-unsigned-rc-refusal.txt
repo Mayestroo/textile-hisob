@@ -1,0 +1,1 @@
+RC_SIGNER_REQUIRED: RC_SIGNER_REQUIRED: Windows and an approved NOVDA_RELEASE_SIGNER_THUMBPRINT are required; use dist:local only for unsigned engineering fixtures

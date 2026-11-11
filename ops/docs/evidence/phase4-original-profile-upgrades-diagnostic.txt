@@ -1,0 +1,2 @@
+
+ERR_ASSERTION Retained disposable discovery snapshot missing; rerun discovery, never fall back to live AppData     at D:\hisob-new\scripts\verify\release\original-profile-upgrades-electron.cjs:29:5

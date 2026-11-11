@@ -1,0 +1,75 @@
+
+ RUN  v5.1.0 D:/hisob-new
+
+ ❯ apps/desktop/electron/database/tests/payrollReader.test.ts (15 tests | 1 failed) 1489ms
+   ❯ desktop SQLite saved-rate reader and shared server reducer (15)
+     × rejects a valid digest with foreign top-level company rather than borrowing its tariff 104ms
+ ❯ apps/server/modules/workers/tests/payrollValuation.test.ts (13 tests | 1 failed) 27ms
+   ❯ shared payroll service/query contract (13)
+     × rejects a correctly hashed archive whose top-level company conflicts with its nested period 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desktop/electron/database/tests/payrollReader.test.ts > desktop SQLite saved-rate reader and shared server reducer > rejects a valid digest with foreign top-level company rather than borrowing its tariff
+AssertionError: expected { workerId: 7, name: 'Worker', …(18) } to match object { Object (gross, unknownQuantity, ...) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "accountingReasons": [
+-     "CLOSED_TARIFF_UNAVAILABLE",
++     "HISTORICAL_BASELINE_UNVERIFIED",
++     "SYNC_FRESHNESS_UNVERIFIED",
+    ],
+-   "gross": 0,
+-   "unknownQuantity": 12,
++   "gross": 11988,
++   "unknownQuantity": 0,
+  }
+
+ ❯ apps/desktop/electron/database/tests/payrollReader.test.ts:83:31
+     81|     db.prepare("UPDATE period_archives SET archive_json=?,sha256=? WHE…
+     82|       .run(canonicalStringify(foreign), computePayloadHash(canonicalSt…
+     83|     expect(read().workers[0]).toMatchObject({ gross: 0, unknownQuantit…
+       |                               ^
+     84|       accountingReasons: expect.arrayContaining(['CLOSED_TARIFF_UNAVAI…
+     85|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/server/modules/workers/tests/payrollValuation.test.ts > shared payroll service/query contract > rejects a correctly hashed archive whose top-level company conflicts with its nested period
+AssertionError: expected { workerId: 7, name: 'Worker', …(18) } to match object { Object (gross, unknownQuantity, ...) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "accountingReasons": [
+-     "CLOSED_TARIFF_UNAVAILABLE",
++     "HISTORICAL_BASELINE_UNVERIFIED",
+    ],
+-   "gross": 0,
+-   "unknownQuantity": 12,
++   "gross": 11988,
++   "unknownQuantity": 0,
+  }
+
+ ❯ apps/server/modules/workers/tests/payrollValuation.test.ts:88:8
+     86|     const row = { archive_json: foreign, sha256: computePayloadHash(ca…
+     87|     expect((await fixture([entry('12', '5')], [], period, 7, 7, row).a…
+     88|       .toMatchObject({ gross: 0, unknownQuantity: 12, accountingReason…
+       |        ^
+     89|   });
+     90|   it('uses frozen close tariff for closed P and current operation tari…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 26 passed (28)
+   Start at  09:09:15
+   Duration  2.27s (tests 77%, transform 13%, import 9%)
+

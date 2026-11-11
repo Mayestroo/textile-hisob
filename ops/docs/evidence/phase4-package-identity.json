@@ -1,0 +1,20 @@
+{
+  "scope": "Unsigned local engineering fixture; not a signed release",
+  "installer": {
+    "file": "Novda-hisob-kitob-Setup-2.0.0-win10-11-x64.exe",
+    "sizeBytes": 130977578,
+    "sha256": "412a6e2fa620920a0c24be35bcc8a3f88df6f1ee8b5d5f6b7aa3c3580860128f"
+  },
+  "appAsar": {
+    "file": "app.asar",
+    "sizeBytes": 4692868,
+    "sha256": "a4320c45d153df33cae944d7174b94a889e6a970ad19cf614ee49c1ed5666b8e"
+  },
+  "executable": {
+    "file": "Novda-hisob-kitob.exe",
+    "sizeBytes": 246345216,
+    "sha256": "fe013e05c14de3ab59c11584bc9c76110d519f5d56413e7d2ca7de59d81d4c80"
+  },
+  "builderVersion": "26.18.0",
+  "electronVersion": "44.10.2"
+}

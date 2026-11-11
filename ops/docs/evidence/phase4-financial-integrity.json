@@ -1,0 +1,63 @@
+{
+  "status": "PASS",
+  "source": "novda_audit_phase4_final",
+  "reference": "novda_local migration-22",
+  "sourceWrites": 0,
+  "checks": [
+    {
+      "table": "production_adjustments",
+      "originalRows": 216,
+      "comparedColumns": [
+        "adjustment_id",
+        "company_id",
+        "created_at",
+        "created_by",
+        "delta_qty",
+        "model_id",
+        "op_name",
+        "original_adjustment_id",
+        "provenance",
+        "reason",
+        "server_revision",
+        "status",
+        "worker_id"
+      ],
+      "originalRowsUnchanged": true,
+      "referenceSha256": "e054d6e60b69584a390db6c1da99e3decc8edabc20a1e8fa53e2e9a71d404356"
+    },
+    {
+      "table": "worker_adjustments",
+      "originalRows": 73,
+      "comparedColumns": [
+        "amount",
+        "company_id",
+        "created_at",
+        "id",
+        "period_id",
+        "provenance",
+        "source_id",
+        "type",
+        "worker_id"
+      ],
+      "originalRowsUnchanged": true,
+      "referenceSha256": "2cac4836b1ec52f068dadde52253ac98ccabd986c9c322ba950bfceb0374959f"
+    },
+    {
+      "table": "period_archives",
+      "originalRows": 2,
+      "comparedColumns": [
+        "archive_json",
+        "archived_at",
+        "company_id",
+        "period_id",
+        "sha256"
+      ],
+      "originalRowsUnchanged": true,
+      "referenceSha256": "2a00eddbe7171e7d8dd4dddb1304e503dfbb6e2d17da1cc48ef27a474e99a4b4"
+    }
+  ],
+  "migrations": 29,
+  "requiredForeignKeys": 17,
+  "zeroOrphanCounters": 16,
+  "baselineScopePreserved": true
+}

@@ -1,0 +1,175 @@
+[
+  {
+    "id": "engineering",
+    "status": "PASS",
+    "sourceFingerprint": "22b18ca23a884648b4f9db28d3a5d711192fd03a0b31915bd78e827ff9fa3ecf",
+    "artifacts": [
+      {
+        "path": "phase4-engineering-final-output.txt",
+        "sha256": "313c33cb2621a89a5a29b3cf568f77a840644432dbf10dbcbe9aaca755fc9d46"
+      },
+      {
+        "path": "phase4-secret-scan-output.txt",
+        "sha256": "b8da6bce4c6dca2c94725ce6b081c7ed892e1b9aef1bb90ba6caab10755a585b"
+      },
+      {
+        "path": "phase4-python-output.txt",
+        "sha256": "8235e882713e75e78e540bd94c9560d45bb02784d56e43b039b83eac9915b620"
+      }
+    ]
+  },
+  {
+    "id": "apiRecovery",
+    "status": "PASS",
+    "sourceFingerprint": "22b18ca23a884648b4f9db28d3a5d711192fd03a0b31915bd78e827ff9fa3ecf",
+    "artifacts": [
+      {
+        "path": "phase4-api-output.txt",
+        "sha256": "24697f66e814e2ea3c9ca19b373eb98b998ad2af2e586c0eb57d3c42b5073f91"
+      }
+    ]
+  },
+  {
+    "id": "backupLifecycle",
+    "status": "PASS",
+    "sourceFingerprint": "22b18ca23a884648b4f9db28d3a5d711192fd03a0b31915bd78e827ff9fa3ecf",
+    "artifacts": [
+      {
+        "path": "phase4-backup-output.txt",
+        "sha256": "d3050cce0d394753c674ffead7e6ce89d2ec5113b73c33b72b0517d930cabc03"
+      },
+      {
+        "path": "phase4-admin-output.txt",
+        "sha256": "fa2e0d30271d8818afa7519404cc3df969db3c74f29b10fefecd8c3497530fed"
+      },
+      {
+        "path": "phase4-financial-integrity.json",
+        "sha256": "62cd3e414f862f695330ac3e416d5c0461eab27c9a95005f1848f0814352b8ea"
+      }
+    ]
+  },
+  {
+    "id": "historicalInventory",
+    "status": "PASS",
+    "sourceFingerprint": "22b18ca23a884648b4f9db28d3a5d711192fd03a0b31915bd78e827ff9fa3ecf",
+    "artifacts": [
+      {
+        "path": "phase3-historical-reconciliation.json",
+        "sha256": "e4e91cf492c63db1df869c99fa3bf7df288fba1977bd17c7f92da86a6951b5f7"
+      },
+      {
+        "path": "phase4-local-historical-evidence.json",
+        "sha256": "1a7e7cd98b8bfea00d7cdc901173d5195549e2dcac8a90e41d47db087e36e9be"
+      },
+      {
+        "path": "phase4-financial-integrity.json",
+        "sha256": "62cd3e414f862f695330ac3e416d5c0461eab27c9a95005f1848f0814352b8ea"
+      }
+    ]
+  },
+  {
+    "id": "historicalSignoff",
+    "status": "BLOCKED",
+    "reason": "Six additional local SQLite files and two JSON backups yield no complete original attribution; 216 UNRESOLVED and opening balances require finance primary evidence/approved scope",
+    "artifacts": []
+  },
+  {
+    "id": "packagedStartup",
+    "status": "PASS",
+    "sourceFingerprint": "22b18ca23a884648b4f9db28d3a5d711192fd03a0b31915bd78e827ff9fa3ecf",
+    "artifacts": [
+      {
+        "path": "phase4-packaged.json",
+        "sha256": "1dc2e38649a579209bf6da01ff3fd2b9459c8ab1b1ae95446e07eb2a91a60c63"
+      },
+      {
+        "path": "phase4-package-identity.json",
+        "sha256": "05399276f439ca61e9528781749067d9f292f5789a6e69616baa74f1224d1799"
+      }
+    ]
+  },
+  {
+    "id": "profileUpgrade",
+    "status": "PASS",
+    "sourceFingerprint": "22b18ca23a884648b4f9db28d3a5d711192fd03a0b31915bd78e827ff9fa3ecf",
+    "artifacts": [
+      {
+        "path": "phase4-profile.json",
+        "sha256": "2afd5ddb1606b1529998ac8bb852857225d4665c3cd440c1176813e55708b32d"
+      },
+      {
+        "path": "phase4-recovery-verified.txt",
+        "sha256": "248197df07be00aa9bfc197c881e8e7a9bab83aad6e813cb9e79e0f4ef02b97f"
+      }
+    ]
+  },
+  {
+    "id": "installerUpgradeRollback",
+    "status": "BLOCKED",
+    "reason": "Source/NSIS fixture safety hardened; authorized disposable Windows VM, previous signed installer/profile and actual install/rollback run still required",
+    "artifacts": []
+  },
+  {
+    "id": "security",
+    "status": "BLOCKED",
+    "reason": "Zero runtime/high/critical advisories; nine moderate tooling dependencies remain with no compatible upstream minimatch patch; explicit risk acceptance or compatible fix required",
+    "artifacts": [
+      {
+        "path": "phase4-security-audit.json",
+        "sha256": "a1005eb7642b4b9ea370874d04e37ef9fdf0f5a2a10ce5417c7d7997e1799ec5"
+      },
+      {
+        "path": "phase4-runtime-audit.json",
+        "sha256": "0691c059e61f3bc4492c25426f9248eb246f6250045609f8af623a2cd18bc26e"
+      }
+    ]
+  },
+  {
+    "id": "activationTls",
+    "status": "BLOCKED",
+    "reason": "Unsigned engineering candidate; RC now refuses unsigned output. Approved signer and authorized production-mode staging TLS/activation remain unavailable",
+    "artifacts": [
+      {
+        "path": "phase4-signature-output.txt",
+        "sha256": "2b9958f55e684bfd572a7693cdc935d2a0f6be3dff37292cdbcc19b3f0f23648"
+      },
+      {
+        "path": "phase4-unsigned-rc-refusal.txt",
+        "sha256": "e9190b4210e56738f18cf9329222c997d93c2d000350062c815987b14094816f"
+      }
+    ]
+  },
+  {
+    "id": "printing",
+    "status": "BLOCKED",
+    "reason": "Real preview/generated HTML/local persistence pass; witnessed Canon/Argox physical output and staging PG batch receipt remain required",
+    "artifacts": [
+      {
+        "path": "phase4-printing-output.txt",
+        "sha256": "d94d7719b4722ba6b431e8ff2599469afdc518ba0265e3ca64dddbbc7079888c"
+      }
+    ]
+  },
+  {
+    "id": "telegram",
+    "status": "BLOCKED",
+    "reason": "Local signed routes/actual admin DOM pass; permitted live Telegram staging transport still required",
+    "artifacts": [
+      {
+        "path": "phase4-admin-output.txt",
+        "sha256": "fa2e0d30271d8818afa7519404cc3df969db3c74f29b10fefecd8c3497530fed"
+      }
+    ]
+  },
+  {
+    "id": "performance",
+    "status": "BLOCKED",
+    "reason": "Nine real loopback HTTP bootstrap requests at concurrency 3 pass without business mutations; approved SLO, realistic TLS/UI load and soak remain required",
+    "artifacts": [
+      {
+        "path": "phase4-http-capacity.json",
+        "sha256": "029178209903c1fec73dad75f0c969ca461df7a7410db73956e037535acadaca"
+      }
+    ]
+  }
+]

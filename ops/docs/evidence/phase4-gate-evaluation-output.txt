@@ -1,0 +1,78 @@
+{
+  "verdict": "NOT READY",
+  "sourceFingerprint": "2e2111edc3f5ee62f8cc2bc9b6bbe14bce74ec29479c639b255cf81bc220d512",
+  "gates": [
+    {
+      "id": "engineering",
+      "expected": "Lint, TS, build, protected-file, secret and unit regressions pass",
+      "status": "PASS"
+    },
+    {
+      "id": "apiRecovery",
+      "expected": "PG atomicity, concurrent dedup, authorization and stale-session regressions pass",
+      "status": "PASS"
+    },
+    {
+      "id": "backupLifecycle",
+      "expected": "Real Electron/SQLite/HTTP/PG restart, ticket/payroll/close/archive workflows pass",
+      "status": "PASS"
+    },
+    {
+      "id": "historicalInventory",
+      "expected": "Every retained historical adjustment classified; original rows and digests unchanged",
+      "status": "PASS"
+    },
+    {
+      "id": "historicalSignoff",
+      "expected": "Original financial attribution/opening balances verified or explicit business-approved restricted-release scope",
+      "status": "BLOCKED",
+      "reason": "Six additional local SQLite files and two JSON backups yield no complete original attribution; 216 UNRESOLVED and opening balances require finance primary evidence/approved scope"
+    },
+    {
+      "id": "packagedStartup",
+      "expected": "Actual packaged main, sandboxed preload/IPC, activation UI and clean shutdown pass",
+      "status": "PASS"
+    },
+    {
+      "id": "profileUpgrade",
+      "expected": "Existing-profile data/outbox/archive migration, reopen and backup recovery pass",
+      "status": "PASS"
+    },
+    {
+      "id": "installerUpgradeRollback",
+      "expected": "Old-to-new Windows installer and rollback in disposable Windows VM preserve existing profile and pending commands",
+      "status": "BLOCKED",
+      "reason": "Source/NSIS fixture safety hardened; authorized disposable Windows VM, previous signed installer/profile and actual install/rollback run still required"
+    },
+    {
+      "id": "security",
+      "expected": "No unaccepted runtime/high/critical advisories; remaining tooling risks reviewed by release owner",
+      "status": "BLOCKED",
+      "reason": "Zero runtime/high/critical advisories; nine moderate tooling dependencies remain with no compatible upstream minimatch patch; explicit risk acceptance or compatible fix required"
+    },
+    {
+      "id": "activationTls",
+      "expected": "Approved signing/activation and TLS/reverse-proxy exercise on authorized staging environment",
+      "status": "BLOCKED",
+      "reason": "Unsigned engineering candidate; RC now refuses unsigned output. Approved signer and authorized production-mode staging TLS/activation remain unavailable"
+    },
+    {
+      "id": "printing",
+      "expected": "Preview/HTML match persisted batches; required physical-printer output approved by operator",
+      "status": "BLOCKED",
+      "reason": "Real preview/generated HTML/local persistence pass; witnessed Canon/Argox physical output and staging PG batch receipt remain required"
+    },
+    {
+      "id": "telegram",
+      "expected": "Authorized staging bot/WebApp login, signed routes and delivery exercise",
+      "status": "BLOCKED",
+      "reason": "Local signed routes/actual admin DOM pass; permitted live Telegram staging transport still required"
+    },
+    {
+      "id": "performance",
+      "expected": "Backup-sized latency/error/memory measurements evaluated against approved operational SLO",
+      "status": "BLOCKED",
+      "reason": "Nine real loopback HTTP bootstrap requests at concurrency 3 pass without business mutations; approved SLO, realistic TLS/UI load and soak remain required"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+
+PROFILE_UPGRADE_PASS {"status":"PASS","electronVersion":"44.10.2","legacyVersion":15,"upgradedVersion":25,"exactLedgerArchiveAndPendingPayloadPreserved":true,"reopenPreserved":true,"onlineBackupRecovery":true,"originalV15BackupIntact":true,"automaticPreUpgradeBackup":true,"existingRestoreRefused":true,"foreignTenantRestoreRefused":true,"activeProfilePreserved":true,"integrity":{"integrityCheck":"ok","foreignKeyCheck":[]},"scope":"Packaged SQLite modules/native ABI, synthetic v15 file; NOT old executable compatibility or Windows installer upgrade/rollback"}
