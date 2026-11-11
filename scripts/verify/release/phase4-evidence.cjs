@@ -13,7 +13,7 @@ const output = name => read(name).replace(/\u001b\[[0-9;]*m/g, '');
 const artifact = name => ({ path: name, sha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(directory, name))).digest('hex') });
 function main() {
   const fingerprint = sourceFingerprint();
-  const engineering = output('phase4-engineering-final-output.txt'), api = output('phase4-api-output.txt');
+  const engineering = output('phase4-engineering-complete-output.txt'), api = output('phase4-api-output.txt');
   assert(/Tests\s+773 passed\s*\|\s*1 skipped/.test(engineering));
   assert(engineering.includes('built in') && !/\bFAIL\b/.test(engineering));
   assert(/Tests\s+368 passed\s*\|\s*1 skipped/.test(api) && !/\bFAIL\b/.test(api));
@@ -28,6 +28,9 @@ function main() {
   const packaged = json('phase4-packaged.json'), profile = json('phase4-profile.json');
   assert.equal(packaged.sourceFingerprint, fingerprint); assert.equal(packaged.status, 'PASS'); assert(packaged.cleanExit);
   assert.equal(profile.status, 'PASS'); assert(profile.automaticPreUpgradeBackup && profile.activeProfilePreserved && profile.foreignTenantRestoreRefused);
+  const originals = json('phase4-original-profiles.json');
+  assert.equal(originals.status, 'PASS'); assert.equal(originals.appAsarSha256, packaged.appAsarSha256);
+  assert.equal(originals.profiles.length, 6); assert(originals.profiles.every(item => item.reopenVerified && item.onlineBackupRestoreVerified));
   assert.equal(json('phase4-financial-integrity.json').status, 'PASS');
   const history = json('phase4-local-historical-evidence.json');
   assert.equal(history.completeDirectAttributionCandidates.length, 0);
@@ -35,13 +38,13 @@ function main() {
   const pass = (id, names) => ({ id, status: 'PASS', sourceFingerprint: fingerprint, artifacts: names.map(artifact) });
   const blocked = (id, reason, names = []) => ({ id, status: 'BLOCKED', reason, artifacts: names.map(artifact) });
   const records = [
-    pass('engineering', ['phase4-engineering-final-output.txt', 'phase4-secret-scan-output.txt', 'phase4-python-output.txt']),
+    pass('engineering', ['phase4-engineering-complete-output.txt', 'phase4-secret-scan-output.txt', 'phase4-python-output.txt']),
     pass('apiRecovery', ['phase4-api-output.txt']),
     pass('backupLifecycle', ['phase4-backup-output.txt', 'phase4-admin-output.txt', 'phase4-financial-integrity.json']),
     pass('historicalInventory', ['phase3-historical-reconciliation.json', 'phase4-local-historical-evidence.json', 'phase4-financial-integrity.json']),
     blocked('historicalSignoff', 'Six additional local SQLite files and two JSON backups yield no complete original attribution; 216 UNRESOLVED and opening balances require finance primary evidence/approved scope'),
     pass('packagedStartup', ['phase4-packaged.json', 'phase4-package-identity.json']),
-    pass('profileUpgrade', ['phase4-profile.json', 'phase4-recovery-verified.txt']),
+    pass('profileUpgrade', ['phase4-profile.json', 'phase4-original-profiles.json', 'phase4-recovery-verified.txt']),
     blocked('installerUpgradeRollback', 'Source/NSIS fixture safety hardened; authorized disposable Windows VM, previous signed installer/profile and actual install/rollback run still required'),
     blocked('security', 'Zero runtime/high/critical advisories; nine moderate tooling dependencies remain with no compatible upstream minimatch patch; explicit risk acceptance or compatible fix required', ['phase4-security-audit.json', 'phase4-runtime-audit.json']),
     blocked('activationTls', 'Unsigned engineering candidate; RC now refuses unsigned output. Approved signer and authorized production-mode staging TLS/activation remain unavailable', ['phase4-signature-output.txt', 'phase4-unsigned-rc-refusal.txt']),
