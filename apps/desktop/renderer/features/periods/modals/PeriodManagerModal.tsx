@@ -52,6 +52,12 @@ export const PeriodManagerModal: React.FC = () => {
   const [isAutoName, setIsAutoName] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
 
+  const getNextDate = (date: string) => {
+    const next = new Date(`${date}T00:00:00.000Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
+  };
+
   // Edit current period state
   const [isEditingCurrent, setIsEditingCurrent] = useState(false);
   const [currentEditName, setCurrentEditName] = useState('');
@@ -109,8 +115,9 @@ export const PeriodManagerModal: React.FC = () => {
     if (modalType !== 'period_manager') return;
     const today = formatDateIso();
     setCloseDate(today);
-    setNextPeriodStartDate(today);
-    setNextPeriodName(getUzbekMonthName(today));
+    const nextDay = getNextDate(today);
+    setNextPeriodStartDate(nextDay);
+    setNextPeriodName(getUzbekMonthName(nextDay));
     setIsAutoName(true);
     setConfirmed(false);
     setCurrentEditName(currentPeriod.name || getUzbekMonthName(currentPeriod.startDate));
@@ -131,9 +138,10 @@ export const PeriodManagerModal: React.FC = () => {
   // When close date changes, auto-suggest next start date & name if user hasn't typed custom name
   const handleCloseDateChange = (val: string) => {
     setCloseDate(val);
-    setNextPeriodStartDate(val);
+    const nextDay = getNextDate(val);
+    setNextPeriodStartDate(nextDay);
     if (isAutoName) {
-      setNextPeriodName(getUzbekMonthName(val));
+      setNextPeriodName(getUzbekMonthName(nextDay));
     }
   };
 
@@ -704,7 +712,7 @@ export const PeriodManagerModal: React.FC = () => {
                   className="period-modal-input"
                 />
                 <span style={{ display: 'block', fontSize: '14.5px', color: 'var(--text-muted, #64748b)', marginTop: '5px' }}>
-                  Yangi oy shu sanadan boshlanadi
+                  Yangi oy yopish sanasidan keyingi kuni boshlanadi
                 </span>
               </div>
 
