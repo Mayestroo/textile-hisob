@@ -107,7 +107,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
     "electron": "44.10.2",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "eslint": "^10.14.0",
     "globals": "^17.14.0",
     "lucide-react": "^1.42.0",

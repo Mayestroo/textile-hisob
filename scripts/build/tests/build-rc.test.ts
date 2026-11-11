@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const { assertReleaseVersion, calculateArtifactIdentity } = require('../build-rc.cjs');
+const { assertReleaseVersion, assertSigningEnvironment, calculateArtifactIdentity } = require('../build-rc.cjs');
 
 describe('local RC build boundary', () => {
   let tempDirectory: string | undefined;
@@ -35,5 +35,14 @@ describe('local RC build boundary', () => {
       sizeBytes: Buffer.byteLength('local release candidate fixture'),
       sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
     });
+  });
+  it('requires an approved signer and never silently emits an unsigned RC', () => {
+    for (const env of [{}, { NOVDA_RELEASE_SIGNER_THUMBPRINT: 'not-a-thumbprint' }]) {
+      expect(() => assertSigningEnvironment(env, 'win32')).toThrowError(expect.objectContaining({ code: 'RC_SIGNER_REQUIRED' }));
+    }
+    expect(() => assertSigningEnvironment({ NOVDA_RELEASE_SIGNER_THUMBPRINT: 'a'.repeat(40) }, 'win32')).not.toThrow();
+    const source = fs.readFileSync(path.resolve(__dirname, '../build-rc.cjs'), 'utf8');
+    expect(source).toContain('--config.forceCodeSigning=true');
+    expect(source).toContain('verify-windows-signature.ps1');
   });
 });

@@ -99,6 +99,19 @@ describe('Windows NSIS release configuration', () => {
     expect(matrix).toContain("'G: exit code 2 with no running app repairs through in-place replacement'");
     expect(matrix).toContain("'H: exit code 2 with a running app aborts without replacing files'");
     expect(matrix).toContain("RecoveryDecision=abort-process-remains-or-check-failed");
+    expect(matrix).toContain('$pass = $userDataPreserved');
+    expect(matrix).toContain("$env:USERNAME -ne 'WDAGUtilityAccount'");
+    expect(matrix.indexOf('DISPOSABLE_WINDOWS_SANDBOX_REQUIRED')).toBeLessThan(matrix.indexOf('$artifactDirectory'));
+    const sandbox = fs.readFileSync(path.resolve(__dirname, '../../../../ops/windows-sandbox/nsis-upgrade-matrix.wsb'), 'utf8');
+    expect(sandbox).toContain('<SandboxFolder>C:\\Project</SandboxFolder>');
+    expect(sandbox).toContain('-DisposableSandbox');
+    expect(sandbox).toContain("$env:NOVDA_DISPOSABLE_WINDOWS = '1'");
+    if (process.platform === 'win32') {
+      const rejected = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-File',
+        path.resolve(__dirname, '../../../../ops/windows-sandbox/nsis-upgrade-matrix.ps1')], { encoding: 'utf8' });
+      expect(rejected.status).not.toBe(0);
+      expect(rejected.stderr).toContain('DISPOSABLE_WINDOWS_SANDBOX_REQUIRED');
+    }
   });
 
   it('does not expose the legacy auto-publish workflow or allow implicit builder publication', () => {

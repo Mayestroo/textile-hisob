@@ -1,4 +1,10 @@
+param([switch]$DisposableSandbox)
 $ErrorActionPreference = 'Stop'
+# This legacy fault matrix deletes installation/registry/profile fixtures. Never
+# run on a user's host or against their installed data, even by accident.
+if (-not $DisposableSandbox -or $env:NOVDA_DISPOSABLE_WINDOWS -ne '1' -or $env:USERNAME -ne 'WDAGUtilityAccount') {
+  throw 'DISPOSABLE_WINDOWS_SANDBOX_REQUIRED: explicit switch, opt-in and WDAG sandbox account required; no changes made.'
+}
 
 $artifactDirectory = 'C:\Installers'
 $outputDirectory = 'C:\TestOutput'
@@ -140,7 +146,8 @@ function Reset-Install([switch]$ClearTestUserData) {
 
 function Add-Scenario([string]$name, $installerResult, $preState, $postState, $processesBefore, $processesAfter, [bool]$userDataPreserved) {
   $shortcuts = if ($postState.InstallLocation) { @(Get-Shortcuts $postState.InstallLocation) } else { @() }
-  $pass = $installerResult.ExitCode -eq 0 `
+  $pass = $userDataPreserved `
+    -and $installerResult.ExitCode -eq 0 `
     -and $postState.DisplayVersion -eq $finalVersion `
     -and $postState.ExecutableProductVersion -eq "$finalVersion.0" `
     -and $postState.UninstallerProductVersion -eq $finalVersion `

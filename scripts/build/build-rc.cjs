@@ -26,12 +26,18 @@ function calculateArtifactIdentity(artifactPath) {
   return { file: path.basename(artifactPath), sizeBytes: stat.size, sha256 };
 }
 
+function assertSigningEnvironment(env = process.env, platform = process.platform) {
+  if (platform !== 'win32' || !/^[a-fA-F0-9]{40}$/.test(env.NOVDA_RELEASE_SIGNER_THUMBPRINT || '')) {
+    throw Object.assign(new Error('RC_SIGNER_REQUIRED: Windows and an approved NOVDA_RELEASE_SIGNER_THUMBPRINT are required; use dist:local only for unsigned engineering fixtures'), { code: 'RC_SIGNER_REQUIRED' });
+  }
+}
+
 function run(command, args, root, env = process.env) {
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     env,
-    shell: process.platform === 'win32'
+    shell: process.platform === 'win32' && command.endsWith('.cmd')
   });
   if (result.error || result.status !== 0) {
     const error = new Error(`RC_BUILD_COMMAND_FAILED: ${command} ${args.join(' ')}`);
@@ -42,6 +48,7 @@ function run(command, args, root, env = process.env) {
 }
 
 function buildReleaseCandidate(root = path.resolve(__dirname, '../..')) {
+  assertSigningEnvironment(); // Fail before rebuilding/overwriting anything.
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const packageLock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const version = assertReleaseVersion(packageJson, packageLock);
@@ -57,7 +64,7 @@ function buildReleaseCandidate(root = path.resolve(__dirname, '../..')) {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   run(npm, ['run', 'build'], root, { ...process.env, VITE_APP_VERSION: packageJson.version });
-  run(npx, ['electron-builder', '--win', 'nsis', '--publish', 'never'], root);
+  run(npx, ['--no-install', 'electron-builder', '--win', 'nsis', '--publish', 'never', '--config.forceCodeSigning=true'], root);
 
   if (!fs.existsSync(artifactPath)) {
     const error = new Error(`RC_ARTIFACT_MISSING: expected ${artifactName}`);
@@ -66,6 +73,10 @@ function buildReleaseCandidate(root = path.resolve(__dirname, '../..')) {
   }
 
   const identity = calculateArtifactIdentity(artifactPath);
+  run('powershell.exe', ['-NoProfile', '-NonInteractive', '-File',
+    path.join(root, 'scripts/verify/release/verify-windows-signature.ps1'),
+    '-Artifact', artifactPath, '-ExpectedSha256', identity.sha256,
+    '-ExpectedSignerThumbprint', process.env.NOVDA_RELEASE_SIGNER_THUMBPRINT], root);
   process.stdout.write(`LOCAL_RC_ARTIFACT ${JSON.stringify(identity)}\n`);
   return identity;
 }
@@ -80,4 +91,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { assertReleaseVersion, calculateArtifactIdentity, buildReleaseCandidate };
+module.exports = { assertReleaseVersion, assertSigningEnvironment, calculateArtifactIdentity, buildReleaseCandidate };
