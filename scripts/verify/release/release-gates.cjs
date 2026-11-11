@@ -24,12 +24,14 @@ function sourceFingerprint() {
   function walk(directory) {
     for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
-      if (entry.isDirectory() && !['tests', '__pycache__', 'node_modules'].includes(entry.name)) walk(file);
-      else if (entry.isFile() && !/\.test\./.test(file)) files.push(file);
+      if (entry.isDirectory() && !['__pycache__', 'node_modules'].includes(entry.name)) walk(file);
+      else if (entry.isFile()) files.push(file);
     }
   }
-  for (const directory of ['apps', 'packages']) walk(directory);
-  for (const file of ['package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json']) if (fs.existsSync(path.join(root, file))) files.push(file);
+  // Bind verification policy/runners and deployment/installer source too. Reports
+  // and evidence are hashed separately to avoid a self-referential fingerprint.
+  for (const directory of ['apps', 'packages', 'scripts', 'ops/deploy', 'ops/windows-sandbox']) walk(directory);
+  for (const file of ['package.json', 'package-lock.json', 'vite.config.ts', 'vitest.config.ts', 'tsconfig.json', 'eslint.config.mjs']) if (fs.existsSync(path.join(root, file))) files.push(file);
   const hash = crypto.createHash('sha256');
   for (const file of files.sort()) {
     hash.update(file.split(path.sep).join('/') + '\0');
