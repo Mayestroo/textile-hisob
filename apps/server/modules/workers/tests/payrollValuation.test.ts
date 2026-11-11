@@ -80,6 +80,13 @@ describe('shared payroll service/query contract', () => {
       workers: [], accountingStatus: 'COMPLETE', accountingReasons: []
     });
   });
+  it('rejects a correctly hashed archive whose top-level company conflicts with its nested period', async () => {
+    const foreign = { companyId: 'other', period: { id: 'P', companyId: 'tenant' },
+      models: [{ id: 'deleted-model', operations: [{ name: 'Old operation', rate: 999 }] }] };
+    const row = { archive_json: foreign, sha256: computePayloadHash(canonicalStringify(foreign)) };
+    expect((await fixture([entry('12', '5')], [], period, 7, 7, row).admin.getPayroll({ companyId: 'tenant', periodId: 'P' })).workers[0])
+      .toMatchObject({ gross: 0, unknownQuantity: 12, accountingReasons: expect.arrayContaining(['CLOSED_TARIFF_UNAVAILABLE']) });
+  });
   it('uses frozen close tariff for closed P and current operation tariff for open work', async () => {
     const f = fixture([entry('10', '5')], [adjustment('2', '5')]);
     const admin = await f.admin.getPayroll({ companyId: 'tenant', periodId: 'P' });

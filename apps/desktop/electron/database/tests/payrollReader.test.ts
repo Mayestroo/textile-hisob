@@ -73,6 +73,16 @@ describe('desktop SQLite saved-rate reader and shared server reducer', () => {
     });
   }
   const read = (p: string | null = 'P') => loadPayrollValuationFromSqlite(db, tenant, p);
+  it('rejects a valid digest with foreign top-level company rather than borrowing its tariff', () => {
+    ticket('foreign-archive', 12, 5);
+    db.prepare("UPDATE periods SET is_closed=1 WHERE id='P'").run();
+    const foreign = { companyId: 'other', period: { id: 'P', companyId: tenant },
+      models: [{ id: 'm', operations: [{ name: 'Sew', rate: 999 }] }] };
+    db.prepare("UPDATE period_archives SET archive_json=?,sha256=? WHERE company_id=? AND period_id='P'")
+      .run(canonicalStringify(foreign), computePayloadHash(canonicalStringify(foreign)), tenant);
+    expect(read().workers[0]).toMatchObject({ gross: 0, unknownQuantity: 12,
+      accountingReasons: expect.arrayContaining(['CLOSED_TARIFF_UNAVAILABLE']) });
+  });
   it('does not let an unverified period-read archive replace the persisted closing tariff', () => {
     ticket('closed', 12, 5);
     db.prepare("UPDATE periods SET is_closed=1 WHERE id='P'").run();

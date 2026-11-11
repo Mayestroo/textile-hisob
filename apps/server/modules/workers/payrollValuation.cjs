@@ -64,6 +64,7 @@ async function loadPayroll(client, companyId, requestedPeriodId, boundWorker = n
         const parsed = typeof row.archive_json === 'string' ? JSON.parse(row.archive_json) : row.archive_json;
         const identity = parsed?.period;
         if (computePayloadHash(canonicalStringify(parsed)) === row.sha256
+          && (parsed.companyId == null || parsed.companyId === companyId)
           && (!identity || (identity.id === period.id && (identity.companyId == null || identity.companyId === companyId)))
           && Array.isArray(parsed?.models)) closingArchive = parsed;
       } catch { /* invalid archive cannot establish a closing tariff */ }

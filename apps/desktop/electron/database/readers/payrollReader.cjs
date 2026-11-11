@@ -249,8 +249,9 @@ function loadPayrollValuationFromSqlite(db, companyId, periodId, options = {}) {
       const digestMatches = typeof archivedRow.archive_json === 'string'
         && computePayloadHash(canonicalStringify(parsed)) === archivedRow.sha256;
       const identity = parsed?.period;
-      const identityMatches = !identity || (identity.id === periodId
-        && (identity.companyId == null || identity.companyId === companyId));
+      const identityMatches = (parsed.companyId == null || parsed.companyId === companyId)
+        && (!identity || (identity.id === periodId
+        && (identity.companyId == null || identity.companyId === companyId)));
       if (digestMatches && identityMatches && Array.isArray(parsed?.models)) closingArchive = parsed;
     } catch { closingArchive = null; }
   }
