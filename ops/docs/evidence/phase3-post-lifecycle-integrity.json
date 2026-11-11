@@ -1,0 +1,8 @@
+{
+  "source": "novda_audit_phase3_evidence post-lifecycle versus preserved reference",
+  "originalArchiveDigestsPreserved": 2,
+  "migrations": 29,
+  "requiredForeignKeys": 17,
+  "orphanCountersZero": 16,
+  "scopePreserved": true
+}

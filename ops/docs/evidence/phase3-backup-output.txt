@@ -1,0 +1,47 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+BACKUP_DESKTOP_RESULT {"status":"passed","electronVersion":"44.10.2","summary":{"models":26,"workers":223,"tickets":0,"periodStart":"2026-11-05"},"checks":["offline renderer write committed before process shutdown"],"risks":[],"restartExpected":{"workerId":1,"avans":111}}
+
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+AUDIT_STEP: Oklad input
+AUDIT_STEP: Oklad focused
+AUDIT_STEP: Oklad blurred
+BACKUP_DESKTOP_RESULT {"status":"passed","electronVersion":"44.10.2","summary":{"models":26,"workers":223,"tickets":0,"periodStart":"2026-11-05"},"checks":["real App + AuthGate startup + main IPC bootstrap + reconnect","full Electron process restart replays durable offline balance exactly once","navigation through eight real workbook views with production backup rows","actual desktop tariff DOM: unknown stays blank, explicit zero visible, unknown save blocked, explicit 0/9 reaches SQLite/HTTP/PG","two model drafts persist independently through real debounce and SQLite IPC","real closed-period archives validate and return bound payroll through shipped IPC","renderer AVANS change -> real IPC -> outbox -> HTTP -> PostgreSQL -> projection","interrupted HTTP + durable offline AVANS + renderer rehydration + repeated reconnect preserve exactly one change","real renderer ticket form -> command -> outbox -> authorized PostgreSQL fact","model tariff change + ticket worker reassignment preserve the original wage snapshot","ticket deletion -> server VOIDED fact -> removal from active workbook","actual Oklad input focus/type/blur -> canonical period-bound persisted balance","real renderer month close -> PostgreSQL archive -> next period -> retained patta numbering -> readable archive"],"risks":[]}
+
+{
+  "timezone": "Asia/Tashkent",
+  "checks": [
+    "release integrity under the same least-privilege grants as production",
+    "real device authentication and operator login",
+    "calendar dates preserved across PostgreSQL and HTTP bootstrap",
+    "complete real backup bootstraps into fresh SQLite and workbook projection",
+    "all backup periods: desktop and server payroll amounts agree",
+    "independent raw-SQL quantity/tariff/balance oracle agrees for every active worker in every backup period",
+    "offline AVANS edit -> outbox -> real operator-authorized HTTP write -> feed -> exact-once balance",
+    "real backup roster: offline worker creation receives exactly one server-assigned canonical ID"
+  ],
+  "counts": {
+    "models": 28,
+    "workers": 222,
+    "periods": 3,
+    "legacyPartyCollisionExceptions": 2,
+    "parties": 252,
+    "workerAdjustments": 73,
+    "tickets": 1976,
+    "ticketEntries": 28700,
+    "productionAdjustments": 216,
+    "periodArchives": 2
+  },
+  "independentPayrollComparisons": 11988,
+  "reconnect": {
+    "pushed": {
+      "attempted": 1,
+      "synced": 1,
+      "conflict": 0,
+      "deadLetter": 0,
+      "transientErrors": 0,
+      "operatorReauthRequired": 0
+    }
+  }
+}

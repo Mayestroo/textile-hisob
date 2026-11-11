@@ -1,0 +1,146 @@
+[
+  {
+    "id": "engineering",
+    "status": "PASS",
+    "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+    "artifacts": [
+      {
+        "path": "phase3-engineering-output.txt",
+        "sha256": "e47121eef0545488768a31946d81bb450e1a0c355ec186a74fee21b64aa184e5"
+      },
+      {
+        "path": "phase3-secret-scan-output.txt",
+        "sha256": "14e626fa83df47f32101d2a5aedbd333c0fc62f07fac3d13d90d4d0cac98807a"
+      }
+    ]
+  },
+  {
+    "id": "apiRecovery",
+    "status": "PASS",
+    "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+    "artifacts": [
+      {
+        "path": "phase3-api-output.txt",
+        "sha256": "e6459f50196e5c159ef28536e621dd15cdfdcb689c743b2ed554b5339ebe17f9"
+      }
+    ]
+  },
+  {
+    "id": "backupLifecycle",
+    "status": "PASS",
+    "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+    "artifacts": [
+      {
+        "path": "phase3-backup-output.txt",
+        "sha256": "9c115e97f393daf3b5b4be8e7831a24fc5da761a5a2143372d6e592c1bb6332b"
+      },
+      {
+        "path": "phase3-admin-output.txt",
+        "sha256": "fa2e0d30271d8818afa7519404cc3df969db3c74f29b10fefecd8c3497530fed"
+      },
+      {
+        "path": "phase3-post-lifecycle-integrity.json",
+        "sha256": "58039b7bff4367d6c4f6d3ee670e0865e975eb54000f6c66c2126a214a0d080d"
+      }
+    ]
+  },
+  {
+    "id": "historicalInventory",
+    "status": "PASS",
+    "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+    "artifacts": [
+      {
+        "path": "phase3-historical-reconciliation.json",
+        "sha256": "e4e91cf492c63db1df869c99fa3bf7df288fba1977bd17c7f92da86a6951b5f7"
+      },
+      {
+        "path": "phase3-original-financial-integrity.json",
+        "sha256": "85a6e07b22223f5c5eab5463423875aea81158fbe2953735ca35b3a65be73629"
+      }
+    ]
+  },
+  {
+    "id": "historicalSignoff",
+    "status": "BLOCKED",
+    "reason": "216 records and opening balances lack unambiguous attribution or approved restricted-release scope",
+    "artifacts": []
+  },
+  {
+    "id": "packagedStartup",
+    "status": "PASS",
+    "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+    "artifacts": [
+      {
+        "path": "phase3-packaged.json",
+        "sha256": "91c8d06fab90878ba6c5a0f98eb53056f5f0eb4bfba6d8da86704749eaba0ad5"
+      }
+    ]
+  },
+  {
+    "id": "profileUpgrade",
+    "status": "PASS",
+    "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+    "artifacts": [
+      {
+        "path": "phase3-profile.json",
+        "sha256": "89e373b350897e2454cda95203c00eaf62d04702d429295c1157f33ca4b445e1"
+      }
+    ]
+  },
+  {
+    "id": "installerUpgradeRollback",
+    "status": "BLOCKED",
+    "reason": "NSIS build passes; Hyper-V access denied; old/new install and rollback unverified",
+    "artifacts": []
+  },
+  {
+    "id": "security",
+    "status": "BLOCKED",
+    "reason": "Zero runtime/high/critical advisories; 9 moderate tooling advisories require release-owner acceptance",
+    "artifacts": [
+      {
+        "path": "phase3-security-audit.json",
+        "sha256": "5af90f65fc91793d605b5df2dbf99df46d8025d1a645944c11894e77ec4c7ee7"
+      }
+    ]
+  },
+  {
+    "id": "activationTls",
+    "status": "BLOCKED",
+    "reason": "Unsigned candidate; authorized signed activation/TLS staging unavailable",
+    "artifacts": []
+  },
+  {
+    "id": "printing",
+    "status": "BLOCKED",
+    "reason": "Preview/HTML pass; physical Canon/Argox output not witnessed",
+    "artifacts": [
+      {
+        "path": "phase3-printing-output.txt",
+        "sha256": "0aa1ad46e05eacc89ed3310a62f58319e171fc4158b0822df9f72d3bcf34fd45"
+      }
+    ]
+  },
+  {
+    "id": "telegram",
+    "status": "BLOCKED",
+    "reason": "Synthetic signed routes pass; no authorized live staging transport",
+    "artifacts": [
+      {
+        "path": "phase3-admin-output.txt",
+        "sha256": "fa2e0d30271d8818afa7519404cc3df969db3c74f29b10fefecd8c3497530fed"
+      }
+    ]
+  },
+  {
+    "id": "performance",
+    "status": "BLOCKED",
+    "reason": "Local measurements but no approved SLO/concurrent network/UI capacity signoff",
+    "artifacts": [
+      {
+        "path": "phase3-performance.json",
+        "sha256": "df8a3c34e9cf141b9990cf85b9bbcd8e4568d4a64486d03436ca16223d628324"
+      }
+    ]
+  }
+]

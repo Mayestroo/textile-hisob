@@ -1,0 +1,9 @@
+
+ RUN  v5.1.0 D:/hisob-new
+
+
+ Test Files  37 passed | 1 skipped (38)
+      Tests  367 passed | 1 skipped (368)
+   Start at  08:38:41
+   Duration  209.25s (tests 98%, import 2%)
+

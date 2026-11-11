@@ -1,0 +1,3432 @@
+{
+  "methodology": "Literal-import heuristic; type-only import declarations excluded from cycle graph; mixed inline type imports may overapproximate. Runtime/IPC/HTTP/Python edges require manual ownership map.",
+  "files": 220,
+  "edges": [
+    {
+      "from": "apps/desktop/electron/database/archive/periodArchiveValidator.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "packages/contracts/ticketEntryIdentity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "apps/desktop/electron/database/core/companyPath.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "to": "packages/domain/periodWriteGuard.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "apps/desktop/electron/database/core/companyPath.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "packages/domain/pattaSequence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "to": "packages/domain/pattaFinishScope.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "to": "apps/desktop/electron/database/core/companyPath.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "to": "apps/desktop/electron/database/core/migrationRunner.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/migrationRunner.cjs",
+      "to": "apps/desktop/electron/database/core/schema.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/migrator.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/migrator.cjs",
+      "to": "apps/desktop/electron/database/core/identifierPolicy.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/migrator.cjs",
+      "to": "apps/desktop/electron/database/core/companyPath.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/schema.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/core/schema.cjs",
+      "to": "apps/desktop/electron/database/core/identifierPolicy.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/maintenance/parityReporter.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/maintenance/parityReporter.cjs",
+      "to": "apps/desktop/electron/database/core/migrator.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/maintenance/sqliteBackup.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/maintenance/sqliteBackup.cjs",
+      "to": "apps/desktop/electron/database/core/companyPath.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/maintenance/sqliteBackup.cjs",
+      "to": "apps/desktop/electron/database/core/migrationRunner.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "to": "packages/contracts/ticketEntryIdentity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/pattaJournalReader.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/pattaJournalReader.cjs",
+      "to": "apps/desktop/electron/database/archive/periodArchiveValidator.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/pattaJournalReader.cjs",
+      "to": "apps/desktop/electron/database/archive/periodArchiveEligibility.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "to": "packages/contracts/ticketEntryIdentity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "to": "packages/domain/payrollReducer.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "to": "apps/desktop/electron/sync/feedEvidence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionEngine.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/license/license.cjs",
+      "to": "apps/desktop/electron/config/apiConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/license/license.cjs",
+      "to": "apps/desktop/electron/security/licenseBoundary.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/license/license.cjs",
+      "to": "packages/contracts/keys/licensePublicKey.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/license/license.cjs",
+      "to": "apps/desktop/electron/security/deviceCredentialStore.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/runtime/diagnostics.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/license/license.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/security/updateSecurity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/security/windowSecurity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/auth/companyAuthority.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/security/licenseBoundary.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/ipc/licenseIpcHandlers.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/config/apiConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/migrator.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/maintenance/parityReporter.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/security/operatorSessionStore.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/security/deviceCredentialStore.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/runtime/runtimeMode.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/sync/bootstrapApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/sync/syncClient.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/sync/bootstrapInitializer.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/sync/leaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/archive/periodArchiveEligibility.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/archive/periodArchiveValidator.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/main.cjs",
+      "to": "apps/desktop/electron/database/readers/pattaJournalReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/runtime/runtimeMode.cjs",
+      "to": "apps/desktop/electron/auth/companyAuthority.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/runtime/runtimeMode.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/runtime/runtimeMode.cjs",
+      "to": "apps/desktop/electron/database/core/migrationRunner.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/runtime/runtimeMode.cjs",
+      "to": "apps/desktop/electron/database/core/schema.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/security/deviceCredentialStore.cjs",
+      "to": "apps/desktop/electron/database/core/companyPath.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/bootstrapApplier.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/bootstrapApplier.cjs",
+      "to": "apps/desktop/electron/sync/feedEvidence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/bootstrapInitializer.cjs",
+      "to": "apps/desktop/electron/sync/bootstrapApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "to": "packages/contracts/ticketEntryIdentity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "to": "apps/desktop/electron/sync/feedEvidence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/leaseManager.cjs",
+      "to": "apps/desktop/electron/sync/syncClient.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/lifecycleArchiveReconcile.cjs",
+      "to": "apps/desktop/electron/database/archive/periodArchiveValidator.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "to": "apps/desktop/electron/sync/syncClient.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/sync/feedEvidence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/sync/syncClient.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "to": "apps/desktop/electron/sync/lifecycleArchiveReconcile.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/syncClient.cjs",
+      "to": "apps/desktop/electron/config/apiConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/database/outbox/outboxManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/sync/syncClient.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/ModellarJamiView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/ModelSizesView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/NewOperationModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/DeleteOperationModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/NewModelModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/LicenseActivationModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/workers/modals/WorkerManagerModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/DeveloperModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/AppUpdateModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/components/ui/NotificationToast.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/components/ui/LoadingOverlay.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/ConfirmModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/components/auth/PermissionGuard.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/components/auth/AccessDenied.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/App.tsx",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AccessDenied.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AccessDenied.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AccessDenied.tsx",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AuthGate.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AuthGate.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AuthGate.tsx",
+      "to": "apps/desktop/renderer/store/index.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/AuthGate.tsx",
+      "to": "apps/desktop/renderer/components/auth/PendingApproval.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/PendingApproval.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/PendingApproval.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/PermissionGuard.tsx",
+      "to": "apps/desktop/renderer/hooks/useCan.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/auth/PermissionGuard.tsx",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/hooks/useOnline.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/syncStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/sessionGuard.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/OperationRatesModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "to": "apps/desktop/renderer/domain/modelRateStatus.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "to": "apps/desktop/renderer/domain/modelRateStatus.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/store/selectors.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/hooks/useTrialCountdown.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/hooks/useOnline.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/store/syncStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/components/layout/ConnectionStatus.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "to": "apps/desktop/renderer/utils/statusFormatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/ui/LoadingOverlay.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/ui/NotificationToast.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/ui/RoleBadge.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/components/ui/RoleBadge.tsx",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/modelRateStatus.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/domain/partyAnalytics.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/partyHistoryVisibility.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/domain/partyHistoryVisibility.ts",
+      "to": "apps/desktop/renderer/domain/pattaLifecycle.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/domain/pattaLifecycle.ts",
+      "to": "apps/desktop/renderer/domain/partyAnalytics.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/pattaQuantity.ts",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/projections.ts",
+      "to": "apps/desktop/renderer/domain/productionAdjustment.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/reconciliation.ts",
+      "to": "apps/desktop/renderer/domain/productionAdjustment.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/ticketValidation.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/domain/ticketValidation.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/excelSync.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/excelSync.ts",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/excelSync.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/excelSync.ts",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/utils/excelUtils.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/components/ui/CustomSelect.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "to": "apps/desktop/renderer/store/sessionGuard.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "to": "apps/desktop/renderer/components/ui/CustomSelect.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/DeleteOperationModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/DeleteOperationModal.tsx",
+      "to": "apps/desktop/renderer/components/ui/CustomSelect.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/NewModelModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/NewModelModal.tsx",
+      "to": "apps/desktop/renderer/components/ui/CustomSelect.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/NewOperationModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/NewOperationModal.tsx",
+      "to": "apps/desktop/renderer/components/ui/CustomSelect.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/modals/OperationRatesModal.tsx",
+      "to": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModellarJamiView.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModellarJamiView.tsx",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModellarJamiView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModellarJamiView.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/OperationRatesModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModelSizesView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModelSizesView.tsx",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/ModelSizesView.tsx",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/operationRateDraft.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "to": "apps/desktop/renderer/domain/modelRateStatus.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "to": "apps/desktop/renderer/features/models/operationRateDraft.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "to": "apps/desktop/renderer/store/pattaBatch.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "to": "apps/desktop/renderer/domain/pattaQuantity.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/domain/partyAnalytics.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/domain/pattaQuantity.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "to": "apps/desktop/renderer/store/selectors.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/domain/partyAnalytics.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/domain/pattaLifecycle.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/domain/partyHistoryVisibility.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/features/patta/pattaHistoryActions.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/pattaHistoryActions.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "to": "apps/desktop/renderer/domain/ticketValidation.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/engine/excelSync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/AppUpdateModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/AppUpdateModal.tsx",
+      "to": "apps/desktop/renderer/services/updateService.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/AppUpdateModal.tsx",
+      "to": "apps/desktop/renderer/types/update.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/ConfirmModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/DeveloperModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/LicenseActivationModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/system/modals/LicenseActivationModal.tsx",
+      "to": "apps/desktop/renderer/hooks/useTrialCountdown.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/components/ui/CustomSelect.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/engine/payrollDisplay.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerManagerModal.tsx",
+      "to": "apps/desktop/renderer/engine/formulaEngine.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/features/workers/modals/WorkerManagerModal.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/hooks/useCan.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/hooks/useOnline.ts",
+      "to": "apps/desktop/renderer/store/syncStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/hooks/useTrialCountdown.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/hooks/useTrialCountdown.ts",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/main.tsx",
+      "to": "apps/desktop/renderer/App.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/main.tsx",
+      "to": "apps/desktop/renderer/components/auth/AuthGate.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/main.tsx",
+      "to": "apps/desktop/renderer/components/ui/ErrorBoundary.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/services/updateService.ts",
+      "to": "apps/desktop/renderer/types/update.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/authStore.ts",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/authStore.ts",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/bridge.ts",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/bridge.ts",
+      "to": "apps/desktop/renderer/store/uiStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/bridge.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/bridge.ts",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/bridge.ts",
+      "to": "apps/desktop/renderer/store/sessionGuard.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/bridge.ts",
+      "to": "apps/desktop/renderer/store/helpers/debounceSave.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/businessMutations.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/businessMutations.ts",
+      "to": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/businessMutations.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/businessMutations.ts",
+      "to": "apps/desktop/renderer/store/sessionGuard.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/businessMutations.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "to": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "to": "apps/desktop/renderer/domain/ticketPeriodScope.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/uiStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/syncStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/bridge.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/store/uiStore.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/index.ts",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/pattaBatch.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/pattaBatch.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/selectors.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createLicenseSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/constants/operationConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/debounceSave.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/domain/pattaSizeSystem.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/debounceSave.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "to": "apps/desktop/renderer/store/pattaBatch.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPattaSequenceSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/domain/partyAnalytics.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/engine/excelSync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/sessionGuard.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "to": "apps/desktop/renderer/store/pattaBatch.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/domain/ticketValidation.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/debounceSave.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/hydration.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/sessionGuard.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "to": "apps/desktop/renderer/domain/ticketPeriodScope.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createUiSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createUiSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createUiSlice.ts",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/debounceSave.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/store/helpers/storeSanitizers.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/syncStore.ts",
+      "to": "apps/desktop/renderer/types/sync.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/desktop/renderer/store/types.ts",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/types.ts",
+      "to": "apps/desktop/renderer/types/update.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/uiStore.ts",
+      "to": "apps/desktop/renderer/constants/sheetConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createUiSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createLicenseSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createWorkerSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createPeriodSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createModelSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createPattaSequenceSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createTicketSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/slices/createPersistenceSlice.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/runtimeMode.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/helpers/debounceSave.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/pattaBatch.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/domain/pattaQuantity.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/utils/formatters.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/constants/batchConstants.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/desktop/renderer/store/workbookStore.ts",
+      "to": "apps/desktop/renderer/store/types.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/infrastructure/db.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/auth/auth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/sync/handlers/operations.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/sync/handlers/changeFeed.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/sync/handlers/bootstrap.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/sync/handlers/leases.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/auth/operatorAuth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/activation/activationRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/workers/workerRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/admin/adminDashboardRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/sync/workbookOperations.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/workers/workerCreation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/app.cjs",
+      "to": "apps/server/modules/sync/businessMutationFence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/auth/auth.cjs",
+      "to": "apps/server/modules/sync/versionFence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/auth/auth.cjs",
+      "to": "apps/server/auth/operatorAuth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/infrastructure/db.cjs",
+      "to": "apps/server/database/migrate.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/infrastructure/db.cjs",
+      "to": "apps/server/infrastructure/connectionConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/infrastructure/postgresIntegrity.cjs",
+      "to": "apps/server/database/migrate.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/activation/activationRequests.cjs",
+      "to": "apps/server/modules/activation/licenseActivation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/activation/activationRoutes.cjs",
+      "to": "apps/server/modules/activation/activationRequests.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/activation/licenseActivation.cjs",
+      "to": "packages/contracts/keys/licensePublicKey.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboard.cjs",
+      "to": "apps/server/modules/workers/payrollValuation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboard.cjs",
+      "to": "apps/server/modules/activation/activationRequests.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboard.cjs",
+      "to": "apps/server/modules/admin/adminAccess.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboard.cjs",
+      "to": "apps/server/modules/workers/workerService.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboard.cjs",
+      "to": "apps/server/modules/sync/handlers/operations.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboard.cjs",
+      "to": "apps/server/modules/sync/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboardRoutes.cjs",
+      "to": "apps/server/modules/admin/adminDashboard.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboardRoutes.cjs",
+      "to": "apps/server/modules/admin/adminWebAuth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboardRoutes.cjs",
+      "to": "apps/server/modules/admin/adminAccess.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/admin/adminDashboardRoutes.cjs",
+      "to": "apps/server/modules/activation/activationRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/bootstrapSnapshot.cjs",
+      "to": "apps/server/modules/sync/changeFeedWatermark.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/bootstrap.cjs",
+      "to": "apps/server/auth/auth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/bootstrap.cjs",
+      "to": "apps/server/modules/sync/bootstrapSnapshot.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/changeFeed.cjs",
+      "to": "apps/server/auth/auth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/changeFeed.cjs",
+      "to": "apps/server/modules/sync/changeFeedWatermark.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/leases.cjs",
+      "to": "apps/server/auth/auth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "packages/contracts/ticketEntryIdentity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "apps/server/modules/sync/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "apps/server/auth/auth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "packages/domain/periodWriteGuard.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "apps/server/modules/sync/payloadValidation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "packages/domain/partyPolicy.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "packages/domain/pattaSequence.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "apps/server/modules/sync/workbookOperations.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/handlers/operations.cjs",
+      "to": "apps/server/modules/sync/changeFeedWatermark.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/payloadValidation.cjs",
+      "to": "apps/server/modules/sync/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/workbookOperations.cjs",
+      "to": "apps/server/modules/sync/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/sync/workbookOperations.cjs",
+      "to": "packages/domain/pattaFinishScope.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/payrollValuation.cjs",
+      "to": "packages/domain/payrollReducer.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/payrollValuation.cjs",
+      "to": "apps/server/modules/sync/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/workerCreation.cjs",
+      "to": "apps/server/modules/sync/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/workerCreation.cjs",
+      "to": "apps/server/modules/sync/changeFeedWatermark.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/workerRoutes.cjs",
+      "to": "apps/server/modules/activation/activationRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/workerRoutes.cjs",
+      "to": "apps/server/modules/workers/workerService.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/workerService.cjs",
+      "to": "apps/server/modules/admin/adminAccess.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/modules/workers/workerService.cjs",
+      "to": "apps/server/modules/workers/payrollValuation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/serve.cjs",
+      "to": "apps/server/app.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/serve.cjs",
+      "to": "apps/server/infrastructure/db.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/serve.cjs",
+      "to": "apps/server/infrastructure/connectionConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "apps/server/serve.cjs",
+      "to": "apps/server/infrastructure/postgresIntegrity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "ops/deploy/importSqliteBaseline.cjs",
+      "to": "apps/server/infrastructure/connectionConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "ops/deploy/migrateProduction.cjs",
+      "to": "apps/server/infrastructure/connectionConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "ops/deploy/migrateProduction.cjs",
+      "to": "apps/server/infrastructure/postgresIntegrity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "ops/deploy/migrateProduction.cjs",
+      "to": "apps/server/database/migrate.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "ops/deploy/verifyProductionDatabase.cjs",
+      "to": "apps/server/infrastructure/connectionConfig.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "ops/deploy/verifyProductionDatabase.cjs",
+      "to": "apps/server/infrastructure/postgresIntegrity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-performance.cjs",
+      "to": "apps/server/modules/sync/bootstrapSnapshot.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-performance.cjs",
+      "to": "apps/server/modules/workers/payrollValuation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/server/app.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/server/auth/auth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/server/auth/operatorAuth.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/sync/syncClient.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/sync/bootstrapInitializer.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/server/modules/workers/payrollValuation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/server/infrastructure/postgresIntegrity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "apps/desktop/electron/sync/reconnectManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "scripts/verify/database/payroll-oracle.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/backup-workflows.cjs",
+      "to": "scripts/verify/database/local-fault-gateway.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/historical-reconciliation.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/inspect-legacy-archives.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/inspect-legacy-archives.cjs",
+      "to": "apps/desktop/electron/database/archive/periodArchiveValidator.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/server/database/migrate.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/server/modules/workers/payrollValuation.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/server/modules/sync/workbookOperations.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/server/modules/sync/bootstrapSnapshot.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/server/modules/sync/handlers/operations.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/sync/outboxDispatcher.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/sync/bootstrapApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/migration-pg-9a.cjs",
+      "to": "apps/desktop/electron/sync/changeFeedApplier.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/money-1d-bridge-acceptance.cjs",
+      "to": "apps/server/modules/workers/workerRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/money-1d-bridge-acceptance.cjs",
+      "to": "apps/server/modules/admin/adminDashboard.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/money-1d-bridge-acceptance.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/money-1d-bridge-acceptance.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/money-1d-bridge-acceptance.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "scripts/verify/render/admin-financial-ui.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "apps/server/modules/workers/workerRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "apps/server/modules/admin/adminDashboardRoutes.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "apps/desktop/electron/database/readers/payrollReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/database/worker-bot-acceptance.cjs",
+      "to": "apps/server/database/migrate.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/hisob-render-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/hisob-render-fixture.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/hisob-render-fixture.tsx",
+      "to": "apps/desktop/renderer/types/workbook.ts",
+      "typeOnly": true
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/store/businessMutations.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/store/workbookStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/store/bridge.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/engine/excelSync.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/components/layout/TitleBar.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/ModelSizesView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/ModellarJamiView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/workers/modals/WorkerManagerModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/NewModelModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/NewOperationModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/DeleteOperationModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/LicenseActivationModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/AppUpdateModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/DeveloperModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/system/modals/ConfirmModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/components/ui/NotificationToast.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/components/ui/LoadingOverlay.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/OperationRatesView.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/features/models/modals/OperationRatesModal.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/App.tsx",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "to": "apps/desktop/renderer/store/authStore.ts",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/release/packaged-smoke.cjs",
+      "to": "scripts/verify/release/release-gates.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/release/verify-release-integrity.cjs",
+      "to": "scripts/verify/database/verify-pg16-test-env.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/release/verify-release-integrity.cjs",
+      "to": "apps/server/infrastructure/postgresIntegrity.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/backup-workflows-electron.cjs",
+      "to": "apps/desktop/electron/license/license.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/backup-workflows-electron.cjs",
+      "to": "apps/desktop/electron/main.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/backup-workflows-electron.cjs",
+      "to": "apps/desktop/electron/security/deviceCredentialStore.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/backup-workflows-electron.cjs",
+      "to": "apps/desktop/electron/security/operatorSessionStore.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/model-sizes-stage-c-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/core/canonicalPayload.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/core/databaseManager.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "scripts/verify/render/model-sizes-stage-c-runtime.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/projectionReader.cjs",
+      "typeOnly": false
+    },
+    {
+      "from": "scripts/verify/render/payroll-display-runtime.cjs",
+      "to": "apps/desktop/electron/database/readers/workbookPayrollRead.cjs",
+      "typeOnly": false
+    }
+  ],
+  "unresolved": [],
+  "cycles": [],
+  "externals": [
+    "/apps/desktop/renderer/store/businessMutations.ts",
+    "@electron/asar",
+    "@tanstack/react-virtual",
+    "@vitejs/plugin-react",
+    "better-sqlite3",
+    "child_process",
+    "crypto",
+    "electron",
+    "fastify",
+    "fs",
+    "http",
+    "https",
+    "lucide-react",
+    "node:assert/strict",
+    "node:child_process",
+    "node:crypto",
+    "node:fs",
+    "node:fs/promises",
+    "node:http",
+    "node:net",
+    "node:os",
+    "node:path",
+    "node:perf_hooks",
+    "node:sqlite",
+    "node:timers/promises",
+    "node:url",
+    "node:util",
+    "os",
+    "path",
+    "pg",
+    "react",
+    "react-dom",
+    "react-dom/client",
+    "util",
+    "vite",
+    "xlsx-js-style",
+    "zustand",
+    "zustand/react/shallow"
+  ],
+  "sourceHashes": {
+    "apps/bots/admin/src/admin_bot.py": "c7eae09d2131a849cc5cf4b855cf612d90f5af63c3a8a20e787a7bc47730cb78",
+    "apps/bots/worker/src/worker_bot.py": "da6cd80569607a8cd9993059bfdd57d1147447e04283311b8931a6cc10cf8314",
+    "apps/desktop/electron/auth/companyAuthority.cjs": "ad6fc719e4dec59f021cbca79b7fee2beb591768c5927146bb0c66096ed090d6",
+    "apps/desktop/electron/config/apiConfig.cjs": "286a14238568f7f67c40bd5fafd2629e38d8a34ca79da3c9d2c0d3b76ac65479",
+    "apps/desktop/electron/database/archive/periodArchiveEligibility.cjs": "955bafa6f76afc624c0e9aedba2d5dfcd3d0feae9ce6ed1cec24bcd0c26caae7",
+    "apps/desktop/electron/database/archive/periodArchiveValidator.cjs": "418d4e0f858363553e5b9c8f934fd65de117d13c42e58f7695549489690e4d3f",
+    "apps/desktop/electron/database/commands/commandPipeline.cjs": "59253ffa1637a55df31634b1ec373b70174291e4dc664dda7780e1708505ba52",
+    "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs": "e77b9589a2fdd107a6148e64ac854b5c17128e1cf74546ab17836ae5194a13a1",
+    "apps/desktop/electron/database/core/canonicalPayload.cjs": "d8b8f8655dc7a59000ee7d691d1679d8505139acb6bcd6e91abba4c6d360fa63",
+    "apps/desktop/electron/database/core/companyPath.cjs": "421579b9a9ec98b3d4d524af1c3ee941b7368196f3567e9e3070380f0b977094",
+    "apps/desktop/electron/database/core/databaseManager.cjs": "21b70b8133bb24199cce7d83d481aa8b34f58ccf4638f3d6e5397701d865833b",
+    "apps/desktop/electron/database/core/identifierPolicy.cjs": "5d392048cb4b8a7f5bf50ee25cf8b783216c3a15ee99da9fab3e0612f55c9dec",
+    "apps/desktop/electron/database/core/migrationRunner.cjs": "3036f0a9d06bd8730f72d63e8c81d4888544199fc8971c696845bdac16c8e271",
+    "apps/desktop/electron/database/core/migrator.cjs": "a784c5f3a948160163aeeaeaf31435c23ca9493d8257b0f0dfdb7c6f42d16a0c",
+    "apps/desktop/electron/database/core/schema.cjs": "1aa34b6c3654ab2a47cc26cf40d9ccfc8b5bbbeb9ba3ddd8cc31b1aab0016189",
+    "apps/desktop/electron/database/maintenance/parityReporter.cjs": "cc913ea057bfa4a5a068249241d491ba22c58b7a40d6aff2b141fa5ae73f7702",
+    "apps/desktop/electron/database/maintenance/sqliteBackup.cjs": "4b5bebd628d1ad66b7d3fd741d1d0614ad161eeebdb3400951e2946bb90a8dcb",
+    "apps/desktop/electron/database/outbox/outboxManager.cjs": "3f2e0efe04d366015a10b7a9c6df7b29a41625ad8a9cc38f17efa2a88defdf38",
+    "apps/desktop/electron/database/readers/pattaJournalReader.cjs": "c825e2ab043f66c40c34e320a682d5a6c4ee0e65d59b60a96139659a4336b2a0",
+    "apps/desktop/electron/database/readers/payrollReader.cjs": "ec6f54b90c12a92128e1aac6f319666cef0a2cbecca6359cd1606debb3daa2c7",
+    "apps/desktop/electron/database/readers/projectionEngine.cjs": "3712d5e99e942a4a2752cc64543a777f7ff9727fce8505c4580ed726e8454f45",
+    "apps/desktop/electron/database/readers/projectionReader.cjs": "de8c0f354743fedaf9ac7c63ae47af412a1de712433fd0e5369dc25c8bc0f648",
+    "apps/desktop/electron/database/readers/workbookPayrollRead.cjs": "d377fe04f27339677e9ef07aba8fb8b336b211fe148aaf77ac1c9378a0b94af3",
+    "apps/desktop/electron/ipc/licenseIpcHandlers.cjs": "766aeb7d97d2605244f20d2577586c0d0d33de312c5ff8d1aed90d917f4c2e15",
+    "apps/desktop/electron/license/license.cjs": "0b6ead734380b0da336bf6b6b2238d5aa1aa846141571821ee49f6233903e26b",
+    "apps/desktop/electron/main.cjs": "68035aa299cf42fb7d2d94bfee164a58ce4ecb3e4b2aa9992eafc500bea8a993",
+    "apps/desktop/electron/preload.cjs": "76dde2d16c7dd6a8893992adce1f0ea9c133f5cc757b2015a832f1ec33334dd3",
+    "apps/desktop/electron/runtime/diagnostics.cjs": "6c78c259ec3274a1cceedeab5cddecd34779578e9959835eaddef094da3a67cf",
+    "apps/desktop/electron/runtime/runtimeMode.cjs": "7c360a5908336896ebf43bff21153934bccc92de54797d15daf25079c486ccbc",
+    "apps/desktop/electron/security/deviceCredentialStore.cjs": "2c21619165cb74761d8cc10ada7efde9c59371549848821f651a268f8fc5eaac",
+    "apps/desktop/electron/security/licenseBoundary.cjs": "07565ccfc94ca0e9cdbea01b409ac1d0f8b3279b14b07c16435aa9bf1259f15c",
+    "apps/desktop/electron/security/operatorSessionStore.cjs": "02d19d03238edc5021e51027b0193070518feab591cea7525d9bce3dbaa6be16",
+    "apps/desktop/electron/security/updateSecurity.cjs": "70ac2a2d0989019184b91c9c829d66769ef1dda91d5255423cb3932a8e8f76dc",
+    "apps/desktop/electron/security/windowSecurity.cjs": "575e81d46a90eb43a0e58f5d4bc384aad3a0b6bd6de8acd8da131b9a8861e875",
+    "apps/desktop/electron/sync/bootstrapApplier.cjs": "d8d58d74d1a6877327930ea8e65817f5cded11e00fe46546888494f555e33b0c",
+    "apps/desktop/electron/sync/bootstrapInitializer.cjs": "686e03ecd932dc0e68a031c969d809cc918c8527b2d339bc737ae60421e552c8",
+    "apps/desktop/electron/sync/changeFeedApplier.cjs": "9d4aa10aa38418a4a0f0738d89b463bfe9bb4fdb6fa90a71daf22ff38074aab2",
+    "apps/desktop/electron/sync/feedEvidence.cjs": "cc653d9c95fe8aff20320f0bae10fa760e5a4cd35df94c8a21f235f7e27ef222",
+    "apps/desktop/electron/sync/leaseManager.cjs": "a31a5af48b506dbc048f18cbb79b66974d6d94baded541a4150e3284257cbaea",
+    "apps/desktop/electron/sync/lifecycleArchiveReconcile.cjs": "bb877e1c0741867926b28fab7aace08f6786f9ac2ccf40026d35173db4b9dab3",
+    "apps/desktop/electron/sync/outboxDispatcher.cjs": "5b80889cef23a2b1dcd626fe42d83496e2a1ca2e75922a9663e5a6563585538c",
+    "apps/desktop/electron/sync/reconnectManager.cjs": "4f1624fa212509f0a98193a9c24512a3aabb809257174d6b90148e67a913e790",
+    "apps/desktop/electron/sync/syncClient.cjs": "151e1773ad5906dd5ad92c572f95f7dab951a0ecb7cfb277f16044ef836a4e52",
+    "apps/desktop/electron/sync/twoClientAcceptanceWorker.cjs": "04fab86088a04aa07eb56680568af600b28f801baa8af84609ea0c2fe9c1a78c",
+    "apps/desktop/renderer/App.tsx": "8d3bb1d7938dd60b1fe8d691a767beadf5fb94838d3d4517ffb8addaa5f5450b",
+    "apps/desktop/renderer/components/auth/AccessDenied.tsx": "21ee7ba912c98c7157332d667b009bf1d0064564377aa2d23d50bb4d7cf43017",
+    "apps/desktop/renderer/components/auth/AuthGate.tsx": "e195f32c67980d9643ed5c6aed0b1245598887027b7b383d05a64b9c7ba808b3",
+    "apps/desktop/renderer/components/auth/PendingApproval.tsx": "c4d8bd972ae2811e462cf99b7cec235245fede23f5c5962ec7c084170d7f4b68",
+    "apps/desktop/renderer/components/auth/PermissionGuard.tsx": "7b6eeff3174aac35a85f4d0c152607a75c2d57e9759168934cfbf16482cb53a0",
+    "apps/desktop/renderer/components/layout/ConnectionStatus.tsx": "4ed071d18366ab8e0ed1957a091849455e0f0328674a8a18fb560d5193879dab",
+    "apps/desktop/renderer/components/layout/SheetTabs.tsx": "c5acce7acccc5e10b3e6a8d3d728bf759f14b360e64e2cba9779b18c71493009",
+    "apps/desktop/renderer/components/layout/TitleBar.tsx": "62a022ed20385b53ac12a628127910ffcb047471f4e1fda16f441942dd4ed111",
+    "apps/desktop/renderer/components/ui/CustomSelect.tsx": "e94c786056d9d253d1a2f98219ca7edb7540a4b6515d9cc81af815946f61261b",
+    "apps/desktop/renderer/components/ui/ErrorBoundary.tsx": "23d04a11d2f2c5862a408e557eb20cad309642781ac8628d842110f698618edf",
+    "apps/desktop/renderer/components/ui/LoadingOverlay.tsx": "80b2739addc5ede1c4f52d15298bef61d16922abbc6539be3a679539d59156d4",
+    "apps/desktop/renderer/components/ui/NotificationToast.tsx": "7a04b6cc8d313aba85219de30a0fd19b354e85e6d1d0418be58bd3092bcc6db4",
+    "apps/desktop/renderer/components/ui/RoleBadge.tsx": "37f72799d1cb36ee7417fa4524b58b6128bbcd1b7c881cbcf37cd25942d0ff4e",
+    "apps/desktop/renderer/constants/batchConstants.ts": "0f0c0909366df8601270172778678d1253a7bdb09ca40be77fcb66daffc64c47",
+    "apps/desktop/renderer/constants/operationConstants.ts": "1de002bbbeaa741b5d353245e2314c948388d7fb2039aebc51560a7182efe6f6",
+    "apps/desktop/renderer/constants/sheetConstants.ts": "50047a6f064bb8374106deb0eb87d2d79ec906b5965834202f0b9f4b233714fd",
+    "apps/desktop/renderer/domain/modelRateStatus.ts": "a112e3f32ce909aee490399db87696cbc047e345e41bebe18f70196c2ad55996",
+    "apps/desktop/renderer/domain/partyAnalytics.ts": "559dedc44d2fb555d1a3371d6537817a31d5b32e1ae29135db4c51fcdff3f855",
+    "apps/desktop/renderer/domain/partyHistoryVisibility.ts": "cec7adb887d615f56e16ac8a3602b246054073a7c8a2c4176b461c5e992c6f13",
+    "apps/desktop/renderer/domain/pattaLifecycle.ts": "63136c26e793f6832b2e76eda7bff3dc1efb31582ed155752f753a29df8e2d88",
+    "apps/desktop/renderer/domain/pattaQuantity.ts": "3801b4aefeab8bede608e238676ec920f02e77cb694dc9db4bed6f5fd0ca4233",
+    "apps/desktop/renderer/domain/pattaSizeSystem.ts": "3207e9c55b8b844277f69d4ef2ddf9c2fcecd2e2ff4d35f7b1aec5e3bef3596d",
+    "apps/desktop/renderer/domain/periodCloseGuard.ts": "2d5979e001eff40dad3dd9fec5fede4181457e765c85f89dd174e2c07a7e01ed",
+    "apps/desktop/renderer/domain/productionAdjustment.ts": "fe24d96bb5880aadaff7df38ea6d4beac00784d95890b013a1888a702c027cad",
+    "apps/desktop/renderer/domain/projections.ts": "1b0e25b2cfa7b1610bc77f59d9f90754b6d62911ab3e7dc245967fa9ed1f21a8",
+    "apps/desktop/renderer/domain/reconciliation.ts": "5a7425f227fe29137f8a7e2deb99e6cd77903c5a40a9773f3aebbaed542847a2",
+    "apps/desktop/renderer/domain/ticketPeriodScope.ts": "06d4d40c5b9aa62d66b87804ec9aed8b06582a53eeae9b4f84831423bd0a2af0",
+    "apps/desktop/renderer/domain/ticketValidation.ts": "9cf45c8a402a4ce5846c9c23cc17d2bda07e92c0c4350880dae952365163dba6",
+    "apps/desktop/renderer/engine/excelSync.ts": "686ec93e1911a43ed2974656aa2f6fff5c952cd9d1843e431f05598566639065",
+    "apps/desktop/renderer/engine/formulaEngine.ts": "98313197740da226339a9eff3c773729ab78413d2b57e02c221dd3322558c471",
+    "apps/desktop/renderer/engine/payrollDisplay.ts": "a7060f705dea0e62be2daf1309e67de10e1c23969123280b068c7f1cdd833e57",
+    "apps/desktop/renderer/features/journal/AmallarJurnaliView.tsx": "a4f8e7e9b083ed7deaaa723c0938d1238dd63d5c93f69052805dceda549ba403",
+    "apps/desktop/renderer/features/models/HisobView.tsx": "052dd4e21d1414108f60d4fc7b74c9a1a44e3c72e9ec06b6f1a8496370edeec5",
+    "apps/desktop/renderer/features/models/KonveyerView.tsx": "e85cbbfae901736b43f6a3fd80a100dcc5ab7b8dbc6cf12edda400449d89d011",
+    "apps/desktop/renderer/features/models/modals/DeleteOperationModal.tsx": "add3d2b7417fd4f7f30238746f36b7372436e873892fd7c98ac5b7d6d56859f7",
+    "apps/desktop/renderer/features/models/modals/NewModelModal.tsx": "ccbab4c60b2cf63a01fca98e26a3314ec60bcd113b8a23bd4612d725ab396a3f",
+    "apps/desktop/renderer/features/models/modals/NewOperationModal.tsx": "fc88d16103b4fe1ed879ddf726183a1896d27945e2718d2a9a9d3e6120403eb4",
+    "apps/desktop/renderer/features/models/modals/OperationRatesModal.tsx": "953c4994cef6ec7fa773ab1cca87c6ee7cb336246d2f81f3fc1a8e2e8b35d599",
+    "apps/desktop/renderer/features/models/ModellarJamiView.tsx": "050fc810b430f0ddb33cab2d3876494428b71eaf1e08e1baee0dda873a087d85",
+    "apps/desktop/renderer/features/models/ModelSizesView.tsx": "ceb08cda1f3eeb3fcee47fd6a1e64a0c79fd1009da8f44ef7e857514380c5b8c",
+    "apps/desktop/renderer/features/models/operationRateDraft.ts": "87ff1fd699e95df82effaf5595a74fcf71ef8542212229d1a2fa6a866bfa9a80",
+    "apps/desktop/renderer/features/models/OperationRatesView.tsx": "e739882dcf53bf4de01a5a47428f02c33b635409c4cd6430ee791867246f8424",
+    "apps/desktop/renderer/features/patta/modals/EditSubmittedTicketModal.tsx": "f27d0359439d29e81830fd18f3451ac969345f828e8d343f2add71a88a7299dd",
+    "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx": "74c5910fbed1829079395abfb45a422e92d3064061db6c5820f4c128798ee321",
+    "apps/desktop/renderer/features/patta/PattaBatchView.tsx": "107f4cb7394fbbb95991ec7137a1c10687e9d0c04fa20874d591050fa8f1fe28",
+    "apps/desktop/renderer/features/patta/PattaHisobView.tsx": "d5073005d7c6468fc06504e3e458b6b6c53cd42947e951f7b83fdcf8437a288e",
+    "apps/desktop/renderer/features/patta/pattaHistoryActions.ts": "2feaead4844d3d68b7da1e5c6147d7d108d1e5362bca8a0a4d89c79f0acfcddc",
+    "apps/desktop/renderer/features/patta/PattaView.tsx": "fb554214a40a65254f12fc7a329b8b02d18cb75cef72d30d4301f8a430c061de",
+    "apps/desktop/renderer/features/payroll/UmumiyView.tsx": "61577fa562722f733733d2c517e16d24922e695215d92ae11540fcf87e20dfeb",
+    "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx": "0641a785e1ad8dbc1b64815b48c58263e4033f08a1d055902f21f49bc4d82b70",
+    "apps/desktop/renderer/features/system/modals/AppUpdateModal.tsx": "a1e52823b42265bf7833b71c0b94d6b1a4e94da04df1d4ad275767f19e3423c5",
+    "apps/desktop/renderer/features/system/modals/BackupManagerModal.tsx": "7d2e44dd027a5ef3a90be5be3229f823c5e1d99e24db7bb3611754a21ae4806c",
+    "apps/desktop/renderer/features/system/modals/ConfirmModal.tsx": "0d0e2cce4a246a94ec2c5faf06dad4c0388cb570195ceac2a177cee295f6f085",
+    "apps/desktop/renderer/features/system/modals/DeveloperModal.tsx": "464d8db6c4d62194259cfd0a7f6141fd8723db50e03e1e1c938e6e880922e2d6",
+    "apps/desktop/renderer/features/system/modals/LicenseActivationModal.tsx": "295a658f68e446b1a6a8205ee5c9d0dd8ba1db6bca810cbb3b73cb7a8065bafb",
+    "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx": "ac3b7bda7a399b6b8e4544285f1ace7eb0bf11bd8799974b47c7bc1eb8d04fbf",
+    "apps/desktop/renderer/features/workers/modals/WorkerManagerModal.tsx": "4942f74f1ca9000953dd29bcca0dfb5ab2101b4cf85570d11f0280f822355c0c",
+    "apps/desktop/renderer/hooks/useCan.ts": "16750c04147c6114e1b2ba681ed9cc903f419ad2a7cddd2d66babaddc1d09fb1",
+    "apps/desktop/renderer/hooks/useOnline.ts": "25055b2ce7f79d639ebacf7d18fba690bd67e69d970d1fca5aa7b98fd16b49ff",
+    "apps/desktop/renderer/hooks/useTrialCountdown.ts": "020479cfea40589ca3a1759a86aad280f6d69fa3f9ed4352e1fe9235b0931f9f",
+    "apps/desktop/renderer/main.tsx": "2bd147046c47d2846b2934e60f2183dbc0397c173aa1e3299debbda8a3a835ee",
+    "apps/desktop/renderer/services/updateService.ts": "c008f232a1e367367b2bff70304ef101c55d81c367b24348d6b2a942b3ce6d06",
+    "apps/desktop/renderer/store/authStore.ts": "6a41b377505f348e8ea97fc772351b96e4ae24920827d7f9d788ea59cbac98de",
+    "apps/desktop/renderer/store/bridge.ts": "c8aa41e33f47836d34da014cfebfb5f2999e3dbe1a6ff66650c7a26d66692d9a",
+    "apps/desktop/renderer/store/businessMutations.ts": "c755fcf30cc99cea3f2c38de0536dcd32f570a56090df01b2d4125d3843dd2c9",
+    "apps/desktop/renderer/store/helpers/debounceSave.ts": "24fa9c13a8bd3bcd94dc57888d593b1200a95032205f5c147783f9d01044f2b6",
+    "apps/desktop/renderer/store/helpers/hydration.ts": "ba47723208ca5a4e1a4af67f4329e1b5829728d48721e382444c26acb5284000",
+    "apps/desktop/renderer/store/helpers/storeSanitizers.ts": "d30d11bdb8a8b4947025a8202bf9de4d66dd7b4db8569dfbf41dbeeadc604268",
+    "apps/desktop/renderer/store/index.ts": "3c0cf53908a12cbcd76500c8e9199cfe4d4fcba241ab81356cf6d204395d2168",
+    "apps/desktop/renderer/store/pattaBatch.ts": "ed63c05697188bf193b77ac242740d86c3b6fca1da052f05e0b12cfc19a72def",
+    "apps/desktop/renderer/store/runtimeMode.ts": "27bba9ba844652f64a58ffb63fc4ca59c7d5f4b1a766b69a8fbe906e0047d658",
+    "apps/desktop/renderer/store/selectors.ts": "bd757d44231d4873f83544d8470a9f83546c01a4f513c13f73e69f0b9355c874",
+    "apps/desktop/renderer/store/sessionGuard.ts": "1fd572d1295da96f9c9f21c1d870015cdb01b692be4ef2ecc2069b2e1de2c79d",
+    "apps/desktop/renderer/store/slices/createLicenseSlice.ts": "11a76f759c6be465d0629e71302237240c31e738343feb7c32bdd944b8a667de",
+    "apps/desktop/renderer/store/slices/createModelSlice.ts": "a186394dd374eacc2975fc247ec5e26086db66f268631c9419a595b426181504",
+    "apps/desktop/renderer/store/slices/createPattaBatchSlice.ts": "6329d63def7dec41ff028c0f0ef51bc59eb8282aea64ff31683a12bf472d7315",
+    "apps/desktop/renderer/store/slices/createPattaSequenceSlice.ts": "91323c648b308c2e7837c74846eeeab288bbdd23a38dede97b0b8521243c1571",
+    "apps/desktop/renderer/store/slices/createPeriodSlice.ts": "529ea3993994ebaaef30f10a46e6e6b39d0f5b19143ed840019c76e5c347355f",
+    "apps/desktop/renderer/store/slices/createPersistenceSlice.ts": "497301f0635a4f05100a53b0353d63a9f16c12fde4953675a49f85ec7cd2c232",
+    "apps/desktop/renderer/store/slices/createTicketSlice.ts": "bd56d04a0a5c2782edc8eb1f32ea33fb29e2a0b0b15a900fc052c1039f08a93c",
+    "apps/desktop/renderer/store/slices/createUiSlice.ts": "e6ee317a480e7c52ea055dc4d07473fad2f31199425cd74e77330ac380389585",
+    "apps/desktop/renderer/store/slices/createWorkerSlice.ts": "9aa97cbabc724654fde5f3cb26094e4fba90b111ae039af6b82cf31604c8a900",
+    "apps/desktop/renderer/store/syncStore.ts": "4f8d32a72d846b2774712d2e97b5dfbe3668d9976e0dcf324f7e3a2f671a1369",
+    "apps/desktop/renderer/store/types.ts": "f547ad063f767f464a77757e6fd02ee95ee1830b466c3e474fa774d507f19423",
+    "apps/desktop/renderer/store/uiStore.ts": "8034be6d2d2cdc1e5a1d77ad18f901f08c57bac29136191e2d8fe858f9b3c24c",
+    "apps/desktop/renderer/store/workbookStore.ts": "687715a7c42260f032e419df6f2de46d3dac0d7cabc7b70d9b71bb04b5005bcf",
+    "apps/desktop/renderer/types/sync.ts": "fc09e5556c2cbdd80b385849c8af7e5e312c7db83bcdd2a4b3b6965416777d94",
+    "apps/desktop/renderer/types/update.ts": "a23c650e2e22d11ae3f317cb52edfbc52ce4a9c7be5b8e7e9430d67959f8de8a",
+    "apps/desktop/renderer/types/workbook.ts": "ac90078c045effafe2c6d85249ea086b7d51912219ade70c51853d601d0e5c20",
+    "apps/desktop/renderer/utils/excelUtils.ts": "9cdaa5dad6a699244e87d058973eea361d0bf6e40f9bad01f061e70d638d35ac",
+    "apps/desktop/renderer/utils/formatters.ts": "e2fb78160f3464177db240a52f8483beb1d40ec730a36806f4f8af858e27a2bf",
+    "apps/desktop/renderer/utils/statusFormatters.ts": "eb104cc8bdecd8d789433c21f990870e0dbd65d7ebe6416c1691bf25a4204528",
+    "apps/server/app.cjs": "1837244a0fea410cfe89ed4b153489c93b7aa436601e3b2e834c6d7e280c03cf",
+    "apps/server/auth/auth.cjs": "c3b79a26fd78e784ccd9f043d4ff24dd719529a89d90d993d078cff9c3017235",
+    "apps/server/auth/deviceProvisioning.cjs": "4f50fb05b79b7336b4d9bc2bbb1bb0ecf334757a9fddf5d303ec6a86acbd67bc",
+    "apps/server/auth/operatorAuth.cjs": "5600bfbed8f2a72d17cb557210cddbce8cafbd6f843449371ecb177a072a5316",
+    "apps/server/database/migrate.cjs": "1be07375edf675402269440917f077ccb240dbe51006f9365065dcfaddbb67d3",
+    "apps/server/infrastructure/connectionConfig.cjs": "7603046ea9c67d9121596eafc552abc76e9fb28dec8733a9d22a0865e6165276",
+    "apps/server/infrastructure/db.cjs": "dffe8e4687832fabf74f1ce2d059a6e7c4b11f6e05b71854a4416b16ccb630c4",
+    "apps/server/infrastructure/postgresBackup.cjs": "74475cb66a2a6ec579004c190db9379170fa7cefb91bda8a093a132323c84fe9",
+    "apps/server/infrastructure/postgresIntegrity.cjs": "e1c99d9d1099af0a4b5c713bc1114b0fa19b48cee1fa3a75309f5bd0ef8a023e",
+    "apps/server/modules/activation/activationRequests.cjs": "ae77d08ad500600bb9e96b291a7a09193d29d3776d408e98672c0ed2962f647b",
+    "apps/server/modules/activation/activationRoutes.cjs": "e6977ab56fdad063ad619068675dc3209e3ea15bbcf5073b8416c8bfa9312550",
+    "apps/server/modules/activation/licenseActivation.cjs": "21024af057097a8ac8b7953ba9c1836b40a9e1f1881555d87463804993f84760",
+    "apps/server/modules/admin/adminAccess.cjs": "e86e1ddb0c65a2a479ae496868aa7bb5e7457cc96e5aad280ea9013dc8860987",
+    "apps/server/modules/admin/adminDashboard.cjs": "64d12ef0c4845bed2ed05060af9b8d2cb2322d8da44c244ffb418edc515f999f",
+    "apps/server/modules/admin/adminDashboardRoutes.cjs": "c1e65a42b413e315c23970738635a41dfd7aedb8700541625d995577b65d0a44",
+    "apps/server/modules/admin/adminWebAuth.cjs": "c807dcc87250112de9f5f777bbbe7f188153a460c05cfefcd47c234b276f7fbf",
+    "apps/server/modules/sync/bootstrapSnapshot.cjs": "43096e0fee5ef3f2056160a192a6d3fb1ab90824eda176583e2890340edcbc0a",
+    "apps/server/modules/sync/businessMutationFence.cjs": "88ded2c038b9542adf70ba2583fd0b3d15ad51d87346d358e4af94e9c1741747",
+    "apps/server/modules/sync/canonicalPayload.cjs": "6f2698e6a6b38dd1267365a084402f7d08558319238a080574dfc3eab0d8b237",
+    "apps/server/modules/sync/changeFeedWatermark.cjs": "4a20d419bb21b9d7538ce96c0049db1c0dbae5c2030d744434a90e89c8aa8d70",
+    "apps/server/modules/sync/handlers/bootstrap.cjs": "aecded94d9d122949d7833b25619c20af53d158868fef1b8c73c4d2788816f9e",
+    "apps/server/modules/sync/handlers/changeFeed.cjs": "e55928a73220fe648b6934847e2317bfae5e5da2f7d568d9ef789f6b5d3d277c",
+    "apps/server/modules/sync/handlers/leases.cjs": "7e824fa68fa9a35efe1616e82ba7139bd1bd1ed4fcdf5ba0dcfd3a90d679f614",
+    "apps/server/modules/sync/handlers/operations.cjs": "1f2c97fcab50ff51955e693e6fb30c9382228e63c9af225fd24a83d080ccc88e",
+    "apps/server/modules/sync/payloadValidation.cjs": "e5889abd3fd83eee4c1a896a8781b47739961ef90b8b2bee6c32fe42dede7a41",
+    "apps/server/modules/sync/versionFence.cjs": "2f06b22ad0041d9837b2f01b6b70b966d412fab17982e4941d1ae65123c0a33a",
+    "apps/server/modules/sync/workbookOperations.cjs": "e1fbd5e80febee51bf479b7aa389038b851d8709e98ff8129d6b27bd82fca82d",
+    "apps/server/modules/workers/payrollValuation.cjs": "80600f0758496f2d3defa95dcf880c22f37f1669d40799d250621a10cacb6de9",
+    "apps/server/modules/workers/workerCreation.cjs": "6bfee5e0096592258c694000756e6ae2ffd3d4a1f43a4080916cfbedb0ccceea",
+    "apps/server/modules/workers/workerRoutes.cjs": "f987bdcda52a1a621ac1a2b93709460f90057d0b182a3719fd28be81508d2bd0",
+    "apps/server/modules/workers/workerService.cjs": "697f2ebe10773a475072c816cc94672e0f22b6973066bc92e686a40997d8cee4",
+    "apps/server/serve.cjs": "00036b996b0f0fd1c1512d64ef3b17fba32c46a811712e7b10625ae56416e852",
+    "apps/webapps/admin/scripts/admin.js": "83403748f8e6ba76486f45d4dcff290be7fac8f3e6a1a3b0cc797d24a42f2188",
+    "apps/webapps/admin/scripts/financial-intent.js": "8ff0e3a199b47e1e326309f494f7bbe0b663c16c0a1ef5e4b2717a35e195c2de",
+    "apps/webapps/worker/scripts/worker.js": "7d5e64eeca70b06297c5a0d0d854ab435537ce6aaa3881a97133d9ecba437480",
+    "packages/contracts/keys/licensePublicKey.cjs": "b26d3c0f4332ab3425dc7becf8f6dd969d7b0e90a2544e2cba4d66b0e79be14f",
+    "packages/contracts/serialization/canonicalPayload.py": "4d74d910a69b65fab12fb3c0380cb120c9582b512bcf32cc9d9ae42e443e0a1f",
+    "packages/contracts/ticketEntryIdentity.cjs": "5eea883f05edbb844929028af1193e17ad47996aa476024e551dd42f26326fc9",
+    "packages/domain/partyPolicy.cjs": "339b78d38ce6743d92b15b3e1a350322fb681f0ce9b63891c945d5eb5244f134",
+    "packages/domain/pattaFinishScope.cjs": "d964fe64e9e6c9a6030cca9dd22213ea368c372bc1a00c3c539ae9066bf57574",
+    "packages/domain/pattaSequence.cjs": "2b8c8df6a4eee9773b3ca5fe2f380aef9a498bedab98ef890a6326fdd45845a2",
+    "packages/domain/payrollReducer.cjs": "55c88a912995ab2cf407b2f3b5c8401d4ae9d858efd8f880c585e403d7c91100",
+    "packages/domain/periodWriteGuard.cjs": "b3e13e165621c0b8a413a8b2aa71a81c494bd37b6274062104deeda69a55b8be",
+    "ops/deploy/importSqliteBaseline.cjs": "56d2d34739f03003c2780d10b75790d9242deb9502de892fa416e8d8559633b6",
+    "ops/deploy/migrateProduction.cjs": "e5e1677fd3cdf2c150ef3b6e44dda8e534ee5868946d502ffbd3c298ff6a2218",
+    "ops/deploy/verifyProductionDatabase.cjs": "d0ededae18691cd522c4d4eaa3d32970d4c6e8da2d1d0a9c58db360eb64148aa",
+    "scripts/build/build-rc.cjs": "1940b2c4f53c205004efc9664425fa885bfaf06901b2f67d58b0d6dc7a68895c",
+    "scripts/tools/generate_license.py": "51f7477ade6c470506b0147d4be5eec74039d9f705f4c1ce2873b492c2bbe406",
+    "scripts/verify/database/assert-local-pg.cjs": "856beaea07dd8addd9367fe15da55b5e3c536fd18860f68de05cb5ee8d1682d6",
+    "scripts/verify/database/backup-performance.cjs": "4e5511d94b629ef5dabfe7f5085fee9fb7106a9b1e0ee226c9303a8a2802a6a0",
+    "scripts/verify/database/backup-workflows.cjs": "64f4e1ad770f80c9fec7a5b34322a4c0942d6f1a36c33cc93c5f5f284db21690",
+    "scripts/verify/database/financial-retry-pg.cjs": "2002a05962065d06f94771ec4e80e5d16bfca0d44a949ec238f871a80535384f",
+    "scripts/verify/database/historical-reconciliation.cjs": "88617da25f851ca836697ee641462cb67cde65e02c5943b68fd5fb89c8558716",
+    "scripts/verify/database/inspect-legacy-archives.cjs": "792d7728ce95a762a6579daf6214539bc470c2871e7e1ee26d47d75128e59925",
+    "scripts/verify/database/local-fault-gateway.cjs": "545e37023ec38369b303251f9163f5aecf8a255cb6973680102688c2f63ef429",
+    "scripts/verify/database/migration-pg-9a.cjs": "bf92035b439eb2a831b2de4536c114eb1427f5fffaa808d70d671d06a71ebc26",
+    "scripts/verify/database/money-1d-bridge-acceptance.cjs": "5a616a506373f43af820cc751468de5cf547466f1ae512a7e57afbde4a7a5ccb",
+    "scripts/verify/database/money-1d-pg.cjs": "db600bb02d5e576093d3d58087fef17e586b4cc41593e05cb4d8df14b698f421",
+    "scripts/verify/database/patta-lifecycle-pg.cjs": "682084bf3462a440852f04abd475e5119c7a2660c165d38bb4a21e9d8f5384bb",
+    "scripts/verify/database/payroll-oracle.cjs": "8f8b053ab4340d257d567008a511a8e32755a28d65a6463b3a003313a0036ab6",
+    "scripts/verify/database/verify-pg16-test-env.cjs": "cd527bec9b96b164295ef693ed47bc6853c905444df4e0689623e8503d1c47fe",
+    "scripts/verify/database/worker-bot-acceptance.cjs": "0f4fec1564748be32f8e688fdaa2ddbc8cc77b56a9602826beab52b1371a3c0f",
+    "scripts/verify/fixtures/hisob-render-fixture.tsx": "4d57b78834792c970113357d128716cf6ee9dd73e06e15a779cd766c0f42bf8e",
+    "scripts/verify/fixtures/payroll-display-fixture.tsx": "4369387bc3d371d062c48cec09b4d95ed1e248ba774783f220c6702c9074441a",
+    "scripts/verify/release/architecture-inventory.cjs": "6f89dfcf115ffff96c4dc75d0b26b94fd092038dfa17e87fc49e0d1491468e38",
+    "scripts/verify/release/local-checkpoint.py": "705104abb316c25e210f556e0d383767c590b7dee14b0e57a9ee9d3152f8c99b",
+    "scripts/verify/release/packaged-smoke.cjs": "4836e5bfc0660f298dce32c2e3bdd84cbcc91708fae4bb9cb2e03a014cedb2b1",
+    "scripts/verify/release/profile-upgrade-electron.cjs": "89c25db8abd4899a8d9c122bf1ba51a8d2c4218f761f6b8b28986a371a1dcc91",
+    "scripts/verify/release/release-gates.cjs": "418700cf9c9a1ba4eaddcc2895e393a57c34cdc1b169dd158d9559b6d07db9c4",
+    "scripts/verify/release/verify-release-integrity.cjs": "b98a92172820ea23cbf2cbd3fdbc899d37c48fab8df40496545a92c50c1d9a65",
+    "scripts/verify/render/admin-financial-ui-electron.cjs": "da565c88a6613f105bbc421be2f50c18d18e5a88296b980d6fc5240cd2351e1f",
+    "scripts/verify/render/admin-financial-ui.cjs": "d6e0fff181d03a1775f3cbdd3b672520a27378f4047a9e87691a4bba4f8adc96",
+    "scripts/verify/render/admin-webapp-local-render.cjs": "24d6fccb3813ee8f99f9d71f482330cf6eab9059629ae87974b3c8363007f87b",
+    "scripts/verify/render/backup-workflows-electron.cjs": "d28be3159039dc8e8515a12b49a373fd9c5c4208ebe3540e9514e0298253e0a2",
+    "scripts/verify/render/hisob-css-probe.js": "5dd2276d00135585f00a02abf46b59cf836df7a32c97aca31e706dbbb9f3fb56",
+    "scripts/verify/render/hisob-render-runtime.cjs": "dca6252e0bc31a95b200d7fa76a95344fa7baeb3548e151eaa3216ec8c7ec052",
+    "scripts/verify/render/model-sizes-stage-c-runtime.cjs": "ac5cd0a18f02210418987c9dcbe4248ddf11b6ec5ebb6dfee8f70bbffc7a0f61",
+    "scripts/verify/render/payroll-display-runtime.cjs": "6c93befd1ffa10a672df10d300118c7ff5ab3367a219e5cdc7acc0f89cadb1e2",
+    "scripts/verify/render/redesign-local-preview.cjs": "6785d560d527a0c48936c5a37395a327ed34b553fa7000cd001e2a6a5100f252",
+    "scripts/verify/render/redesign-preview-electron.cjs": "dd8ec0568d5e0fb79a83b50102fa309d6eb872af3139e30ec4da868ad09df720",
+    "scripts/verify/render/worker-webapp-local-render.cjs": "d75a572900df2af2decabc515f110172934ebf4dd39fd30a1393516bb9a6ec91",
+    "scripts/verify/security/secret-scan.cjs": "159ab1ac5d5a4e5bbce87109176637dda47d1ff6130b907d658ae59a2199a963",
+    "scripts/verify/security/verify-protected-file-integrity.cjs": "387dc5c452fcbbc995c4d9a619d21880ab1b120b7678423df76550eaf1a3380c",
+    "scripts/verify/security/verify-signer-environment.cjs": "615352b7172b4f1005b687987cbfcfcb5e6882f3c005449fa4cf4b34d33b7c9d"
+  },
+  "largestModules": [
+    {
+      "file": "scripts/verify/render/payroll-display-runtime.cjs",
+      "lines": 2880,
+      "fanIn": 0,
+      "fanOut": 13
+    },
+    {
+      "file": "apps/desktop/electron/database/core/migrator.cjs",
+      "lines": 1725,
+      "fanIn": 2,
+      "fanOut": 3
+    },
+    {
+      "file": "apps/desktop/electron/database/core/schema.cjs",
+      "lines": 1676,
+      "fanIn": 2,
+      "fanOut": 2
+    },
+    {
+      "file": "apps/webapps/admin/scripts/admin.js",
+      "lines": 1597,
+      "fanIn": 0,
+      "fanOut": 0
+    },
+    {
+      "file": "apps/desktop/renderer/features/models/KonveyerView.tsx",
+      "lines": 1594,
+      "fanIn": 2,
+      "fanOut": 5
+    },
+    {
+      "file": "apps/server/modules/sync/handlers/operations.cjs",
+      "lines": 1482,
+      "fanIn": 3,
+      "fanOut": 9
+    },
+    {
+      "file": "apps/desktop/renderer/features/patta/PattaHisobView.tsx",
+      "lines": 1451,
+      "fanIn": 2,
+      "fanOut": 9
+    },
+    {
+      "file": "apps/desktop/electron/database/commands/workbookCommandPipeline.cjs",
+      "lines": 1443,
+      "fanIn": 8,
+      "fanOut": 8
+    },
+    {
+      "file": "apps/desktop/electron/main.cjs",
+      "lines": 1347,
+      "fanIn": 1,
+      "fanOut": 37
+    },
+    {
+      "file": "apps/server/modules/sync/payloadValidation.cjs",
+      "lines": 1258,
+      "fanIn": 1,
+      "fanOut": 1
+    },
+    {
+      "file": "apps/desktop/renderer/features/payroll/UmumiyView.tsx",
+      "lines": 1212,
+      "fanIn": 2,
+      "fanOut": 6
+    },
+    {
+      "file": "apps/desktop/electron/database/commands/commandPipeline.cjs",
+      "lines": 1060,
+      "fanIn": 3,
+      "fanOut": 7
+    },
+    {
+      "file": "apps/desktop/renderer/components/layout/SheetTabs.tsx",
+      "lines": 1031,
+      "fanIn": 2,
+      "fanOut": 6
+    },
+    {
+      "file": "scripts/verify/fixtures/payroll-display-fixture.tsx",
+      "lines": 1018,
+      "fanIn": 0,
+      "fanOut": 34
+    },
+    {
+      "file": "apps/desktop/renderer/features/periods/modals/PeriodManagerModal.tsx",
+      "lines": 994,
+      "fanIn": 2,
+      "fanOut": 7
+    },
+    {
+      "file": "apps/desktop/renderer/features/patta/PattaBatchView.tsx",
+      "lines": 993,
+      "fanIn": 2,
+      "fanOut": 8
+    },
+    {
+      "file": "apps/desktop/renderer/features/workers/modals/WorkerDetailModal.tsx",
+      "lines": 903,
+      "fanIn": 2,
+      "fanOut": 7
+    },
+    {
+      "file": "apps/desktop/renderer/features/patta/PattaView.tsx",
+      "lines": 893,
+      "fanIn": 2,
+      "fanOut": 4
+    },
+    {
+      "file": "apps/desktop/renderer/features/patta/modals/PattaPrintModal.tsx",
+      "lines": 815,
+      "fanIn": 2,
+      "fanOut": 6
+    },
+    {
+      "file": "apps/desktop/renderer/features/models/HisobView.tsx",
+      "lines": 780,
+      "fanIn": 3,
+      "fanOut": 8
+    }
+  ]
+}

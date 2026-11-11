@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "electronVersion": "44.10.2",
+  "legacyVersion": 15,
+  "upgradedVersion": 25,
+  "exactLedgerArchiveAndPendingPayloadPreserved": true,
+  "reopenPreserved": true,
+  "onlineBackupRecovery": true,
+  "originalV15BackupIntact": true,
+  "integrity": {
+    "integrityCheck": "ok",
+    "foreignKeyCheck": []
+  },
+  "scope": "Packaged SQLite modules/native ABI, synthetic v15 file; NOT old executable compatibility or Windows installer upgrade/rollback"
+}

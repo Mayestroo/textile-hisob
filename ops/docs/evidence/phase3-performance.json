@@ -1,0 +1,28 @@
+{
+  "source": "novda_local_current",
+  "capturedAt": "2026-11-11T03:21:31.125Z",
+  "counts": {
+    "workers": 222,
+    "tickets": 1976,
+    "periods": 3
+  },
+  "snapshotBytes": 13041272,
+  "measurements": {
+    "bootstrap": {
+      "samples": 10,
+      "p50Ms": 315.5653999999995,
+      "p95Ms": 646.8421,
+      "maxMs": 646.8421
+    },
+    "payrollAllWorkers": {
+      "samples": 30,
+      "p50Ms": 43.621200000000044,
+      "p95Ms": 298.4037999999998,
+      "maxMs": 307.09800000000007
+    }
+  },
+  "nodeRssBytes": 338296832,
+  "errors": 0,
+  "writes": 0,
+  "limitations": "Local warm sequential DB/service calls; no network/TLS/renderer/physical printer/load saturation measurement. Not an approved production SLO or capacity signoff."
+}

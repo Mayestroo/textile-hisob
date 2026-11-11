@@ -1,0 +1,286 @@
+
+> novda-hisob-kitob@2.0.0 verify
+> npm run verify:protected-integrity && npm run lint && npm run test:non-pg && npx tsc --noEmit && npm run build
+
+
+> novda-hisob-kitob@2.0.0 verify:protected-integrity
+> node scripts/verify/security/verify-protected-file-integrity.cjs
+
+PASS apps/desktop/renderer/store/slices/createPattaBatchSlice.ts: 6329d63def7dec41ff028c0f0ef51bc59eb8282aea64ff31683a12bf472d7315
+
+> novda-hisob-kitob@2.0.0 lint
+> eslint .
+
+
+> novda-hisob-kitob@2.0.0 test:non-pg
+> vitest run --exclude "apps/server/**" --exclude "apps/desktop/electron/sync/tests/syncIntegration.test.ts" --exclude "apps/desktop/electron/sync/tests/outboxRecovery.test.ts" --exclude "apps/desktop/electron/sync/tests/bootstrapIntegration.test.ts"
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.1.0 [39m[90mD:/hisob-new[39m
+
+ [32m✓[39m apps/desktop/electron/database/tests/migration.test.ts [2m([22m[2m91 tests[22m[2m)[22m[33m 42962[2mms[22m[39m
+   [32m✓[39m Phase 2 Step 1: Local SQLite Engine & V1-> Migration Foundation [2m(91)[22m
+     [33m[2m✓[22m[39m migration 012 records a pre-existing collision without hardcoded company or row IDs[33m 1854[2mms[22m[39m
+     [33m[2m✓[22m[39m migration 012 preserves the exact comp_novda pair and rejects transferring it to another company[33m 2207[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration corrects legacy party totals with numeric sizes and preserves ticket data[33m 480[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration corrects legacy party totals with numeric-string sizes and preserves ticket data[33m 455[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration corrects legacy party totals with empty size object and preserves ticket data[33m 471[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects non-divisible source before changing any parties[33m 350[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects unsafe source integer before changing any parties[33m 301[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects unsafe patta count before changing any parties[33m 436[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects size count mismatch before changing any parties[33m 361[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects malformed size JSON before changing any parties[33m 375[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects invalid size count before changing any parties[33m 352[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects exponent-form size string before changing any parties[33m 377[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects hex size string before changing any parties[33m 435[2mms[22m[39m
+     [33m[2m✓[22m[39m patta work quantity migration rejects fractional size string before changing any parties[33m 307[2mms[22m[39m
+     [33m[2m✓[22m[39m migration 016 creates one canonical refresh operation for previously rejected model snapshots[33m 461[2mms[22m[39m
+     [33m[2m✓[22m[39m migration 019 retries only patta commands rejected by the fixed VPS permission and stale-archive cases[33m 401[2mms[22m[39m
+     [33m[2m✓[22m[39m migration 020 leaves existing adjustments explicitly unresolved[33m 390[2mms[22m[39m
+     [33m[2m✓[22m[39m upgrades an older outbox without inventing receipts and preserves work across restart and rerun[33m 622[2mms[22m[39m
+     [33m[2m✓[22m[39m migration 017 preserves ticket column identities while allowing a missing printed party[33m 431[2mms[22m[39m
+     [33m[2m✓[22m[39m migration 018 adds an optional local rollback snapshot to outbox operations[33m 335[2mms[22m[39m
+     [33m[2m✓[22m[39m 5. schema migration crash rollback leaves version at N-1[33m 414[2mms[22m[39m
+     [33m[2m✓[22m[39m 28. schema_meta / user_version mismatch fails closed with SCHEMA_VERSION_MISMATCH[33m 376[2mms[22m[39m
+     [33m[2m✓[22m[39m 31. Migration 003: adds payload_hash column, index, and deterministically backfills existing rows[33m 1093[2mms[22m[39m
+     [33m[2m✓[22m[39m 32A. v3 DB with valid payload_json and NULL hash => Migration 004 deterministically backfills correct hash => v4[33m 1218[2mms[22m[39m
+     [33m[2m✓[22m[39m 32B. v3 DB with valid canonical payload_json and valid matching hash => preserved unchanged => v6[33m 1232[2mms[22m[39m
+     [33m[2m✓[22m[39m 32C. v3 DB with valid payload_json but WRONG existing non-empty hash => migration FAILS CLOSED => DB remains version 3[33m 746[2mms[22m[39m
+     [33m[2m✓[22m[39m 32D. v3 DB with malformed payload_json => migration FAILS CLOSED => DB remains version 3[33m 640[2mms[22m[39m
+     [33m[2m✓[22m[39m 32E. fresh DB v1 -> sync -> v3 -> v4 -> v5 succeeds sequentially[33m 785[2mms[22m[39m
+     [33m[2m✓[22m[39m 32F. sync -> v3 -> v4 -> v5 succeeds sequentially[33m 1066[2mms[22m[39m
+     [33m[2m✓[22m[39m 32G. v3 -> v4 -> v5 succeeds[33m 1218[2mms[22m[39m
+     [33m[2m✓[22m[39m 33A. v4 -> v5 succeeds[33m 1215[2mms[22m[39m
+     [33m[2m✓[22m[39m 33B. v3 -> v4 -> v5 succeeds[33m 992[2mms[22m[39m
+     [33m[2m✓[22m[39m 33C. sync -> v3 -> v4 -> v5 succeeds[33m 1169[2mms[22m[39m
+     [33m[2m✓[22m[39m 33D. fresh DB -> all migrations -> v11 succeeds[33m 455[2mms[22m[39m
+     [33m[2m✓[22m[39m 33E. Migration 005 creates immutability trigger[33m 1306[2mms[22m[39m
+     [33m[2m✓[22m[39m 33F. existing valid outbox rows remain semantically identical after migration[33m 1258[2mms[22m[39m
+     [33m[2m✓[22m[39m 33G & 33H. schema_meta version = 7 and PRAGMA user_version = 7[33m 1197[2mms[22m[39m
+     [33m[2m✓[22m[39m 33I. Migration failure atomicity: if Migration 005 fails, database remains strictly at version 4[33m 932[2mms[22m[39m
+     [33m[2m✓[22m[39m 34. Migration 006: v5 -> v6 transactional upgrade ensures parties active unique index, drops tickets business key, and creates migration_party_resolutions table[33m 1154[2mms[22m[39m
+     [33m[2m✓[22m[39m 38. Migration 007: v6 -> v7 transactional upgrade drops idx_parties_active_unique, creates legacy_party_collision_exceptions, and installs uniqueness triggers[33m 1411[2mms[22m[39m
+     [33m[2m✓[22m[39m 40. Migration 008: creates migration_reconciliation_resolutions table and immutability triggers[33m 352[2mms[22m[39m
+     [33m[2m✓[22m[39m 41. Migration 009 upgrades a valid v8 ticket and preserves its same-company Party FK[33m 1283[2mms[22m[39m
+     [33m[2m✓[22m[39m 42. Migration 009 rejects invalid v8 ticket Party links without advancing schema version[33m 1426[2mms[22m[39m
+     [33m[2m✓[22m[39m 43. Migration 012 preserves an explicitly persisted collision group without ID-specific policy[33m 2036[2mms[22m[39m
+     [33m[2m✓[22m[39m 44. Migration 010 rejects more than two pre-existing active collisions[33m 1494[2mms[22m[39m
+[90mstderr[2m | apps/desktop/electron/database/tests/commandPipeline.test.ts[2m > [22m[2mPhase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox (Correction Pass)[2m > [22m[2mfreezes linked original period and saved 5/0/null rates across rollover, edits and reversal
+[22m[39m[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+[CommandPipeline] Post-commit projection rebuild warning: [ProjectionValidationError: INVALID_TICKET_STATUS] Unrecognized ticket status: "UNENTERED" on ticket "ticket-unentered".
+
+ [32m✓[39m apps/desktop/electron/database/tests/commandPipeline.test.ts [2m([22m[2m69 tests[22m[2m)[22m[33m 7271[2mms[22m[39m
+   [32m✓[39m Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox (Correction Pass) [2m(69)[22m
+     [33m[2m✓[22m[39m 21. hard kill (taskkill /F) before commit leaves no fact, no outbox, and PRAGMA integrity_check ok[33m 455[2mms[22m[39m
+     [33m[2m✓[22m[39m 22. hard kill (taskkill /F) after commit preserves both fact and outbox, and PRAGMA integrity_check ok[33m 605[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/integrityRegression.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 2821[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/workbookCommandPipeline.test.ts [2m([22m[2m28 tests[22m[2m)[22m[33m 2503[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/reconciliationResolution.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 1678[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/bootstrapApplier.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 1843[2mms[22m[39m
+ [32m✓[39m scripts/verify/build/tests/packaging-rules.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1520[2mms[22m[39m
+   [32m✓[39m Electron Packaging Rules & Allowlist [2m(5)[22m
+     [33m[2m✓[22m[39m contains only production runtime files and zero tests, docs, or server code in built app.asar[33m 1514[2mms[22m[39m
+ [32m✓[39m ops/deploy/tests/importSqliteBaseline.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 1553[2mms[22m[39m
+   [32m✓[39m SQLite baseline import guardrails [2m(6)[22m
+     [33m[2m✓[22m[39m plans only canonical business tables and leaves the outbox untouched[33m 374[2mms[22m[39m
+     [33m[2m✓[22m[39m rejects a source with another companyâ€™s rows instead of mixing tenants[33m 390[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses to discard a nonempty source-only business field[33m 371[2mms[22m[39m
+     [33m[2m✓[22m[39m rejects an unqualified SQLite schema version[33m 410[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/payrollReader.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 1358[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/license/tests/license.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 1985[2mms[22m[39m
+   [32m✓[39m Ed25519 license verification [2m(21)[22m
+     [33m[2m✓[22m[39m creates a persistent  activation request and polls using only its request credential[33m 419[2mms[22m[39m
+     [33m[2m✓[22m[39m hands the approved activation request credential to OS-protected  device storage[33m 412[2mms[22m[39m
+     [33m[2m✓[22m[39m refreshes an existing device activation from the server after its company validation policy changes[33m 525[2mms[22m[39m
+ [32m✓[39m scripts/verify/build/tests/nsis-config.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 998[2mms[22m[39m
+   [32m✓[39m Windows NSIS release configuration [2m(7)[22m
+     [33m[2m✓[22m[39m does not mistake PowerShell parse failure for a no-process result on quoted paths[33m 989[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/periodCompletionRegression.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 1166[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/changeFeedApplier.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1010[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/outboxManager.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 899[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/durableAcceptance.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 810[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/feedFreshness.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 692[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/outboxLiveness.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 659[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/sqliteBackup.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 682[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/transientOperationRetry.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 566[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/bootstrapInitializer.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 507[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/reconnectManager.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 454[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/projectionReader.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 380[2mms[22m[39m
+ [32m✓[39m scripts/verify/security/tests/verify-signer-environment.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 365[2mms[22m[39m
+   [32m✓[39m signer environment gate [2m(1)[22m
+     [33m[2m✓[22m[39m checks signer removal, worker-secret isolation, and generator restrictions[33m 364[2mms[22m[39m
+ [32m✓[39m scripts/verify/database/tests/local-pg-boundary.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 344[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/license/tests/licenseCanonicalCompatibility.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 272[2mms[22m[39m
+ [32m✓[39m scripts/verify/build/tests/vite-version-config.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 156[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/profileIsolation.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 192[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/partyPolicy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 229[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/slices/tests/createTicketSlice.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 171[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/features/payroll/tests/payrollDisplay.integration.test.tsx [2m([22m[2m6 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[32m 98[2mms[22m[39m
+[90mstdout[2m | apps/desktop/renderer/domain/tests/projections.test.ts[2m > [22m[2mPerformance Sanity Benchmark[2m > [22m[2mbenchmarks rebuild over 10,000 and 50,000 facts
+[22m[39m[Performance Sanity] 10,000 facts rebuilt in 6.40ms
+[Performance Sanity] 50,000 facts rebuilt in 42.31ms
+
+ [32m✓[39m apps/desktop/renderer/domain/tests/projections.test.ts [2m([22m[2m53 tests[22m[2m)[22m[32m 116[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/sync/tests/syncClient.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m scripts/verify/release/tests/verify-release-integrity.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/slices/tests/createPersistenceSlice.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+[90mstderr[2m | apps/desktop/renderer/store/slices/tests/createPeriodSlice.test.ts[2m > [22m[2m period legacy-storage boundary[2m > [22m[2mpreserves completed parties as active across month close and archives submitted pattas
+[22m[39mFailed to call archive API [TypeError: Failed to parse URL from /api/archive-period] {
+  [cause]: TypeError: Invalid URL
+  [90m    at new URL (node:internal/url:840:25)[39m
+  [90m    at new Request (node:internal/deps/undici/undici:12072:25)[39m
+  [90m    at fetch (node:internal/deps/undici/undici:12997:25)[39m
+  [90m    at fetch (node:internal/deps/undici/undici:17708:10)[39m
+  [90m    at fetch (node:internal/bootstrap/web/exposed-window-or-worker:83:12)[39m
+      at Object.closeCurrentPeriod (D:/hisob-new/apps/desktop/renderer/store/slices/createPeriodSlice.ts:308:13)
+  [90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+      at D:/hisob-new/apps/desktop/renderer/store/slices/tests/createPeriodSlice.test.ts:126:21
+      at async [90mfile:///D:/hisob-new/[39mnode_modules/[4mvitest[24m/dist/chunks/run.CjdgFZiW.js:2801:20 {
+    code: [32m'ERR_INVALID_URL'[39m,
+    input: [32m'/api/archive-period'[39m
+  }
+}
+
+ [32m✓[39m apps/desktop/renderer/store/slices/tests/createPeriodSlice.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 68[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/engine/tests/excelSync.payroll.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 66[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/slices/tests/createModelSlice.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/workbookStore.persistence.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/slices/tests/createWorkerSlice.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/utils/tests/formatters.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/security/tests/deviceCredentialStore.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/features/models/tests/HisobView.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/pattaLifecycle.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/runtime/tests/diagnostics.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/helpers/tests/hydration.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/partyAnalytics.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/bridge.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/runtime/tests/runtimeMode.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/pattaJournalReader.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/businessMutations.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/features/models/tests/ModelSizesView.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/tests/main/main.operatorSessionPath.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/pattaBatch.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m ops/deploy/tests/dockerfile.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/security/tests/operatorSessionStore.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/engine/tests/payrollDisplay.money.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/modelRateStatus.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m scripts/build/tests/build-rc.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/workbookStore.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/security/tests/windowSecurity.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/sessionGuard.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/pattaQuantity.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/config/tests/apiConfig.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/ipc/tests/licenseIpcHandlers.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/periodCloseGuard.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/phase1Regression.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+POSTGRES_MIGRATION_APPLIED version=2
+POSTGRES_MIGRATION_APPLIED version=3
+POSTGRES_MIGRATION_APPLIED version=4
+POSTGRES_MIGRATION_APPLIED version=5
+POSTGRES_MIGRATION_ALREADY_APPLIED version=6
+POSTGRES_MIGRATION_APPLIED version=7
+POSTGRES_MIGRATION_APPLIED version=8
+POSTGRES_MIGRATION_APPLIED version=9
+POSTGRES_MIGRATION_APPLIED version=10
+POSTGRES_MIGRATION_APPLIED version=11
+POSTGRES_MIGRATION_APPLIED version=12
+POSTGRES_MIGRATION_APPLIED version=13
+POSTGRES_MIGRATION_APPLIED version=14
+POSTGRES_MIGRATION_APPLIED version=15
+POSTGRES_MIGRATION_APPLIED version=16
+POSTGRES_MIGRATION_APPLIED version=17
+POSTGRES_MIGRATION_APPLIED version=18
+POSTGRES_MIGRATION_APPLIED version=19
+POSTGRES_MIGRATION_APPLIED version=20
+POSTGRES_MIGRATION_APPLIED version=21
+POSTGRES_MIGRATION_APPLIED version=22
+POSTGRES_MIGRATION_APPLIED version=23
+POSTGRES_MIGRATION_APPLIED version=24
+POSTGRES_MIGRATION_APPLIED version=25
+POSTGRES_MIGRATION_APPLIED version=26
+POSTGRES_MIGRATION_APPLIED version=27
+POSTGRES_MIGRATION_APPLIED version=28
+POSTGRES_MIGRATION_APPLIED version=29
+POSTGRES_MIGRATION_APPLIED version=2
+POSTGRES_MIGRATION_APPLIED version=3
+POSTGRES_MIGRATION_APPLIED version=4
+POSTGRES_MIGRATION_APPLIED version=5
+ [32m✓[39m ops/deploy/tests/migrateProduction.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/legacyArchiveIdentity.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/schemaDowngrade.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/runtimeMode.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/security/tests/licenseBoundary.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/components/layout/tests/ConnectionStatus.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/pattaSizeSystem.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m scripts/verify/release/tests/release-gates.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/slices/tests/createLicenseSlice.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/ticketPeriodScope.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/features/system/modals/tests/BackupManagerModal.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/tests/main/main.legacyStorageBoundary.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/security/tests/updateSecurity.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/auth/tests/companyAuthority.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/features/patta/tests/pattaHistoryActions.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/features/models/tests/operationRateDraft.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/tests/main/reconciliationIpcBoundary.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m scripts/verify/database/tests/historical-reconciliation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/domain/tests/partyHistoryVisibility.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/utils/tests/statusFormatters.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/tests/main/main.payrollReadBridge.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m apps/desktop/electron/database/tests/pattaSequence.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m scripts/verify/security/tests/secret-scan.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m apps/desktop/renderer/store/tests/selectors.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m90 passed[39m[22m[90m (90)[39m
+[2m      Tests [22m [1m[32m762 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (763)[39m
+[2m   Start at [22m 08:30:41
+[2m   Duration [22m 99.19s[2m (tests 91%, import 6%, transform 2%, worker 1%)[22m
+
+[2m    Isolate [22m [33m90 workers spawned[39m[2m · ~155ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~13.82s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
+
+> novda-hisob-kitob@2.0.0 build
+> tsc && vite build
+
+[36mvite v8.3.7 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 1940 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                     0.90 kB │ gzip:   0.44 kB
+dist/assets/android-chrome-192x192-DujWza2f.png    70.60 kB
+dist/assets/Onest_wght_-DZuv1oNk.ttf              193.05 kB
+dist/assets/IBMPlexSans_wdth_wght_-B8AMtGvj.ttf   537.24 kB
+dist/assets/index-BjF6-Jij.css                    178.15 kB │ gzip:  26.17 kB
+dist/assets/rolldown-runtime-pP25SEvz.js            0.98 kB │ gzip:   0.56 kB
+dist/assets/AmallarJurnaliView-BebrMR2P.js          5.67 kB │ gzip:   2.05 kB
+dist/assets/DeveloperModal-B8PCaqib.js              6.43 kB │ gzip:   1.76 kB
+dist/assets/AppUpdateModal-BM8N-fXg.js              7.54 kB │ gzip:   2.45 kB
+dist/assets/BackupManagerModal-BWXrmzNN.js          8.76 kB │ gzip:   3.03 kB
+dist/assets/ModellarJamiView-DBbBzaQS.js           10.12 kB │ gzip:   2.77 kB
+dist/assets/WorkerManagerModal-BU6kaSex.js         10.14 kB │ gzip:   3.20 kB
+dist/assets/EditSubmittedTicketModal-BkGCa6pr.js   11.66 kB │ gzip:   3.82 kB
+dist/assets/ModelSizesView-CEPYdk23.js             13.39 kB │ gzip:   3.87 kB
+dist/assets/icons-vendor-_jJckh2O.js               20.59 kB │ gzip:   6.96 kB
+dist/assets/WorkerDetailModal-DEcfQ1OL.js          22.35 kB │ gzip:   6.66 kB
+dist/assets/PeriodManagerModal-BEMaZcNo.js         22.92 kB │ gzip:   6.18 kB
+dist/assets/tanstack-vendor-BfuZZDmY.js            24.41 kB │ gzip:   7.30 kB
+dist/assets/KonveyerView-Crgy-OWW.js               33.73 kB │ gzip:   8.59 kB
+dist/assets/PattaHisobView-98Kspz5I.js             41.65 kB │ gzip:  11.23 kB
+dist/assets/framework-vendor-bomaH3VZ.js          190.11 kB │ gzip:  59.87 kB
+dist/assets/index-24gocylH.js                     323.30 kB │ gzip:  83.47 kB
+dist/assets/xlsx-vendor-CBAGQv2B.js               862.99 kB │ gzip: 317.91 kB
+
+[33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 882ms[39m

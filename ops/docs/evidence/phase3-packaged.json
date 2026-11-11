@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "scope": "Packaged blank-profile startup, real main/preload/IPC/DOM; NOT activated business acceptance or installer upgrade",
+  "appAsarSha256": "ec3fba9efac0ce92d3091c733032d889ded10ed45d4d39e3df9d82bd309b890e",
+  "executableSha256": "22ad748747657557df0f486c0fb42b7d7b921b44b4af42ca183e1cd7bc150aff",
+  "sourceFingerprint": "5492e26720a94a4f5a32fcd3973b8d6e48b4f2615fa1c3844551ef20a4ab1246",
+  "matchedSourceAndBuildFiles": 69,
+  "packagedFiles": 210,
+  "forbiddenFiles": 0,
+  "runtimeMode": "sync",
+  "appVersion": "2.0.0",
+  "unlicensedReadRejected": true,
+  "sandboxedRenderer": true,
+  "environment": "NODE_ENV=test permits loopback HTTPS sink; real license code unchanged; no activation/network writes",
+  "cleanExit": true
+}
