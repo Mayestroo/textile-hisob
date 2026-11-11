@@ -76,6 +76,12 @@ function verifySchemaVersionConsistency(db) {
 function applyMigrations(db, options = {}) {
   // First, verify consistency of existing schema state
   const currentVersion = verifySchemaVersionConsistency(db);
+  const supportedVersion = MIGRATIONS[MIGRATIONS.length - 1].version;
+  if (currentVersion > supportedVersion) {
+    const error = new Error(`SCHEMA_VERSION_NEWER_THAN_APP: profile=${currentVersion} supported=${supportedVersion}; restore a compatible pre-upgrade backup before downgrading`);
+    error.code = 'SCHEMA_VERSION_NEWER_THAN_APP';
+    throw error;
+  }
   let appliedCount = 0;
   let activeVersion = currentVersion;
   const targetVersion = Number.isSafeInteger(options.targetVersion)

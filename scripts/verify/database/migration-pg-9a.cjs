@@ -7,19 +7,19 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { Client } = require('pg');
-const { MIGRATIONS, applyMigrations } = require('../../ops/deploy/migrateProduction.cjs');
-const { canonicalStringify, computePayloadHash } = require('../../apps/desktop/electron/database/core/canonicalPayload.cjs');
-const { loadPayroll } = require('../../apps/server/modules/workers/payrollValuation.cjs');
-const { readPeriodArchiveSource } = require('../../apps/server/modules/sync/workbookOperations.cjs');
-const { withCompanyBootstrapSnapshot } = require('../../apps/server/modules/sync/bootstrapSnapshot.cjs');
-const { processSingleOperation } = require('../../apps/server/modules/sync/handlers/operations.cjs');
-const { executeWorkbookCommand } = require('../../apps/desktop/electron/database/commands/workbookCommandPipeline.cjs');
-const databaseManager = require('../../apps/desktop/electron/database/core/databaseManager.cjs');
-const { dispatchOutbox } = require('../../apps/desktop/electron/sync/outboxDispatcher.cjs');
-const { applyBootstrapSnapshot } = require('../../apps/desktop/electron/sync/bootstrapApplier.cjs');
-const { applyChangesBatch, getLocalCursor } = require('../../apps/desktop/electron/sync/changeFeedApplier.cjs');
-const { readWorkbookPayrollProjection } = require('../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs');
-const { loadPayrollValuationFromSqlite } = require('../../apps/desktop/electron/database/readers/payrollReader.cjs');
+const { MIGRATIONS, applyMigrations } = require('../../../apps/server/database/migrate.cjs');
+const { canonicalStringify, computePayloadHash } = require('../../../apps/desktop/electron/database/core/canonicalPayload.cjs');
+const { loadPayroll } = require('../../../apps/server/modules/workers/payrollValuation.cjs');
+const { readPeriodArchiveSource } = require('../../../apps/server/modules/sync/workbookOperations.cjs');
+const { withCompanyBootstrapSnapshot } = require('../../../apps/server/modules/sync/bootstrapSnapshot.cjs');
+const { processSingleOperation } = require('../../../apps/server/modules/sync/handlers/operations.cjs');
+const { executeWorkbookCommand } = require('../../../apps/desktop/electron/database/commands/workbookCommandPipeline.cjs');
+const databaseManager = require('../../../apps/desktop/electron/database/core/databaseManager.cjs');
+const { dispatchOutbox } = require('../../../apps/desktop/electron/sync/outboxDispatcher.cjs');
+const { applyBootstrapSnapshot } = require('../../../apps/desktop/electron/sync/bootstrapApplier.cjs');
+const { applyChangesBatch, getLocalCursor } = require('../../../apps/desktop/electron/sync/changeFeedApplier.cjs');
+const { readWorkbookPayrollProjection } = require('../../../apps/desktop/electron/database/readers/workbookPayrollRead.cjs');
+const { loadPayrollValuationFromSqlite } = require('../../../apps/desktop/electron/database/readers/payrollReader.cjs');
 
 const root = path.resolve(__dirname, '../../..');
 const container = 'hisob_test_display_05d2b2';
@@ -40,7 +40,7 @@ function socketSql(sql) {
 async function withDb(name, fn) {
   const url = new URL(process.env.NOVDA_LOCAL_TEST_PG_URL);
   url.pathname = `/${name}`;
-  const guard = spawnSync(process.execPath, [path.join(root, '.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')], {
+  const guard = spawnSync(process.execPath, [path.join(__dirname, 'assert-local-pg.cjs')], {
     env: { NOVDA_LOCAL_TEST_PG_URL: url.href }, encoding: 'utf8'
   });
   assert.equal(guard.status, 0, 'local PG guard failed');
@@ -260,7 +260,7 @@ async function verifyWorkerCommandDurability(db, fixtureUrl, suffix) {
     assert.equal(localDb.prepare('SELECT accepted_change_id FROM local_outbox WHERE company_id=? AND operation_id=?')
       .get(company, command.operationId).accepted_change_id, head);
     // A duplicate change delivery is idempotent at the fact boundary.
-    const { applyWorkerChange } = require('../../apps/desktop/electron/sync/changeFeedApplier.cjs');
+    const { applyWorkerChange } = require('../../../apps/desktop/electron/sync/changeFeedApplier.cjs');
     applyWorkerChange(localDb, company, '7', 'UPDATE', items[0].payload, items[0].entityRevision);
     assert.equal(localDb.prepare('SELECT COUNT(*) AS n FROM worker_adjustments WHERE company_id=?').get(company).n, 4);
 
@@ -354,7 +354,7 @@ async function main() {
     const port = binding.split(':')[1];
     // Guard precedes *any* PostgreSQL socket, including local Unix socket provisioning.
     process.env.NOVDA_LOCAL_TEST_PG_URL = `postgresql://${ownRole}:${password}@127.0.0.1:${port}/${ownRole}`;
-    const guarded = spawnSync(process.execPath, [path.join(root,'.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')], {
+    const guarded = spawnSync(process.execPath, [path.join(__dirname, 'assert-local-pg.cjs')], {
       env: { NOVDA_LOCAL_TEST_PG_URL: process.env.NOVDA_LOCAL_TEST_PG_URL }, encoding:'utf8'
     });
     assert.equal(guarded.status, 0, 'local PG guard failed');

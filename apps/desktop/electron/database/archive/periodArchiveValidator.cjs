@@ -64,8 +64,40 @@ function classifyArchiveTicket(ticket, companyId, periodId, canonicalTicket = nu
 }
 
 function readCanonicalPeriodTickets(db, companyId, periodId) {
-  return db.prepare(`SELECT id, company_id, model_id, party_number, party_record_id, patta_number,
-    period_id, status, qty, size, color FROM tickets WHERE company_id = ? AND period_id = ?`).all(companyId, periodId);
+  const tickets = db.prepare(`SELECT id, company_id, model_id, party_number, party_record_id, patta_number,
+    period_id, status, qty, size, color, submitted_at, is_closed FROM tickets WHERE company_id = ? AND period_id = ?`).all(companyId, periodId);
+  // Old free-mode tickets legitimately have no printed party on either side.
+  // Corroborate their immutable work, not a guessed party/date-range association.
+  if (tickets.some(ticket => ticket.party_record_id == null)
+    && db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ticket_entries'").get()) {
+    const entries = db.prepare(`SELECT e.ticket_id, e.op_name, e.worker_id, e.rate_snapshot, e.brak
+      FROM ticket_entries e JOIN tickets t ON t.company_id=e.company_id AND t.id=e.ticket_id
+      WHERE t.company_id=? AND t.period_id=?`).all(companyId, periodId);
+    const byTicket = new Map();
+    for (const entry of entries) {
+      if (!byTicket.has(entry.ticket_id)) byTicket.set(entry.ticket_id, []);
+      byTicket.get(entry.ticket_id).push(entry);
+    }
+    for (const ticket of tickets) ticket.historicalEntries = byTicket.get(ticket.id) || [];
+  }
+  return tickets;
+}
+
+function sameUnprintedHistoricalWork(ticket, canonical) {
+  if (ticket.partyRecordId != null || canonical.party_record_id != null || !canonical.is_closed
+    || !['CONFIRMED', 'VOIDED'].includes(canonical.status) || (ticket.status !== undefined && ticket.status !== canonical.status)
+    || typeof ticket.modelId !== 'string' || ticket.modelId !== canonical.model_id
+    || ticket.partyNumber == null || String(ticket.partyNumber) !== String(canonical.party_number)
+    || !Number.isFinite(Date.parse(ticket.submittedAt))
+    || Date.parse(ticket.submittedAt) !== Date.parse(canonical.submitted_at)
+    || !Array.isArray(ticket.entries) || !ticket.entries.length || !Array.isArray(canonical.historicalEntries)) return false;
+  const frozen = ticket.entries.map(entry => canonicalStringify([
+    entry.opName, entry.workerId, entry.rateSnapshot ?? null, entry.brak || null
+  ])).sort();
+  const retained = canonical.historicalEntries.map(entry => canonicalStringify([
+    entry.op_name, entry.worker_id, entry.rate_snapshot ?? null, entry.brak || null
+  ])).sort();
+  return canonicalStringify(frozen) === canonicalStringify(retained);
 }
 
 function sameCanonicalTicket(archiveTicket, canonical) {
@@ -74,7 +106,8 @@ function sameCanonicalTicket(archiveTicket, canonical) {
   const sameRequired = (archiveValue, canonicalValue) => archiveValue !== undefined && archiveValue !== null &&
     String(archiveValue) === String(canonicalValue);
   return sameRequired(archiveTicket.id, canonical.id) && sameIfPresent(archiveTicket.modelId, canonical.model_id) &&
-    sameIfPresent(archiveTicket.partyNumber, canonical.party_number) && sameRequired(archiveTicket.partyRecordId, canonical.party_record_id) &&
+    sameIfPresent(archiveTicket.partyNumber, canonical.party_number) &&
+    (sameRequired(archiveTicket.partyRecordId, canonical.party_record_id) || sameUnprintedHistoricalWork(archiveTicket, canonical)) &&
     Number(archiveTicket.pattaNumber) === Number(canonical.patta_number) && Number(archiveTicket.qty) === Number(canonical.qty);
 }
 

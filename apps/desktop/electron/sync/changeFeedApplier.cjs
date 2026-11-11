@@ -1,4 +1,5 @@
 'use strict';
+const { ticketEntryId } = require('../../../../packages/contracts/ticketEntryIdentity.cjs');
 const { cursor, verifyPage, recordAppliedHead, markFeedUnavailable } = require('./feedEvidence.cjs');
 const { acknowledgeOutboxOperation } = require('../database/outbox/outboxManager.cjs');
 
@@ -228,7 +229,7 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
         const now = new Date().toISOString();
         payload.entries.forEach((entry, index) => {
           insertEntry.run(
-            entry.entryId || `${ticketId}_entry_${index + 1}`,
+            entry.entryId || ticketEntryId(ticketId, index),
             ticketId,
             companyId,
             entry.opName,
@@ -310,7 +311,7 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
 
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
-      const entryId = `${ticketId}_entry_${i + 1}`;
+      const entryId = ticketEntryId(ticketId, i);
       entryStmt.run(
         entryId,
         ticketId,

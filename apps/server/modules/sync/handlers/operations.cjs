@@ -1,4 +1,5 @@
 'use strict';
+const { ticketEntryId, legacyLocalTicketEntryId } = require('../../../../../packages/contracts/ticketEntryIdentity.cjs');
 
 const { canonicalStringify, computePayloadHash } = require('../canonicalPayload.cjs');
 const { validateCompanyScope } = require('../../../auth/auth.cjs');
@@ -18,7 +19,7 @@ function dateOnly(value) {
 }
 
 async function resolveTicketPeriodForDate(client, companyId, effectiveDate, requestedPeriodId = null) {
-  const openPeriodsResult = await client.query(`SELECT id, start_date, end_date FROM periods
+  const openPeriodsResult = await client.query(`SELECT id, start_date::text AS start_date, end_date::text AS end_date FROM periods
     WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC, id DESC`, [companyId]);
   const openPeriods = openPeriodsResult.rows || [];
   const matchingPeriods = openPeriods.filter((period) => {
@@ -434,9 +435,19 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
 
   // Lock the existing work before replacing rows. A model's current tariff is not
   // evidence of the rate at which this ticket's work was originally recorded.
-  const oldResult = await client.query(`SELECT id, op_name, rate_snapshot, brak FROM ticket_entries
+  const oldResult = await client.query(`SELECT id, op_name, worker_id, rate_snapshot, brak FROM ticket_entries
     WHERE company_id = $1 AND ticket_id = $2 FOR UPDATE`, [companyId, ticketId]);
   const oldById = new Map(oldResult.rows.map((row) => [row.id, row]));
+  // Older desktop versions persisted a different deterministic ID for their own
+  // submitted work. Accept only an exact alias of the locked canonical entry;
+  // never fall back from an arbitrary client ID to an operation-name guess.
+  for (const row of oldResult.rows) {
+    const prefix = `${ticketId}_entry_`;
+    const ordinal = row.id.startsWith(prefix) ? Number(row.id.slice(prefix.length)) : NaN;
+    if (Number.isSafeInteger(ordinal) && ordinal > 0 && row.id === ticketEntryId(ticketId, ordinal - 1)) {
+      oldById.set(legacyLocalTicketEntryId(ticketId, ordinal - 1, row.op_name, row.worker_id), row);
+    }
+  }
   const oldByName = new Map();
   for (const row of oldResult.rows) {
     const list = oldByName.get(row.op_name) || [];
@@ -662,7 +673,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   if (Array.isArray(entries)) {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
-      const entryId = `${ticketId}_entry_${i + 1}`;
+      const entryId = ticketEntryId(ticketId, i);
       await client.query(
         `INSERT INTO ticket_entries (
           id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot,

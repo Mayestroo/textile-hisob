@@ -31,7 +31,7 @@ const apiToken = crypto.randomBytes(32).toString('hex');
 const admin = { company: 'fixture-company', global: 'fixture-global' };
 const screenshots = path.join(root, '.opencode/deep-audit/output/post-redesign-money-1d-pg-screenshots');
 fs.mkdirSync(screenshots, { recursive: true });
-const guard = spawnSync(process.execPath, [path.join(root, '.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')],
+const guard = spawnSync(process.execPath, [path.join(__dirname, 'assert-local-pg.cjs')],
   { encoding: 'utf8', env: { NOVDA_LOCAL_TEST_PG_URL: process.env.NOVDA_LOCAL_TEST_PG_URL } });
 assert.equal(guard.status, 0, 'explicit local PG guard must pass before PG Pool construction');
 assert(fixtureDb && new URL(process.env.NOVDA_LOCAL_TEST_PG_URL).pathname === `/${fixtureDb}`);

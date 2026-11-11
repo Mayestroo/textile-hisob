@@ -18,7 +18,7 @@ const dateOnly = (value) => value == null ? null : value instanceof Date ? value
 
 async function loadPayroll(client, companyId, requestedPeriodId, boundWorker = null) {
   const periodId = validatePeriodId(requestedPeriodId);
-  const periods = await client.query(`SELECT id, name, start_date, end_date, is_closed FROM periods
+  const periods = await client.query(`SELECT id, name, start_date::text AS start_date, end_date::text AS end_date, is_closed FROM periods
     WHERE company_id = $1 AND (($2::VARCHAR IS NOT NULL AND id = $2) OR ($2::VARCHAR IS NULL AND is_closed = 0))
     ORDER BY start_date DESC NULLS LAST, id DESC LIMIT 1`, [companyId, periodId]);
   const period = periods.rows[0] || null;
@@ -48,7 +48,7 @@ async function loadPayroll(client, companyId, requestedPeriodId, boundWorker = n
   const deductions = period ? await client.query(`SELECT worker_id, type,
       CASE WHEN type IN ('AVANS', 'JARIMA') THEN COALESCE(SUM(amount), 0)
         ELSE COALESCE(SUM(amount) FILTER (WHERE period_id = $2 AND status = 'POSTED'), 0) END::TEXT AS total
-    FROM worker_adjustments WHERE company_id = $1 AND ($4::INTEGER IS NULL OR worker_id = $4)
+    FROM worker_adjustments WHERE company_id = $1 AND status = 'POSTED' AND ($4::INTEGER IS NULL OR worker_id = $4)
       AND (period_id = $2 OR (type IN ('AVANS', 'JARIMA') AND period_id IS NULL AND ($3::DATE IS NOT NULL OR $5::DATE IS NOT NULL)
         AND ($3::DATE IS NULL OR created_at::DATE >= $3::DATE)
         AND ($5::DATE IS NULL OR created_at::DATE <= $5::DATE)))

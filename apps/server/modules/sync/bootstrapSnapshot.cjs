@@ -68,7 +68,7 @@ async function readCompanySnapshot(client, companyId) {
   }));
 
   const periodResult = await client.query(`
-    SELECT id, company_id, name, start_date, end_date, is_closed, closed_at,
+    SELECT id, company_id, name, start_date::text AS start_date, end_date::text AS end_date, is_closed, closed_at,
        notes, archive_filename, close_operation_id, status, server_revision, created_at, updated_at
     FROM periods WHERE company_id = $1 ORDER BY start_date DESC, id DESC
   `, [companyId]);

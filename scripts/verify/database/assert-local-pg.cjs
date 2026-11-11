@@ -1,0 +1,11 @@
+'use strict';
+const assert = require('node:assert/strict');
+const value = process.env.NOVDA_LOCAL_TEST_PG_URL;
+assert(value, 'Explicit NOVDA_LOCAL_TEST_PG_URL required');
+const url = new URL(value);
+assert(['postgres:', 'postgresql:'].includes(url.protocol), 'Postgres DSN required');
+assert(['127.0.0.1', '[::1]'].includes(url.hostname), 'Only loopback permitted');
+assert(/^hisob_test_[a-z0-9_]+$/.test(decodeURIComponent(url.pathname.slice(1))), 'Only own test DB permitted');
+assert(Number(url.port) > 1 && Number(url.port) <= 65535, 'Explicit test port required');
+assert(!url.search, 'No DSN query overrides permitted');
+console.log(`Local PostgreSQL boundary OK: ${url.hostname}:${url.port}/${url.pathname.slice(1)}`);

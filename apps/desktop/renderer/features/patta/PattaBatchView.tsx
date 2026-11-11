@@ -669,6 +669,17 @@ export const PattaBatchView: React.FC = () => {
                         {isCustom && (
                           <button
                             type="button"
+                            className="patta-size-del-btn"
+                            aria-label={`${sizeName} razmerini nomlash`}
+                            title="Nomini o'zgartirish"
+                            onClick={() => { setRenameSize({ modelId: model.id, sizeName }); setRenameSizeInput(sizeName); }}
+                          >
+                            <Pencil size={9} />
+                          </button>
+                        )}
+                        {isCustom && (
+                          <button
+                            type="button"
                             onClick={async (e) => {
                               e.stopPropagation();
                               const ok = await confirmAction({

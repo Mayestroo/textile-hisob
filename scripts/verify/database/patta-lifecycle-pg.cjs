@@ -40,7 +40,7 @@ function docker(args, input) {
 }
 
 function guard(url) {
-  const result = spawnSync(process.execPath, [path.join(root, '.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')],
+  const result = spawnSync(process.execPath, [path.join(__dirname, 'assert-local-pg.cjs')],
     { env: { NOVDA_LOCAL_TEST_PG_URL: url }, encoding: 'utf8' });
   assert.equal(result.status, 0, `local PostgreSQL boundary check failed: ${result.stderr}`);
 }

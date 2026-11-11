@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const { buildFastifyServer } = require('../../../../server/app.cjs');
 const { getServerPool, resetServerDatabase, closeServerPool } = require('../../../../server/infrastructure/db.cjs');
@@ -151,6 +152,33 @@ describePostgresIntegration(' PostgreSQL-to-SQLite bootstrap integration', () =>
         (SELECT COALESCE(MAX(id), 0) + 1 FROM workers WHERE company_id = $1)::int AS next_worker_id
     `, [companyId]);
     expect(serverCounts.rows[0]).toEqual({ pattas: 0, tickets: 0, entries: 0, adjustments: 0, next_worker_id: 202 });
+  });
+
+  it('preserves SQL calendar dates in bootstrap and payroll under UTC, Tashkent and Los Angeles', async () => {
+    await pool.query(`UPDATE periods SET end_date = '2026-09-30' WHERE company_id = $1`, [companyId]);
+    const script = `
+      const assert = require('node:assert/strict');
+      const { Pool } = require('pg');
+      const { readCompanySnapshot } = require('./apps/server/modules/sync/bootstrapSnapshot.cjs');
+      const { loadPayroll } = require('./apps/server/modules/workers/payrollValuation.cjs');
+      (async () => {
+        const pool = new Pool({ connectionString: process.env.NOVDA_PG_URL });
+        try {
+          const { snapshot } = await readCompanySnapshot(pool, ${JSON.stringify(companyId)});
+          assert.equal(snapshot.periods[0].startDate, '2026-09-01');
+          assert.equal(snapshot.periods[0].endDate, '2026-09-30');
+          const payroll = await loadPayroll(pool, ${JSON.stringify(companyId)}, 'period-current');
+          assert.equal(payroll.period.startDate, '2026-09-01');
+          assert.equal(payroll.period.endDate, '2026-09-30');
+        } finally { await pool.end(); }
+      })().catch(error => { console.error(error.message); process.exitCode = 1; });
+    `;
+    for (const timezone of ['UTC', 'Asia/Tashkent', 'America/Los_Angeles']) {
+      const result = spawnSync(process.execPath, ['-e', script], {
+        cwd: process.cwd(), env: { ...process.env, TZ: timezone }, encoding: 'utf8', timeout: 30000
+      });
+      expect(result.status, `${timezone}: ${result.stderr}`).toBe(0);
+    }
   });
 
   it('retries after a local pre-commit crash without leaving partial rows or a completed marker', async () => {

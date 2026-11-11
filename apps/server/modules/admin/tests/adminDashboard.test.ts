@@ -10,6 +10,14 @@ function serviceFor(query: ReturnType<typeof vi.fn>, overrides = {}) {
 }
 
 describe(' admin dashboard PostgreSQL projections', () => {
+  it.each([null, undefined, '', '  ', false, true, [], {}].map(rate => ({ rate })))('rejects unknown or non-price values instead of coercing $rate to zero', async ({ rate }) => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [{ company_id: 'comp_novda' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'm', status: 'ACTIVE', operations_json: [{ name: 'Sew', rate: null }] }] });
+    await expect(serviceFor(query).updateModelRates('274466315', {
+      companyId: 'comp_novda', modelId: 'm', baseRevision: 0, operations: [{ name: 'Sew', rate }]
+    })).rejects.toMatchObject({ code: 'INVALID_MODEL_OPERATIONS', statusCode: 400 });
+    expect(query).toHaveBeenCalledTimes(2);
+  });
   it('returns overview counts from one PostgreSQL projection', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{
       company_count: '1', worker_count: '201', model_count: '18', party_count: '42',
@@ -96,6 +104,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(query.mock.calls[2][0]).toContain('ticket_entries');
     expect(query.mock.calls[3][0]).toContain('production_adjustments');
     expect(query.mock.calls[4][0]).toContain('worker_adjustments');
+    expect(query.mock.calls[4][0]).toContain("status = 'POSTED'");
     expect(query.mock.calls[4][1]).toEqual(['comp_novda', 'period-1', '2026-09-01', null, null]);
   });
 

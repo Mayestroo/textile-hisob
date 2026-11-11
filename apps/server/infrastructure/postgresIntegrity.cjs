@@ -1,36 +1,6 @@
 'use strict';
 
-const EXPECTED_MIGRATIONS = Object.freeze({
-  1: 'schema.sql',
-  2: 'deploy_active_party_migration.sql',
-  3: 'deploy_operator_auth_migration.sql',
-  4: 'deploy_operator_auth_rate_limit_migration.sql',
-  5: 'deploy_reconciliation_migration.sql',
-  6: 'deploy_ticket_identity_party_fk_migration.sql',
-  7: 'deploy_exact_party_2_policy_migration.sql',
-  8: 'deploy_activation_migration.sql',
-  9: 'deploy_business_mutations_migration.sql',
-  10: 'deploy_activation_company_scope_migration.sql',
-  11: 'deploy_activation_policy_revision_migration.sql',
-  12: 'deploy_exact_party_2_company_scope_migration.sql',
-  13: 'deploy_activation_policy_device_sync_migration.sql',
-  14: 'deploy_free_mode_ticket_party_migration.sql',
-  15: 'deploy_patta_work_quantity_migration.sql',
-  16: 'deploy_canonical_ids_global_patta_sequence.sql',
-  17: 'deploy_production_adjustment_provenance_migration.sql',
-  18: 'deploy_patta_series_sequence_migration.sql',
-  19: 'deploy_patta_sequence_runtime_grant_migration.sql',
-  20: 'deploy_voided_ticket_patta_reuse_migration.sql',
-  21: 'deploy_company_admin_scope_migration.sql',
-  22: 'deploy_worker_telegram_unbind_migration.sql',
-  23: 'deploy_production_adjustment_attribution_migration.sql',
-  24: 'deploy_activation_policy_sync_count_migration.sql',
-  25: 'deploy_worker_adjustment_manual_payroll_types.sql',
-  26: 'deploy_model_batch_size_names_migration.sql',
-  27: 'deploy_party_size_order_migration.sql',
-  28: 'deploy_patta_lifecycle_provenance_migration.sql',
-  29: 'deploy_worker_onboarding_profile_migration.sql'
-});
+const { EXPECTED_MIGRATIONS } = require('../database/migrate.cjs');
 
 const REQUIRED_FOREIGN_KEYS = Object.freeze([
   ['tickets', ['company_id', 'party_record_id'], 'parties', ['company_id', 'id']],
@@ -171,6 +141,9 @@ async function verifyPostgresReleaseState(client) {
     && report.migrations.rows.every((row) => EXPECTED_MIGRATIONS[row.version] === row.name);
   if (!report.migrations.contiguous) problems.push('schema_migrations versions are empty, duplicated, unordered, or contain gaps');
   if (!report.migrations.namesMatch) problems.push('schema_migrations names do not match the ordered migration definitions');
+  if (report.migrations.rows.length !== Object.keys(EXPECTED_MIGRATIONS).length) {
+    problems.push('schema_migrations does not contain the complete migration lineage required by this server release');
+  }
   if (report.migrations.rows.some((row) => !Number.isSafeInteger(row.version))) problems.push('schema_migrations contains an invalid version');
 
   const activationTableRows = await rowsFor('activation and worker service tables', `

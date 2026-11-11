@@ -6,37 +6,7 @@ const { Client } = require('pg');
 const { validatePostgresDsn } = require('../../apps/server/infrastructure/connectionConfig.cjs');
 const { verifyPostgresReleaseState } = require('../../apps/server/infrastructure/postgresIntegrity.cjs');
 
-const MIGRATIONS = [
-  'schema.sql',
-  'deploy_active_party_migration.sql',
-  'deploy_operator_auth_migration.sql',
-  'deploy_operator_auth_rate_limit_migration.sql',
-  'deploy_reconciliation_migration.sql',
-  'deploy_ticket_identity_party_fk_migration.sql',
-  'deploy_exact_party_2_policy_migration.sql',
-  'deploy_activation_migration.sql',
-  'deploy_business_mutations_migration.sql',
-  'deploy_activation_company_scope_migration.sql',
-  'deploy_activation_policy_revision_migration.sql',
-  'deploy_exact_party_2_company_scope_migration.sql',
-  'deploy_activation_policy_device_sync_migration.sql',
-  'deploy_free_mode_ticket_party_migration.sql',
-  'deploy_patta_work_quantity_migration.sql',
-  'deploy_canonical_ids_global_patta_sequence.sql',
-  'deploy_production_adjustment_provenance_migration.sql',
-  'deploy_patta_series_sequence_migration.sql',
-  'deploy_patta_sequence_runtime_grant_migration.sql',
-  'deploy_voided_ticket_patta_reuse_migration.sql',
-  'deploy_company_admin_scope_migration.sql',
-  'deploy_worker_telegram_unbind_migration.sql',
-  'deploy_production_adjustment_attribution_migration.sql',
-  'deploy_activation_policy_sync_count_migration.sql',
-  'deploy_worker_adjustment_manual_payroll_types.sql',
-  'deploy_model_batch_size_names_migration.sql',
-  'deploy_party_size_order_migration.sql',
-  'deploy_patta_lifecycle_provenance_migration.sql',
-  'deploy_worker_onboarding_profile_migration.sql'
-];
+const { MIGRATIONS, applyMigrations } = require('../../apps/server/database/migrate.cjs');
 
 function requireDsn(env, name, requiredUsername) {
   const value = env[name];
@@ -72,41 +42,6 @@ async function connect(connectionString) {
   const client = new Client({ connectionString });
   await client.connect();
   return client;
-}
-
-async function applyMigrations(migrator, options = {}) {
-  const migrationDirectory = options.migrationDirectory
-    || path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'migrations');
-  const schemaPath = options.schemaPath
-    || path.join(__dirname, '..', '..', 'apps', 'server', 'database', 'schema.sql');
-  const readFile = options.readFile || ((filePath) => fs.readFileSync(filePath, 'utf8'));
-
-  for (let index = 0; index < MIGRATIONS.length; index += 1) {
-    const filename = MIGRATIONS[index];
-    if (index > 0) {
-      const version = index + 1;
-      const result = await migrator.query(
-        'SELECT name FROM schema_migrations WHERE version = $1',
-        [version]
-      );
-      const applied = result.rows[0];
-      if (applied) {
-        if (applied.name !== filename) {
-          const error = new Error(`POSTGRES_MIGRATION_VERSION_CONFLICT version=${version}`);
-          error.code = 'POSTGRES_MIGRATION_VERSION_CONFLICT';
-          throw error;
-        }
-        process.stdout.write(`POSTGRES_MIGRATION_ALREADY_APPLIED version=${version}\n`);
-        continue;
-      }
-    }
-
-    const sqlPath = filename === 'schema.sql'
-      ? schemaPath
-      : path.join(migrationDirectory, filename);
-    await migrator.query(readFile(sqlPath));
-    if (index > 0) process.stdout.write(`POSTGRES_MIGRATION_APPLIED version=${index + 1}\n`);
-  }
 }
 
 async function main(env = process.env) {

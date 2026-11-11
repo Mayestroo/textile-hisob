@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const recordDiagnostic = require('./runtime/diagnostics.cjs').installRuntimeDiagnostics({
+  app, directory: path.join(app.getPath('userData'), 'logs')
+});
 const https = require('https');
 const http = require('http');
 const child_process = require('child_process');
@@ -742,18 +745,19 @@ if (isSyncEnabled) {
              require('./database/core/canonicalPayload.cjs').canonicalStringify(archiveData)) !== localArchive.sha256)) {
          throw Object.assign(new Error('PERIOD_ARCHIVE_INTEGRITY_FAILURE'), { code: 'PERIOD_ARCHIVE_INTEGRITY_FAILURE' });
        }
-       const archiveValidator = require('./database/archive/periodArchiveValidator.cjs');
-       const canonicalTickets = archiveValidator.readCanonicalPeriodTickets(ready.db, ready.companyId, period.id);
+        const archiveValidator = require('./database/archive/periodArchiveValidator.cjs');
+        const canonicalTickets = archiveValidator.readCanonicalPeriodTickets(ready.db, ready.companyId, period.id);
+        const canonicalById = new Map(canonicalTickets.map((ticket) => [ticket.id, ticket]));
        const archiveProblem = archiveValidator.validatePeriodArchive(
          archiveData, archiveSha, ready.companyId, period.id,
          { binding: localArchive ? 'retained-local-owner' : 'authenticated-request-scope', canonicalTickets });
        if (archiveProblem) throw Object.assign(new Error(archiveProblem), { code: archiveProblem,
          ...(archiveProblem === 'ARCHIVE_TICKET_PERIOD_UNKNOWN' ? { details: {
            incomplete: true, factCompleteness: 'UNKNOWN',
-           unresolvedTicketIds: (archiveData.submittedTickets || []).filter((ticket) =>
-             ticket?.periodId === undefined || ticket?.periodId === null).map((ticket) => ticket?.id).filter(Boolean)
+            unresolvedTicketIds: (archiveData.submittedTickets || []).filter((ticket) => ticket &&
+              archiveValidator.classifyArchiveTicket(ticket, ready.companyId, period.id, canonicalById.get(ticket.id)).problem === 'ARCHIVE_TICKET_PERIOD_UNKNOWN')
+              .map((ticket) => ticket.id)
          } } : {}) });
-       const canonicalById = new Map(canonicalTickets.map((ticket) => [ticket.id, ticket]));
        const archiveTicketFactsById = new Map(archiveData.submittedTickets.map((ticket) => [ticket.id,
          archiveValidator.classifyArchiveTicket(ticket, ready.companyId, period.id, canonicalById.get(ticket.id))]));
        const archiveTicketFacts = Array.from(archiveTicketFactsById.values());
@@ -1273,8 +1277,8 @@ async function createWindow() {
     } catch (error) {
       if (!canOpenActivationUi(error)) {
         console.error('[Main]  readiness failed before window creation:', error?.code || '_RUNTIME_NOT_READY');
-        app.exitCode = 1;
-        app.quit();
+        recordDiagnostic('RUNTIME_NOT_READY', { code: error?.code });
+        app.exit(1);
         return;
       }
     }
@@ -1306,14 +1310,16 @@ async function createWindow() {
   });
   mainWindow.loadFile(indexHtml);
 
-  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[Renderer]: ${message} (${sourceId}:${line})`);
+  mainWindow.webContents.on('console-message', (event) => {
+    if (event.level === 'error') recordDiagnostic('RENDERER_CONSOLE_ERROR');
   });
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error(`did-fail-load: ${errorCode} - ${errorDescription}`);
+    recordDiagnostic('RENDERER_LOAD_FAILED', { exitCode: errorCode });
   });
   mainWindow.webContents.on('render-process-gone', (event, details) => {
     console.error('render-process-gone:', details);
+    recordDiagnostic('RENDERER_PROCESS_GONE', details);
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -1322,10 +1328,6 @@ async function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
-
-process.on('uncaughtException', (err) => {
-  console.error('Main process uncaughtException:', err);
-});
 
 app.on('before-quit', () => {
   try {

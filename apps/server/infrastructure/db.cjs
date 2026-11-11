@@ -2,8 +2,7 @@
 
 const { Pool } = require('pg');
 const { createHash } = require('crypto');
-const fs = require('fs');
-const path = require('path');
+const { applyMigrations } = require('../database/migrate.cjs');
 const { resolveDatabaseUrl, validatePostgresDsn } = require('./connectionConfig.cjs');
 
 let pool = null;
@@ -70,13 +69,33 @@ async function withTransaction(callback) {
 
 async function initServerDatabase(options = {}) {
   const p = options.pool || getServerPool(options);
-  const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
-  const sql = fs.readFileSync(schemaPath, 'utf8');
-  await p.query(sql);
+  // Migration scripts contain transactions: pin all their queries to one connection.
+  const client = await p.connect();
+  let failure;
+  try {
+    await applyMigrations(client, { log: () => {} });
+  } catch (error) {
+    failure = error;
+    throw error;
+  } finally {
+    client.release(failure);
+  }
 }
 
-async function resetServerDatabase() {
-  const p = getServerPool();
+async function resetServerDatabase(options = {}) {
+  const env = options.env || process.env;
+  const target = env.NOVDA_PG_URL ? validatePostgresDsn(env.NOVDA_PG_URL, 'NOVDA_PG_URL') : null;
+  if (env.NOVDA_DISPOSABLE_PG !== '1' || env.DATABASE_URL || env.NODE_ENV === 'production'
+    || !target || !/(test|regression|disposable)/i.test(decodeURIComponent(target.pathname.slice(1)))) {
+    throw Object.assign(new Error('DISPOSABLE_POSTGRES_REQUIRED: database reset is restricted to explicitly opted-in test databases'),
+      { code: 'DISPOSABLE_POSTGRES_REQUIRED' });
+  }
+  const p = getServerPool({ env });
+  const actual = (await p.query("SELECT current_database() AS database, current_setting('server_version_num') AS version")).rows[0];
+  if (actual?.database !== decodeURIComponent(target.pathname.slice(1)) || !String(actual?.version).startsWith('16')) {
+    throw Object.assign(new Error('DISPOSABLE_POSTGRES_REQUIRED: reset target verification failed'),
+      { code: 'DISPOSABLE_POSTGRES_REQUIRED' });
+  }
   await p.query(`
     DROP TABLE IF EXISTS period_archives CASCADE;
     DROP TABLE IF EXISTS party_id_aliases CASCADE;
@@ -119,42 +138,7 @@ async function resetServerDatabase() {
     DROP TABLE IF EXISTS models CASCADE;
     DROP TABLE IF EXISTS workers CASCADE;
   `);
-  await initServerDatabase();
-  // Test-only reset helper: restore the complete source schema lineage so the
-  // integration suite exercises the same migration set as the current client.
-  const migrations = [
-    'deploy_active_party_migration.sql',
-    'deploy_operator_auth_migration.sql',
-    'deploy_operator_auth_rate_limit_migration.sql',
-    'deploy_reconciliation_migration.sql',
-    'deploy_ticket_identity_party_fk_migration.sql',
-    'deploy_exact_party_2_policy_migration.sql',
-    'deploy_activation_migration.sql',
-    'deploy_business_mutations_migration.sql',
-    'deploy_activation_company_scope_migration.sql',
-    'deploy_activation_policy_revision_migration.sql',
-    'deploy_exact_party_2_company_scope_migration.sql',
-    'deploy_activation_policy_device_sync_migration.sql',
-    'deploy_free_mode_ticket_party_migration.sql',
-    'deploy_patta_work_quantity_migration.sql',
-    'deploy_canonical_ids_global_patta_sequence.sql',
-    'deploy_production_adjustment_provenance_migration.sql',
-    'deploy_patta_series_sequence_migration.sql',
-    'deploy_patta_sequence_runtime_grant_migration.sql',
-    'deploy_voided_ticket_patta_reuse_migration.sql',
-    'deploy_company_admin_scope_migration.sql',
-    'deploy_worker_telegram_unbind_migration.sql',
-    'deploy_production_adjustment_attribution_migration.sql',
-    'deploy_activation_policy_sync_count_migration.sql',
-    'deploy_worker_adjustment_manual_payroll_types.sql',
-    'deploy_model_batch_size_names_migration.sql',
-    'deploy_party_size_order_migration.sql',
-    'deploy_patta_lifecycle_provenance_migration.sql',
-    'deploy_worker_onboarding_profile_migration.sql'
-  ];
-  for (const filename of migrations) {
-    await p.query(fs.readFileSync(path.join(__dirname, '..', 'database', 'migrations', filename), 'utf8'));
-  }
+  await initServerDatabase({ pool: p });
 }
 
 async function closeServerPool() {

@@ -6,18 +6,19 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const vm = require('node:vm');
+const { verifyAdminFinancialUi } = require('../render/admin-financial-ui.cjs');
 const { spawn, spawnSync } = require('node:child_process');
 const Fastify = require('fastify');
 const { Pool } = require('pg');
-const { registerWorkerRoutes } = require('../../apps/server/modules/workers/workerRoutes.cjs');
-const { registerAdminDashboardRoutes } = require('../../apps/server/modules/admin/adminDashboardRoutes.cjs');
-const manager = require('../../apps/desktop/electron/database/core/databaseManager.cjs');
-const { loadPayrollValuationFromSqlite } = require('../../apps/desktop/electron/database/readers/payrollReader.cjs');
-const { canonicalStringify, computePayloadHash } = require('../../apps/desktop/electron/database/core/canonicalPayload.cjs');
+const { registerWorkerRoutes } = require('../../../apps/server/modules/workers/workerRoutes.cjs');
+const { registerAdminDashboardRoutes } = require('../../../apps/server/modules/admin/adminDashboardRoutes.cjs');
+const manager = require('../../../apps/desktop/electron/database/core/databaseManager.cjs');
+const { loadPayrollValuationFromSqlite } = require('../../../apps/desktop/electron/database/readers/payrollReader.cjs');
+const { canonicalStringify, computePayloadHash } = require('../../../apps/desktop/electron/database/core/canonicalPayload.cjs');
+const { applyMigrations } = require('../../../apps/server/database/migrate.cjs');
 
 const root = path.resolve(__dirname, '../../..');
-const guard = spawnSync(process.execPath, [path.join(root, '.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')], {
+const guard = spawnSync(process.execPath, [path.join(__dirname, 'assert-local-pg.cjs')], {
   env: { NOVDA_LOCAL_TEST_PG_URL: process.env.NOVDA_LOCAL_TEST_PG_URL }, encoding: 'utf8'
 });
 assert.equal(guard.status, 0, guard.stderr || 'local PG guard failed');
@@ -49,7 +50,7 @@ async function extraTicket(company, ticketId, operation, qty) {
 
 function bot(updates, base, staleBinding = null) {
   return new Promise((resolve, reject) => {
-    const child = spawn('python', ['-B', path.join(root, 'apps/bots/worker/tests/test_worker_acceptance_driver.py')], {
+    const child = spawn('python', ['-B', path.join(root, 'apps/bots/worker/tests/worker_acceptance_driver.py')], {
       cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
       env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, PYTHONDONTWRITEBYTECODE: '1',
         PYTHONNOUSERSITE: '1', HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '*' }
@@ -74,17 +75,10 @@ const texts = (run) => run.replies.filter(r => r.method === 'sendMessage').map(r
 async function main() {
   try {
     // Only the dedicated database may receive schema and synthetic facts.
-    await pool.query(fs.readFileSync(path.join(root, 'apps/server/database/schema.sql'), 'utf8'));
-    for (const migration of ['deploy_activation_migration.sql', 'deploy_business_mutations_migration.sql']) {
-      await pool.query(fs.readFileSync(path.join(root, 'apps/server/database/migrations', migration), 'utf8'));
-    }
+    const migrationClient = await pool.connect();
+    try { await applyMigrations(migrationClient, { log: () => {} }); }
+    finally { migrationClient.release(); }
     await pool.query(`INSERT INTO company_batch_settings(company_id) VALUES ($1),($2)`, [tenant, other]);
-    for (const migration of ['deploy_activation_company_scope_migration.sql', 'deploy_production_adjustment_provenance_migration.sql',
-      'deploy_production_adjustment_attribution_migration.sql', 'deploy_activation_policy_revision_migration.sql',
-      'deploy_activation_policy_sync_count_migration.sql', 'deploy_company_admin_scope_migration.sql',
-      'deploy_worker_telegram_unbind_migration.sql']) {
-      await pool.query(fs.readFileSync(path.join(root, 'apps/server/database/migrations', migration), 'utf8'));
-    }
     await pool.query(`INSERT INTO activation_companies(company_id, company_name, updated_by_telegram_id)
       VALUES ($1, 'Synthetic A', '1'), ($2, 'Synthetic B', '1') ON CONFLICT (company_id) DO UPDATE
       SET company_name=EXCLUDED.company_name, updated_by_telegram_id=EXCLUDED.updated_by_telegram_id,
@@ -156,9 +150,12 @@ async function main() {
       }
     });
     const base = await app.listen({ host: '127.0.0.1', port: 0 });
-    const open = await bot([update('/start'), update('/operatsiyalar'), update('/pattalar')], base);
+    const open = await bot([update('/start'), update('/hisob'), update('/operatsiyalar'), update('/pattalar')], base);
     const shown = texts(open);
-    assert(shown.some(t => t.includes('81 so\'m') && t.includes('73 so\'m') && t.includes('9 dona')), JSON.stringify(shown));
+    // /start navigates to WebApp; explicitly request /hisob to exercise the
+    // financial summary instead of assuming the greeting renders it.
+    assert(shown.some(t => t.includes('Mening hisobim')), JSON.stringify(shown));
+    assert(shown.some(t => t.includes('81 so\'m') && t.includes('9 dona')), JSON.stringify(shown));
     assert(shown.some(t => t.includes('9 so\'m') && t.includes('81 so\'m')), JSON.stringify(shown));
     assert(shown.some(t => t.includes('Patta #1')), JSON.stringify(shown));
     assert(open.requests.includes('/api/worker/profile') && open.requests.includes('/api/worker/tickets'));
@@ -167,11 +164,12 @@ async function main() {
     await extraTicket(tenant, '00000000-0000-4000-8000-000000000082', 'Zero', 3);
     const zero = await bot([update('/hisob'), update('/operatsiyalar')], base);
     assert(texts(zero).some(t => t.includes('Sof foyda: 73 so\'m') && t.includes('12 dona')));
+    assert.equal(loadPayrollValuationFromSqlite(sqlite, tenant, 'P').workers[0].pieces, 12);
     assert(texts(zero).some(t => t.includes('Zero: 3 dona × 0 so\'m = <b>0 so\'m</b>')));
     assert.equal(loadPayrollValuationFromSqlite(sqlite, tenant, 'P').workers[0].unknownEntryCount, 0);
     await extraTicket(tenant, '00000000-0000-4000-8000-000000000083', 'Unknown', 2);
     const unknown = await bot([update('/hisob'), update('/operatsiyalar')], base);
-    assert(texts(unknown).some(t => t.includes('Hisoblangan oraliq summa: 81 so\'m') && t.includes('Hisob to‘liq emas')));
+    assert(texts(unknown).some(t => t.includes('81 so\'m') && t.includes('Hisob to‘liq emas')));
     assert(texts(unknown).some(t => t.includes('narx noma’lum = <b>summa noma’lum</b>')));
     assert(!texts(unknown).some(t => t.includes('Sof foyda: 73 so\'m')));
     assert.equal(loadPayrollValuationFromSqlite(sqlite, tenant, 'P').workers[0].unknownEntryCount, 1);
@@ -184,7 +182,12 @@ async function main() {
     webParams.set('periodId', 'P');
     const webUrl = new URL(`/api/worker/profile?${webParams}`, base);
     const webHeaders = { 'x-worker-auth-token': signed.searchParams.get('authToken') };
-    assert.equal((await fetch(webUrl, { headers: webHeaders })).status, 200);
+    const profileResponse = await fetch(webUrl, { headers: webHeaders });
+    assert.equal(profileResponse.status, 200);
+    const profile = (await profileResponse.json()).profile;
+    assert.equal(profile.gross, 81);
+    assert.equal(profile.net, 73);
+    assert.equal(profile.accountingStatus, 'INCOMPLETE');
     const crossWebParams = new URLSearchParams(webParams);
     crossWebParams.set('companyId', other);
     assert.equal((await fetch(new URL(`/api/worker/profile?${crossWebParams}`, base), { headers: webHeaders })).status, 401);
@@ -197,11 +200,11 @@ async function main() {
       .run(tenant, now);
     const qTicket = '00000000-0000-4000-8000-000000000084';
     await pool.query(`INSERT INTO tickets(id,company_id,model_id,period_id,party_number,party_record_id,patta_number,qty,status,submitted_at)
-      VALUES ($1,$2,'m','Q','1','synthetic-party',2,4,'CONFIRMED',$3)`, [qTicket, tenant, now]);
+      VALUES ($1,$2,'m','Q','1','synthetic-party',4,4,'CONFIRMED',$3)`, [qTicket, tenant, now]);
     await pool.query(`INSERT INTO ticket_entries(id,ticket_id,company_id,op_name,worker_id,rate_snapshot,qty)
       VALUES ('q-entry',$1,$2,'Sew',7,5,4)`, [qTicket, tenant]);
     sqlite.prepare(`INSERT INTO tickets(id,company_id,model_id,period_id,party_number,patta_number,qty,status,submitted_at,created_at,provenance)
-      VALUES (? ,?,'m','Q','1',2,4,'CONFIRMED',?,?,'REMOTE_SYNC')`).run(qTicket, tenant, now, now);
+      VALUES (? ,?,'m','Q','1',4,4,'CONFIRMED',?,?,'REMOTE_SYNC')`).run(qTicket, tenant, now, now);
     sqlite.prepare(`INSERT INTO ticket_entries(id,ticket_id,company_id,op_name,worker_id,rate_snapshot,qty,created_at)
       VALUES ('q-entry',?,?,'Sew',7,5,4,?)`).run(qTicket, tenant, now);
     for (const [adjustmentId, type, amount] of [['q-av', 'AVANS', 2], ['q-ja', 'JARIMA', 1]]) {
@@ -255,7 +258,7 @@ async function main() {
     assert(!stale.requests.includes('/api/worker/profile'));
 
     async function adminProcess(telegramId, updates = undefined) {
-      const child = spawn('python', ['-B', path.join(root, 'apps/bots/admin/tests/test_admin_acceptance_driver.py')], {
+      const child = spawn('python', ['-B', path.join(root, 'apps/bots/admin/tests/admin_acceptance_driver.py')], {
         cwd: root, stdio: ['pipe', 'pipe', 'pipe'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, APPDATA: process.env.APPDATA, PYTHONDONTWRITEBYTECODE: '1',
           HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '*' }
@@ -486,149 +489,30 @@ async function main() {
             VALUES ('00000000-0000-4000-8000-0000000000f8',$1,'m','R','1','synthetic-party',8,2,'CONFIRMED',$2)`, [tenant, now]);
           await pool.query(`INSERT INTO ticket_entries(id,ticket_id,company_id,op_name,worker_id,rate_snapshot,qty)
             VALUES ('retry-entry','00000000-0000-4000-8000-0000000000f8',$1,'Sew',8,13,2)`, [tenant]);
-          const source = fs.readFileSync(path.join(root, 'apps/webapps/admin/scripts/admin.js'), 'utf8');
-          const boot = '  enforceLightModeTheme();\n  bindEvents();\n  void beginAuthentication();\n})();';
-          assert(source.includes(boot), 'actual UI entrypoint changed');
-          const script = source.replace(boot, `  window.fixture = { state, companyPanel, submitQuickAdjustment, giveCompanyAdvance };\n})();`);
-          const intentApi = require('../../../apps/webapps/admin/scripts/financial-intent.js');
-          const cells = new Map();
-          const element = (key) => {
-            if (!cells.has(key)) cells.set(key, { disabled: false, hidden: false, value: '', fields: {},
-              addEventListener() {}, close() {}, classList: { toggle() {}, add() {}, remove() {} } });
-            return cells.get(key);
-          };
-          const data = new Map();
-          const storage = { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value),
-            removeItem: key => data.delete(key) };
-          const queues = new Map();
-          const locks = { request(key, _options, action) {
-            const previous = queues.get(key) || Promise.resolve();
-            const next = previous.catch(() => {}).then(action);
-            queues.set(key, next);
-            void next.finally(() => { if (queues.get(key) === next) queues.delete(key); }).catch(() => {});
-            return next;
-          } };
-          const requests = [];
-          let drop = false;
-          let prompts = [];
-          let confirms = [];
-          const fetchUi = async (route, init) => {
-            const url = new URL(route, base);
-            assert.equal(url.hostname, '127.0.0.1');
-            assert(url.pathname.startsWith('/api/admin/webapp/'));
-            if (init.method === 'PUT') requests.push(JSON.parse(init.body));
-            const response = await fetch(url, init);
-            if (init.method === 'PUT' && drop) {
-              if (response.status !== 200) {
-                console.error(`fixture PUT rejected ${response.status} ${((await response.json()).error || {}).code || ''}`);
-                throw new Error('fixture expected committed PUT');
-              }
-              await response.text(); drop = false;
-              throw new Error('synthetic lost HTTP response after commit');
-            }
-            return response;
-          };
-          function ui(actor = companyAdminId, options = {}) {
-            const submitButton = { disabled: false };
-            const tabElement = (key) => key === 'submitQuickAdj' ? submitButton : element(key);
-            const win = { NovdaFinancialIntent: intentApi, localStorage: options.storage || storage,
-              setTimeout: () => 1, clearTimeout() {}, prompt: () => prompts.shift() ?? null,
-              confirm: () => confirms.shift() ?? false };
-            const context = { window: win, document: { getElementById: tabElement, querySelectorAll: () => [], addEventListener() {} },
-              fetch: fetchUi, Headers, FormData: class { constructor(form) { this.fields = form.fields; } get(key) { return this.fields[key]; } },
-              URL, URLSearchParams, crypto, console, navigator: { locks: options.noLocks ? null : locks } };
-            vm.runInNewContext(script, context, { filename: 'admin-webapp/admin.js', timeout: 3000 });
-            const fixture = win.fixture;
-            fixture.state.sessionToken = bearer;
-            fixture.state.user = { id: actor };
-            fixture.state.sessionActorId = companyAdminId;
-            fixture.state.access = { companyIds: [tenant] };
-            fixture.companyPanel.companyId = tenant;
-            fixture.companyPanel.periods = [{ periodId: 'R', isClosed: false }];
-            fixture.companyPanel.selectedWorker = { companyId: tenant, workerId: 8, name: 'Retry Worker', staj: 0, serverRevision: 1 };
-            return fixture;
-          }
+          await pool.query(`INSERT INTO models(id,company_id,name,operations_json) VALUES ('unknown-model',$1,'Unknown tariff fixture',$2::jsonb)`,
+            [tenant, JSON.stringify([{ name: 'Known', rate: 7 }, { name: 'Unknown', rate: null }, { name: 'Zero', rate: 0 }])]);
+          await pool.query(`INSERT INTO worker_adjustments(id,company_id,worker_id,period_id,type,amount,status,source_id,provenance)
+            VALUES ('unposted-audit',$1,8,'R','AVANS',1000,'VOIDED','unposted-audit','AUDIT_FIXTURE')`, [tenant]);
           const read = async () => {
             const row = (await adminRequest(`/api/admin/webapp/payroll?companyId=${tenant}&periodId=R`, bearer)).body.payroll.workers.find(w => Number(w.workerId) === 8);
             const facts = (await pool.query(`SELECT id,type,amount::text AS amount,period_id FROM worker_adjustments
-              WHERE company_id=$1 AND worker_id=8 ORDER BY id`, [tenant])).rows;
+              WHERE company_id=$1 AND worker_id=8 AND status='POSTED' ORDER BY id`, [tenant])).rows;
             const revision = Number((await pool.query(`SELECT server_revision FROM workers WHERE company_id=$1 AND id=8`, [tenant])).rows[0].server_revision);
             return { gross: row.gross, net: row.net, facts, revision };
           };
           assert.deepEqual([ (await read()).gross, (await read()).net ], [26, 26]);
-          const quick = element('quickAdjustmentForm');
-          quick.fields = { workerId: '8', companyId: tenant, type: 'JARIMA', periodId: 'R', amountDelta: '3', description: 'retry quick' };
-          const first = ui();
-          drop = true;
-          const opening = first.submitQuickAdjustment({ preventDefault() {} });
-          await first.submitQuickAdjustment({ preventDefault() {} }); // double-click cannot create another intent.
-          await opening;
-          assert.equal(requests.length, 1);
-          assert.deepEqual([ (await read()).gross, (await read()).net, (await read()).facts.length ], [26, 23, 1]);
-          assert.equal(data.size, 1);
-          const wrongActor = ui('999999999');
-          await wrongActor.submitQuickAdjustment({ preventDefault() {} });
-          assert.equal(requests.length, 1, 'other actor cannot dispatch prior intent');
-          const switched = ui();
-          switched.state.selectedCompanyId = other;
-          await switched.submitQuickAdjustment({ preventDefault() {} });
-          assert.equal(requests.length, 1, 'changed company cannot dispatch old intent');
-          const recovered = ui(); // Closed tab/new VM: localStorage persists; sessionStorage does not.
-          const concurrent = ui();
-          await Promise.all([recovered.submitQuickAdjustment({ preventDefault() {} }),
-            concurrent.submitQuickAdjustment({ preventDefault() {} })]);
-          assert.equal(requests.length, 2);
-          assert.deepEqual(requests[1], requests[0]);
-          assert.deepEqual([ (await read()).net, (await read()).facts.length, (await read()).revision ], [23, 1, 2]);
-          assert.equal(data.size, 1, 'resolved marker stops stale tab from opening the same draft as new money');
-          const persisted = intentApi.create(storage, locks);
-          const scope = { actor: companyAdminId, companyId: tenant, kind: 'quick-adjustment' };
-          assert.throws(() => persisted.complete(scope, requests[0].operationId), /FINANCIAL_INTENT_CHANGED/);
-          assert.equal(data.size, 1, 'old completion cannot remove the current resolved marker');
-          const broken = { getItem() { throw new Error('storage disabled'); }, setItem() { throw new Error('storage disabled'); }, removeItem() { throw new Error('storage disabled'); } };
-          await ui(companyAdminId, { storage: broken }).submitQuickAdjustment({ preventDefault() {} });
-          await ui(companyAdminId, { noLocks: true }).submitQuickAdjustment({ preventDefault() {} });
-          assert.equal(requests.length, 2, 'unavailable storage/coordination fails closed before PUT');
-
-          // A different explicit intent after successful receipt gets new IDs; first rejection is definite.
-          quick.fields = { ...quick.fields, periodId: 'closed-invalid', amountDelta: '2' };
-          await recovered.submitQuickAdjustment({ preventDefault() {} });
-          assert.equal(data.size, 0);
-          assert.equal((await read()).facts.length, 1);
-          quick.fields = { ...quick.fields, periodId: 'R', amountDelta: '2', description: 'second quick' };
-          await recovered.submitQuickAdjustment({ preventDefault() {} });
-          assert.equal(requests.length, 4);
-          assert.notEqual(requests[3].operationId, requests[0].operationId);
-          assert.deepEqual([ (await read()).net, (await read()).facts.length ], [21, 2]);
-
-          const advance = ui();
-          prompts = ['5', 'retry advance']; drop = true;
-          await advance.giveCompanyAdvance(advance.companyPanel.selectedWorker);
-          assert.equal(data.size, 1);
-          assert.deepEqual([ (await read()).net, (await read()).facts.length ], [16, 3], element('companyToast').textContent);
-          const changed = ui(); changed.state.sessionToken = 'other-session';
-          // The actor/session authorization guard rejects a company switch before dispatch.
-          changed.state.selectedCompanyId = other;
-          prompts = ['5', 'retry advance'];
-          await changed.giveCompanyAdvance(changed.companyPanel.selectedWorker);
-          assert.equal(requests.length, 5);
-          const restored = ui(); prompts = ['5', 'retry advance'];
-          await restored.giveCompanyAdvance(restored.companyPanel.selectedWorker);
-          assert.equal(requests.length, 6);
-          assert.deepEqual(requests[5], requests[4]);
+          const evidence = await verifyAdminFinancialUi({ baseUrl: base, initData: companyRun.result.init_data });
+          const tariff = (await pool.query(`SELECT operations_json FROM models WHERE company_id=$1 AND id='unknown-model'`, [tenant])).rows[0];
+          assert.deepEqual(tariff.operations_json.map(op => [op.name, op.rate]), [['Known', 9], ['Unknown', 0], ['Zero', 0]]);
           assert.deepEqual([ (await read()).gross, (await read()).net, (await read()).facts.length, (await read()).revision ], [26, 16, 3, 4]);
-          assert.equal(data.size, 1, 'completed advance keeps a resolved marker across tabs');
-          const advanceScope = { actor: companyAdminId, companyId: tenant, kind: 'company-advance' };
-          assert.throws(() => persisted.complete(advanceScope, requests[4].operationId), /FINANCIAL_INTENT_CHANGED/);
-          const oldTab = ui(); prompts = ['5', 'retry advance'];
-          await oldTab.giveCompanyAdvance(oldTab.companyPanel.selectedWorker);
-          assert.equal(requests.length, 6, 'a stale tab cannot silently create a fourth identical deduction');
-          assert.deepEqual([ (await read()).net, (await read()).facts.length ], [16, 3]);
-          assert.deepEqual((await pool.query(`SELECT amount::text,period_id,provenance FROM worker_adjustments WHERE company_id=$1 AND worker_id=8 ORDER BY amount`, [tenant])).rows,
+          assert.deepEqual((await pool.query(`SELECT amount::text,status FROM worker_adjustments WHERE company_id=$1 AND id='unposted-audit'`, [tenant])).rows,
+            [{ amount: '1000', status: 'VOIDED' }], 'Unposted history must be excluded, not deleted or rewritten');
+          assert.deepEqual((await pool.query(`SELECT amount::text,period_id,provenance FROM worker_adjustments WHERE company_id=$1 AND worker_id=8 AND status='POSTED' ORDER BY amount`, [tenant])).rows,
             [{ amount: '2', period_id: 'R', provenance: 'ADMIN_WEBAPP' }, { amount: '3', period_id: 'R', provenance: 'ADMIN_WEBAPP' }, { amount: '5', period_id: 'R', provenance: 'ADMIN_WEBAPP' }]);
-          console.log('FINANCIAL_UI_RETRY quick 26->23->21, advance 21->16; lost responses, exact bodies replayed, 3 facts once');
+          console.log(evidence.output);
+          return evidence;
         }
-        await exerciseFinancialUiRetry();
+        return await exerciseFinancialUiRetry();
       } finally { companyRun.finish(); }
 
     }

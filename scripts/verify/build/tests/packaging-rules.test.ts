@@ -39,6 +39,9 @@ describe('Electron Packaging Rules & Allowlist', () => {
 
   it('unpacks native better-sqlite3 from asar archive', () => {
     expect(packageJson.build.asarUnpack).toContain('**/node_modules/better-sqlite3/**/*');
+    const nativeRule = buildFiles.find((rule: any) => rule.from === 'node_modules/better-sqlite3') as any;
+    expect(nativeRule.filter).toContain('!**/*.md');
+    expect(nativeRule.filter).toContain('!**/tests/**');
   });
 
   it('contains only production runtime files and zero tests, docs, or server code in built app.asar', () => {

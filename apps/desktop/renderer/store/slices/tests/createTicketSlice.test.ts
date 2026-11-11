@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTicketSlice } from '../createTicketSlice';
 import { resetSessionGuardForTests } from '../../sessionGuard';
+import { cancelDebouncedSave } from '../../helpers/debounceSave';
 
 function makeSlice() {
   let state: any = {
@@ -54,6 +55,10 @@ function makeSlice() {
 }
 
 describe(' ticket command routing', () => {
+  afterEach(() => {
+    cancelDebouncedSave();
+    vi.useRealTimers();
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
     resetSessionGuardForTests();
@@ -63,6 +68,22 @@ describe(' ticket command routing', () => {
       '33333333-3333-4333-8333-333333333333'
     ];
     vi.stubGlobal('crypto', { randomUUID: vi.fn(() => uuids.shift()) });
+  });
+
+  it('persists drafts for both models when the user switches models within the debounce interval', async () => {
+    vi.useFakeTimers();
+    const TicketDraftSave = vi.fn().mockResolvedValue({ success: true });
+    vi.stubGlobal('window', { electronAPI: {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }), TicketDraftSave
+    } });
+    const { slice } = makeSlice();
+    slice.updateTicketField('model-a', 'qty', '31');
+    slice.updateTicketField('model-b', 'qty', '47');
+    slice.updateTicketField('model-a', 'qty', '32');
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(TicketDraftSave).toHaveBeenCalledTimes(2);
+    expect(TicketDraftSave).toHaveBeenCalledWith({ companyId: 'company-a', modelId: 'model-a', form: expect.objectContaining({ qty: '32' }) });
+    expect(TicketDraftSave).toHaveBeenCalledWith({ companyId: 'company-a', modelId: 'model-b', form: expect.objectContaining({ qty: '47' }) });
   });
 
   it('submits one canonical UUID command and reloads the SQLite projection', async () => {

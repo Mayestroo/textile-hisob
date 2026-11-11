@@ -380,7 +380,12 @@
   }
 
   async function loadCompanyAdminData({ throwOnError = false } = {}) {
-    const { companyId } = companyPanel;
+    const { companyId, periodId } = companyPanel;
+    const version = companyPanel.dataLoadVersion = (companyPanel.dataLoadVersion || 0) + 1;
+    const token = state.sessionToken;
+    const actor = state.sessionActorId;
+    const isCurrent = () => companyPanel.companyId === companyId && companyPanel.periodId === periodId
+      && companyPanel.dataLoadVersion === version && state.sessionToken === token && state.sessionActorId === actor;
     try {
       const [payrollRes, workers, parties, models, tickets] = await Promise.all([
         request(withQuery(`${API}/payroll`, payrollQuery())),
@@ -389,6 +394,7 @@
         loadCompanyCollection(`${API}/models`, companyId, 'models'),
         loadCompanyCollection(`${API}/tickets`, companyId, 'tickets')
       ]);
+      if (!isCurrent()) return;
       companyPanel.payroll = payrollRes.payroll?.workers || [];
       const payrollMap = new Map(companyPanel.payroll.map((worker) => [String(worker.workerId), worker]));
       companyPanel.workers = workers.map((worker) => ({ ...worker, ...(payrollMap.get(String(worker.workerId)) || {}) }));
@@ -400,6 +406,7 @@
       renderCompanyParties();
       renderCompanyModels();
     } catch (error) {
+      if (!isCurrent()) return;
       if (throwOnError) throw error;
       coToast(`Ma’lumotlar olinmadi: ${error.code || 'API_UNAVAILABLE'}`);
     }
@@ -1046,11 +1053,11 @@
     operations.slice(0, companyPanel.visibleOperations).forEach((operation, index) => {
       const row = coText('div', 'co-operation-row'); row.appendChild(coText('strong', '', operation.name || `Operatsiya ${index + 1}`));
       const inputWrap = coText('div', 'co-rate-input-wrap');
-      const input = document.createElement('input'); input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.placeholder = '0'; input.value = Number(operation.rate || 0) || '';
+      const input = document.createElement('input'); input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.placeholder = 'Noma’lum'; input.value = operation.rate == null ? '' : String(operation.rate);
       input.setAttribute('aria-label', `${operation.name || 'Operatsiya'} narxi`);
       input.addEventListener('focus', () => inputWrap.classList.add('is-focused'));
       input.addEventListener('blur', () => inputWrap.classList.remove('is-focused'));
-      input.addEventListener('input', () => { operation.rate = Number(input.value || 0); renderCompanyModelSummaryOnly(); });
+      input.addEventListener('input', () => { operation.rate = input.value.trim() === '' ? null : Number(input.value); renderCompanyModelSummaryOnly(); });
       const suffix = coText('span', 'co-rate-suffix', 'so‘m');
       inputWrap.appendChild(input);
       inputWrap.appendChild(suffix);
@@ -1302,6 +1309,9 @@
   async function saveCompanyModelRates() {
     const model = companyPanel.selectedModel;
     if (!model) return coToast('Saqlash uchun model tanlang.');
+    if ((model.operations || []).some(operation => operation.rate == null || !Number.isSafeInteger(Number(operation.rate)) || Number(operation.rate) < 0)) {
+      return coToast('Noma’lum narxni 0 deb saqlab bo‘lmaydi. Har bir narxni aniq kiriting (bepul ish uchun 0).');
+    }
     const button = byId('companySaveRates');
     button.disabled = true;
     try {

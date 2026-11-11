@@ -24,17 +24,14 @@ import { SYSTEM_SHEETS, SYSTEM_SHEET_NAMES } from '../../constants/sheetConstant
 import { OperationRatesModal } from '../../features/models/modals/OperationRatesModal';
 import { useWorkbookStore } from '../../store/workbookStore';
 import { ModelConfig, SubmittedTicketRecord } from '../../types/workbook';
+import { isModelNarxsiz } from '../../domain/modelRateStatus';
+export { isModelNarxsiz } from '../../domain/modelRateStatus';
 
 interface ContextMenuState {
   x: number;
   y: number;
   sheetName: string;
 }
-
-export const isModelNarxsiz = (m: ModelConfig): boolean => {
-  if (!m.operations || m.operations.length === 0) return true;
-  return m.operations.some((op) => !op.rate || op.rate <= 0);
-};
 
 export const isModelFaol = (m: ModelConfig, submittedTickets: SubmittedTicketRecord[] = []): boolean => {
   if (isModelNarxsiz(m)) return false;

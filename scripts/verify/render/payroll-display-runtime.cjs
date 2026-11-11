@@ -447,6 +447,10 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
        const data = readWorkbookPayrollProjection(db, company);
        if (process.env.PATTA_JUMP_ONLY !== '1' && data.payrollValuation.workers[0].gross !== 84) throw Error('SQLite wage expected 84');
       await window.loadFile(path.join(outDir, 'scripts/verify/fixtures/payroll-display-fixture.html'));
+      if (process.env.MODEL_SIZES_C_ONLY === '1') {
+        await require('./model-sizes-stage-c-runtime.cjs')({ window, db, manager, root, fixtureRoot, outDir, setDb: (nextDb) => { db = nextDb; } });
+        return;
+      }
       await window.webContents.executeJavaScript(`window.renderPayrollFixture(${JSON.stringify(data)})`);
       const result = await window.webContents.executeJavaScript(`(() => {
         const views = [...document.querySelectorAll('.excel-grid-container')];
@@ -653,10 +657,6 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
            if(keyboard.search!=='42'||keyboard.ticketCount!==1||companySwitch.search||companyRestore.search!=='42'||periodSwitch.search||archiveSwitch.search||actorSwitch.search||actorRestore.search!=='42'||deniedStorage.ticketCount!==1||!roleDenied||pattaCards.cards!==3||!printSelection.modal||printSelection.completed!==beforePrint.completed||!narrowVisible) throw Error('2d context/keyboard/storage/role/Patta/narrow acceptance failed '+JSON.stringify({keyboard,companySwitch,companyRestore,periodSwitch,archiveSwitch,actorSwitch,actorRestore,deniedStorage,roleDenied,pattaCards,beforePrint,printSelection,narrow,narrowVisible}));
             const evidence={fixtureRoot,setup,exactInitial,matrixSearch,activeOnly,matrixEmpty,matrixClear,detailBaseline,byTicket,conveyorSelect,modelSelect,partySelect,detailsEmpty,detailsClear,rerender,reload,keyboard,companySwitch,companyRestore,periodSwitch,archiveSwitch,actorSwitch,actorRestore,authActorB,authActorA,conveyorAuthContext,conveyorAuthContextAfter,deniedStorage,roleDenied,pattaCards,beforePrint,printSelection,narrow,narrowVisible,screenshots};
             fsSync.writeFileSync(path.join(screenshots,'evidence.json'),JSON.stringify(evidence,null,2)); console.log('FILTERS_2D_PASS '+JSON.stringify(evidence)); return;
-          }
-          if (process.env.MODEL_SIZES_C_ONLY === '1') {
-            await require('./model-sizes-stage-c-runtime.cjs')({ window, db, manager, root, fixtureRoot, outDir, setDb: (nextDb) => { db = nextDb; } });
-            return;
           }
           if (process.env.FILTERS_2B_ONLY === '1') {
           const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -1238,7 +1238,7 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
            if (journalCleared.parties.length !== 2 || journalCleared.search !== '' || journalClosed.parties.length !== 1 || !journalClosed.parties[0].includes('Partiya 43'))
              throw Error('Journal clear/closed boundary mismatch: '+JSON.stringify({journalCleared,journalClosed,tabClosed}));
            const evidence = { selected, rerender, refreshed, empty, company:{selectedNine,switched,restored}, period:{periodSwitch,periodRestore}, keyboard,
-              journal:{journalFixture,journalInitial,journalMismatch,byTicket,journalRerender,journalCleared,journalClosed,screenshot:path.join(journalShotDir,'selected-ticket.png')}, screenshots:screenshotDir };
+               journal:{journalFixture,journalInitial,byTicket,journalRerender,journalCleared,journalClosed,screenshot:path.join(journalShotDir,'selected-ticket.png')}, screenshots:screenshotDir };
           fsSync.writeFileSync(path.join(screenshotDir,'evidence.json'),JSON.stringify(evidence,null,2));
           console.log('FILTERS_2A_PASS '+JSON.stringify(evidence));
           return;
@@ -2834,8 +2834,8 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
        if (conveyorCsvHeader.toLowerCase().includes('summa') || conveyorCsvHeader.toLowerCase().includes('ish haqi')) process.exitCode = 1;
       }
     } catch (error) { console.error(error); process.exitCode = 1; }
-     finally { if (db.open && db.inTransaction) db.exec('ROLLBACK'); manager.closeAllCompanyDatabases(); window.destroy(); app.quit(); }
-  }).catch(error => { console.error(error); app.quit(); process.exitCode = 1; });
+     finally { if (db.open && db.inTransaction) db.exec('ROLLBACK'); manager.closeAllCompanyDatabases(); window.destroy(); app.exit(process.exitCode || 0); }
+  }).catch(error => { console.error(error); app.exit(1); });
 } else {
   (async () => {
     const underLocalDbRoot = target => target === localDbRoot || target.startsWith(localDbRoot + path.sep);
@@ -2859,173 +2859,6 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
     if (process.env.FILTERS_2D_ONLY === '1') safeEnv.FILTERS_2D_ONLY = '1';
     if (process.env.FILTERS_2A_ONLY === '1') safeEnv.FILTERS_2A_ONLY = '1';
     if (process.env.FILTERS_2A_ACTOR_STORAGE_ONLY === '1') safeEnv.FILTERS_2A_ACTOR_STORAGE_ONLY = '1';
-          if (process.env.MODEL_SIZES_C_ONLY === '1' && process.env.PAYROLL_RENDER_CHILD === '1') {
-            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-            const waitFor = async (predicate, label, timeout = 20000) => {
-              const until = Date.now() + timeout;
-              while (Date.now() < until) { if (await predicate()) return; await wait(60); }
-              throw Error(`model sizes C timeout: ${label}`);
-            };
-            const setup = await window.webContents.executeJavaScript('window.renderModelSizesCApp()');
-            if (setup.modelIds.join(',') !== 'm,model-sizes-c-b' || setup.periodClosed || setup.archive)
-              throw Error('Stage C isolated fixture context/model setup mismatch ' + JSON.stringify(setup));
-            window.setSize(1440, 1100); window.show(); window.focus();
-            await waitFor(() => window.webContents.executeJavaScript(`document.querySelectorAll('.e2b-batch-card').length===2`), 'production App Patta cards');
-            await window.webContents.executeJavaScript(`window.__modelSizesCAuth.getState().setAuth({status:'active',role:'type',companyId:'hisob_test_browser',permissions:['view:umumiy','edit:hisob']})`);
-            await wait(100);
-            const typeDenied = await window.webContents.executeJavaScript(`document.querySelectorAll('.e2b-batch-card').length===0 && document.body.innerText.includes('faqat Admin')`);
-            await window.webContents.executeJavaScript(`window.__modelSizesCAuth.getState().setAuth({status:'active',role:'admin',companyId:'hisob_test_browser',permissions:['view:umumiy','view:patta','edit:hisob']})`); await wait(100);
-            if(!typeDenied) throw Error('Production App type role did not deny batch-card access');
-            const wrongCompany = await window.webContents.executeJavaScript(`window.electronAPI.WorkbookCommand({companyId:'model-sizes-c-other-company',commandType:'UpdateBatchSettings',operationId:'model-sizes-c-wrong-company',entityId:'model-sizes-c-other-company',payload:{availableSizes:[],configs:[]}})`);
-            if(wrongCompany.success!==false||wrongCompany.code!=='MODEL_SIZES_FIXTURE_SCOPE') throw Error('Stage C IPC fixture failed to reject wrong company command '+JSON.stringify(wrongCompany));
-            const initialBConfig = await window.webContents.executeJavaScript(`JSON.stringify(window.__modelSizesCStore.getState().pattaBatchConfigs['model-sizes-c-b'])`);
-            const shotDir = path.join(root,'.opencode/deep-audit/output/post-redesign-model-sizes-c-screenshots',path.basename(fixtureRoot));
-            fsSync.mkdirSync(shotDir,{recursive:true});
-            const card = id => `document.querySelector('.e2b-batch-card[data-model-id="${id}"]')`;
-            const setInput = async (selector, value) => window.webContents.executeJavaScript(`(()=>{const i=${selector};if(!i)throw Error('missing input '+${JSON.stringify(selector)});const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(i,${JSON.stringify(String(value))});i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:${JSON.stringify(String(value))}}));i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-            const clickInCard = async (id, text) => window.webContents.executeJavaScript(`(()=>{const c=${card(id)};const b=[...c.querySelectorAll('button')].find(x=>x.innerText.includes(${JSON.stringify(text)}));if(!b)throw Error('missing card button '+${JSON.stringify(text)});b.click()})()`);
-            const addName = async (id, name) => {
-              await clickInCard(id, "Razmer qo'shish"); await wait(40);
-              await setInput(`document.querySelector('.modal-card input[type=text]')`, name);
-              await window.webContents.executeJavaScript(`document.querySelector('.modal-card form button[type=submit]')?.click()`);
-              await wait(120);
-            };
-            const rowNames = id => window.webContents.executeJavaScript(`(()=>[...${card(id)}.querySelectorAll('.e2b-size-cell')].map(r=>r.querySelector('span')?.innerText.trim()).filter(Boolean))()`);
-            const setCount = async (id, size, value) => setInput(`(() => [...${card(id)}.querySelectorAll('.e2b-size-cell')].find(r=>r.querySelector('span')?.innerText.trim()==${JSON.stringify(size)})?.querySelector('input'))()`, value);
-            await addName('m','XXL');
-            if (!(await rowNames('m')).includes('XXL') || (await rowNames('model-sizes-c-b')).includes('XXL')) throw Error('Add XXL was not isolated to model A');
-            if (initialBConfig!==await window.webContents.executeJavaScript(`JSON.stringify(window.__modelSizesCStore.getState().pattaBatchConfigs['model-sizes-c-b'])`))
-              throw Error('Adding a custom row to A changed B config bytes');
-            await addName('m','M');
-            if ((await rowNames('m')).filter(x=>x==='M').length!==1) throw Error('Duplicate size name was accepted on model A');
-            await addName('m','TEMP');
-            await window.webContents.executeJavaScript(`(()=>{window.__oldPrompt=window.prompt;window.prompt=()=> 'TEMP2';${card('m')}.querySelector('[aria-label="TEMP razmerini nomlash"]').click();window.prompt=window.__oldPrompt})()`);
-            if (!(await rowNames('m')).includes('TEMP2') || (await rowNames('m')).includes('TEMP')) throw Error('Empty custom size rename failed');
-            await window.webContents.executeJavaScript(`(()=>${card('m')}.querySelector('[title="«TEMP2» razmerini o\'chirish"]').click())()`);
-            await waitFor(() => window.webContents.executeJavaScript(`Boolean(document.querySelector('.confirm-modal')||document.body.innerText.includes('TEMP2'))`), 'remove confirmation');
-            await window.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes("o'chirilsin"))?.click())()`); await wait(100);
-            if ((await rowNames('m')).includes('TEMP2')) throw Error('Empty custom size removal failed');
-            await setCount('m','XXL','2');
-            await window.webContents.executeJavaScript(`(()=>${card('m')}.querySelector('[title="«XXL» razmerini o\'chirish"]').click())()`);
-            await wait(40);
-            await window.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes("o'chirilsin"))?.click())()`); await wait(100);
-            const positiveRemove = await window.webContents.executeJavaScript(`({row:${card('m')}.innerText.includes('XXL'),count:[...${card('m')}.querySelectorAll('.e2b-size-cell')].find(r=>r.querySelector('span')?.innerText.trim()==='XXL')?.querySelector('input')?.value})`);
-            if (!positiveRemove.row || positiveRemove.count!=='2') throw Error('Positive count was silently dropped on removal '+JSON.stringify(positiveRemove));
-            await setCount('m','M','1'); await setCount('model-sizes-c-b','L','1');
-            await setInput(`document.querySelector(${card('m')}+' .e2b-batch-work input')`,'10');
-            await setInput(`document.querySelector(${card('model-sizes-c-b')}+' .e2b-batch-work input')`,'20');
-            const beforeToggle = await rowNames('m');
-            await window.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('[role=group][aria-label="Razmer turi"] button')].find(b=>b.innerText.includes('Raqamli'))?.click())()`); await wait(60);
-            const numericRows = await rowNames('m');
-            await window.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('[role=group][aria-label="Razmer turi"] button')].find(b=>b.innerText.includes('Harfli'))?.click())()`); await wait(60);
-            if (!numericRows.some(x=>/^\d/.test(x)) || !(await rowNames('m')).includes('XXL') || !beforeToggle.includes('M')) throw Error('Size system toggle failed to preserve owned names');
-            const keyboard = await window.webContents.executeJavaScript(`(()=>{const i=${card('m')}.querySelector('.e2b-batch-work input');i.focus();i.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));return document.activeElement===${card('m')}.querySelector('.e2b-batch-party input')})()`);
-            if (!keyboard) throw Error('Card keyboard Enter navigation failed');
-            const totals = await window.webContents.executeJavaScript(`(()=>({cards:[...document.querySelectorAll('.e2b-batch-card')].map(c=>({id:c.dataset.modelId,text:c.innerText})),print:[...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat ('))?.innerText}))()`);
-            if (!String(totals.print).includes('4 ta')) throw Error('Expected total 4 pattas, got '+JSON.stringify(totals));
-            const configBefore = await window.webContents.executeJavaScript(`JSON.stringify(window.__modelSizesCStore.getState().pattaBatchConfigs)`);
-            await waitFor(() => db.prepare('SELECT COUNT(*) AS n FROM patta_batch_settings WHERE company_id=?').get('hisob_test_browser').n > 0, 'canonical SQLite batch settings');
-            manager.closeAllCompanyDatabases(); db = manager.getCompanyDatabase(fixtureRoot, 'hisob_test_browser');
-            const settingsRow = db.prepare('SELECT * FROM patta_batch_settings WHERE company_id=?').get('hisob_test_browser');
-            const initialProjection = readWorkbookPayrollProjection(db,'hisob_test_browser');
-            const savedConfigs = initialProjection.pattaBatchConfigs || {};
-            if (!savedConfigs.m || !savedConfigs['model-sizes-c-b']) throw Error('Canonical projection missing one model configuration '+JSON.stringify({settingsRow,savedConfigs}));
-            if(savedConfigs.m.sizes.M!=='1'||savedConfigs.m.sizes.XXL!=='2'||!savedConfigs.m.sizeNames.includes('XXL')
-              ||savedConfigs['model-sizes-c-b'].sizes.L!=='1'||savedConfigs['model-sizes-c-b'].sizeNames.includes('XXL'))
-              throw Error('Fresh SQLite saved A/B configs/counts mismatch '+JSON.stringify(savedConfigs));
-            const rendererReopen = await window.webContents.executeJavaScript('window.reloadModelSizesC()');
-            if(rendererReopen.configs.m.sizes.M!=='1'||rendererReopen.configs.m.sizes.XXL!=='2'
-              ||rendererReopen.configs['model-sizes-c-b'].sizes.L!=='1'||rendererReopen.configs['model-sizes-c-b'].sizeNames.includes('XXL'))
-              throw Error('Renderer re-open projection lost or cross-contaminated A/B settings '+JSON.stringify(rendererReopen));
-            const storedA = JSON.stringify(savedConfigs.m), storedBNames = JSON.stringify(savedConfigs['model-sizes-c-b'].sizeNames);
-            fsSync.writeFileSync(path.join(shotDir,'before-print.png'),(await window.webContents.capturePage()).toPNG());
-            await window.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat (4 ta patta)'))?.click())()`);
-            await waitFor(() => window.webContents.executeJavaScript(`document.querySelector('.phase-c-print-preview')?.innerText.includes('4 ta patta')`), 'actual print preview');
-            const preview = await window.webContents.executeJavaScript(`(()=>({text:document.querySelector('.phase-c-print-preview')?.innerText, tickets:[...document.querySelectorAll('#printable-patta-area .print-ticket-box')].map(e=>e.innerText)}))()`);
-            if (preview.tickets.length!==4 || !preview.tickets.some(t=>t.includes('Demo')&&t.includes('M')&&t.includes('10'))
-              || preview.tickets.filter(t=>t.includes('XXL')).length!==2 || !preview.tickets.some(t=>t.includes('Jacket B')&&t.includes('L')&&t.includes('20')))
-              throw Error('Actual print modal ticket rows mismatch '+JSON.stringify(preview));
-            fsSync.writeFileSync(path.join(shotDir,'print-preview.png'),(await window.webContents.capturePage()).toPNG());
-            await window.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat qilish (4 ta patta)'))?.click())()`);
-            await waitFor(()=>fsSync.existsSync(path.join(outDir,'generated-patta-stage-c.html')),'generated Patta HTML');
-            const html=fsSync.readFileSync(path.join(outDir,'generated-patta-stage-c.html'),'utf8');
-            const htmlDoc = await window.webContents.executeJavaScript(`(()=>{const d=new DOMParser().parseFromString(${JSON.stringify(html)},'text/html');return [...d.querySelectorAll('.print-ticket-box')].map(e=>e.innerText)})()`);
-            if(htmlDoc.length!==4||htmlDoc.filter(t=>t.includes('XXL')).length!==2||!htmlDoc.some(t=>t.includes('Jacket B')&&t.includes('L')&&t.includes('20')))
-              throw Error('Generated print HTML ticket details mismatch '+JSON.stringify(htmlDoc));
-            await waitFor(()=>db.prepare('SELECT COUNT(*) AS n FROM parties WHERE company_id=?').get('hisob_test_browser').n===2,'canonical CompletePattaBatch parties');
-            const persistedParties = db.prepare('SELECT id,model_id,party_number,patta_count,patta_start_number,patta_end_number,sizes_json,size_order_json,total_ish_soni FROM parties WHERE company_id=? ORDER BY model_id').all('hisob_test_browser');
-            const resetProjection = readWorkbookPayrollProjection(db,'hisob_test_browser');
-            const resetConfigs = resetProjection.pattaBatchConfigs || {};
-            if(persistedParties.some(p=>!p.size_order_json)||JSON.parse(persistedParties.find(p=>p.model_id==='m').size_order_json).join(',')!=='M,XXL'
-              ||JSON.parse(persistedParties.find(p=>p.model_id==='model-sizes-c-b').size_order_json).join(',')!=='L'
-              ||resetConfigs.m.sizes.M!==''||resetConfigs.m.sizes.XXL!==''||resetConfigs.m.sizeNames.indexOf('XXL')<0
-              ||persistedParties.find(p=>p.model_id==='m').total_ish_soni!==30
-              ||persistedParties.find(p=>p.model_id==='model-sizes-c-b').total_ish_soni!==20
-              ||persistedParties.find(p=>p.model_id==='m').patta_start_number!==1
-              ||persistedParties.find(p=>p.model_id==='m').patta_end_number!==3
-              ||persistedParties.find(p=>p.model_id==='model-sizes-c-b').patta_start_number!==4
-              ||persistedParties.find(p=>p.model_id==='model-sizes-c-b').patta_end_number!==4)
-              throw Error('Canonical print party order/count reset/definition mismatch '+JSON.stringify({persistedParties,resetConfigs}));
-            if(storedBNames!==JSON.stringify(resetConfigs['model-sizes-c-b'].sizeNames)
-              ||resetConfigs['model-sizes-c-b'].sizes.L!=='') throw Error('Printing/reset changed model B definition or failed to reset its count');
-            const oldParty = JSON.stringify(persistedParties.find(p=>p.model_id==='m'));
-            await window.webContents.executeJavaScript(`window.__modelSizesCStore.getState().updatePattaBatchConfig('m',{sizeNames:['S','M','L','XL','XXL','LATER']})`);
-            await waitFor(()=>db.prepare('SELECT COUNT(*) AS n FROM patta_batch_settings WHERE company_id=?').get('hisob_test_browser').n>0,'later A edit persisted');
-            if(oldParty!==JSON.stringify(db.prepare('SELECT id,model_id,party_number,patta_count,patta_start_number,patta_end_number,sizes_json,size_order_json,total_ish_soni FROM parties WHERE company_id=? AND model_id=\'m\'').get('hisob_test_browser')))
-              throw Error('Later A size edit mutated immutable printed party/ticket slots');
-            const evidence={fixtureRoot,outDir,setup,initialBConfig,rendererReopen,settingsRow,configBefore,savedConfigs,storedA,storedBNames,totals,keyboard,numericRows,preview,htmlDoc,persistedParties,resetConfigs,oldParty,screenshots:shotDir,htmlPath:path.join(outDir,'generated-patta-stage-c.html')};
-            fsSync.writeFileSync(path.join(shotDir,'evidence.json'),JSON.stringify(evidence,null,2));
-            console.log('MODEL_SIZES_C_PARTIAL_PASS '+JSON.stringify(evidence)); return;
-          }
-           if (process.env.MODEL_SIZES_C_ONLY === '1' && process.env.PAYROLL_RENDER_CHILD === '1') {
-            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-            const waitFor = async (predicate, label) => { const end=Date.now()+25000; while(Date.now()<end){if(await predicate())return;await wait(60)} throw Error('model sizes C timeout: '+label); };
-            const setup=await window.webContents.executeJavaScript('window.renderModelSizesCApp()');
-            if(setup.modelIds.join(',')!=='m,model-sizes-c-b'||setup.periodClosed||setup.archive) throw Error('fresh current-period fixture guard/context '+JSON.stringify(setup));
-            window.setSize(1440,1100);window.show();window.focus();
-            await waitFor(()=>window.webContents.executeJavaScript(`document.querySelectorAll('.e2b-batch-card').length===2`),'App Patta cards');
-            const shots=path.join(root,'.opencode/deep-audit/output/post-redesign-model-sizes-c-screenshots',path.basename(fixtureRoot));fsSync.mkdirSync(shots,{recursive:true});
-            const card=id=>`document.querySelector('.e2b-batch-card[data-model-id="${id}"]')`;
-            const ev=js=>window.webContents.executeJavaScript(js);
-            const setInput=(selector,value)=>ev(`(()=>{const i=${selector};if(!i)throw Error('Missing input '+${JSON.stringify(selector)});const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;s.call(i,${JSON.stringify(String(value))});i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:${JSON.stringify(String(value))}}));i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
-            const names=id=>ev(`(()=>[...${card(id)}.querySelectorAll('.e2b-size-cell span')].map(e=>e.innerText.trim()))()`);
-            const add=async(id,name)=>{await ev(`(()=>[...${card(id)}.querySelectorAll('button')].find(b=>b.innerText.includes("Razmer qo'shish"))?.click())()`);await wait(30);await setInput(`document.querySelector('.modal-card input[type=text]')`,name);await ev(`document.querySelector('.modal-card form button[type=submit]')?.click()`);await wait(100)};
-            const qty=async(id,size,n)=>setInput(`(()=>[...${card(id)}.querySelectorAll('.e2b-size-cell')].find(r=>r.querySelector('span')?.innerText.trim()==${JSON.stringify(size)})?.querySelector('input'))()`,n);
-            const initialB=JSON.stringify(await ev(`window.__modelSizesCStore.getState().pattaBatchConfigs['model-sizes-c-b']`));
-            await add('m','XXL');if(!(await names('m')).includes('XXL')||(await names('model-sizes-c-b')).includes('XXL'))throw Error('XXL add cross-model isolation failure');
-            if(initialB!==JSON.stringify(await ev(`window.__modelSizesCStore.getState().pattaBatchConfigs['model-sizes-c-b']`)))throw Error('A add changed B config');
-            await add('m','M');if((await names('m')).filter(n=>n==='M').length!==1)throw Error('duplicate M accepted');
-            await add('m','TEMP');await ev(`(()=>{window.__oldPrompt=window.prompt;window.prompt=()=> 'TEMP2';${card('m')}.querySelector('[aria-label="TEMP razmerini nomlash"]').click();window.prompt=window.__oldPrompt})()`);
-            if(!(await names('m')).includes('TEMP2'))throw Error('empty row rename failed');
-            await ev(`(()=>${card('m')}.querySelector('[title^="«TEMP2»"]').click())()`);await wait(40);await ev(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes("o'chirilsin"))?.click())()`);await wait(100);
-            if((await names('m')).includes('TEMP2'))throw Error('empty row removal failed');
-            await qty('m','XXL','2');await ev(`(()=>${card('m')}.querySelector('[title^="«XXL»"]').click())()`);await wait(40);await ev(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes("o'chirilsin"))?.click())()`);await wait(80);
-            const positive=await ev(`(()=>[...${card('m')}.querySelectorAll('.e2b-size-cell')].find(r=>r.querySelector('span')?.innerText.trim()==='XXL')?.querySelector('input')?.value)()`);if(positive!=='2')throw Error('positive count removed '+positive);
-            await qty('m','M','1');await qty('model-sizes-c-b','L','1');await setInput(`document.querySelector(${card('m')}+' .e2b-batch-work input')`,'10');await setInput(`document.querySelector(${card('model-sizes-c-b')}+' .e2b-batch-work input')`,'20');
-            const keyboard=await ev(`(()=>{const i=${card('m')}.querySelector('.e2b-batch-work input');i.focus();i.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));return document.activeElement===${card('m')}.querySelector('.e2b-batch-party input')})()`);if(!keyboard)throw Error('Patta keyboard navigation failure');
-            await ev(`(()=>[...document.querySelectorAll('[role=group][aria-label="Razmer turi"] button')].find(b=>b.innerText.includes('Raqamli'))?.click())()`);await wait(50);const numeric=await names('m');await ev(`(()=>[...document.querySelectorAll('[role=group][aria-label="Razmer turi"] button')].find(b=>b.innerText.includes('Harfli'))?.click())()`);await wait(50);if(!numeric.some(n=>/^\d/.test(n))||!(await names('m')).includes('XXL'))throw Error('letter/numeric toggle failed');
-            const total=await ev(`([...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat ('))||{}).innerText`);if(!total.includes('4 ta'))throw Error('wrong per-card total '+total);
-            await waitFor(()=>db.prepare('SELECT COUNT(*) n FROM patta_batch_settings WHERE company_id=?').get('hisob_test_browser').n===2,'settings canonical write');
-            manager.closeAllCompanyDatabases();db=manager.getCompanyDatabase(fixtureRoot,'hisob_test_browser');const projection=readWorkbookPayrollProjection(db,'hisob_test_browser'),cfg=projection.pattaBatchConfigs;
-            if(cfg.m.sizes.M!=='1'||cfg.m.sizes.XXL!=='2'||cfg['model-sizes-c-b'].sizes.L!=='1'||cfg['model-sizes-c-b'].sizeNames?.includes('XXL'))throw Error('SQLite save/reopen A/B values mismatch '+JSON.stringify(cfg));
-            const reload=await ev('window.reloadModelSizesC()');if(reload.configs.m.sizes.XXL!=='2'||reload.configs['model-sizes-c-b'].sizes.L!=='1')throw Error('renderer projection reopen mismatch');
-            fsSync.writeFileSync(path.join(shots,'before-print.png'),(await window.webContents.capturePage()).toPNG());
-            await ev(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat (4 ta patta)'))?.click())()`);await waitFor(()=>ev(`Boolean(document.querySelector('#printable-patta-area .print-ticket-box'))`),'Patta print preview');
-            const preview=await ev(`(()=>[...document.querySelectorAll('#printable-patta-area .print-ticket-box')].map(e=>e.innerText))()`);if(preview.length!==4||preview.filter(t=>t.includes('XXL')).length!==2||!preview.some(t=>t.includes('Jacket B')&&t.includes('L')&&t.includes('20')))throw Error('preview ticket mapping mismatch '+JSON.stringify(preview));
-            fsSync.writeFileSync(path.join(shots,'print-preview.png'),(await window.webContents.capturePage()).toPNG());
-            await ev(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat qilish (4 ta patta)'))?.click())()`);await waitFor(()=>fsSync.existsSync(path.join(outDir,'generated-patta-stage-c.html')),'print HTML output');
-            const html=fsSync.readFileSync(path.join(outDir,'generated-patta-stage-c.html'),'utf8');const htmlTickets=await ev(`(()=>{const d=new DOMParser().parseFromString(${JSON.stringify(html)},'text/html');return [...d.querySelectorAll('.print-ticket-box')].map(x=>x.innerText)})()`);
-            if(htmlTickets.length!==4||htmlTickets.filter(t=>t.includes('XXL')).length!==2||!htmlTickets.some(t=>t.includes('Jacket B')&&t.includes('L')&&t.includes('20')))throw Error('generated HTML ticket mismatch '+JSON.stringify(htmlTickets));
-            await waitFor(()=>db.prepare('SELECT COUNT(*) n FROM parties WHERE company_id=?').get('hisob_test_browser').n===2,'CompletePattaBatch party writes');
-            const parties=db.prepare('SELECT id,model_id,party_number,patta_count,patta_start_number,patta_end_number,sizes_json,size_order_json,total_ish_soni FROM parties WHERE company_id=? ORDER BY model_id').all('hisob_test_browser');
-            const reset=readWorkbookPayrollProjection(db,'hisob_test_browser').pattaBatchConfigs;
-            if(JSON.parse(parties[0].size_order_json).join(',')!=='M,XXL'||JSON.parse(parties[1].size_order_json).join(',')!=='L'||parties[0].patta_start_number!==1||parties[0].patta_end_number!==3||parties[1].patta_start_number!==4||parties[1].patta_end_number!==4||parties[0].total_ish_soni!==30||parties[1].total_ish_soni!==20||reset.m.sizes.XXL!==''||!reset.m.sizeNames.includes('XXL'))throw Error('canonical party order/range/work/reset mismatch '+JSON.stringify({parties,reset}));
-            const oldParty=JSON.stringify(parties[0]);await ev(`window.__modelSizesCStore.getState().updatePattaBatchConfig('m',{sizeNames:[...window.__modelSizesCStore.getState().pattaBatchConfigs.m.sizeNames,'LATER']})`);await wait(1300);
-            if(oldParty!==JSON.stringify(db.prepare("SELECT id,model_id,party_number,patta_count,patta_start_number,patta_end_number,sizes_json,size_order_json,total_ish_soni FROM parties WHERE company_id=? AND model_id='m'").get('hisob_test_browser')))throw Error('later A edit mutated printed party size order/identity');
-            const outbox=db.prepare("SELECT command_type,status FROM local_outbox WHERE company_id=? AND command_type IN ('UpdateBatchSettings','CompletePattaBatch')").all('hisob_test_browser');
-            if(!outbox.some(r=>r.command_type==='UpdateBatchSettings')||!outbox.some(r=>r.command_type==='CompletePattaBatch'))throw Error('canonical outbox records missing '+JSON.stringify(outbox));
-            const evidence={fixtureRoot,outDir,setup,initialB,keyboard,numeric,total,reload,preview,htmlTickets,parties,reset,outbox,screenshots:shots,htmlPath:path.join(outDir,'generated-patta-stage-c.html')};fsSync.writeFileSync(path.join(shots,'evidence.json'),JSON.stringify(evidence,null,2));console.log('MODEL_SIZES_C_PASS '+JSON.stringify(evidence));return;
-          }
           if (process.env.FILTERS_2B_ONLY === '1') {
       safeEnv.FILTERS_2B_ONLY = '1';
       safeEnv.FILTERS_2B_FIXTURE_ROOT = fixtureRoot;
@@ -3038,6 +2871,9 @@ if (process.env.PAYROLL_RENDER_CHILD === '1') {
         env: safeEnv, encoding: 'utf8', timeout: process.env.VISUAL_REFERENCE_FIX_ONLY === '1' ? 360000 : process.env.VISUAL_EXISTING_ONLY === '1' ? 300000 : process.env.MODEL_SIZES_C_ONLY === '1' || process.env.REDESIGN_E3_ONLY === '1' || process.env.MONEY_1C_ONLY === '1' || process.env.FILTERS_2A_ONLY === '1' || process.env.FILTERS_2A_ACTOR_STORAGE_ONLY === '1' || process.env.FILTERS_2B_ONLY === '1' || process.env.FILTERS_2C_ONLY === '1' || process.env.FILTERS_2D_ONLY === '1' || process.env.FILTERS_2G_ONLY === '1' || process.env.PATTA_JUMP_ONLY === '1' ? 240000 : 90000 });
     process.stdout.write(result.stdout || ''); process.stderr.write(result.stderr || '');
     if (result.error) throw result.error;
+    if (process.env.MODEL_SIZES_C_ONLY === '1' && !String(result.stdout).includes('MODEL_SIZES_C_PASS ')) {
+      throw new Error('MODEL_SIZES_C acceptance did not complete; an Electron exit code alone is not proof');
+    }
     if (result.status !== 0) process.exitCode = 1;
   })().catch(error => { console.error(error); process.exitCode = 1; });
 }

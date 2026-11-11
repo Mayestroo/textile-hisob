@@ -155,6 +155,37 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
     expect(projAfter.accounting['m_test']?.[1]?.['Bichish']).toBe(50);
   });
 
+  it.each([false, true])('edits work created on this desktop with exact entry identity (legacy local ID: %s)', async (legacy) => {
+    const db = seedCompany(COMPANY_A);
+    await seedServerParty('1');
+    db.prepare(`INSERT INTO workers(id, company_id, name, created_at, updated_at)
+      VALUES (2, ?, 'Replacement', datetime('now'), datetime('now'))`).run(COMPANY_A);
+    await serverPool.query(`INSERT INTO workers(id, company_id, name) VALUES (2, $1, 'Replacement')`, [COMPANY_A]);
+    const ticketId = '00000000-0000-4000-8000-000000000299';
+    executeSubmitTicketCommand(testUserDataDir, COMPANY_A, {
+      commandId: 'own-submit', operationId: 'own-submit', companyId: COMPANY_A, ticketId,
+      modelId: 'm_test', partyNumber: '1', partyRecordId: 'party-sync-1', effectiveDate: '2026-09-01',
+      pattaNumber: 1, qty: 2, entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: 5 }]
+    });
+    if (legacy) db.prepare('UPDATE ticket_entries SET id = ? WHERE ticket_id = ?')
+      .run(`entry_${ticketId}_0_Bichish_1`, ticketId);
+    const client = new SyncClient({ baseUrl, token: TOKEN_A });
+    await executeReconnectProtocol(db, COMPANY_A, client, { baseUserDataPath: testUserDataDir });
+    const local = db.prepare('SELECT id FROM ticket_entries WHERE ticket_id = ?').get(ticketId);
+    if (!legacy) expect(local.id).toBe(`${ticketId}_entry_1`);
+    executeWorkbookCommand(testUserDataDir, COMPANY_A, {
+      commandType: 'UpdateTicket', commandId: 'own-edit', operationId: 'own-edit', companyId: COMPANY_A,
+      entityId: ticketId, baseRevision: 1, payload: { ticketId,
+        entries: [{ entryId: local.id, opName: 'Bichish', workerId: 2 }] }
+    });
+    const result = await executeReconnectProtocol(db, COMPANY_A, client, { baseUserDataPath: testUserDataDir });
+    expect(result.pushed).toMatchObject({ synced: 1, deadLetter: 0, conflict: 0 });
+    expect((await serverPool.query('SELECT id, worker_id, rate_snapshot FROM ticket_entries WHERE ticket_id = $1', [ticketId])).rows)
+      .toEqual([{ id: `${ticketId}_entry_1`, worker_id: 2, rate_snapshot: '5' }]);
+    expect(db.prepare('SELECT id, worker_id, rate_snapshot FROM ticket_entries WHERE ticket_id = ?').get(ticketId))
+      .toEqual({ id: `${ticketId}_entry_1`, worker_id: 2, rate_snapshot: 5 });
+  });
+
   it('offline command survives SQLite restart, reconnects through the server handler, and reconciles expected payroll once', async () => {
     const db = seedCompany(COMPANY_A);
     db.prepare('UPDATE models SET operations_json = ? WHERE company_id = ? AND id = ?')

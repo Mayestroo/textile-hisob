@@ -288,7 +288,7 @@ async function getWorkerTickets(pool, input, limit = 8) {
   try {
     const worker = await resolveBoundWorker(client, params);
     const periodResult = await client.query(
-      `SELECT start_date, end_date FROM periods
+      `SELECT start_date::text AS start_date, end_date::text AS end_date FROM periods
        WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC LIMIT 1`,
       [params.companyId]
     );
@@ -320,7 +320,6 @@ module.exports = {
   getWorkerBindingByWorker,
   getWorkerForEnrollment,
   claimWorkerBinding,
-  unbindWorkerTelegramBinding,
   unbindWorkerTelegramBinding,
   verifyWorkerPin,
   hashWorkerPin,

@@ -1,13 +1,16 @@
 'use strict';
 
 const Database = require('better-sqlite3');
+const fs = require('node:fs');
+const path = require('node:path');
 const { sanitizeCompanyDbPath, isSafeCompanyId } = require('./companyPath.cjs');
 const { applyMigrations, verifySchemaVersionConsistency } = require('./migrationRunner.cjs');
 
 /**
  * Map of managed company SQLite database connections.
- * Key: sanitized companyId, Value: Database instance.
- * @type {Map<string, Database>}
+ * Key: canonical file path, Value: owning company and connection.
+ * A company can exist in both an active and an isolated restore/upgrade profile.
+ * @type {Map<string, { companyId: string, db: Database }>}
  */
 const activeCompanyConnections = new Map();
 
@@ -108,17 +111,19 @@ function getCompanyDatabase(baseUserDataPath, companyId, options = {}) {
     throw new Error(`Invalid or unsafe company ID: "${companyId}"`);
   }
 
-  // Return existing managed connection if already open
-  if (activeCompanyConnections.has(companyId)) {
-    const existingDb = activeCompanyConnections.get(companyId);
+  const dbPath = sanitizeCompanyDbPath(baseUserDataPath, companyId);
+  const canonicalPath = path.join(fs.realpathSync(path.dirname(dbPath)), path.basename(dbPath));
+  const connectionKey = process.platform === 'win32' ? canonicalPath.toLowerCase() : canonicalPath;
+  // Reuse only this exact file, never another profile containing the same tenant.
+  if (activeCompanyConnections.has(connectionKey)) {
+    const existingDb = activeCompanyConnections.get(connectionKey).db;
     if (existingDb.open) {
       runDatabaseIntegrityChecks(existingDb);
       return existingDb;
     }
-    activeCompanyConnections.delete(companyId);
+    activeCompanyConnections.delete(connectionKey);
   }
 
-  const dbPath = sanitizeCompanyDbPath(baseUserDataPath, companyId);
   const db = new Database(dbPath);
 
   try {
@@ -135,7 +140,7 @@ function getCompanyDatabase(baseUserDataPath, companyId, options = {}) {
     // independent SQLite health checks have completed successfully.
     runDatabaseIntegrityChecks(db);
 
-    activeCompanyConnections.set(companyId, db);
+    activeCompanyConnections.set(connectionKey, { companyId, db });
     return db;
   } catch (err) {
     if (db.open) {
@@ -152,22 +157,24 @@ function getCompanyDatabase(baseUserDataPath, companyId, options = {}) {
  * @returns {boolean} True if a connection was closed
  */
 function closeCompanyDatabase(companyId) {
-  if (activeCompanyConnections.has(companyId)) {
-    const db = activeCompanyConnections.get(companyId);
-    activeCompanyConnections.delete(companyId);
+  let closed = false;
+  for (const [key, entry] of activeCompanyConnections) {
+    if (entry.companyId !== companyId) continue;
+    const { db } = entry;
+    activeCompanyConnections.delete(key);
     if (db.open) {
       db.close();
-      return true;
+      closed = true;
     }
   }
-  return false;
+  return closed;
 }
 
 /**
  * Closes all active company database connections.
  */
 function closeAllCompanyDatabases() {
-  for (const [companyId, db] of activeCompanyConnections.entries()) {
+  for (const { companyId, db } of activeCompanyConnections.values()) {
     try {
       if (db.open) {
         db.close();

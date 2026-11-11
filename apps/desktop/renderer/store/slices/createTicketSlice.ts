@@ -102,7 +102,7 @@ function scheduleTicketFormPersistence(
       if (get().licenseStatus !== initialLicenseStatus) return;
       get().addNotification('error', 'TICKET_DRAFT_SAVE_FAILED', error instanceof Error ? error.message : 'Ticket draft could not be saved.');
     });
-  }, 1200, 'ticket_form', () => get().licenseStatus === initialLicenseStatus);
+  }, 1200, `ticket_form:${companyId}:${modelId}`, () => get().licenseStatus === initialLicenseStatus);
 }
 
 export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice> = (set, get) => {
@@ -370,7 +370,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
           return false;
       };
 
-      if (runtime.mode === 'sync') cancelDebouncedSave('ticket_form');
+      if (runtime.mode === 'sync') cancelDebouncedSave(`ticket_form:${companyId}:${model.id}`);
 
       if (!isCurrentSession()) return rejectStaleSession();
 

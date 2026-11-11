@@ -1,4 +1,5 @@
 'use strict';
+const { ticketEntryId, legacyLocalTicketEntryId } = require('../../../../../packages/contracts/ticketEntryIdentity.cjs');
 
 const { reducePayroll } = require('../../../../../packages/domain/payrollReducer.cjs');
 const { canonicalStringify, computePayloadHash } = require('../core/canonicalPayload.cjs');
@@ -37,7 +38,10 @@ function ticketAcceptanceEvidence(db, companyId, ticketId) {
   const matched = new Set();
   for (const [index, entry] of payload.entries.entries()) {
     let id = op.command_type === 'SubmitTicket'
-      ? `entry_${ticketId}_${index}_${entry.opName}_${entry.workerId}` : entry.entryId;
+      ? ticketEntryId(ticketId, index) : entry.entryId;
+    if (op.command_type === 'SubmitTicket' && !actual.has(id)) {
+      id = legacyLocalTicketEntryId(ticketId, index, entry.opName, entry.workerId);
+    }
     if (!id && op.command_type === 'UpdateTicket') {
       const existing = entries.filter(row => row.op_name === entry.opName && !matched.has(row.id));
       if (existing.length === 1) id = existing[0].id;

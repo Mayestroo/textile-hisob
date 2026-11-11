@@ -21,7 +21,8 @@
     "dist:rc": "node scripts/build/build-rc.cjs",
     "verify:protected-integrity": "node scripts/verify/security/verify-protected-file-integrity.cjs",
     "verify:secrets": "node scripts/verify/security/secret-scan.cjs",
-    "verify": "npm run verify:protected-integrity && npm run test:non-pg && npx tsc --noEmit && npm run build"
+    "lint": "eslint .",
+    "verify": "npm run verify:protected-integrity && npm run lint && npm run test:non-pg && npx tsc --noEmit && npm run build"
   },
   "build": {
     "appId": "com.novda.hisob",
@@ -33,7 +34,7 @@
         "repo": "hisob-releases"
       }
     ],
-    "electronVersion": "44.0.0",
+    "electronVersion": "44.10.2",
     "compression": "normal",
     "asar": true,
     "directories": {
@@ -57,7 +58,9 @@
         "from": "node_modules/better-sqlite3",
         "to": "node_modules/better-sqlite3",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/*.md",
+          "!**/tests/**"
         ]
       }
     ],
@@ -96,14 +99,17 @@
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
-    "electron": "44.0.0",
+    "electron": "44.10.2",
     "electron-builder": "^26.15.3",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "lucide-react": "^1.42.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

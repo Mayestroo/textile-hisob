@@ -182,6 +182,14 @@ describe('PostgreSQL release-integrity evidence', () => {
     expect(report.baseline.scopePreserved).toBe(true);
   });
 
+  it('rejects a valid but outdated production schema before serving incompatible bootstrap queries', async () => {
+    const client = createEvidenceClient({ migrations: exactMigrations.slice(0, 22) });
+    await expect(verifyPostgresReleaseState(client)).rejects.toMatchObject({
+      code: 'POSTGRES_RELEASE_INTEGRITY_FAILED',
+      details: { problems: expect.arrayContaining([expect.stringContaining('complete migration lineage')]) }
+    });
+  });
+
   it('fails closed on migration gaps, unvalidated relationships, orphans, business-key constraints, and scope drift', async () => {
     const client = createEvidenceClient({
       migrations: exactMigrations.filter((row) => row.version !== 4),

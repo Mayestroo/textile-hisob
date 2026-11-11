@@ -1,4 +1,4 @@
-"""Test-only admin process_update and local internal HTTP server. Never starts polling."""
+"""Subprocess acceptance driver (not a pytest module). Never starts polling."""
 import hashlib
 import hmac
 import importlib.util

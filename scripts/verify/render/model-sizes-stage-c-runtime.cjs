@@ -5,7 +5,10 @@ const path = require('node:path');
 
 module.exports = async function runModelSizesStageC({ window, db, manager, root, fixtureRoot, outDir, setDb }) {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const evalUi = (source) => window.webContents.executeJavaScript(source);
+  const evalUi = async (source) => {
+    try { return await window.webContents.executeJavaScript(source); }
+    catch (error) { throw new Error(`MODEL_SIZES_C renderer expression failed: ${source.slice(0, 400)}`, { cause: error }); }
+  };
   const waitFor = async (predicate, label, timeout = 25000) => {
     const until = Date.now() + timeout;
     while (Date.now() < until) { if (await predicate()) return; await wait(60); }
@@ -15,10 +18,10 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   if (setup.modelIds.join(',') !== 'm,model-sizes-c-b' || setup.periodClosed || setup.archive)
     throw Error(`Fresh fixture context mismatch: ${JSON.stringify(setup)}`);
   window.setSize(1440, 1100); window.show(); window.focus();
-  await waitFor(() => evalUi(`document.querySelectorAll('.e2b-batch-card').length === 2`), 'production Patta cards');
+  await waitFor(() => evalUi(`document.querySelectorAll('.patta-card').length === 2`), 'production Patta cards');
   await evalUi(`window.__modelSizesCAuth.getState().setAuth({status:'active',role:'type',companyId:'hisob_test_browser',permissions:['view:umumiy','edit:hisob']})`);
   await wait(100);
-  const typeDenied = await evalUi(`document.querySelectorAll('.e2b-batch-card').length===0 && document.body.innerText.includes('faqat Admin')`);
+  const typeDenied = await evalUi(`document.querySelectorAll('.patta-card').length===0 && document.body.innerText.includes('faqat Admin')`);
   await evalUi(`window.__modelSizesCAuth.getState().setAuth({status:'active',role:'admin',companyId:'hisob_test_browser',permissions:['view:umumiy','view:patta','edit:hisob']})`);
   await wait(100);
   if (!typeDenied) throw Error('Production App type role did not deny Patta batch access');
@@ -26,17 +29,17 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   if (wrongCompany.success !== false || wrongCompany.code !== 'MODEL_SIZES_FIXTURE_SCOPE') throw Error(`Wrong-company command was not denied: ${JSON.stringify(wrongCompany)}`);
   const screenshots = path.join(root, '.opencode/deep-audit/output/post-redesign-model-sizes-c-screenshots', path.basename(fixtureRoot));
   fs.mkdirSync(screenshots, { recursive: true });
-  const card = (id) => `document.querySelector('.e2b-batch-card[data-model-id="${id}"]')`;
-  const names = (id) => evalUi(`(()=>[...${card(id)}.querySelectorAll('.e2b-size-cell span')].map(x=>x.innerText.trim()))()`);
+  const card = (id) => `document.querySelector('.patta-card[data-model-id="${id}"]')`;
+  const names = (id) => evalUi(`(()=>[...${card(id)}.querySelectorAll('.patta-size-label')].map(x=>x.innerText.trim()))()`);
   const setInput = (selector, value) => evalUi(`(()=>{const i=${selector};if(!i)throw Error('missing input');const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;s.call(i,${JSON.stringify(String(value))});i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:${JSON.stringify(String(value))}}));i.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   const add = async (id, value) => {
-    await evalUi(`(()=>[...${card(id)}.querySelectorAll('button')].find(b=>b.innerText.includes("Razmer qo'shish"))?.click())()`);
+    await evalUi(`(()=>${card(id)}.querySelector('.patta-card-add-size-btn').click())()`);
     await wait(40);
     await setInput(`document.querySelector('.modal-card input[type=text]')`, value);
     await evalUi(`document.querySelector('.modal-card form button[type=submit]')?.click()`);
     await wait(100);
   };
-  const count = (id, size, value) => setInput(`(()=>[...${card(id)}.querySelectorAll('.e2b-size-cell')].find(r=>r.querySelector('span')?.innerText.trim()===${JSON.stringify(size)})?.querySelector('input'))()`, value);
+  const count = (id, size, value) => setInput(`(()=>[...${card(id)}.querySelectorAll('.patta-size-box')].find(r=>r.querySelector('.patta-size-label')?.innerText.trim()===${JSON.stringify(size)})?.querySelector('input'))()`, value);
   await count('model-sizes-c-b', 'L', 1);
   const initialB = JSON.stringify(await evalUi(`window.__modelSizesCStore.getState().pattaBatchConfigs['model-sizes-c-b']`));
 
@@ -53,7 +56,7 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   await wait(100);
   if (!(await names('m')).includes('TEMP2')) throw Error('Renaming empty custom row failed');
   const remove = async (id, name) => {
-    await evalUi(`(()=>{const b=[...${card(id)}.querySelectorAll('button')].find(x=>x.title.includes(${JSON.stringify(name)})&&x.title.includes("o'chirish"));if(!b)throw Error('missing delete button '+${JSON.stringify(name)}+'; titles='+JSON.stringify([...${card(id)}.querySelectorAll('button')].map(x=>x.title)));b.click()})()`);
+    await evalUi(`(()=>{const row=[...${card(id)}.querySelectorAll('.patta-size-box')].find(row=>row.querySelector('.patta-size-label').textContent.trim()===${JSON.stringify(name)});const b=[...(row?.querySelectorAll('button')||[])].find(button=>button.title.toLowerCase().includes('chirish'));if(!b)throw Error('missing delete button '+${JSON.stringify(name)});b.click()})()`);
     await wait(50);
     await evalUi(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes("o'chirilsin"))?.click())()`);
     await wait(100);
@@ -61,21 +64,25 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   await remove('m', 'TEMP2');
   if ((await names('m')).includes('TEMP2')) throw Error('Removing empty custom row failed');
   await add('m', 'GUARD'); await count('m', 'GUARD', 2); await remove('m', 'GUARD');
-  const positiveCount = await evalUi(`(()=>[...${card('m')}.querySelectorAll('.e2b-size-cell')].find(r=>r.querySelector('span')?.innerText.trim()==='GUARD')?.querySelector('input')?.value)()`);
+  const positiveCount = await evalUi(`(()=>[...${card('m')}.querySelectorAll('.patta-size-box')].find(r=>r.querySelector('.patta-size-label')?.innerText.trim()==='GUARD')?.querySelector('input')?.value)()`);
   if (positiveCount !== '2') throw Error(`Positive count was dropped on remove: ${positiveCount}`);
   await count('m', 'GUARD', 0); await remove('m', 'GUARD');
 
   await count('m', 'M', 1); await count('m', 'XXL', 2);
   if (initialB !== JSON.stringify(await evalUi(`window.__modelSizesCStore.getState().pattaBatchConfigs['model-sizes-c-b']`))) throw Error('A quantity/rename/remove changed B names/count bytes');
-  await setInput(`(${card('m')}).querySelector('.e2b-batch-work input')`, 10);
-  await setInput(`(${card('model-sizes-c-b')}).querySelector('.e2b-batch-work input')`, 20);
-  const keyboard = await evalUi(`(()=>{const i=${card('m')}.querySelector('.e2b-batch-work input');i.focus();i.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));return document.activeElement===${card('m')}.querySelector('.e2b-batch-party input')})()`);
+  await setInput(`(${card('m')}).querySelector('.patta-field-input-full')`, 10);
+  await setInput(`(${card('model-sizes-c-b')}).querySelector('.patta-field-input-full')`, 20);
+  const keyboard = await evalUi(`(()=>{const i=${card('m')}.querySelector('.patta-field-input-full');i.focus();i.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));return document.activeElement===${card('m')}.querySelector('.patta-size-input')})()`);
   if (!keyboard) throw Error('Per-card Enter navigation failed');
+  const configuredNames = await names('m');
   await evalUi(`(()=>[...document.querySelectorAll('[role=group][aria-label="Razmer turi"] button')].find(b=>b.innerText.includes('Raqamli'))?.click())()`); await wait(50);
   const numericNames = await names('m');
   await evalUi(`(()=>[...document.querySelectorAll('[role=group][aria-label="Razmer turi"] button')].find(b=>b.innerText.includes('Harfli'))?.click())()`); await wait(50);
-  if (!numericNames.some((name) => /^\d/.test(name)) || !(await names('m')).includes('XXL')) throw Error('Numeric/letter mode toggle lost rows');
-  const printTotal = await evalUi(`([...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat ('))||{}).innerText`);
+  // Model-owned sizeNames take precedence over the toolbar's fallback scale.
+  // Switching fallback must not overwrite explicitly configured definitions.
+  if (JSON.stringify(numericNames) !== JSON.stringify(configuredNames)
+    || JSON.stringify(await names('m')) !== JSON.stringify(configuredNames)) throw Error('Fallback scale toggle rewrote model-owned sizes');
+  const printTotal = await evalUi(`document.querySelector('.patta-batch-btn-primary').innerText`);
   if (!printTotal.includes('4 ta')) throw Error(`Expected four pattas, saw ${printTotal}`);
   await waitFor(() => db.prepare('SELECT COUNT(*) n FROM patta_batch_settings WHERE company_id=?').get('hisob_test_browser').n === 2, 'canonical settings write');
   manager.closeAllCompanyDatabases(); db = manager.getCompanyDatabase(fixtureRoot, 'hisob_test_browser'); setDb(db);
@@ -94,7 +101,7 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   await wait(250);
   fs.writeFileSync(path.join(screenshots, 'before-print.png'), (await window.webContents.capturePage()).toPNG());
 
-  await evalUi(`(()=>[...document.querySelectorAll('button')].find(b=>b.innerText.includes('Pechat (4 ta patta)'))?.click())()`);
+  await evalUi(`document.querySelector('.patta-batch-btn-primary').click()`);
   await waitFor(() => evalUi(`Boolean(document.querySelector('#printable-patta-area .print-ticket-box'))`), 'production print modal');
   const preview = await evalUi(`(()=>[...document.querySelectorAll('#printable-patta-area .print-ticket-box')].map(e=>e.innerText))()`);
   const ticketFacts = (tickets) => tickets.map((ticket) => {
@@ -156,7 +163,7 @@ module.exports = async function runModelSizesStageC({ window, db, manager, root,
   if (printedPayload.batchSettingsBaseRevision !== printRevision) throw Error('Canonical UI print outbox lost the projected base revision');
   const updatePayload = persistedOutbox.filter((row) => row.command_type === 'UpdateBatchSettings').map((row) => JSON.parse(row.payload_json)).find((payload) => payload.configs?.some((config) => config.modelId === 'm' && config.sizeNames?.includes('XXL')));
   if (!updatePayload || updatePayload.configs.find((config) => config.modelId === 'model-sizes-c-b').sizeNames.includes('XXL')) throw Error(`Outbox payload lost or cross-contaminated model definitions: ${JSON.stringify(updatePayload)}`);
-  const evidence = { fixtureRoot, outDir, setup, typeDenied, wrongCompany, numericNames, keyboard, printTotal, rendererReopen, preview, previewFacts, htmlTickets, htmlFacts, parties, reset, archiveLoaded, archiveBefore, archiveAfter, configAfterAEdit, outbox: persistedOutbox.map((row) => ({ command_type: row.command_type, status: row.status })), updatePayload, printedTicket, screenshots, htmlPath };
+  const evidence = { electronVersion: process.versions.electron, fixtureRoot, outDir, setup, typeDenied, wrongCompany, numericNames, keyboard, printTotal, rendererReopen, preview, previewFacts, htmlTickets, htmlFacts, parties, reset, archiveLoaded, archiveBefore, archiveAfter, configAfterAEdit, outbox: persistedOutbox.map((row) => ({ command_type: row.command_type, status: row.status })), updatePayload, printedTicket, screenshots, htmlPath };
   fs.writeFileSync(path.join(screenshots, 'evidence.json'), JSON.stringify(evidence, null, 2));
   console.log(`MODEL_SIZES_C_PASS ${JSON.stringify(evidence)}`);
 };

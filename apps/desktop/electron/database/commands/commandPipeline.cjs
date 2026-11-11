@@ -1,4 +1,5 @@
 'use strict';
+const { ticketEntryId } = require('../../../../../packages/contracts/ticketEntryIdentity.cjs');
 
 /**
  * Local Transactional Command Pipeline
@@ -370,7 +371,7 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
     `);
 
     entries.forEach((e, idx) => {
-      const entryId = `entry_${ticketId}_${idx}_${e.opName}_${e.workerId}`;
+      const entryId = ticketEntryId(ticketId, idx);
       insertEntryStmt.run(
         entryId,
         ticketId,

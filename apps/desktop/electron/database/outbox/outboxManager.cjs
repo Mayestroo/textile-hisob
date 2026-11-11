@@ -1,4 +1,5 @@
 'use strict';
+const { ticketEntryId, legacyLocalTicketEntryId } = require('../../../../../packages/contracts/ticketEntryIdentity.cjs');
 
 /**
  * Local Outbox Manager & State Machine Guard
@@ -504,7 +505,8 @@ function recoverCapturedTicketProvenanceTickets(db, companyId) {
     const byId = new Map(localEntries.map(entry => [entry.id, entry]));
     if (localEntries.length !== payload.entries.length
       || payload.entries.some((entry, index) => {
-        const local = byId.get(`entry_${payload.ticketId}_${index}_${entry.opName}_${entry.workerId}`);
+        const local = byId.get(ticketEntryId(payload.ticketId, index))
+          || byId.get(legacyLocalTicketEntryId(payload.ticketId, index, entry.opName, entry.workerId));
         return !local || local.op_name !== entry.opName || String(local.worker_id) !== String(entry.workerId)
           || local.rate_snapshot !== (entry.rateSnapshot ?? null);
       })) continue;

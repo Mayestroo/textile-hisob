@@ -1,4 +1,4 @@
-"""Test-only actual update handler: local API HTTP, captured fake Telegram, no bot startup."""
+"""Subprocess acceptance driver (not a pytest module): local API, no bot polling."""
 import importlib.util
 import json
 from pathlib import Path

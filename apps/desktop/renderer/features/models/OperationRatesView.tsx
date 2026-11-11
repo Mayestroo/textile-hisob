@@ -9,8 +9,9 @@ import {
   Check
 } from 'lucide-react';
 import { useWorkbookStore } from '../../store/workbookStore';
-import { ModelConfig, Operation } from '../../types/workbook';
-import { isModelNarxsiz } from '../../components/layout/SheetTabs';
+import { ModelConfig } from '../../types/workbook';
+import { isModelNarxsiz } from '../../domain/modelRateStatus';
+import { cloneRateDraft, finalizeRateDraft, parseRateDraft, type OperationRateDraft } from './operationRateDraft';
 
 interface OperationRatesViewProps {
   initialModelId?: string;
@@ -55,7 +56,7 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
   }, [models, selectedModelId]);
 
   // Working draft operations for the selected model
-  const [draftOps, setDraftOps] = useState<Operation[]>([]);
+  const [draftOps, setDraftOps] = useState<OperationRateDraft[]>([]);
   const [isDirty, setIsDirty] = useState(false);
 
   // Bulk rate fill state
@@ -77,12 +78,7 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
       setIsDirty(false);
       return;
     }
-    const cloned = (selectedModel.operations || []).map((op, idx) => ({
-      ...op,
-      rate: Number(op.rate) || 0,
-      col: op.col ?? 3 + idx * 2,
-      id: op.id || `op_${idx + 1}`
-    }));
+    const cloned = cloneRateDraft(selectedModel.operations || []);
     setDraftOps(cloned);
     setIsDirty(false);
     setIsAddingOp(false);
@@ -152,7 +148,7 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
 
   // Handle individual rate input change
   const handleRateChange = (index: number, val: string) => {
-    const numericVal = val === '' ? 0 : parseFloat(val.replace(/\s+/g, '')) || 0;
+    const numericVal = parseRateDraft(val);
     setDraftOps((prev) => {
       const copy = [...prev];
       copy[index] = { ...copy[index], rate: numericVal };
@@ -163,8 +159,8 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
 
   // Handle bulk rate apply
   const handleApplyBulkRate = () => {
-    const num = parseFloat(bulkRate.replace(/\s+/g, ''));
-    if (isNaN(num) || num < 0) {
+    const num = parseRateDraft(bulkRate);
+    if (num == null || !Number.isFinite(num) || num < 0) {
       addNotification('warning', 'Xatolik', 'Musbat son kiriting');
       return;
     }
@@ -236,8 +232,8 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
       addNotification('warning', 'Mavjud', 'Ushbu operatsiya allaqachon mavjud');
       return;
     }
-    const rateVal = parseFloat(newOpRate.replace(/\s+/g, '')) || 0;
-    const newOp: Operation = {
+    const rateVal = parseRateDraft(newOpRate);
+    const newOp: OperationRateDraft = {
       id: `op_${Date.now()}`,
       name: trimmed,
       rate: rateVal,
@@ -276,12 +272,7 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
   // Reset / Bekor qilish
   const handleReset = () => {
     if (!selectedModel) return;
-    const cloned = (selectedModel.operations || []).map((op, idx) => ({
-      ...op,
-      rate: Number(op.rate) || 0,
-      col: op.col ?? 3 + idx * 2,
-      id: op.id || `op_${idx + 1}`
-    }));
+    const cloned = cloneRateDraft(selectedModel.operations || []);
     setDraftOps(cloned);
     setIsDirty(false);
     setIsAddingOp(false);
@@ -295,9 +286,14 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
 
   const handleSave = async () => {
     if (!selectedModel) return;
+    const operations = finalizeRateDraft(draftOps);
+    if (!operations) {
+      addNotification('warning', 'Noma’lum narx', 'Har bir narxni aniq kiriting. Bo‘sh narx 0 deb saqlanmaydi; bepul ish uchun 0 kiriting.');
+      return;
+    }
     setIsSaving(true);
     try {
-      const ok = await updateModelOperations(selectedModel.id, draftOps);
+      const ok = await updateModelOperations(selectedModel.id, operations);
       if (ok) {
         setIsDirty(false);
         if (isModal && onClose) {
@@ -553,7 +549,6 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
 
                 <div className="rates-table-body">
                   {draftOps.map((op, idx) => {
-                    const rateNum = Number(op.rate) || 0;
                     return (
                       <div
                         key={op.id || idx}
@@ -580,8 +575,9 @@ export const OperationRatesView: React.FC<OperationRatesViewProps> = ({
                             <input
                               type="number"
                               min="0"
-                              value={rateNum === 0 ? '' : rateNum}
-                              placeholder="0"
+                              value={op.rate == null || !Number.isFinite(op.rate) ? '' : op.rate}
+                              placeholder="Noma’lum"
+                              aria-label={`${op.name} narxi`}
                               onChange={(e) => handleRateChange(idx, e.target.value)}
                               className="rates-rate-input"
                             />

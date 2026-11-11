@@ -240,7 +240,7 @@ function createAdminDashboardService(options = {}) {
   async function listPeriods(telegramId, companyId) {
     const scopedCompanyId = validateCompanyId(companyId);
     await actorForCompany(telegramId, scopedCompanyId);
-    const result = await pool.query(`SELECT id, name, start_date, end_date, is_closed, server_revision
+    const result = await pool.query(`SELECT id, name, start_date::text AS start_date, end_date::text AS end_date, is_closed, server_revision
       FROM periods WHERE company_id = $1 ORDER BY start_date DESC, id DESC LIMIT 100`, [scopedCompanyId]);
     return result.rows.map((row) => ({
       periodId: row.id,
@@ -467,7 +467,7 @@ function createAdminDashboardService(options = {}) {
       throw activationError('INVALID_PERIOD_ID', 400);
     }
     const periodResult = await pool.query(`
-      SELECT id, name, start_date, end_date, is_closed
+      SELECT id, name, start_date::text AS start_date, end_date::text AS end_date, is_closed
       FROM periods
       WHERE company_id = $1
         AND (($2::VARCHAR IS NOT NULL AND id = $2) OR ($2::VARCHAR IS NULL AND is_closed = 0))
@@ -575,7 +575,9 @@ function createAdminDashboardService(options = {}) {
     for (const operation of input.operations) {
       const name = String(operation?.name || '').trim();
       const rate = Number(operation?.rate);
-      if (!name || name.length > 256 || !Number.isSafeInteger(rate) || rate < 0 || updates.has(name.toLocaleLowerCase())) {
+      if (!['number', 'string'].includes(typeof operation?.rate) || (typeof operation.rate === 'string' && !operation.rate.trim())
+        || !name || name.length > 256
+        || !Number.isSafeInteger(rate) || rate < 0 || updates.has(name.toLocaleLowerCase())) {
         throw activationError('INVALID_MODEL_OPERATIONS', 400);
       }
       updates.set(name.toLocaleLowerCase(), rate);

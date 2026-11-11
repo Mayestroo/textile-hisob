@@ -19,7 +19,7 @@ function docker(args, input) {
 }
 function checkGuard(url) {
   const check = spawnSync(process.execPath,
-    [path.join(root, '.opencode/deep-audit/output/local-test-db/assert-local-pg.cjs')],
+    [path.join(__dirname, 'assert-local-pg.cjs')],
     { encoding: 'utf8', env: { NOVDA_LOCAL_TEST_PG_URL: url } });
   assert.equal(check.status, 0, 'local PG guard failed before socket/client');
 }

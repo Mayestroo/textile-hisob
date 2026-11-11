@@ -222,7 +222,7 @@ async function executeCreatePeriod(client, companyId, operationId, payload, enve
 }
 
 async function executeUpdatePeriod(client, companyId, operationId, payload, envelope) {
-  const currentResult = await client.query(`SELECT id, name, start_date, is_closed, server_revision FROM periods WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, payload.periodId]);
+  const currentResult = await client.query(`SELECT id, name, start_date::text AS start_date, is_closed, server_revision FROM periods WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, payload.periodId]);
   const current = currentResult.rows[0];
   if (!current) throw workbookError('PERIOD_NOT_FOUND', `Period "${payload.periodId}" was not found`);
   if (current.is_closed) throw workbookError('PERIOD_CLOSED', 'Closed periods cannot be updated');
@@ -329,7 +329,7 @@ async function readPeriodArchiveSource(client, companyId, period) {
 
 async function executeClosePeriod(client, companyId, operationId, payload, canonicalJson, envelope) {
   await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':periods'))`, [companyId]);
-  const periodResult = await client.query(`SELECT id, name, start_date, end_date, is_closed, archive_filename, server_revision
+  const periodResult = await client.query(`SELECT id, name, start_date::text AS start_date, end_date::text AS end_date, is_closed, archive_filename, server_revision
     FROM periods WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, payload.periodId]);
   const period = periodResult.rows[0];
   if (!period) throw workbookError('PERIOD_NOT_FOUND', `Period "${payload.periodId}" was not found`);
@@ -578,7 +578,7 @@ async function executeCompletePattaBatch(client, companyId, operationId, payload
 }
 
 async function executeCompletePartySeries(client, companyId, operationId, payload) {
-  const period = await client.query(`SELECT id, start_date, end_date FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0 FOR UPDATE`, [companyId, payload.periodId]);
+  const period = await client.query(`SELECT id, start_date::text AS start_date, end_date::text AS end_date FROM periods WHERE company_id = $1 AND id = $2 AND is_closed = 0 FOR UPDATE`, [companyId, payload.periodId]);
   if (!period.rows.length) throw workbookError('PERIOD_NOT_FOUND', `Open period "${payload.periodId}" was not found`);
   if (payload.endDate < calendarDate(period.rows[0].start_date) || (period.rows[0].end_date && payload.endDate > calendarDate(period.rows[0].end_date))) {
     throw workbookError('INVALID_PERIOD_RANGE', 'Party series close date is outside the open period');

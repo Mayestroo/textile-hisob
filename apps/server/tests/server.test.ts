@@ -25,6 +25,17 @@ function signActivation(payload: Record<string, unknown>) {
 }
 
 describe('Server startup and package boundaries', () => {
+  it('never allows the destructive reset helper to use ambient production credentials', async () => {
+    for (const env of [
+      { DATABASE_URL: 'postgresql://prod@db/novda_prod' },
+      { NOVDA_PG_URL: 'postgresql://local@127.0.0.1/novda_local' },
+      { NOVDA_DISPOSABLE_PG: '1', NOVDA_PG_URL: 'postgresql://local@127.0.0.1/novda_prod' },
+      { NOVDA_DISPOSABLE_PG: '1', NOVDA_PG_URL: 'postgresql://local@127.0.0.1/novda_test', DATABASE_URL: 'postgresql://prod@db/novda_prod' }
+    ]) {
+      await expect(resetServerDatabase({ env })).rejects.toMatchObject({ code: 'DISPOSABLE_POSTGRES_REQUIRED' });
+    }
+  });
+
   it('uses the authoritative entrypoint for server commands', () => {
     const packageJson = require('../../../package.json');
 

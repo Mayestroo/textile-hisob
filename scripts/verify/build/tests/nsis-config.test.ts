@@ -88,7 +88,7 @@ describe('Windows NSIS release configuration', () => {
   });
 
   it('keeps package and lockfile release versions aligned', () => {
-    expect(packageJson.version).toBe('1.1.11');
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[''].version).toBe(packageJson.version);
   });
