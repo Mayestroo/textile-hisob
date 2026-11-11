@@ -3,8 +3,10 @@
 const Database = require('better-sqlite3');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { sanitizeCompanyDbPath, isSafeCompanyId } = require('./companyPath.cjs');
-const { applyMigrations, verifySchemaVersionConsistency } = require('./migrationRunner.cjs');
+const { applyMigrations, verifySchemaCompatibility } = require('./migrationRunner.cjs');
+const { MIGRATIONS } = require('./schema.cjs');
 
 /**
  * Map of managed company SQLite database connections.
@@ -96,6 +98,30 @@ function configurePragmas(db) {
   db.pragma('synchronous = NORMAL');
 }
 
+// Rare startup-only operation. VACUUM INTO includes committed WAL pages without
+// an unsafe raw file copy; it completes before any forward migration can start.
+// Keep all snapshots, including on failure, for operator recovery (never prune here).
+function preservePreUpgradeProfile(db, currentVersion) {
+  const supported = MIGRATIONS[MIGRATIONS.length - 1].version;
+  if (currentVersion === 0 || currentVersion >= supported) return;
+  const parent = path.join(path.dirname(db.name), 'pre-upgrade');
+  fs.mkdirSync(parent, { recursive: true });
+  const directory = fs.mkdtempSync(path.join(parent, `v${currentVersion}-to-v${supported}-`));
+  const file = path.join(directory, 'profile.sqlite');
+  db.prepare('VACUUM INTO ?').run(file);
+  const snapshot = new Database(file, { readonly: true });
+  try {
+    runDatabaseIntegrityChecks(snapshot);
+    if (verifySchemaCompatibility(snapshot) !== currentVersion) throw new Error('PRE_UPGRADE_VERSION_MISMATCH');
+  } finally { snapshot.close(); }
+  const handle = fs.openSync(file, 'r+'); // Windows FlushFileBuffers requires a writable handle.
+  try { fs.fsyncSync(handle); } finally { fs.closeSync(handle); }
+  fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({
+    fromVersion: currentVersion, toVersion: supported, createdAt: new Date().toISOString(),
+    sha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+  }, null, 2), { flag: 'wx' });
+}
+
 /**
  * Gets or opens a managed connection to the company database.
  * Automatically runs integrity check and applies schema migrations if needed.
@@ -118,7 +144,13 @@ function getCompanyDatabase(baseUserDataPath, companyId, options = {}) {
   if (activeCompanyConnections.has(connectionKey)) {
     const existingDb = activeCompanyConnections.get(connectionKey).db;
     if (existingDb.open) {
+      const currentVersion = verifySchemaCompatibility(existingDb);
       runDatabaseIntegrityChecks(existingDb);
+      if (!options.skipMigration && currentVersion < MIGRATIONS[MIGRATIONS.length - 1].version) {
+        preservePreUpgradeProfile(existingDb, currentVersion);
+        applyMigrations(existingDb);
+        runDatabaseIntegrityChecks(existingDb);
+      }
       return existingDb;
     }
     activeCompanyConnections.delete(connectionKey);
@@ -127,13 +159,14 @@ function getCompanyDatabase(baseUserDataPath, companyId, options = {}) {
   const db = new Database(dbPath);
 
   try {
+    // Check before WAL/pragmas can change a newer profile's header.
+    const currentVersion = verifySchemaCompatibility(db);
     configurePragmas(db);
     runIntegrityCheck(db);
 
     if (!options.skipMigration) {
+      preservePreUpgradeProfile(db, currentVersion);
       applyMigrations(db);
-    } else {
-      verifySchemaVersionConsistency(db);
     }
 
     // The connection is not ready for  use until migrations and both

@@ -6,12 +6,22 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const {
   getCompanyDatabase,
-  closeCompanyDatabase,
-  runDatabaseIntegrityChecks,
-  configurePragmas
+  runDatabaseIntegrityChecks
 } = require('../core/databaseManager.cjs');
 const { sanitizeCompanyDbPath, isSafeCompanyId } = require('../core/companyPath.cjs');
-const { verifySchemaVersionConsistency } = require('../core/migrationRunner.cjs');
+const { verifySchemaCompatibility } = require('../core/migrationRunner.cjs');
+
+function assertBackupCompany(db, companyId) {
+  // Backup/restore never rebinds a tenant, including outbox/archive-only files.
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+  const quote = value => '"' + value.replaceAll('"', '""') + '"';
+  for (const { name } of tables) {
+    if (!db.prepare(`PRAGMA table_info(${quote(name)})`).all().some(column => column.name === 'company_id')) continue;
+    if (db.prepare(`SELECT 1 FROM ${quote(name)} WHERE company_id IS NOT ? LIMIT 1`).get(companyId)) {
+      throw Object.assign(new Error('BACKUP_COMPANY_MISMATCH'), { code: 'BACKUP_COMPANY_MISMATCH' });
+    }
+  }
+}
 
 /**
  * Computes SHA-256 checksum of a file.
@@ -148,6 +158,15 @@ async function backupCompanyDatabase(baseUserDataPath, companyId, destinationBac
   }
 
   const db = getCompanyDatabase(baseUserDataPath, companyId);
+  const canonical = file => {
+    const absolute = path.resolve(file);
+    const resolved = fs.existsSync(absolute) ? fs.realpathSync(absolute)
+      : path.join(fs.realpathSync(path.dirname(absolute)), path.basename(absolute));
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  if (canonical(db.name) === canonical(destinationBackupPath)) {
+    throw Object.assign(new Error('BACKUP_DESTINATION_IS_SOURCE'), { code: 'BACKUP_DESTINATION_IS_SOURCE' });
+  }
   const temporaryDir = fs.mkdtempSync(
     path.join(destDir, `.${path.basename(destinationBackupPath)}.tmp-`)
   );
@@ -163,6 +182,8 @@ async function backupCompanyDatabase(baseUserDataPath, companyId, destinationBac
     let integrityChecks;
     try {
       integrityChecks = runDatabaseIntegrityChecks(backupDb);
+      verifySchemaCompatibility(backupDb);
+      assertBackupCompany(backupDb, companyId);
       const verRow = backupDb.prepare('PRAGMA user_version').get();
       schemaVersion = verRow ? (verRow.user_version ?? verRow['user_version'] ?? 0) : 0;
     } finally {
@@ -189,7 +210,9 @@ async function backupCompanyDatabase(baseUserDataPath, companyId, destinationBac
 }
 
 /**
- * Restores a company SQLite database from a verified backup into an isolated or active userData directory.
+ * Restores a verified standalone backup into a NEW isolated target. Existing
+ * profiles/WAL files must be preserved and moved aside by an operator with the app
+ * stopped. This helper never deletes a potentially newer fact or pending command.
  *
  * @param {string} backupFilePath Source backup file
  * @param {string} targetBaseUserDataPath Target base userData directory
@@ -205,44 +228,48 @@ function restoreCompanyDatabase(backupFilePath, targetBaseUserDataPath, targetCo
     throw new Error(`Backup file does not exist: "${backupFilePath}"`);
   }
 
-  // Step 1: Verify source backup integrity before restoring
+  if (fs.existsSync(`${backupFilePath}-wal`) && fs.statSync(`${backupFilePath}-wal`).size > 0) {
+    throw Object.assign(new Error('BACKUP_NOT_STANDALONE: create an online backup first'), { code: 'BACKUP_NOT_STANDALONE' });
+  }
+  // Verify source before even creating a target directory.
   const sourceDb = new Database(backupFilePath, { readonly: true });
   let schemaVersion = 0;
   try {
     runDatabaseIntegrityChecks(sourceDb);
+    verifySchemaCompatibility(sourceDb);
+    assertBackupCompany(sourceDb, targetCompanyId);
     const verRow = sourceDb.prepare('PRAGMA user_version').get();
     schemaVersion = verRow ? (verRow.user_version ?? verRow['user_version'] ?? 0) : 0;
   } finally {
     sourceDb.close();
   }
 
-  // Step 2: Ensure target directory exists and close active connections
+  // Never close another active same-company profile merely to restore a copy.
   const targetDbPath = sanitizeCompanyDbPath(targetBaseUserDataPath, targetCompanyId);
   const targetDir = path.dirname(targetDbPath);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  closeCompanyDatabase(targetCompanyId);
-
-  // Clean target WAL and SHM files if present
-  const walPath = `${targetDbPath}-wal`;
-  const shmPath = `${targetDbPath}-shm`;
-  if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-  if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-
-  // Step 3: Copy backup file to target location
-  fs.copyFileSync(backupFilePath, targetDbPath);
-
-  // Step 4: Verify restored database opens cleanly, runs integrity check, and applies pragmas
-  const restoredDb = new Database(targetDbPath);
+  if ([targetDbPath, `${targetDbPath}-wal`, `${targetDbPath}-shm`].some(file => fs.existsSync(file))) {
+    throw Object.assign(new Error('RESTORE_TARGET_EXISTS: restore to a new isolated profile'), { code: 'RESTORE_TARGET_EXISTS' });
+  }
+  const staging = fs.mkdtempSync(path.join(targetDir, '.restore-'));
+  const stagedFile = path.join(staging, 'profile.sqlite');
   let integrityChecks;
   try {
-    configurePragmas(restoredDb);
-    verifySchemaVersionConsistency(restoredDb);
-    integrityChecks = runDatabaseIntegrityChecks(restoredDb);
+    fs.copyFileSync(backupFilePath, stagedFile, fs.constants.COPYFILE_EXCL);
+    const restoredDb = new Database(stagedFile, { readonly: true });
+    try {
+      verifySchemaCompatibility(restoredDb);
+      integrityChecks = runDatabaseIntegrityChecks(restoredDb);
+      assertBackupCompany(restoredDb, targetCompanyId);
+    } finally { restoredDb.close(); }
+    // Atomic no-overwrite publication on the same filesystem. Unsupported hard
+    // links fail safely; never fall back to overwriting or deleting the target.
+    fs.linkSync(stagedFile, targetDbPath);
   } finally {
-    restoredDb.close();
+    fs.rmSync(staging, { recursive: true, force: true });
   }
 
   const sha256 = computeFileSha256(targetDbPath);

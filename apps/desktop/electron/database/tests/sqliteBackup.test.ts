@@ -75,7 +75,7 @@ describe('SQLite Backup & Restore Procedure (Step 4 / Gate 6)', () => {
     expect(backupResult.sha256).toMatch(/^[a-f0-9]{64}$/);
 
     // 3. Restore backup into completely separate target userData directory
-    const RESTORED_COMPANY = 'company-restored';
+    const RESTORED_COMPANY = COMPANY_ID; // A new profile, never a tenant rebind.
     const restoreResult = restoreCompanyDatabase(backupFile, restoreUserData, RESTORED_COMPANY);
 
     expect(restoreResult.success).toBe(true);

@@ -73,8 +73,10 @@ function verifySchemaVersionConsistency(db) {
  * @param {import('better-sqlite3').Database} db
  * @returns {{ previousVersion: number, currentVersion: number, appliedCount: number }}
  */
-function applyMigrations(db, options = {}) {
-  // First, verify consistency of existing schema state
+function verifySchemaCompatibility(db) {
+  if (getPragmaUserVersion(db) > 0 && getMetaTableVersion(db) === 0) {
+    throw Object.assign(new Error('SCHEMA_LINEAGE_MISSING: schema_meta has no verified applied migration'), { code: 'SCHEMA_LINEAGE_MISSING' });
+  }
   const currentVersion = verifySchemaVersionConsistency(db);
   const supportedVersion = MIGRATIONS[MIGRATIONS.length - 1].version;
   if (currentVersion > supportedVersion) {
@@ -82,6 +84,11 @@ function applyMigrations(db, options = {}) {
     error.code = 'SCHEMA_VERSION_NEWER_THAN_APP';
     throw error;
   }
+  return currentVersion;
+}
+
+function applyMigrations(db, options = {}) {
+  const currentVersion = verifySchemaCompatibility(db);
   let appliedCount = 0;
   let activeVersion = currentVersion;
   const targetVersion = Number.isSafeInteger(options.targetVersion)
@@ -132,5 +139,6 @@ module.exports = {
   getMetaTableVersion,
   getPragmaUserVersion,
   verifySchemaVersionConsistency,
+  verifySchemaCompatibility,
   applyMigrations
 };

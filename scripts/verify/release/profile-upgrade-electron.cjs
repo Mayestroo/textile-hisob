@@ -49,6 +49,13 @@ app.whenReady().then(async () => {
   const preUpgradeBackup = path.join(output, 'pre-upgrade-v15.sqlite');
   await db.backup(preUpgradeBackup); db.close();
   db = manager.getCompanyDatabase(profile, company);
+  const automaticBackupDir = path.join(path.dirname(file), 'pre-upgrade');
+  const saved = fs.readdirSync(automaticBackupDir);
+  assert.equal(saved.length, 1);
+  const automaticBackupFile = path.join(automaticBackupDir, saved[0], 'profile.sqlite');
+  const automatic = new Database(automaticBackupFile, { readonly: true });
+  assert.equal(runner.verifySchemaVersionConsistency(automatic), 15);
+  assert.deepEqual(facts(automatic), original); automatic.close();
   assert.equal(runner.verifySchemaVersionConsistency(db), MIGRATIONS.at(-1).version);
   assert.deepEqual(facts(db), original);
   assert.equal(db.prepare("SELECT attribution_status FROM production_adjustments WHERE adjustment_id='correction'").get().attribution_status, 'UNRESOLVED');
@@ -58,6 +65,9 @@ app.whenReady().then(async () => {
   const backup = await backupCompanyDatabase(profile, company, path.join(output, 'upgraded.sqlite'));
   const recovered = path.join(output, 'recovered-profile');
   restoreCompanyDatabase(backup.backupPath, recovered, company);
+  assert.equal(db.open, true, 'Restoring an isolated copy must not close the active profile');
+  assert.throws(() => restoreCompanyDatabase(backup.backupPath, recovered, company), { code: 'RESTORE_TARGET_EXISTS' });
+  assert.throws(() => restoreCompanyDatabase(backup.backupPath, path.join(output, 'wrong-tenant'), 'other'), { code: 'BACKUP_COMPANY_MISMATCH' });
   const restored = manager.getCompanyDatabase(recovered, company);
   assert.notEqual(restored.name, db.name); assert.deepEqual(facts(restored), original);
   const integrity = manager.runDatabaseIntegrityChecks(restored);
@@ -68,7 +78,8 @@ app.whenReady().then(async () => {
   assert.equal(runner.verifySchemaVersionConsistency(rollback), 15); assert.deepEqual(facts(rollback), original); rollback.close();
   const evidence = { status: 'PASS', electronVersion: process.versions.electron, legacyVersion: 15,
     upgradedVersion: MIGRATIONS.at(-1).version, exactLedgerArchiveAndPendingPayloadPreserved: true,
-    reopenPreserved: true, onlineBackupRecovery: true, originalV15BackupIntact: true, integrity,
+    reopenPreserved: true, onlineBackupRecovery: true, originalV15BackupIntact: true, automaticPreUpgradeBackup: true,
+    existingRestoreRefused: true, foreignTenantRestoreRefused: true, activeProfilePreserved: true, integrity,
     scope: 'Packaged SQLite modules/native ABI, synthetic v15 file; NOT old executable compatibility or Windows installer upgrade/rollback' };
   fs.writeFileSync(path.join(output, 'evidence.json'), JSON.stringify(evidence, null, 2));
   console.log('PROFILE_UPGRADE_PASS ' + JSON.stringify(evidence)); app.exit(0);
