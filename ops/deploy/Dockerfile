@@ -7,6 +7,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY apps/server ./apps/server
 COPY packages/contracts/keys/licensePublicKey.cjs ./packages/contracts/keys/licensePublicKey.cjs
+COPY packages/contracts/ticketEntryIdentity.cjs ./packages/contracts/ticketEntryIdentity.cjs
 COPY apps/webapps ./apps/webapps
 COPY packages/assets/fonts ./packages/assets/fonts
 COPY ops/deploy/migrateProduction.cjs ./ops/deploy/migrateProduction.cjs
@@ -24,5 +25,7 @@ ENV NODE_ENV=production \
     ALLOW_TEST_TOKENS=false
 
 USER node
+# Resolve the startup dependency graph before deploying; importing does not start the server.
+RUN node -e "require('./apps/server/serve.cjs')"
 EXPOSE 3474
 CMD ["node", "apps/server/serve.cjs"]

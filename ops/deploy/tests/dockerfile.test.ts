@@ -13,13 +13,13 @@ function serverModules(directory: string): string[] {
 }
 
 describe('production API Dockerfile', () => {
-  it('copies all shared domain modules required by server runtime', () => {
+  it('copies all shared modules required by server runtime', () => {
     const dockerfile = fs.readFileSync(path.join(root, 'ops/deploy/Dockerfile'), 'utf8');
     const dependencies = new Set<string>();
 
     for (const file of serverModules(path.join(root, 'apps/server'))) {
       const source = fs.readFileSync(file, 'utf8');
-      for (const match of source.matchAll(/require\(['"]([^'"]*packages\/domain\/[^'"]+\.cjs)['"]\)/g)) {
+      for (const match of source.matchAll(/require\(['"]([^'"]*packages\/[^'"]+\.cjs)['"]\)/g)) {
         dependencies.add(path.relative(root, path.resolve(path.dirname(file), match[1])).replace(/\\/g, '/'));
       }
     }
