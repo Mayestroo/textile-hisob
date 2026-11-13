@@ -311,6 +311,7 @@ async function readPeriodArchiveSource(client, companyId, period) {
   return {
     period: periodData,
     stajDebtLedgerVersion: 1,
+    stajDeductionMode: 'RECURRING',
     archivedAt: new Date().toISOString(),
     models: models.rows.map((row) => ({
       id: row.id, name: row.name, hisobSheetName: row.hisob_sheet_name, title: row.title, party: row.party,

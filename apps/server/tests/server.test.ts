@@ -1526,8 +1526,8 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
         gross: 12,
         avans: 5,
         jarima: 2,
-        staj: 0,
-        net: 5,
+        staj: 3,
+        net: 2,
         pieces: 4
       });
 

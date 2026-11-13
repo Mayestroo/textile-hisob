@@ -16,7 +16,7 @@ describe('worker binding credential enforcement', () => {
       companyId: 'comp_novda', workerId: 180, telegramId: '8363499557', periodId: 'P'
     });
     expect(profile).toMatchObject({ pieceworkGross: 500000, oklad: 2000000, gross: 2500000,
-      magazin: 100000, avans: 200000, jarima: 50000, staj: 0, net: 2150000,
+      magazin: 100000, avans: 200000, jarima: 50000, staj: 25000, net: 2125000,
       models_breakdown: { m: { earnings: 500000 } } });
   });
 

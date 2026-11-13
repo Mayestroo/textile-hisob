@@ -29,7 +29,7 @@ export interface WorkerPayrollSummary {
   oklad: number; // Manually entered, explicit-period salary addition
   magazin: number; // Explicit-period shop deduction
   umumiy: number; // Gross Total (= piecework + Oklad)
-  staj: number;   // Staj allowance
+  staj: number;   // Recurring deduction retained across payroll periods
   avans: number;  // Avans
   jarima: number; // Jarima
   sofFoyda: number; // Sof foyda (= umumiy - avans - staj - jarima)
@@ -190,8 +190,7 @@ export function calculateMasterPayroll(models: ModelConfig[], workers: Worker[])
       return Number.isFinite(num) ? Math.max(0, num) : 0;
     };
 
-    // Static legacy roster values are not verified debt allocations.
-    const staj = 0;
+    const staj = safeNumber(worker.staj);
     const avans = safeNumber(worker.avans);
     const jarima = safeNumber(worker.jarima);
     const sofFoyda = workerUmumiy - avans - staj - jarima;

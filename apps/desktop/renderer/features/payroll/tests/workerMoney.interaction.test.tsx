@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { UmumiyView } from '../UmumiyView';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { useAuthStore } from '../../../store/authStore';
+import { formatMoney } from '../../../utils/formatters';
+declare const require: (id: string) => any;
 
 describe('worker money edits do not sync navigation', () => {
   const workbook = useWorkbookStore.getState();
@@ -28,6 +30,29 @@ describe('worker money edits do not sync navigation', () => {
     cleanup();
     useWorkbookStore.setState(workbook, true);
     useAuthStore.setState(auth, true);
+  });
+
+  it('shows recurring STAJ negatively in the row and totals when switching to a new month', () => {
+    const { reducePayroll } = require('../../../../../../packages/domain/payrollReducer.cjs');
+    const workers = [{ id: 1, name: 'Ali', staj: 140000, avans: 0, jarima: 0 }];
+    function selectPeriod(id: string, startDate: string) {
+      const period = { id, name: id, startDate, isClosed: false };
+      useWorkbookStore.setState({ workers, currentPeriod: period, periods: [period],
+        payrollValuation: { companyId: 'company-one', ...reducePayroll({ id, is_closed: false },
+          [{ worker_id: 1, worker_name: 'Ali', staj: 140000 }], [], [], []) } });
+    }
+    selectPeriod('november', '2026-11-01');
+    const view = render(<UmumiyView />);
+    const assertDeduction = () => {
+      expect(view.container.querySelector('.umumiy-staj-pill')?.textContent).toBe(formatMoney(-140000));
+      const row = screen.getByText('Ali').closest('tr')!;
+      expect(row.textContent?.split(formatMoney(-140000))).toHaveLength(3); // STAJ and net pay
+      expect(view.container.querySelector('tfoot')?.textContent).toContain(formatMoney(-140000));
+    };
+    assertDeduction();
+    act(() => selectPeriod('december', '2026-12-01'));
+    assertDeduction();
+    expect(updateWorker).not.toHaveBeenCalled();
   });
 
   it.each(['Avans', 'Jarima', 'Oklad', 'Magazin'])('%s focus, scroll, blur and unchanged Enter do not save', async (label) => {

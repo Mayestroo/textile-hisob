@@ -20,12 +20,15 @@ function reducePayroll(period, workers, facts, adjustments, deductions, tariffBa
   const closingRates = operationRates(archivedModels);
   const closingArchiveAvailable = Array.isArray(archivedModels);
   const ratesForPeriod = period && Boolean(period.is_closed) ? closingRates : currentRates;
+  const ledgerOnlyArchive = Boolean(period?.is_closed) && tariffBasis.stajDebtLedgerVersion === 1
+    && tariffBasis.closingArchive?.stajDeductionMode !== 'RECURRING';
+  const archivedWorkers = new Map((tariffBasis.closingArchive?.workers || []).map((w) => [Number(w.id), w]));
   const byWorker = new Map(workers.map((w) => [Number(w.worker_id), {
     workerId: Number(w.worker_id), name: w.worker_name,
-    // Preserve the old value in a closed-period projection as historical output;
-    // open periods no longer charge this static field.
-    staj: period && Boolean(period.is_closed) && tariffBasis.stajDebtLedgerVersion !== 1
-      ? Math.max(0, numeric(w.staj)) : 0,
+    // STAJ is a recurring deduction, retained on the worker across period rollover.
+    // Closed snapshots retain the amount and calculation policy captured at close.
+    staj: ledgerOnlyArchive ? 0 : Math.max(0, numeric(period?.is_closed
+      ? (archivedWorkers.get(Number(w.worker_id))?.staj ?? w.staj) : w.staj)),
     legacyStaj: Math.max(0, numeric(w.staj)),
     avans: 0, jarima: 0, oklad: 0, magazin: 0,
     pieceworkGross: 0, gross: 0, net: 0, pieces: 0, rawQuantity: 0,
@@ -88,10 +91,10 @@ function reducePayroll(period, workers, facts, adjustments, deductions, tariffBa
     if (w && row.type === 'JARIMA') w.jarima = Math.max(0, numeric(row.total));
     if (w && row.type === 'OKLAD') w.oklad = numeric(row.total);
     if (w && row.type === 'MAGAZIN') w.magazin = numeric(row.total);
-    if (w && row.type === 'STAJ_DEBT') w.staj = Math.max(0, numeric(row.total));
+    if (w && ledgerOnlyArchive && row.type === 'STAJ_DEBT') w.staj = Math.max(0, numeric(row.total));
   }
   for (const w of byWorker.values()) {
-    if (w.legacyStaj > 0) reason(w, 'LEGACY_STAJ_REQUIRES_RECONCILIATION');
+    if (ledgerOnlyArchive && w.legacyStaj > 0) reason(w, 'LEGACY_STAJ_REQUIRES_RECONCILIATION');
     if (period && Boolean(period.is_closed)) reason(w, 'HISTORICAL_BASELINE_UNVERIFIED');
     const byOperation = new Map();
     for (const b of w.buckets.values()) {

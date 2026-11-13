@@ -111,6 +111,29 @@ describe('authoritative period-close enforcement', () => {
     expect(fallbackResult.status).toBe('APPLIED');
   });
 
+  it('preserves recurring STAJ across authoritative close and freezes the archived amount', async () => {
+    const { loadPayroll } = require('../modules/workers/payrollValuation.cjs');
+    await pool.query('UPDATE workers SET staj=140000 WHERE company_id=$1 AND id=1', [companyId]);
+    await pool.query(`INSERT INTO periods (id, company_id, start_date, is_closed)
+      VALUES ('september', $1, '2026-09-01', 0)`, [companyId]);
+    const payload = { commandId: 'close-staj', operationId: 'close-staj', companyId,
+      periodId: 'september', endDate: '2026-09-30',
+      nextPeriod: { id: 'october', name: 'October', startDate: '2026-10-01' } };
+    const result = (await send({ ...descriptor('ClosePeriod', payload.operationId, payload.periodId, payload),
+      entityType: 'period' }, true)).json().results[0];
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'APPLIED' });
+    expect((await loadPayroll(pool, companyId, 'october')).workers[0])
+      .toMatchObject({ staj: 140000, gross: 0, net: -140000 });
+    const archive = (await pool.query('SELECT archive_json FROM period_archives WHERE company_id=$1 AND period_id=$2',
+      [companyId, 'september'])).rows[0].archive_json;
+    expect(archive).toMatchObject({ stajDeductionMode: 'RECURRING', workers: [{ id: 1, staj: 140000 }] });
+    await pool.query('UPDATE workers SET staj=200000 WHERE company_id=$1 AND id=1', [companyId]);
+    expect((await loadPayroll(pool, companyId, 'september')).workers[0])
+      .toMatchObject({ staj: 140000, net: -140000 });
+    expect((await loadPayroll(pool, companyId, 'october')).workers[0])
+      .toMatchObject({ staj: 200000, net: -200000 });
+  });
+
   it('keeps a new allocation-aware ticket unresolved when no verifiable open period exists', async () => {
     await pool.query('DELETE FROM periods WHERE company_id=$1', [companyId]);
     const payload = { ...ticket('00000000-0000-4000-8000-000000000407', 'op-period-missing', '2026-11-12'), allocationVersion: 1 };

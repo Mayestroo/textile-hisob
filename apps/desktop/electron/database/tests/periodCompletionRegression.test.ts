@@ -71,6 +71,19 @@ describe('local period completion from active facts (isolated SQLite)', () => {
   function party() {
     return db.prepare('SELECT status, is_closed, archived_patta_numbers_json FROM parties WHERE id = ?').get('party-a');
   }
+  it('retains recurring STAJ after close and starts the next month at negative net pay', () => {
+    const { readWorkbookPayrollProjection } = require('../readers/workbookPayrollRead.cjs');
+    db.prepare('UPDATE workers SET staj=140000 WHERE company_id=? AND id=1').run(companyId);
+    expect(readWorkbookPayrollProjection(db, companyId).payrollValuation.workers[0])
+      .toMatchObject({ staj: 140000, gross: 0, net: -140000 });
+    close();
+    manager.closeAllCompanyDatabases();
+    db = manager.getCompanyDatabase(directory, companyId);
+    const next = readWorkbookPayrollProjection(db, companyId);
+    expect(next.currentPeriod.id).toBe('period-b');
+    expect(next.workers[0].staj).toBe(140000);
+    expect(next.payrollValuation.workers[0]).toMatchObject({ staj: 140000, gross: 0, net: -140000 });
+  });
   it('submit -> accepted -> delete -> accepted -> close retains VOIDED history without fulfilling the party', async () => {
     const id = submit(1);
     await sync(); remove(id); await sync();

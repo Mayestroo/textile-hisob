@@ -397,7 +397,7 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
         title="Staj Ishchilar ro'yxatidan o'zgartiriladi (ochish uchun bosing)"
       >
         {w.staj > 0 ? (
-          <span className="umumiy-staj-pill">{money(w.staj)}</span>
+          <span className="umumiy-staj-pill">{money(-w.staj)}</span>
         ) : (
           <span style={{ color: '#cbd5e1' }}>—</span>
         )}
@@ -835,7 +835,7 @@ export const UmumiyView: React.FC = () => {
           <div className="umumiy-kpi-copy">
             <span className="umumiy-kpi-label">Doimiy stajlar</span>
             <div className="umumiy-kpi-value" style={{ color: '#7c3aed' }}>
-              {money(masterReport.totalStaj)}
+              {money(-masterReport.totalStaj)}
               <span className="umumiy-kpi-unit">so'm</span>
             </div>
           </div>
@@ -1150,7 +1150,7 @@ export const UmumiyView: React.FC = () => {
                 }}
                 onClick={() => handleCellFocus(`D${workers.length + 3}`, display.reportReady ? String(masterReport.totalStaj) : 'Noma’lum', '=SUM(...)')}
               >
-                {masterReport.totalStaj > 0 ? money(masterReport.totalStaj) : '—'}
+                {masterReport.totalStaj > 0 ? money(-masterReport.totalStaj) : '—'}
               </td>
               <td
                 style={{

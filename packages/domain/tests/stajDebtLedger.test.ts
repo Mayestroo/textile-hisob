@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 const { classifyLegacyStaj, fromMinorUnits, planStajAllocation, toMinorUnits } = require('../stajDebtLedger.cjs');
-const { reducePayroll } = require('../payrollReducer.cjs');
 
 describe('STAJ-001 exact debt allocation rules', () => {
-  it('does not validate or deduct a legacy worker attribute', () => {
+  it('does not turn a recurring worker attribute into a one-time debt claim', () => {
     expect(classifyLegacyStaj('5740000')).toMatchObject({ classification: 'RECONCILIATION_REQUIRED', deductionEligible: false });
-    const payroll = reducePayroll({ id: 'p1', is_closed: false }, [{ worker_id: 7, worker_name: 'W', staj: 500000 }], [], [], [], {});
-    expect(payroll.workers[0]).toMatchObject({ staj: 0, legacyStaj: 500000, net: 0, accountingStatus: 'INCOMPLETE' });
-    expect(payroll.workers[0].accountingReasons).toContain('LEGACY_STAJ_REQUIRES_RECONCILIATION');
   });
   it('deducts a verified claim once and exact replay returns the same allocation', () => {
     const input = { companyId: 'c1', workerId: 7, periodId: 'p1', claimId: 'd1', claimAmount: '500000.00',
