@@ -74,6 +74,25 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
   const [localScaleTypes, setLocalScaleTypes] = useState<Record<string, ScaleType>>({});
   const [customSizesByModel, setCustomSizesByModel] = useState<Record<string, string[]>>({});
 
+  const getInitialModelCustomSizes = (modelId: string): string[] => {
+    const cfg = pattaBatchConfigs[modelId];
+    const savedCustoms = Array.isArray(cfg?.customSizes) ? cfg.customSizes : [];
+    const sizeNames = Array.isArray(cfg?.sizeNames) ? cfg.sizeNames : [];
+    const sizeKeys = Object.keys(cfg?.sizes || {});
+    const defaultStandards = new Set([...DEFAULT_BATCH_SIZES, ...DEFAULT_NUMERIC_BATCH_SIZES]);
+    const derivedCustoms = [...sizeNames, ...sizeKeys].filter(
+      (s) => !defaultStandards.has(String(s).trim().toUpperCase())
+    );
+    return sortPattaSizes(Array.from(new Set([...savedCustoms, ...derivedCustoms])));
+  };
+
+  const getModelCustomSizes = (modelId: string): string[] => {
+    if (customSizesByModel[modelId] !== undefined) {
+      return customSizesByModel[modelId];
+    }
+    return getInitialModelCustomSizes(modelId);
+  };
+
   // Ensure selected model exists
   useEffect(() => {
     if (!models.some((m) => m.id === selectedModelId) && models.length > 0) {
@@ -84,9 +103,10 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
   // Helper to determine if a model is configured
   const getModelActiveSizes = (modelId: string): string[] => {
     const scale = getModelScaleType(modelId);
+    const modelCustoms = getModelCustomSizes(modelId);
     const filterByScale = (sizesList: string[]): string[] => {
-      if (scale === 'numbers') return sizesList.filter(isNumericPattaSize);
-      if (scale === 'letters') return sizesList.filter((s) => !isNumericPattaSize(s));
+      if (scale === 'numbers') return sizesList.filter((s) => isNumericPattaSize(s) || modelCustoms.includes(s));
+      if (scale === 'letters') return sizesList.filter((s) => !isNumericPattaSize(s) || modelCustoms.includes(s));
       return sizesList;
     };
 
@@ -133,23 +153,17 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
   // Available sizes to display in the capsules row based on current scale type
   const availableSizesForActiveModel = useMemo(() => {
     if (!activeModel) return [];
-    const modelCustoms = customSizesByModel[activeModel.id] || [];
+    const modelCustoms = getModelCustomSizes(activeModel.id);
     let baseList: string[] = [];
     if (activeScaleType === 'numbers') {
       baseList = [...DEFAULT_NUMERIC_BATCH_SIZES];
-      const numericCustoms = modelCustoms.filter(isNumericPattaSize);
-      const numericActive = activeSizes.filter(isNumericPattaSize);
-      return sortPattaSizes(Array.from(new Set([...baseList, ...numericCustoms, ...numericActive])));
     } else if (activeScaleType === 'letters') {
       baseList = [...DEFAULT_BATCH_SIZES];
-      const letterCustoms = modelCustoms.filter((s) => !isNumericPattaSize(s));
-      const letterActive = activeSizes.filter((s) => !isNumericPattaSize(s));
-      return sortPattaSizes(Array.from(new Set([...baseList, ...letterCustoms, ...letterActive])));
     } else {
       baseList = [...DEFAULT_BATCH_SIZES, ...DEFAULT_NUMERIC_BATCH_SIZES];
-      return sortPattaSizes(Array.from(new Set([...baseList, ...modelCustoms, ...activeSizes])));
     }
-  }, [activeModel, activeScaleType, customSizesByModel, activeSizes]);
+    return sortPattaSizes(Array.from(new Set([...baseList, ...modelCustoms, ...activeSizes])));
+  }, [activeModel, activeScaleType, customSizesByModel, activeSizes, pattaBatchConfigs]);
 
   // Model statistics for filter pills
   const modelStats = useMemo(() => {
@@ -219,12 +233,13 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
 
     // Adjust active sizes to match the new scale
     const currentActive = localActiveSizes[activeModel.id] ?? pattaBatchConfigs[activeModel.id]?.sizeNames ?? [];
+    const modelCustoms = getModelCustomSizes(activeModel.id);
     let nextActive: string[];
     if (newScale === 'numbers') {
-      const numeric = currentActive.filter(isNumericPattaSize);
+      const numeric = currentActive.filter((s) => isNumericPattaSize(s) || modelCustoms.includes(s));
       nextActive = numeric.length > 0 ? numeric : ['48', '50', '52', '54'];
     } else if (newScale === 'letters') {
-      const letters = currentActive.filter((s) => !isNumericPattaSize(s));
+      const letters = currentActive.filter((s) => !isNumericPattaSize(s) || modelCustoms.includes(s));
       nextActive = letters.length > 0 ? letters : ['S', 'M', 'L', 'XL', 'XXL'];
     } else {
       nextActive = currentActive;
@@ -241,11 +256,13 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
     if (!activeModel) return;
     const updatedSizes = sortPattaSizes(getModelActiveSizes(activeModel.id));
     const updatedScale = getModelScaleType(activeModel.id);
+    const updatedCustoms = getModelCustomSizes(activeModel.id);
 
     // Update in store
     updatePattaBatchConfig(activeModel.id, {
       sizeNames: updatedSizes,
       scaleType: updatedScale,
+      customSizes: updatedCustoms,
       isConfigured: updatedSizes.length > 0,
     });
 
@@ -263,6 +280,7 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
     if (!activeModel || !sourceModelId) return;
     const sourceSizes = getModelActiveSizes(sourceModelId);
     const sourceScale = getModelScaleType(sourceModelId);
+    const sourceCustoms = getModelCustomSizes(sourceModelId);
 
     setLocalActiveSizes((prev) => ({
       ...prev,
@@ -271,6 +289,10 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
     setLocalScaleTypes((prev) => ({
       ...prev,
       [activeModel.id]: sourceScale,
+    }));
+    setCustomSizesByModel((prev) => ({
+      ...prev,
+      [activeModel.id]: [...sourceCustoms],
     }));
 
     setIsCopyModalOpen(false);
@@ -284,6 +306,13 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
     const clean = newSizeName.trim().toUpperCase();
     if (!clean || !activeModel) return;
 
+    const currentCustoms = getModelCustomSizes(activeModel.id);
+    const updatedCustoms = sortPattaSizes(Array.from(new Set([...currentCustoms, clean])));
+    setCustomSizesByModel((prev) => ({
+      ...prev,
+      [activeModel.id]: updatedCustoms,
+    }));
+
     if (availableSizesForActiveModel.includes(clean)) {
       // If already exists, just toggle it ON
       if (!activeSizes.includes(clean)) {
@@ -294,19 +323,35 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
       return;
     }
 
-    // Add to model custom sizes and toggle ON in sorted order
-    setCustomSizesByModel((prev) => ({
-      ...prev,
-      [activeModel.id]: sortPattaSizes([...(prev[activeModel.id] || []), clean]),
-    }));
     setLocalActiveSizes((prev) => ({
       ...prev,
-      [activeModel.id]: sortPattaSizes([...(prev[activeModel.id] || getModelActiveSizes(activeModel.id)), clean]),
+      [activeModel.id]: sortPattaSizes(Array.from(new Set([...(prev[activeModel.id] || getModelActiveSizes(activeModel.id)), clean]))),
     }));
 
     setIsAddSizeModalOpen(false);
     setNewSizeName('');
     addNotification('success', "O'lcham qo'shildi", `Yangi «${clean}» razmeri qo'shildi va faollashtirildi.`);
+  };
+
+  // Remove custom size completely from model
+  const handleRemoveCustomSize = (e: React.MouseEvent, size: string) => {
+    e.stopPropagation();
+    if (!activeModel) return;
+    const modelId = activeModel.id;
+    const currentCustoms = getModelCustomSizes(modelId);
+    const updatedCustoms = currentCustoms.filter((s) => s !== size);
+    setCustomSizesByModel((prev) => ({
+      ...prev,
+      [modelId]: updatedCustoms,
+    }));
+    setLocalActiveSizes((prev) => {
+      const currentActive = prev[modelId] !== undefined ? prev[modelId] : getModelActiveSizes(modelId);
+      return {
+        ...prev,
+        [modelId]: currentActive.filter((s) => s !== size),
+      };
+    });
+    addNotification('info', "O'lcham o'chirildi", `«${size}» razmeri ro'yxatdan olib tashlandi.`);
   };
 
   return (
@@ -505,6 +550,7 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
                 <div className="model-sizes-capsules-grid">
                   {availableSizesForActiveModel.map((size) => {
                     const isEnabled = activeSizes.includes(size);
+                    const isCustom = !DEFAULT_BATCH_SIZES.includes(size) && !DEFAULT_NUMERIC_BATCH_SIZES.includes(size);
 
                     return (
                       <div
@@ -525,6 +571,16 @@ export const ModelSizesView: React.FC<ModelSizesViewProps> = (props) => {
                         <div className={`model-sizes-switch-track ${isEnabled ? 'track-on' : 'track-off'}`}>
                           <div className={`model-sizes-switch-knob ${isEnabled ? 'knob-on' : 'knob-off'}`} />
                         </div>
+                        {isCustom && (
+                          <button
+                            type="button"
+                            className="model-sizes-capsule-delete"
+                            onClick={(e) => handleRemoveCustomSize(e, size)}
+                            title={`${size} razmerini butunlay o'chirish`}
+                          >
+                            <X size={12} strokeWidth={2.4} />
+                          </button>
+                        )}
                       </div>
                     );
                   })}

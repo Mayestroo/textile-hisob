@@ -63,6 +63,7 @@ export interface ModelPattaBatchConfig {
   sizeNames?: string[] | null;
   scaleType?: string;
   isConfigured?: boolean;
+  customSizes?: string[];
 }
 
 export interface PrintedPartyRecord {

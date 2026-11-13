@@ -253,7 +253,10 @@ export function sanitizePattaBatchConfigs(
       totalIshSoni: (c && c.totalIshSoni !== undefined) ? String(c.totalIshSoni) : '',
       color: (c && c.color !== undefined) ? String(c.color) : '',
       sizes: sizesObj,
-      sizeNames: Array.isArray(c?.sizeNames) ? [...c.sizeNames] : (c?.sizeNames === null ? null : undefined)
+      sizeNames: Array.isArray(c?.sizeNames) ? [...c.sizeNames] : (c?.sizeNames === null ? null : undefined),
+      scaleType: typeof c?.scaleType === 'string' ? c.scaleType : undefined,
+      isConfigured: typeof c?.isConfigured === 'boolean' ? c.isConfigured : undefined,
+      customSizes: Array.isArray(c?.customSizes) ? [...c.customSizes] : undefined,
     };
   }
   return cleanConfigs;

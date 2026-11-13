@@ -250,7 +250,10 @@ export function buildBatchPrintMutation(state: BatchState, printedItems: Printed
       totalIshSoni: printed ? '' : current?.totalIshSoni || '',
       color: current?.color || model.color || 'Кора',
       sizes,
-      sizeNames: current?.sizeNames
+      sizeNames: current?.sizeNames,
+      scaleType: current?.scaleType,
+      isConfigured: current?.isConfigured,
+      customSizes: current?.customSizes
     };
   }
   const nextPartyNumber = findNextPartyNumber(updatedHistory);

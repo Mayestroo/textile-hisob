@@ -21,7 +21,20 @@ export const PattaBatchView: React.FC = () => {
   const batchPrintCompleted = useWorkbookStore((s) => s.batchPrintCompleted);
   const completePartySeries = useWorkbookStore((s) => s.completePartySeries);
   const addNotification = useWorkbookStore((s) => s.addNotification);
-  const [sizeSystem, setSizeSystem] = useState<PattaSizeSystem>('letters');
+  const [sizeSystem, setSizeSystem] = useState<PattaSizeSystem>(() => {
+    try {
+      const saved = localStorage.getItem('patta_size_system');
+      if (saved === 'letters' || saved === 'numbers') return saved;
+    } catch {}
+    return 'letters';
+  });
+
+  const handleSetSizeSystem = (sys: PattaSizeSystem) => {
+    setSizeSystem(sys);
+    try {
+      localStorage.setItem('patta_size_system', sys);
+    } catch {}
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'filled' | 'empty'>('all');
 
@@ -51,16 +64,36 @@ export const PattaBatchView: React.FC = () => {
 
   const getModelSizes = (modelId: string) => {
     const config = pattaBatchConfigs[modelId];
+
+    if (config && config.isConfigured !== false && Array.isArray(config.sizeNames) && config.sizeNames.length > 0) {
+      // Model has explicitly configured sizes in ModelSizesView!
+      // Filter by the selected sizeSystem (letters vs numbers)
+      const matchingConfigured = config.sizeNames.filter(
+        (size) => isNumericPattaSize(size) === (sizeSystem === 'numbers')
+      );
+      const withCounts = Object.entries(config.sizes || {})
+        .filter(([, count]) => Number(count) > 0)
+        .map(([size]) => size);
+
+      if (matchingConfigured.length > 0) {
+        return sortPattaSizes(Array.from(new Set([
+          ...matchingConfigured,
+          ...withCounts.filter((s) => isNumericPattaSize(s) === (sizeSystem === 'numbers'))
+        ])));
+      }
+
+      // If no configured sizes match this system (e.g. numeric model viewed while toolbar is on letters),
+      // still return the model's actual configured sizes so they are never hidden or replaced with wrong dummy sizes!
+      return sortPattaSizes(Array.from(new Set([...config.sizeNames, ...withCounts])));
+    }
+
+    // Fallback for unconfigured models:
     const defaults = sizeSystem === 'numbers' ? DEFAULT_NUMERIC_BATCH_SIZES : DEFAULT_BATCH_SIZES;
-    const configured = config?.isConfigured !== false && Array.isArray(config?.sizeNames)
-      ? config.sizeNames
-      : [];
-    // Keep this grid to the selected standard scale. Older saved/custom sizes
-    // (including sizes with existing counts) must not mix into the batch UI.
-    const eligibleConfigured = configured.filter((size) =>
-      isDefaultPattaSize(size) && isNumericPattaSize(size) === (sizeSystem === 'numbers')
-    );
-    return sortPattaSizes(Array.from(new Set([...defaults, ...eligibleConfigured])));
+    const withCounts = Object.entries(config?.sizes || {})
+      .filter(([, count]) => Number(count) > 0)
+      .map(([size]) => size)
+      .filter((size) => isNumericPattaSize(size) === (sizeSystem === 'numbers'));
+    return sortPattaSizes(Array.from(new Set([...defaults, ...withCounts])));
   };
   const allKnownSizes = useMemo(() => sortPattaSizes([...new Set(models.flatMap((model) => getModelSizes(model.id)))]), [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
@@ -448,16 +481,16 @@ export const PattaBatchView: React.FC = () => {
               <button
                 type="button"
                 className={`patta-segment-btn ${sizeSystem === 'letters' ? 'active' : ''}`}
-                onClick={() => setSizeSystem('letters')}
+                onClick={() => handleSetSizeSystem('letters')}
               >
                 Harfli (S, M, L)
               </button>
               <button
                 type="button"
                 className={`patta-segment-btn ${sizeSystem === 'numbers' ? 'active' : ''}`}
-                onClick={() => setSizeSystem('numbers')}
+                onClick={() => handleSetSizeSystem('numbers')}
               >
-                Raqamli (36, 38, 40)
+                Raqamli (40 — 60)
               </button>
             </div>
           </div>

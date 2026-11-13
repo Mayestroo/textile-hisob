@@ -85,4 +85,23 @@ describe('ModelSizesView', () => {
     // Should NOT contain default letter capsules in the rendered size list when numeric scale is active
     expect(html).not.toMatch(/>\s*XXL\s*</);
   });
+
+  it('renders custom sizes (e.g. 92, 98, 104, 110) alongside standard numeric sizes with delete buttons', () => {
+    const customNumericConfigs = {
+      m1: {
+        sizeNames: ['40', '42', '44', '46', '48', '50', '52', '54', '56', '58', '60', '92', '98', '104', '110'],
+        scaleType: 'numbers',
+        isConfigured: true,
+      },
+    };
+    const html = renderToStaticMarkup(<ModelSizesView models={mockModels} pattaBatchConfigs={customNumericConfigs} />);
+    expect(html).toContain('15 razmer');
+    expect(html).toContain('40');
+    expect(html).toContain('60');
+    expect(html).toContain('92');
+    expect(html).toContain('98');
+    expect(html).toContain('104');
+    expect(html).toContain('110');
+    expect(html).toContain('model-sizes-capsule-delete');
+  });
 });

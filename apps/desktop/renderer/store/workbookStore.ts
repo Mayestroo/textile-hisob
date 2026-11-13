@@ -129,7 +129,10 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
           totalIshSoni: target ? '' : current?.totalIshSoni || '',
           color: target ? '' : (current?.color || ''),
           sizes,
-          sizeNames: current?.sizeNames
+          sizeNames: current?.sizeNames,
+          scaleType: current?.scaleType,
+          isConfigured: current?.isConfigured,
+          customSizes: current?.customSizes
         };
       }
       set({ nextPartyNumber, pattaBatchConfigs: configs });

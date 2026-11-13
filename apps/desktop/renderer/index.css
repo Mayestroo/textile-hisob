@@ -9918,6 +9918,35 @@ html, body, #root {
   color: #64748b;
 }
 
+.model-sizes-capsule-delete {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 2px;
+  cursor: pointer;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.model-sizes-capsule-delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+[data-theme="dark"] .model-sizes-capsule-delete {
+  color: #64748b;
+}
+
+[data-theme="dark"] .model-sizes-capsule-delete:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.2);
+}
+
 .model-sizes-switch-track {
   width: 26px;
   height: 15px;
