@@ -324,7 +324,8 @@ function loadBatchSettingsFromSqlite(db, companyId, models) {
   `).get(companyId);
   const pending = db.prepare(`SELECT COUNT(*) AS count FROM local_outbox
     WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
-      AND command_type IN ('UpdateBatchSettings', 'CompletePattaBatch')`).get(companyId);
+      AND (command_type = 'UpdateBatchSettings' OR (command_type = 'CompletePattaBatch'
+        AND json_type(payload_json, '$.batchSettingsBaseRevision') = 'integer'))`).get(companyId);
   const configRows = db.prepare(`
     SELECT model_id, party_number, is_custom_party, total_ish_soni, color, sizes_json, size_names_json
     FROM patta_batch_settings WHERE company_id = ?

@@ -544,6 +544,8 @@ async function executeUpdateBatchSettings(client, companyId, operationId, payloa
 }
 
 async function executeCompletePattaBatch(client, companyId, operationId, payload, canonicalJson, options = {}) {
+  const { isLegacyPattaBatch, capturedPattaRange } = require('../../../../packages/domain/legacyPattaBatch.cjs');
+  const legacy = isLegacyPattaBatch(payload);
   const numbers = [...new Set(payload.parties.map((party) => party.partyNumber))].sort();
   if (numbers.length !== payload.parties.length) throw workbookError('ACTIVE_PARTY_EXISTS', 'Batch contains duplicate party numbers');
   for (const partyNumber of numbers) {
@@ -558,28 +560,52 @@ async function executeCompletePattaBatch(client, companyId, operationId, payload
     canonicalPartyIds.push(canonicalPartyRecordId);
     const canonicalParty = canonicalPartyRecordId === party.partyRecordId
       ? party : { ...party, partyRecordId: canonicalPartyRecordId };
-    const existing = await client.query(`SELECT p.id, p.status,
+    const existing = await client.query(`SELECT p.*,
       EXISTS (SELECT 1 FROM legacy_party_collision_exceptions e
         WHERE e.company_id = p.company_id AND e.party_id = p.id AND e.status = 'ACTIVE') AS is_protected
       FROM parties p WHERE p.company_id = $1 AND p.id = $2 FOR UPDATE`, [companyId, canonicalPartyRecordId]);
     let mutation;
     if (existing.rows.length) {
+      if (legacy) {
+        // Bootstrap or another accepted command may already carry this issuance.
+        // Certify only matching paper, without reopening or overwriting the party.
+        const current = existing.rows[0];
+        const modelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
+          WHERE company_id=$1 AND legacy_model_id=$2`, [companyId, canonicalParty.modelId]);
+        const range = capturedPattaRange(canonicalParty);
+        const sameQuantity = (a, b) => a == null ? b == null : b != null && Number(a) === Number(b);
+        if (!range || current.party_number !== canonicalParty.partyNumber
+          || current.model_id !== (modelAlias.rows[0]?.canonical_model_id || canonicalParty.modelId)
+          || Number(current.patta_count) !== canonicalParty.pattaCount
+          || Number(current.patta_start_number) !== range.start || Number(current.patta_end_number) !== range.end
+          || !sameQuantity(current.ish_soni_per_patta, canonicalParty.ishSoniPerPatta)
+          || canonicalStringify(current.sizes_json || {}) !== canonicalStringify(canonicalParty.sizes || {})
+          || (canonicalParty.sizeOrder != null && canonicalStringify(current.size_order_json) !== canonicalStringify(canonicalParty.sizeOrder))) {
+          throw workbookError('LEGACY_PATTA_ISSUANCE_CONFLICT', 'Stored party does not match the original printed issuance');
+        }
+        continue;
+      }
       if (existing.rows[0].is_protected) continue;
       const itemEnvelope = { baseRevision: canonicalParty.baseRevision };
       mutation = await executeUpdateParty(client, companyId, operationId, canonicalParty, canonicalStringify(canonicalParty), itemEnvelope);
     } else {
-      mutation = await options.executeCreateParty(client, companyId, operationId, canonicalParty, canonicalStringify(canonicalParty));
+      mutation = await options.executeCreateParty(client, companyId, operationId, canonicalParty, canonicalStringify(canonicalParty),
+        { preservePrintedRange: legacy });
     }
     lastChangeId = Number(mutation.changeId || lastChangeId);
   }
-  if (!Number.isSafeInteger(payload.batchSettingsBaseRevision) || payload.batchSettingsBaseRevision < 0) {
-    throw workbookError('REVISION_CONFLICT', 'Batch settings revision is missing; reload before printing');
+  // Old completed paper is an issuance, not permission to overwrite today's
+  // draft settings. Modern commands still require the exact captured CAS base.
+  if (!legacy) {
+    if (!Number.isSafeInteger(payload.batchSettingsBaseRevision) || payload.batchSettingsBaseRevision < 0) {
+      throw workbookError('REVISION_CONFLICT', 'Batch settings revision is missing; reload before printing');
+    }
+    const settings = await executeUpdateBatchSettings(client, companyId, operationId, {
+      availableSizes: payload.availableSizes,
+      configs: payload.configs
+    }, { baseRevision: payload.batchSettingsBaseRevision });
+    lastChangeId = Math.max(lastChangeId, Number(settings.changeId || 0));
   }
-  const settings = await executeUpdateBatchSettings(client, companyId, operationId, {
-    availableSizes: payload.availableSizes,
-    configs: payload.configs
-  }, { baseRevision: payload.batchSettingsBaseRevision });
-  lastChangeId = Math.max(lastChangeId, Number(settings.changeId || 0));
   const batchChange = await appendChange(client, companyId, 'patta_batch', payload.batchId, 1, operationId, 'INSERT',
     { batchId: payload.batchId, parties: canonicalPartyIds }, new Date().toISOString());
   lastChangeId = Number(batchChange.rows[0].change_id);

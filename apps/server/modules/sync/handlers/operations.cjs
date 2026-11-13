@@ -1068,7 +1068,7 @@ async function executeReverseAdjustment(client, companyId, operationId, payload,
   };
 }
 
-async function executeCreateParty(client, companyId, operationId, payload, canonicalJson) {
+async function executeCreateParty(client, companyId, operationId, payload, canonicalJson, options = {}) {
   const partyAlias = await client.query(`SELECT canonical_party_id FROM party_id_aliases
     WHERE company_id = $1 AND legacy_party_id = $2`, [companyId, payload.partyRecordId]);
   const partyRecordId = partyAlias.rows[0]?.canonical_party_id || payload.partyRecordId;
@@ -1149,17 +1149,26 @@ async function executeCreateParty(client, companyId, operationId, payload, canon
       FROM parties p LEFT JOIN protected_party_patta_ranges r
         ON r.company_id = p.company_id AND r.party_record_id = p.id
       WHERE p.company_id = $1`, [companyId]);
-    pattaStartNumber = findAvailablePattaStart({
-      nextPattaNumber: currentNextPattaNumber,
-      pattaCount: Number(payload.pattaCount),
-      parties: partyRanges.rows
-    });
+    if (options.preservePrintedRange) {
+      const range = require('../../../../../packages/domain/legacyPattaBatch.cjs').capturedPattaRange(payload);
+      if (!range) throw createOpError('LEGACY_PATTA_EVIDENCE_REQUIRED', 'Original printed patta range is missing');
+      const overlaps = partyRanges.rows.some((party) => party.status !== 'CLOSED' && !party.is_archived
+        && Number(party.patta_start_number) <= range.end && Number(party.patta_end_number) >= range.start);
+      if (overlaps) throw createOpError('LEGACY_PATTA_RANGE_CONFLICT', 'Original printed patta range overlaps an active server issuance');
+      pattaStartNumber = range.start;
+    } else {
+      pattaStartNumber = findAvailablePattaStart({
+        nextPattaNumber: currentNextPattaNumber,
+        pattaCount: Number(payload.pattaCount),
+        parties: partyRanges.rows
+      });
+    }
     pattaEndNumber = pattaStartNumber + Number(payload.pattaCount) - 1;
     if (!Number.isSafeInteger(pattaEndNumber)) {
       throw createOpError('INVALID_PATTA_COUNT', 'Patta sequence exceeds the safe integer range');
     }
     cumulativePattaCount = pattaEndNumber;
-    if (pattaStartNumber >= currentNextPattaNumber) {
+    if (pattaEndNumber >= currentNextPattaNumber) {
       await client.query(`UPDATE company_patta_sequences SET next_patta_number = $2, updated_at = NOW()
         WHERE company_id = $1`, [companyId, pattaEndNumber + 1]);
     }

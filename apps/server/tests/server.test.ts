@@ -952,7 +952,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
     const bodyA = JSON.parse(pullA.payload);
     expect(bodyA.items.length).toBe(2);
     expect(bodyA.nextPattaNumber).toBe(13);
-    expect(bodyA.capabilities).toEqual({ voidedPattaReuse: true, pattaLifecycleV1: true });
+    expect(bodyA.capabilities).toEqual({ voidedPattaReuse: true, pattaLifecycleV1: true, legacyPattaBatchReplayV1: true });
     expect(bodyA.items[0].entityId).toBe('00000000-0000-4000-8000-000000000103');
     expect(bodyA.items[1].entityId).toBe('00000000-0000-4000-8000-000000000105');
     expect(bodyA.items.every((i: any) => i.companyId === COMPANY_A)).toBe(true);

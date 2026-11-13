@@ -12,6 +12,7 @@ const {
   recoverPeriodScopeMismatchTickets,
   recoverCapturedTicketProvenanceTickets,
   recoverVoidedPattaDuplicateTickets,
+  recoverLegacyPattaBatches,
   supersedeBatchSettingsAlreadyApplied
 } = require('../database/outbox/outboxManager.cjs');
 
@@ -189,6 +190,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // ----------------------------------------------------
   let hasMore = true;
   let voidedPattaReuseSupported = false;
+  let legacyPattaBatchReplaySupported = false;
   let purgeRebootstrapped = false;
   let rebootstrapStats = null;
   try { while (hasMore) {
@@ -208,6 +210,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     }
     if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
     if (pullRes.capabilities?.voidedPattaReuse === true) voidedPattaReuseSupported = true;
+    if (pullRes.capabilities?.legacyPattaBatchReplayV1 === true) legacyPattaBatchReplaySupported = true;
     db.prepare(`INSERT INTO local_meta(key, value, updated_at) VALUES('patta_lifecycle_v1', ?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(pullRes.capabilities?.pattaLifecycleV1 === true ? '1' : '0', new Date().toISOString());
@@ -233,6 +236,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     : 0;
   const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
   const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
+  const recoveredLegacyPattaBatchCount = legacyPattaBatchReplaySupported ? recoverLegacyPattaBatches(db, companyId) : 0;
 
   // A previous process can lose the HTTP acknowledgement after the server commits.
   // Reconcile those exact operation IDs before local causal dependencies are evaluated.
@@ -299,6 +303,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     recoveredVoidedPattaDuplicateCount,
     recoveredPeriodScopeMismatchCount,
     recoveredCapturedTicketCount,
+    recoveredLegacyPattaBatchCount,
     reconciledCount,
     pushed: pushRes,
     pulledFinal,

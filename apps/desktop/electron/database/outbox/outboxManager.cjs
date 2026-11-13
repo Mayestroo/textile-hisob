@@ -529,6 +529,37 @@ function isVoidedPattaUniqueViolation(errorValue) {
   }
 }
 
+function recoverLegacyPattaBatches(db, companyId) {
+  const { isLegacyPattaBatch, capturedPattaRange } = require('../../../../../packages/domain/legacyPattaBatch.cjs');
+  return db.transaction(() => {
+    const rows = db.prepare(`SELECT * FROM local_outbox WHERE company_id=?
+      AND command_type='CompletePattaBatch' AND status IN ('CONFLICT','DEAD_LETTER')
+      ORDER BY causal_sequence, rowid`).all(companyId);
+    let recovered = 0;
+    for (const row of rows) {
+      let payload;
+      let error;
+      try {
+        payload = JSON.parse(row.payload_json);
+        error = JSON.parse(row.last_error || row.error_message || '{}');
+      } catch { continue; }
+      // Retry only the obsolete missing-revision refusal. A real CAS, range or
+      // identity conflict is not fixed by retrying and must remain visible.
+      if (error?.code !== 'REVISION_CONFLICT'
+        || !/^Batch settings revision is missing(?: or invalid)?; reload before printing$/.test(error.message || '')
+        || !isLegacyPattaBatch(payload) || payload?.companyId !== companyId
+        || payload.operationId !== row.operation_id || payload.batchId !== row.entity_id
+        || row.entity_type !== 'patta_batch'
+        || computePayloadHash(canonicalStringify(payload)) !== row.payload_hash
+        || !Array.isArray(payload.parties) || !payload.parties.length
+        || payload.parties.some((party) => !capturedPattaRange(party) || !party.printedAt)) continue;
+      updateOperationStatus(db, companyId, row.operation_id, 'PENDING', 'RETRY_LEGACY_PATTA_BATCH_UNCHANGED');
+      recovered++;
+    }
+    return recovered;
+  })();
+}
+
 function recoverVoidedPattaDuplicateTickets(db, companyId) {
   const operations = db.prepare(`SELECT * FROM local_outbox
     WHERE company_id = ? AND command_type = 'SubmitTicket' AND status = 'DEAD_LETTER'
@@ -862,6 +893,7 @@ module.exports = {
   getOutboxDiagnostics,
   supersedeBatchSettingsAlreadyApplied,
   recoverVoidedPattaDuplicateTickets,
+  recoverLegacyPattaBatches,
   recoverPeriodScopeMismatchTickets,
   recoverCapturedTicketProvenanceTickets,
   recoverStrandedSendingOperations

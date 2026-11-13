@@ -445,7 +445,8 @@ function getNextEntityRevision(db, companyId, entityType, entityId, currentRevis
 function getNextBatchSettingsRevision(db, companyId, currentRevision) {
   const pending = db.prepare(`SELECT COUNT(*) AS count FROM local_outbox
     WHERE company_id = ? AND status IN ('PENDING', 'SENDING')
-      AND command_type IN ('UpdateBatchSettings', 'CompletePattaBatch')`).get(companyId);
+      AND (command_type = 'UpdateBatchSettings' OR (command_type = 'CompletePattaBatch'
+        AND json_type(payload_json, '$.batchSettingsBaseRevision') = 'integer'))`).get(companyId);
   return Number(currentRevision || 0) + Number(pending.count);
 }
 

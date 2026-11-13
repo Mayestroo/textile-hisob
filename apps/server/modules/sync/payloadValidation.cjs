@@ -1072,7 +1072,9 @@ function validateCompletePattaBatch(payload, context) {
   rejectAuthorityFields(payload, [...AUTHORITY_FIELDS, 'status', 'serverRevision', 'updatedAt', 'createdAt']);
   const scope = validateWorkbookScope(payload, context);
   const batchId = requiredIdentifier(payload, ['batchId']);
-  if (!Number.isSafeInteger(payload.batchSettingsBaseRevision) || payload.batchSettingsBaseRevision < 0) {
+  const { isLegacyPattaBatch, capturedPattaRange } = require('../../../../packages/domain/legacyPattaBatch.cjs');
+  const legacy = isLegacyPattaBatch(payload);
+  if (!legacy && (!Number.isSafeInteger(payload.batchSettingsBaseRevision) || payload.batchSettingsBaseRevision < 0)) {
     throw createValidationError('REVISION_CONFLICT', 'Batch settings revision is missing or invalid; reload before printing');
   }
   const rawParties = payload.parties;
@@ -1086,6 +1088,9 @@ function validateCompletePattaBatch(payload, context) {
   }));
   const keys = new Set();
   for (const party of parties) {
+    if (legacy && (!capturedPattaRange(party) || !party.printedAt)) {
+      throw createValidationError('LEGACY_PATTA_EVIDENCE_REQUIRED', 'Legacy batch must retain its printed date and original patta range');
+    }
     if (keys.has(party.partyNumber)) throw createValidationError('ACTIVE_PARTY_EXISTS', 'Batch contains duplicate party numbers');
     keys.add(party.partyNumber);
   }
