@@ -1,7 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import React from 'react';
 import { PattaBatchView } from '../PattaBatchView';
 import { useWorkbookStore } from '../../../store/workbookStore';
 
@@ -72,9 +71,8 @@ describe('PattaBatchView - Custom sizes in grid', () => {
   it('renders standard numeric sizes (40, 60) in the grid', () => {
     render(<PattaBatchView />);
     // size inputs are rendered as placeholders or labels containing the size name
-    const inputs = screen.getAllByRole('spinbutton');
-    const inputValues = inputs.map((el) => (el as HTMLInputElement).placeholder || el.getAttribute('aria-label') || el.closest('[data-size]')?.getAttribute('data-size') || '');
-    // Alternatively check for text content anywhere
+    screen.getAllByRole('spinbutton');
+    // Check for text content anywhere in rendered output
     const html = document.body.innerHTML;
     expect(html).toContain('40');
     expect(html).toContain('60');
