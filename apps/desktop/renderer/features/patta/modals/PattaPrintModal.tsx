@@ -18,6 +18,7 @@ export interface PrintBatchItem {
 
 interface PattaPrintModalProps {
   items: PrintBatchItem[];
+  onReserve?: (items: Array<{ modelId: string; partyNumber: string; pattaCount: number; ishSoniPerPatta?: number; totalIshSoni?: number; ishSoni: number; sizes?: Record<string, string>; sizeOrder?: string[]; color: string }>) => Promise<boolean> | boolean;
   onPrinted?: (printedItems: Array<{
     modelId: string;
     partyNumber: string;
@@ -48,6 +49,7 @@ interface PrintableTicket {
 
 export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
   items,
+  onReserve,
   onPrinted,
   onClose
 }) => {
@@ -268,6 +270,14 @@ export const PattaPrintModal: React.FC<PattaPrintModalProps> = ({
         };
       })
       .filter((p) => p.pattaCount > 0);
+
+    // Commit the numbered issuance authority before opening the physical print
+    // dialog. A cancelled/failed spool remains an issued reservation, not proof
+    // of a printed document; retry/reprint must use that reserved identity.
+    if (onReserve && !(await onReserve(printedSummary))) {
+      setIsPrinting(false);
+      return;
+    }
 
     const fullHtml = generateFullHtml();
     const eAPI = (window as any).electronAPI;

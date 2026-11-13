@@ -41,6 +41,20 @@ class SyncClient {
       && config.maxOperationBatchBytes > 0
       ? config.maxOperationBatchBytes
       : DEFAULT_MAX_OPERATION_BATCH_BYTES;
+    this.purgeGeneration = Number.isSafeInteger(Number(config.purgeGeneration)) && Number(config.purgeGeneration) >= 1
+      ? Number(config.purgeGeneration)
+      : null;
+  }
+
+  setPurgeGeneration(purgeGeneration) {
+    if (purgeGeneration === null || purgeGeneration === undefined || purgeGeneration === '') {
+      this.purgeGeneration = null;
+      return;
+    }
+    const parsed = Number(purgeGeneration);
+    if (Number.isSafeInteger(parsed) && parsed >= 1) {
+      this.purgeGeneration = parsed;
+    }
   }
 
   getHeaders() {
@@ -53,6 +67,9 @@ class SyncClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
     if (this.operatorToken) headers['x-operator-token'] = this.operatorToken;
+    if (Number.isSafeInteger(this.purgeGeneration) && this.purgeGeneration >= 1) {
+      headers['x-purge-generation'] = String(this.purgeGeneration);
+    }
     return headers;
   }
 
@@ -159,6 +176,41 @@ class SyncClient {
         data.error
       );
     }
+    return data;
+  }
+
+  async cancelAllocationReview(request) {
+    return this.postJson('/api/sync/allocation-review/cancel', request, 'Allocation cancellation failed');
+  }
+
+  async getAllocationReviewHistory(operationId) {
+    const url = `${this.baseUrl}/api/sync/allocation-review/history/${encodeURIComponent(operationId)}`;
+    const res = await this.fetchWithTimeout(url, { method: 'GET', headers: this.getHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SyncError(data.error?.message || 'Review history failed', data.error?.code || 'ALLOCATION_HISTORY_FAILED', res.status);
+    return data;
+  }
+
+  async getStajDebtHistory(debtId) {
+    const url = `${this.baseUrl}/api/staj-debts/${encodeURIComponent(debtId)}`;
+    const res = await this.fetchWithTimeout(url, { method: 'GET', headers: this.getHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SyncError(data.error?.message || 'STAJ debt history failed', data.error?.code || 'STAJ_DEBT_HISTORY_FAILED', res.status);
+    return data;
+  }
+
+  async getStajDebtReviews() {
+    const url = `${this.baseUrl}/api/staj-debts/reviews`;
+    const res = await this.fetchWithTimeout(url, { method: 'GET', headers: this.getHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SyncError(data.error?.message || 'STAJ debt review list failed', data.error?.code || 'STAJ_DEBT_REVIEW_FAILED', res.status);
+    return data;
+  }
+
+  async postJson(path, payload, fallback) {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}${path}`, { method: 'POST', headers: this.getHeaders(), body: JSON.stringify(payload) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SyncError(data.error?.message || fallback, data.error?.code || `HTTP_${res.status}`, res.status);
     return data;
   }
 
@@ -313,7 +365,10 @@ class SyncClient {
   }
 
   async pullChanges(cursor = 0, limit = 100) {
-    const url = `${this.baseUrl}/api/sync/changes?cursor=${encodeURIComponent(cursor)}&limit=${encodeURIComponent(limit)}`;
+    const genSuffix = Number.isSafeInteger(this.purgeGeneration) && this.purgeGeneration >= 1
+      ? `&purgeGeneration=${encodeURIComponent(this.purgeGeneration)}`
+      : '';
+    const url = `${this.baseUrl}/api/sync/changes?cursor=${encodeURIComponent(cursor)}&limit=${encodeURIComponent(limit)}${genSuffix}`;
     let res;
     try {
       res = await this.fetchWithTimeout(url, {

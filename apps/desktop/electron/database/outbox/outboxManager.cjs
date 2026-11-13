@@ -10,6 +10,32 @@ const { ticketEntryId, legacyLocalTicketEntryId } = require('../../../../../pack
  */
 
 const { canonicalStringify, computePayloadHash } = require('../core/canonicalPayload.cjs');
+const { businessDate } = require('../../../../../packages/domain/periodWriteGuard.cjs');
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function formatCalendarDateInTimezone(timestampIso, timezone = 'Asia/Tashkent') {
+  if (typeof timestampIso !== 'string' || !timestampIso.trim()) return null;
+  const ms = Date.parse(timestampIso);
+  if (!Number.isFinite(ms)) return null;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone || 'Asia/Tashkent',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date(ms));
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  if (!map.year || !map.month || !map.day) return null;
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function resolvePurgeBusinessDate(effectiveDate, timestampIso, timezone = 'Asia/Tashkent') {
+  if (effectiveDate !== undefined && effectiveDate !== null) {
+    return businessDate(effectiveDate, timestampIso);
+  }
+  const zoned = formatCalendarDateInTimezone(timestampIso, timezone);
+  if (zoned) return zoned;
+  return businessDate(effectiveDate, timestampIso);
+}
 
 const LEGAL_TRANSITIONS = new Map([
   ['PENDING', new Set(['SENDING', 'SUPERSEDED'])],
@@ -183,6 +209,103 @@ function listOutboxReconciliationCandidates(db, companyId, limit = 100) {
       causal_sequence ASC, created_at ASC
     LIMIT ?
   `).all(companyId, limit);
+}
+
+/**
+ * Returns immutable local evidence for allocation operations held for review.
+ * This is deliberately read-only: the desktop cannot assert server acceptance
+ * or clear a conflict without an authoritative server receipt.
+ */
+function listAllocationReviewOperations(db, companyId, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(500, Number.isSafeInteger(limit) ? limit : 100));
+  return db.prepare(`
+    SELECT op.operation_id, op.command_type, op.entity_type, op.entity_id, op.payload_json,
+      op.payload_hash, op.depends_on_operation_id, op.status, op.last_error, op.error_message,
+      op.created_at, op.updated_at, intent.status AS cancellation_status,
+      intent.result_json AS cancellation_result_json
+    FROM local_outbox op
+    LEFT JOIN allocation_resolution_intents intent
+      ON intent.company_id = op.company_id AND intent.original_operation_id = op.operation_id
+    WHERE op.company_id = ? AND op.command_type IN ('SubmitTicket', 'UpdateTicket')
+      AND ((op.status = 'CONFLICT' AND (op.last_error LIKE '%ALLOCATION_REVIEW_REQUIRED%'
+        OR op.error_message LIKE '%ALLOCATION_REVIEW_REQUIRED%'))
+        OR (op.status = 'SUPERSEDED' AND op.last_error = 'SERVER_CANCELLED'))
+    ORDER BY op.causal_sequence ASC, op.created_at ASC
+    LIMIT ?
+  `).all(companyId, safeLimit).map((row) => ({
+    ...row,
+    cancellation_result: (() => { try { return row.cancellation_result_json ? JSON.parse(row.cancellation_result_json) : null; } catch { return null; } })(),
+    payload: (() => { try { return JSON.parse(row.payload_json); } catch { return null; } })()
+  }));
+}
+
+function requeueAllocationReviewOperation(db, companyId, operationId) {
+  return db.transaction(() => {
+    const op = getOperation(db, companyId, operationId);
+    if (!op || op.status !== 'CONFLICT' || !['SubmitTicket', 'UpdateTicket'].includes(op.command_type)
+      || !String(op.last_error || op.error_message || '').includes('ALLOCATION_REVIEW_REQUIRED')) {
+      const err = new Error('Allocation review operation is not eligible for retry'); err.code = 'ALLOCATION_RETRY_NOT_ELIGIBLE'; throw err;
+    }
+    if (!op.depends_on_operation_id) {
+      const err = new Error('No recorded issuance dependency exists; retry cannot establish original issuance evidence'); err.code = 'ISSUANCE_DEPENDENCY_MISSING'; throw err;
+    }
+    const parent = getOperation(db, companyId, op.depends_on_operation_id);
+    if (!parent || parent.status !== 'SYNCED' || parent.accepted_payload_hash !== parent.payload_hash) {
+      const err = new Error('Original issuance is not confirmed by an exact server acceptance receipt'); err.code = 'ISSUANCE_NOT_ACCEPTED'; throw err;
+    }
+    validateOutboxTransition(op.status, 'PENDING');
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE local_outbox SET status = 'PENDING', last_error = 'MANUAL_CAUSAL_RETRY',
+      error_message = 'Manual retry after parent server acceptance', updated_at = ?
+      WHERE company_id = ? AND operation_id = ? AND status = 'CONFLICT'`).run(now, companyId, operationId);
+    return getOperation(db, companyId, operationId);
+  })();
+}
+
+function queueAllocationCancellation(db, companyId, operationId, reason) {
+  return db.transaction(() => {
+    const op = getOperation(db, companyId, operationId);
+    if (!op || !['SubmitTicket', 'UpdateTicket'].includes(op.command_type) || !['CONFLICT', 'PENDING'].includes(op.status)) {
+      const err = new Error('Only an unaccepted ticket allocation may be cancelled'); err.code = 'ALLOCATION_NOT_CANCELLABLE'; throw err;
+    }
+    const resolutionOperationId = require('crypto').randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO allocation_resolution_intents
+      (resolution_operation_id,company_id,original_operation_id,original_payload_hash,command_type,original_payload_json,reason,status,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,'PENDING',?,?)`).run(resolutionOperationId, companyId, operationId, op.payload_hash,
+      op.command_type, op.payload_json, reason, now, now);
+    return { resolutionOperationId, operationId, payloadHash: op.payload_hash, commandType: op.command_type, payload: JSON.parse(op.payload_json), reason, status: 'PENDING' };
+  })();
+}
+
+function listPendingAllocationCancellations(db, companyId) {
+  return db.prepare(`SELECT * FROM allocation_resolution_intents WHERE company_id=? AND status='PENDING' ORDER BY created_at`).all(companyId);
+}
+
+function acknowledgeAllocationCancellation(db, companyId, resolutionOperationId, result) {
+  return db.transaction(() => {
+    const intent = db.prepare(`SELECT * FROM allocation_resolution_intents WHERE company_id=? AND resolution_operation_id=?`).get(companyId, resolutionOperationId);
+    if (!intent) throw new Error('Allocation cancellation intent not found');
+    if (result?.status !== 'CANCELLED' || result?.resolutionOperationId !== resolutionOperationId) throw new Error('Invalid authoritative cancellation receipt');
+    const original = getOperation(db, companyId, intent.original_operation_id);
+    if (!original || original.payload_hash !== intent.original_payload_hash) throw new Error('Local original allocation evidence changed');
+    if (original.status !== 'SUPERSEDED') {
+      validateOutboxTransition(original.status, 'SUPERSEDED');
+      db.prepare(`UPDATE local_outbox SET status='SUPERSEDED', last_error='SERVER_CANCELLED',
+        error_message='Authoritatively cancelled by accountant; stale replay fenced by server', updated_at=?
+        WHERE company_id=? AND operation_id=?`).run(new Date().toISOString(), companyId, intent.original_operation_id);
+    }
+    db.prepare(`UPDATE allocation_resolution_intents SET status='ACKNOWLEDGED',result_json=?,updated_at=?
+      WHERE company_id=? AND resolution_operation_id=?`).run(JSON.stringify(result), new Date().toISOString(), companyId, resolutionOperationId);
+    return result;
+  })();
+}
+
+function rejectAllocationCancellation(db, companyId, resolutionOperationId, error) {
+  db.prepare(`UPDATE allocation_resolution_intents SET status='REJECTED',result_json=?,updated_at=?
+    WHERE company_id=? AND resolution_operation_id=? AND status='PENDING'`)
+    .run(JSON.stringify({ code: error?.code || 'ALLOCATION_CANCELLATION_REJECTED', message: error?.message || 'Rejected by server' }),
+      new Date().toISOString(), companyId, resolutionOperationId);
 }
 
 function acknowledgeOutboxOperation(db, companyId, operationId, acceptedPayloadHash, serverRevision, acceptedChangeId = null) {
@@ -577,14 +700,165 @@ function recoverStrandedSendingOperations(db, companyId) {
   })();
 }
 
+/**
+ * Quarantines an outbox operation blocked by an authoritative historical purge era.
+ * Leaves immutable semantic columns untouched so triggers are respected and telemetry survives.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} companyId
+ * @param {string} operationId
+ * @param {string} reason
+ * @returns {object}
+ */
+function quarantinePurgedOutboxOperation(db, companyId, operationId, reason = 'PURGED_IN_HISTORICAL_RESET') {
+  const op = getOperation(db, companyId, operationId);
+  if (!op) {
+    const err = new Error(`Outbox operation not found: ${operationId} for company ${companyId}`);
+    err.code = 'OPERATION_NOT_FOUND';
+    throw err;
+  }
+  if (!['PENDING', 'SENDING', 'CONFLICT', 'DEAD_LETTER'].includes(op.status)) {
+    const err = new Error(`Cannot quarantine outbox operation ${operationId} from terminal state ${op.status}`);
+    err.code = 'INVALID_OUTBOX_TRANSITION';
+    throw err;
+  }
+  const now = new Date().toISOString();
+  const detail = String(reason || 'PURGED_IN_HISTORICAL_RESET');
+  db.prepare(`
+    UPDATE local_outbox
+    SET status = 'DEAD_LETTER',
+        last_error = ?,
+        error_message = ?,
+        updated_at = ?
+    WHERE company_id = ? AND operation_id = ?
+  `).run(detail, detail, now, companyId, operationId);
+  return getOperation(db, companyId, operationId);
+}
+
+function parseTimestampMs(raw) {
+  if (!raw || typeof raw !== 'string') return NaN;
+  return Date.parse(raw);
+}
+
+/**
+ * Classifies whether a queued local outbox operation targets pre-cutoff historical state.
+ *
+ * @param {object} op
+ * @param {object} [context={}]
+ * @returns {{ preCutoff: boolean, reason: string|null }}
+ */
+function isOutboxOperationPreCutoff(op, context = {}) {
+  const cutoffDate = context.cutoffDate || '2026-10-08';
+  const cutoffUtcMs = Number.isFinite(context.cutoffUtcMs) ? context.cutoffUtcMs : Date.parse('2026-10-07T19:00:00Z');
+  let payload = {};
+  try {
+    payload = typeof op.payload_json === 'string' ? JSON.parse(op.payload_json) : (op.payload_json || {});
+  } catch {
+    return { preCutoff: true, reason: 'INVALID_OUTBOX_PAYLOAD_PRE_QUARANTINE' };
+  }
+
+  const commandType = op.command_type;
+  const createdMs = parseTimestampMs(op.created_at);
+
+  if (commandType === 'SubmitTicket') {
+    const effective = resolvePurgeBusinessDate(payload.effectiveDate, payload.submittedAt, context.timezone);
+    if (effective < cutoffDate) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_SUBMIT_TICKET' };
+    }
+    const partyId = payload.partyRecordId;
+    if (partyId && context.snapshotPartyIds && !context.snapshotPartyIds.has(partyId) && !context.preservedNewPartyIds?.has(partyId)) {
+      return { preCutoff: true, reason: 'PURGED_REFERENCED_PARTY_MISSING' };
+    }
+    return { preCutoff: false, reason: null };
+  }
+
+  if (commandType === 'UpdateTicket' || commandType === 'DeleteTicket') {
+    const ticketId = payload.ticketId || op.entity_id;
+    const localSubmitted = context.localTicketSubmittedAtById?.get(ticketId);
+    if (localSubmitted && resolvePurgeBusinessDate(null, localSubmitted, context.timezone) < cutoffDate) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_TICKET_MUTATION' };
+    }
+    if (context.snapshotTicketIds && !context.snapshotTicketIds.has(ticketId) && !context.preservedNewTicketIds?.has(ticketId)) {
+      return { preCutoff: true, reason: 'PURGED_REFERENCED_TICKET_MISSING' };
+    }
+    return { preCutoff: false, reason: null };
+  }
+
+  if (commandType === 'RecordProductionAdjustment' || commandType === 'ReverseProductionAdjustment') {
+    if (typeof payload.effectiveDate === 'string' && ISO_DATE_RE.test(payload.effectiveDate) && payload.effectiveDate < cutoffDate) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_PRODUCTION_ADJUSTMENT' };
+    }
+    const adjCreatedMs = parseTimestampMs(payload.createdAt);
+    if (Number.isFinite(adjCreatedMs) && adjCreatedMs < cutoffUtcMs) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_PRODUCTION_ADJUSTMENT' };
+    }
+    if (Number.isFinite(createdMs) && createdMs < cutoffUtcMs) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_PRODUCTION_ADJUSTMENT' };
+    }
+    if (commandType === 'ReverseProductionAdjustment' && payload.originalAdjustmentId
+      && context.snapshotAdjustmentIds && !context.snapshotAdjustmentIds.has(payload.originalAdjustmentId)
+      && !context.preservedNewAdjustmentIds?.has(payload.originalAdjustmentId)) {
+      return { preCutoff: true, reason: 'PURGED_REFERENCED_ADJUSTMENT_MISSING' };
+    }
+    return { preCutoff: false, reason: null };
+  }
+
+  if (commandType === 'CreatePeriod' || commandType === 'UpdatePeriod' || commandType === 'ClosePeriod') {
+    if (typeof payload.endDate === 'string' && ISO_DATE_RE.test(payload.endDate) && payload.endDate < cutoffDate) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_PERIOD' };
+    }
+    const periodId = payload.periodId || op.entity_id;
+    const localEnd = context.localPeriodEndDateById?.get(periodId);
+    if (localEnd && ISO_DATE_RE.test(localEnd) && localEnd < cutoffDate) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_PERIOD' };
+    }
+    if ((commandType === 'UpdatePeriod' || commandType === 'ClosePeriod') && context.snapshotPeriodIds
+      && !context.snapshotPeriodIds.has(periodId) && !context.preservedNewPeriodIds?.has(periodId)) {
+      return { preCutoff: true, reason: 'PURGED_REFERENCED_PERIOD_MISSING' };
+    }
+    return { preCutoff: false, reason: null };
+  }
+
+  if (commandType === 'UpdateBatchSettings') {
+    if (Number.isFinite(createdMs) && createdMs < cutoffUtcMs) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_BATCH_SETTINGS' };
+    }
+    return { preCutoff: false, reason: null };
+  }
+
+  if (['CompletePattaBatch', 'CompletePartySeries', 'ArchivePartyHistory', 'CreateParty', 'UpdateParty', 'CloseParty'].includes(commandType)) {
+    if (Number.isFinite(createdMs) && createdMs < cutoffUtcMs) {
+      return { preCutoff: true, reason: 'PURGED_PRE_CUTOFF_PARTY_OPERATION' };
+    }
+    if (['UpdateParty', 'CloseParty', 'ArchivePartyHistory'].includes(commandType)) {
+      const targetPartyId = payload.partyRecordId || op.entity_id;
+      if (targetPartyId && context.snapshotPartyIds && !context.snapshotPartyIds.has(targetPartyId)
+        && !context.preservedNewPartyIds?.has(targetPartyId)) {
+        return { preCutoff: true, reason: 'PURGED_REFERENCED_PARTY_MISSING' };
+      }
+    }
+    return { preCutoff: false, reason: null };
+  }
+
+  return { preCutoff: false, reason: null };
+}
+
 module.exports = {
   validateOutboxTransition,
   insertOutboxOperation,
   getOperation,
   listPendingOperations,
   listOutboxReconciliationCandidates,
+  listAllocationReviewOperations,
+  requeueAllocationReviewOperation,
+  queueAllocationCancellation,
+  listPendingAllocationCancellations,
+  acknowledgeAllocationCancellation,
+  rejectAllocationCancellation,
   acknowledgeOutboxOperation,
   updateOperationStatus,
+  quarantinePurgedOutboxOperation,
+  isOutboxOperationPreCutoff,
   getOutboxDiagnostics,
   supersedeBatchSettingsAlreadyApplied,
   recoverVoidedPattaDuplicateTickets,

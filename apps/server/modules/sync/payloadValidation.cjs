@@ -1,6 +1,7 @@
 'use strict';
 
 const { canonicalStringify } = require('./canonicalPayload.cjs');
+const { toMinorUnits, fromMinorUnits } = require('../../../../packages/domain/stajDebtLedger.cjs');
 
 const IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/;
 const COMPANY_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -38,7 +39,10 @@ const COMMANDS = Object.freeze({
   ResolveMigrationReconciliationCandidate: {
     entityType: 'reconciliation_candidate',
     entityId: 'candidateId'
-  }
+  },
+  RegisterStajDebt: { entityType: 'staj_debt', entityId: 'debtId' },
+  AllocateStajDebt: { entityType: 'staj_debt', entityId: 'debtId' },
+  ReverseStajDebtAllocation: { entityType: 'staj_debt', entityId: 'debtId' }
 });
 
 const RECONCILIATION_DECISIONS = Object.freeze([
@@ -488,6 +492,9 @@ function validateSubmitTicket(payload, context) {
     }
   }
   const qty = positiveQuantity(payload.qty, 'qty');
+  if (hasOwn(payload, 'allocationVersion') && payload.allocationVersion !== 1) {
+    throw createValidationError('INVALID_ALLOCATION_VERSION', 'allocationVersion must be 1 when provided');
+  }
 
   if (!Array.isArray(payload.entries) || payload.entries.length === 0) {
     throw createValidationError('INVALID_ENTRIES', 'entries must be a non-empty array');
@@ -501,7 +508,7 @@ function validateSubmitTicket(payload, context) {
     const workerId = workerReference(entry.workerId, `entries[${index}].workerId`);
     const result = { ...entry, opName, workerId };
     if (hasOwn(entry, 'qty') && entry.qty !== undefined && entry.qty !== null) {
-      result.qty = finiteNumber(entry.qty, `entries[${index}].qty`, { min: 0 });
+      result.qty = finiteNumber(entry.qty, `entries[${index}].qty`, { min: Number.MIN_VALUE });
     }
     if (hasOwn(entry, 'rateSnapshot') && entry.rateSnapshot !== undefined && entry.rateSnapshot !== null) {
       result.rateSnapshot = finiteNumber(entry.rateSnapshot, `entries[${index}].rateSnapshot`);
@@ -578,6 +585,7 @@ function validateUpdateTicket(payload, context) {
     return {
       opName: normalizeText(entry.opName, `entries[${index}].opName`, { maxLength: 256 }),
       workerId: workerReference(entry.workerId, `entries[${index}].workerId`),
+      ...(entry.qty == null ? {} : { qty: positiveQuantity(entry.qty, `entries[${index}].qty`) }),
       ...(entry.entryId == null ? {} : { entryId: requiredEntityKey(entry.entryId, `entries[${index}].entryId`) })
     };
   });
@@ -1184,6 +1192,38 @@ function validateResolveCandidate(payload, context) {
   return normalized;
 }
 
+function validateStajDebtCommand(commandType, payload, context) {
+  rejectAuthorityFields(payload, AUTHORITY_FIELDS);
+  const companyId = requiredCompany(payload.companyId);
+  const operationId = requiredIdentifier(payload, ['operationId']);
+  const commandId = requiredIdentifier(payload, ['commandId']);
+  const debtId = requiredEntityKey(payload.debtId, 'debtId');
+  const normalized = { companyId, operationId, commandId, debtId };
+  if (commandType === 'RegisterStajDebt') {
+    const workerId = workerReference(payload.workerId, 'workerId');
+    if (Number(workerId) <= 0) throw createValidationError('INVALID_WORKER_ID', 'workerId must be positive');
+    let amount;
+    try { amount = fromMinorUnits(toMinorUnits(payload.amount)); }
+    catch { throw createValidationError('INVALID_STAJ_DEBT_AMOUNT', 'amount must be a positive decimal with at most two fractional digits'); }
+    if (toMinorUnits(amount) <= 0n) throw createValidationError('INVALID_STAJ_DEBT_AMOUNT', 'amount must be positive');
+    normalized.workerId = Number(workerId);
+    normalized.amount = amount;
+    normalized.evidenceReference = strictText(payload.evidenceReference, 'evidenceReference', { maxLength: 1024 });
+    normalized.evidenceSha256 = strictText(payload.evidenceSha256, 'evidenceSha256', { maxLength: 64 });
+    if (!/^[0-9a-f]{64}$/.test(normalized.evidenceSha256)) throw createValidationError('INVALID_STAJ_EVIDENCE_HASH', 'evidenceSha256 must be lowercase SHA-256 hex');
+    normalized.verificationNote = strictText(payload.verificationNote, 'verificationNote', { maxLength: 1000 });
+  } else if (commandType === 'AllocateStajDebt') {
+    normalized.periodId = requiredEntityKey(payload.periodId, 'periodId');
+  } else {
+    normalized.deductionEventId = requiredEntityKey(payload.deductionEventId, 'deductionEventId');
+    normalized.reason = strictText(payload.reason, 'reason', { maxLength: 1000 });
+  }
+  if (context.companyId && companyId !== context.companyId) throw createValidationError('COMPANY_SCOPE_MISMATCH', 'Command companyId does not match authenticated company');
+  if (context.operation?.operationId && operationId !== context.operation.operationId) throw createValidationError('OPERATION_ID_MISMATCH', 'Command operationId does not match envelope operationId');
+  assertEntity(context.operation, commandType, debtId);
+  return normalized;
+}
+
 function validateCommandPayload(commandType, payload, context = {}) {
   if (!Object.prototype.hasOwnProperty.call(COMMANDS, commandType)) {
     throw createValidationError('UNKNOWN_COMMAND', `Unsupported command type: ${commandType}`);
@@ -1238,6 +1278,10 @@ function validateCommandPayload(commandType, payload, context = {}) {
       return validateArchivePartyHistory(payload, context);
     case 'ResolveMigrationReconciliationCandidate':
       return validateResolveCandidate(payload, context);
+    case 'RegisterStajDebt':
+    case 'AllocateStajDebt':
+    case 'ReverseStajDebtAllocation':
+      return validateStajDebtCommand(commandType, payload, context);
     default:
       throw createValidationError('UNKNOWN_COMMAND', `Unsupported command type: ${commandType}`);
   }

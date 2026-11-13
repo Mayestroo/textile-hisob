@@ -129,10 +129,10 @@ describe('desktop SQLite saved-rate reader and shared server reducer', () => {
   }
   it('values P at frozen 5, Q independently at 9; reversal and closed baseline', () => {
     ticket('p', 10, 5); ticket('q', 2, 9, 'Q'); adjustment('add', 2);
-    expect(parity()).toMatchObject({ gross: 84, pieces: 12, net: 76, syncStatus: 'UNKNOWN', accountingStatus: 'INCOMPLETE' });
-    expect(parity('Q')).toMatchObject({ gross: 14, pieces: 2 });
+    expect(parity()).toMatchObject({ gross: 84, pieces: 12, net: 77, syncStatus: 'UNKNOWN', accountingStatus: 'INCOMPLETE' });
+    expect(parity('Q')).toMatchObject({ gross: 14, pieces: 2, net: 14 });
     adjustment('rev', -2, 5, 'P', 'APPROVED', 'add');
-    expect(parity()).toMatchObject({ gross: 70, net: 62 });
+    expect(parity()).toMatchObject({ gross: 70, net: 63 });
     db.prepare("UPDATE production_adjustments SET status='REVERSED' WHERE adjustment_id='add'").run();
     expect(parity().gross).toBe(70);
     db.prepare("UPDATE production_adjustments SET status='REVERSED' WHERE adjustment_id='rev'").run();
@@ -155,7 +155,7 @@ describe('desktop SQLite saved-rate reader and shared server reducer', () => {
     `).run(tenant, now, tenant, now, tenant, now, tenant, now, tenant, now, tenant, now);
     expect(read('P').workers[0]).toMatchObject({
       pieceworkGross: 500000, oklad: 2000000, magazin: 100000, avans: 200000,
-      jarima: 50000, staj: 25000, gross: 2500000, net: 2125000, pieces: 10
+      jarima: 50000, staj: 0, gross: 2500000, net: 2150000, pieces: 10
     });
     expect(read('Q').workers[0]).toMatchObject({ pieceworkGross: 0, oklad: 9000000, magazin: 0, gross: 9000000 });
     expect(read('P').workers[0].models_breakdown.m.operations[0]).toMatchObject({ qty: 10, amount: 500000 });
@@ -176,24 +176,24 @@ describe('desktop SQLite saved-rate reader and shared server reducer', () => {
       { adjustmentId: 'local-magazin', type: 'MAGAZIN', amountDelta: 100000, periodId: 'P' }
     ] };
     outbox('worker-money-op', 'UpsertWorker', '7', 'PENDING', payload, 'worker');
-    expect(read('P').workers[0]).toMatchObject({ gross: 2500000, net: 2125000,
+    expect(read('P').workers[0]).toMatchObject({ gross: 2500000, net: 2150000,
       syncStatus: 'UNSYNCED', accountingStatus: 'INCOMPLETE' });
 
     db.prepare("UPDATE local_outbox SET status='CONFLICT' WHERE operation_id='worker-money-op'").run();
-    expect(read('P').workers[0]).toMatchObject({ pieceworkGross: 500000, gross: 500000, net: 225000,
+    expect(read('P').workers[0]).toMatchObject({ pieceworkGross: 500000, gross: 500000, net: 250000,
       syncStatus: 'UNKNOWN', accountingStatus: 'INCOMPLETE',
       accountingReasons: expect.arrayContaining(['WORKER_ADJUSTMENT_CONFLICT']) });
 
     db.prepare(`UPDATE local_outbox SET status='SYNCED', accepted_payload_hash=payload_hash, accepted_server_revision=2
       WHERE operation_id='worker-money-op'`).run();
     db.prepare('UPDATE workers SET server_revision=2 WHERE company_id=? AND id=7').run(tenant);
-    expect(read('P').workers[0]).toMatchObject({ gross: 2500000, net: 2125000,
+    expect(read('P').workers[0]).toMatchObject({ gross: 2500000, net: 2150000,
       syncStatus: 'UNKNOWN', accountingStatus: 'INCOMPLETE',
       accountingReasons: expect.arrayContaining(['SYNC_FRESHNESS_UNVERIFIED']) });
   });
   it('independent buckets, floor, zero/null, unresolved and adjustment-only', () => {
     ticket('a', 10, 5); ticket('b', 4, 9); adjustment('minus', -3);
-    expect(parity()).toMatchObject({ gross: 77, pieces: 11, net: 69 });
+    expect(parity()).toMatchObject({ gross: 77, pieces: 11, net: 70 });
     db.prepare("UPDATE production_adjustments SET delta_qty=-12 WHERE adjustment_id='minus'").run();
     expect(parity()).toMatchObject({ gross: 14, pieces: 2, rawQuantity: 2 });
     db.prepare("DELETE FROM production_adjustments WHERE adjustment_id='minus'").run();
@@ -435,11 +435,11 @@ describe('desktop SQLite saved-rate reader and shared server reducer', () => {
     const openProjection = require('../readers/workbookPayrollRead.cjs').readWorkbookPayrollProjection(db, tenant);
     expect(closed.workers[0]).toMatchObject({ gross: 21, pieces: 3, net: 13 }); // (2 original + 1 correction) × frozen 7; deductions/staj 8.
     expect(openProjection.currentPeriod.id).toBe('Q');
-    expect(openProjection.payrollValuation.workers[0]).toMatchObject({ gross: 27, pieces: 3, net: 26,
+    expect(openProjection.payrollValuation.workers[0]).toMatchObject({ gross: 27, pieces: 3, net: 27,
       accountingReasons: expect.arrayContaining(['LOCAL_MUTATION_PENDING']) });
     const workbook = createPayrollWorkbook(openProjection.models, openProjection.workers, openProjection.payrollValuation);
     const rows = require('xlsx-js-style').utils.sheet_to_json(workbook.Sheets.Umumiy, { header: 1, defval: '' });
-    expect(rows[2].slice(0, 7)).toEqual([7, 'Worker', 26, 1, '', '', 27]);
+    expect(rows[2].slice(0, 7)).toEqual([7, 'Worker', 27, '', '', '', 27]);
     expect(db.prepare('SELECT COUNT(*) AS n FROM tickets WHERE id=?').get(entryCommand.ticketId).n).toBe(1);
     expect(db.prepare('SELECT COUNT(*) AS n FROM ticket_entries WHERE ticket_id=?').get(entryCommand.ticketId).n).toBe(1);
     expect(db.prepare("SELECT COUNT(*) AS n FROM production_adjustments WHERE adjustment_id='late-p-correction'").get().n).toBe(1);

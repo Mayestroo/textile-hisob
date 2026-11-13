@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   TicketDraftSave: (args) => ipcRenderer.invoke('ticket-draft-save', args),
   OutboxDiagnostics: (companyId) => ipcRenderer.invoke('outbox-diagnostics', companyId),
   OutboxPending: (options) => ipcRenderer.invoke('outbox-pending', options),
+  AllocationReviewList: (options) => ipcRenderer.invoke('allocation-review-list', options),
+  AllocationReviewRetry: (options) => ipcRenderer.invoke('allocation-review-retry', options),
+  AllocationReviewCancel: (options) => ipcRenderer.invoke('allocation-review-cancel', options),
+  AllocationReviewHistory: (options) => ipcRenderer.invoke('allocation-review-history', options),
+  StajDebtHistory: (options) => ipcRenderer.invoke('staj-debt-history', options),
+  StajDebtReviews: (options) => ipcRenderer.invoke('staj-debt-reviews', options),
   RebuildProjections: (companyId) => ipcRenderer.invoke('rebuild-projections', companyId),
   //  Distributed Sync & Leases IPC
   SyncBootstrap: (companyId) => ipcRenderer.invoke('sync-bootstrap', companyId),

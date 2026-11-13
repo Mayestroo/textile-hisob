@@ -3,6 +3,7 @@
 const { getLocalCursor, applyChangesBatch } = require('./changeFeedApplier.cjs');
 const { markFeedUnavailable } = require('./feedEvidence.cjs');
 const { dispatchOutbox } = require('./outboxDispatcher.cjs');
+const { reapplyBootstrapAfterHistoricalPurge } = require('./bootstrapApplier.cjs');
 const { rebuildCompanyProjections } = require('../database/readers/projectionReader.cjs');
 const {
   acknowledgeOutboxOperation,
@@ -62,6 +63,25 @@ async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
   return reconciledCount;
 }
 
+async function performPurgeRebootstrap(db, companyId, syncClient, options = {}) {
+  if (typeof syncClient?.getBootstrap !== 'function') {
+    throw new Error('SYNC_BOOTSTRAP_UNAVAILABLE');
+  }
+  const bootstrapResponse = await syncClient.getBootstrap();
+  if (options.isContextCurrent && !options.isContextCurrent()) {
+    throw new Error('SYNC_CONTEXT_CHANGED');
+  }
+  const result = reapplyBootstrapAfterHistoricalPurge(db, companyId, bootstrapResponse, options);
+  const nextGen = result?.purgeGeneration
+    ?? bootstrapResponse?.purgeEra?.purgeGeneration
+    ?? bootstrapResponse?.purgeGeneration
+    ?? bootstrapResponse?.feedBaseline?.purgeGeneration;
+  if (nextGen !== undefined && nextGen !== null && typeof syncClient?.setPurgeGeneration === 'function') {
+    syncClient.setPurgeGeneration(nextGen);
+  }
+  return result;
+}
+
 async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) {
   if (typeof syncClient?.pullChanges !== 'function') throw new Error('SYNC_PULL_UNAVAILABLE');
   const maxPages = Number.isSafeInteger(options.maxPages) && options.maxPages > 0 ? options.maxPages : 10;
@@ -73,7 +93,27 @@ async function executePullOnlyProtocol(db, companyId, syncClient, options = {}) 
 
   try { while (hasMore && pages < maxPages) {
     const currentCursor = getLocalCursor(db);
-    lastPull = await syncClient.pullChanges(currentCursor, 100);
+    try {
+      lastPull = await syncClient.pullChanges(currentCursor, 100);
+    } catch (pullErr) {
+      if (pullErr?.code === 'HISTORY_PURGED_REBOOTSTRAP_REQUIRED') {
+        const rebootstrap = await performPurgeRebootstrap(db, companyId, syncClient, options);
+        proofChanged = true;
+        hasMore = false;
+        return {
+          success: true,
+          pulledCount,
+          pages: pages + 1,
+          hasMore: false,
+          proofChanged: true,
+          purgeRebootstrapped: true,
+          rebootstrap,
+          finalCursor: getLocalCursor(db),
+          nextPattaNumber: db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?`).get(companyId)?.next_patta_number || 1
+        };
+      }
+      throw pullErr;
+    }
     if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
     const items = Array.isArray(lastPull.items) ? lastPull.items : [];
     const nextCursor = lastPull.nextCursor ?? currentCursor;
@@ -149,9 +189,23 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // ----------------------------------------------------
   let hasMore = true;
   let voidedPattaReuseSupported = false;
+  let purgeRebootstrapped = false;
+  let rebootstrapStats = null;
   try { while (hasMore) {
     const currentCursor = getLocalCursor(db);
-    const pullRes = await syncClient.pullChanges(currentCursor, 100);
+    let pullRes;
+    try {
+      pullRes = await syncClient.pullChanges(currentCursor, 100);
+    } catch (pullErr) {
+      if (pullErr?.code === 'HISTORY_PURGED_REBOOTSTRAP_REQUIRED' && !purgeRebootstrapped) {
+        rebootstrapStats = await performPurgeRebootstrap(db, companyId, syncClient, options);
+        purgeRebootstrapped = true;
+        voidedPattaReuseSupported = true;
+        hasMore = true;
+        continue;
+      }
+      throw pullErr;
+    }
     if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
     if (pullRes.capabilities?.voidedPattaReuse === true) voidedPattaReuseSupported = true;
     db.prepare(`INSERT INTO local_meta(key, value, updated_at) VALUES('patta_lifecycle_v1', ?, ?)
@@ -193,16 +247,32 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // ----------------------------------------------------
   // STEP 3 & 4 & 5: Push pending local outbox operations
   // ----------------------------------------------------
-  const pushRes = await dispatchOutbox(db, companyId, syncClient, options);
+  let pushRes = await dispatchOutbox(db, companyId, syncClient, options);
+  if (pushRes.rebootstrapRequired > 0 && !purgeRebootstrapped) {
+    rebootstrapStats = await performPurgeRebootstrap(db, companyId, syncClient, options);
+    purgeRebootstrapped = true;
+    pushRes = await dispatchOutbox(db, companyId, syncClient, options);
+  }
 
   // ----------------------------------------------------
   // STEP 6: Final pull of any interleaved changes
   // ----------------------------------------------------
   const finalCursor = getLocalCursor(db);
   let finalPullRes;
-  try { finalPullRes = await syncClient.pullChanges(finalCursor, 100);
+  try {
+    finalPullRes = await syncClient.pullChanges(finalCursor, 100);
     if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
-  } catch (error) { if (!options.isContextCurrent || options.isContextCurrent()) markFeedUnavailable(db); throw error; }
+  } catch (error) {
+    if (error?.code === 'HISTORY_PURGED_REBOOTSTRAP_REQUIRED' && !purgeRebootstrapped) {
+      rebootstrapStats = await performPurgeRebootstrap(db, companyId, syncClient, options);
+      purgeRebootstrapped = true;
+      finalPullRes = await syncClient.pullChanges(getLocalCursor(db), 100);
+      if (options.isContextCurrent && !options.isContextCurrent()) throw new Error('SYNC_CONTEXT_CHANGED');
+    } else {
+      if (!options.isContextCurrent || options.isContextCurrent()) markFeedUnavailable(db);
+      throw error;
+    }
+  }
   const finalItems = Array.isArray(finalPullRes.items) ? finalPullRes.items : [];
   let applyRes;
   try { applyRes = applyChangesBatch(db, companyId, finalItems, finalPullRes.nextCursor, {
@@ -234,6 +304,8 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     pulledFinal,
     proofChanged,
     finalCursor: getLocalCursor(db),
+    purgeRebootstrapped,
+    ...(rebootstrapStats ? { rebootstrap: rebootstrapStats } : {}),
     projections
   };
 }

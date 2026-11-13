@@ -56,6 +56,73 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     }
   }
 
+  it('accepts a 40/60 split for one patta operation and rejects duplicate or over-issued allocations', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    const command = {
+      commandId: 'cmd-split-100', operationId: 'op-split-100', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000000991', modelId: 'model_101',
+      partyNumber: '1', pattaNumber: 991, qty: 100, allocationVersion: 1,
+      entries: [
+        { opName: 'Tikish', workerId: 1, qty: 40, rateSnapshot: 2 },
+        { opName: 'Tikish', workerId: 2, qty: 60, rateSnapshot: 2 }
+      ]
+    };
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, command);
+    expect(db.prepare('SELECT qty FROM tickets WHERE id = ?').get(command.ticketId).qty).toBe(100);
+    expect(db.prepare('SELECT worker_id, qty FROM ticket_entries WHERE ticket_id = ? ORDER BY worker_id').all(command.ticketId))
+      .toEqual([{ worker_id: 1, qty: 40 }, { worker_id: 2, qty: 60 }]);
+    const outboxPayload = JSON.parse(db.prepare('SELECT payload_json FROM local_outbox WHERE operation_id = ?').get(command.operationId).payload_json);
+    expect(outboxPayload.allocationVersion).toBe(1);
+    expect(outboxPayload.entries.map((entry) => [entry.workerId, entry.qty])).toEqual([[1, 40], [2, 60]]);
+
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      ...command, commandId: 'cmd-over-split', operationId: 'op-over-split',
+      ticketId: '00000000-0000-4000-8000-000000000992', pattaNumber: 992,
+      entries: [{ opName: 'Tikish', workerId: 1, qty: 40 }, { opName: 'Tikish', workerId: 2, qty: 61 }]
+    })).toThrowError(expect.objectContaining({ code: 'PATTA_OPERATION_OVERALLOCATED' }));
+
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      ...command, commandId: 'cmd-duplicate-split', operationId: 'op-duplicate-split',
+      ticketId: '00000000-0000-4000-8000-000000000993', pattaNumber: 993,
+      entries: [{ opName: 'Tikish', workerId: 1, qty: 40 }, { opName: 'Tikish', workerId: 1, qty: 60 }]
+    })).toThrowError(expect.objectContaining({ code: 'DUPLICATE_WORK_ALLOCATION' }));
+  });
+
+  it('persists an offline allocation dependency on its unsynced issuance across reopen and exact retry', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    const issuancePayload = canonicalStringify({
+      commandId: 'cmd-issue-dep', operationId: 'op-issue-dep', companyId: companyA,
+      partyRecordId: 'party_1', partyNumber: '1', modelId: 'model_101',
+      pattaCount: 1, ishSoniPerPatta: 100
+    });
+    outboxManager.insertOutboxOperation(db, {
+      operation_id: 'op-issue-dep', company_id: companyA, command_type: 'CreateParty',
+      entity_type: 'party', entity_id: 'party_1', payload_json: issuancePayload,
+      payload_hash: computePayloadHash(issuancePayload), status: 'PENDING'
+    });
+    const ticket = {
+      commandId: 'cmd-allocation-dep', operationId: 'op-allocation-dep', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000000992', modelId: 'model_101',
+      partyNumber: '1', partyRecordId: 'party_1', pattaNumber: 1, qty: 100,
+      entries: [{ opName: 'Tikish', workerId: 1, qty: 100 }]
+    };
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, ticket);
+    const saved = outboxManager.getOperation(db, companyA, ticket.operationId);
+    expect(saved.depends_on_operation_id).toBe('op-issue-dep');
+    expect(saved.causal_sequence).toBeGreaterThan(0);
+    const exactIntent = { payload_json: saved.payload_json, payload_hash: saved.payload_hash,
+      depends_on_operation_id: saved.depends_on_operation_id, causal_sequence: saved.causal_sequence };
+    expect(JSON.parse(saved.payload_json).dependsOnOperationId).toBe('op-issue-dep');
+
+    databaseManager.closeAllCompanyDatabases();
+    const reopened = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    expect(outboxManager.getOperation(reopened, companyA, ticket.operationId)).toMatchObject(exactIntent);
+    expect(commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, ticket).isReplay).toBe(true);
+    expect(outboxManager.getOperation(reopened, companyA, ticket.operationId)).toMatchObject(exactIntent);
+  });
+
   // =========================================================================
   // SECTION A: TICKET REPLAY & PAYLOAD INTEGRITY (Items 1-5)
   // =========================================================================

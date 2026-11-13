@@ -18,6 +18,13 @@ async function main() {
   const archive = path.join(path.dirname(executable), 'resources/app.asar');
   const fingerprint = sourceFingerprint();
   const files = asar.listPackage(archive).map(name => name.replaceAll('\\', '/'));
+  const packagedSources = files.filter(name => /\.(?:cjs|js|json)$/.test(name));
+  for (const name of packagedSources) {
+    const source = asar.extractFile(archive, path.normalize(name.slice(1))).toString('utf8');
+    assert(!/NOVDA_E2E|E2E_TEST_ISSUER/.test(source), 'Production artifact contains E2E runtime or issuer configuration: ' + name);
+    assert(!source.includes('Ephemeral E2E artifact trust'), 'Production artifact contains test trust material: ' + name);
+    assert(!/NOVDA_(?:TEST_)?ISSUER|E2E_TEST_ISSUER/.test(source), 'Production artifact contains test issuer configuration: ' + name);
+  }
   const forbidden = files.filter(name => /(^|\/)(tests|server|ops|scripts)\//.test(name)
     || /\.test\.|\.(map|sqlite|db|py|md)$|(^|\/)\.env/.test(name));
   assert.deepEqual(forbidden, [], 'Packaged application contains forbidden content');

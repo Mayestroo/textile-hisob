@@ -49,6 +49,8 @@ export interface LifecycleItem {
   actualQuantity: number | null;
   hidden: boolean;
   pendingClose?: boolean;
+  /** A matching PENDING_SYNC attempt makes this unaccepted slot's actual unknown. */
+  pendingAttempt?: boolean;
 }
 
 export function selectLifecycleItems(input: {
@@ -109,6 +111,24 @@ export function selectLifecycleItems(input: {
     const start = party?.pattaStartNumber || 1;
     return Boolean(party && ticket.pattaNumber >= start && ticket.pattaNumber <= start + party.pattaCount - 1);
   }).map(ticket => ticket.id));
+  const pendingAttemptSlots = new Set<string>();
+  if (mode !== 'archive') for (const ticket of normalizedTickets) {
+    if (ticket.status !== 'PENDING_SYNC' || !ticket.partyRecordId || !ticket.periodId) continue;
+    const party = partyById.get(ticket.partyRecordId);
+    const period = periodById.get(ticket.periodId);
+    if (!party || !period || period.isClosed || party.isClosed || party.isArchived || ended(party) ||
+        party.modelId !== ticket.modelId || (party.companyId && ticket.companyId && party.companyId !== ticket.companyId)) continue;
+    const start = party.pattaStartNumber || 1;
+    const end = start + party.pattaCount - 1;
+    const target = ticket.pattaNumber >= start && ticket.pattaNumber <= end
+      ? ticket.pattaNumber
+      : ticket.pattaNumber >= 1 && ticket.pattaNumber <= party.pattaCount
+        ? start + ticket.pattaNumber - 1
+        : undefined;
+    if (target === undefined) continue;
+    const companyId = ticket.companyId || party.companyId || 'company_main';
+    pendingAttemptSlots.add(`${companyId}:${party.id}:${target}`);
+  }
   const candidatesBySlot = new Map<string, LifecycleTicket[]>();
   for (const ticket of normalizedTickets) {
     const old = seenTickets.get(ticket.id);
@@ -152,7 +172,8 @@ export function selectLifecycleItems(input: {
       ticketId: ticket.id, periodId: ticket.periodId || null, lifecycle,
       evidence: lifecycle === 'ended' ? 'finish' : closed ? inArchive ? 'archive' : 'period' : legacy ? 'unknown' : 'open',
       accepted, actualQuantity: accepted && Number.isFinite(ticket.qty) ? Number(ticket.qty) : null,
-      hidden: Boolean(party?.isArchived), pendingClose: Boolean(ticket.periodId && pendingClosePeriodIds.includes(ticket.periodId)) });
+      hidden: Boolean(party?.isArchived), pendingClose: Boolean(ticket.periodId && pendingClosePeriodIds.includes(ticket.periodId)),
+      pendingAttempt: Boolean(slotKey && pendingAttemptSlots.has(slotKey)) });
   }
   for (const [slotKey, slotTickets] of candidatesBySlot) {
     const ordered = [...slotTickets].sort((a, b) => Number(absoluteTicketIds.has(b.id)) - Number(absoluteTicketIds.has(a.id)) || a.id.localeCompare(b.id));
@@ -168,7 +189,8 @@ export function selectLifecycleItems(input: {
       modelId: ticket.modelId, pattaNumber: ticket.pattaNumber, ticketId: ticket.id, periodId: ticket.periodId || null,
       lifecycle, evidence: lifecycle === 'ended' ? 'finish' : closed ? inArchive ? 'archive' : 'period' : 'open',
       accepted: true, actualQuantity: Number.isFinite(ticket.qty) ? Number(ticket.qty) : null,
-      hidden: Boolean(party?.isArchived), pendingClose: Boolean(ticket.periodId && pendingClosePeriodIds.includes(ticket.periodId)) });
+      hidden: Boolean(party?.isArchived), pendingClose: Boolean(ticket.periodId && pendingClosePeriodIds.includes(ticket.periodId)),
+      pendingAttempt: pendingAttemptSlots.has(slotKey) });
   }
   if (mode !== 'archive') for (const party of parties) {
     if (mode === 'current' && party.isArchived) continue;
@@ -181,10 +203,25 @@ export function selectLifecycleItems(input: {
       items.push({ key, companyId: pCompany, partyId: party.id, modelId: party.modelId, pattaNumber,
         ticketId: null, periodId: null, lifecycle: ended(party) ? 'ended' : legacy ? 'legacy' : 'active',
         evidence: ended(party) ? 'finish' : legacy ? 'unknown' : 'open', accepted: false, actualQuantity: null,
-        hidden: Boolean(party.isArchived) });
+        hidden: Boolean(party.isArchived), pendingAttempt: pendingAttemptSlots.has(key) });
     }
   }
   return { items, excludedAttempts, incomplete };
+}
+
+export function countPendingActualUncertainty(items: readonly LifecycleItem[]): number {
+  return items.filter((item) => item.pendingAttempt && !item.accepted && item.actualQuantity === null).length;
+}
+
+export function summarizeActualWorkUncertainty(items: readonly LifecycleItem[], unknownExpectedWorkCount = 0) {
+  const unknownLegacyActualCount = items.filter((item) => item.partyId && item.lifecycle === 'legacy' && !item.accepted && item.actualQuantity === null).length;
+  const pendingUnknownActualCount = countPendingActualUncertainty(items);
+  return {
+    unknownLegacyActualCount,
+    pendingUnknownActualCount,
+    unknownPartyActualCount: unknownLegacyActualCount + pendingUnknownActualCount,
+    hasUnknownActual: unknownExpectedWorkCount > 0 || unknownLegacyActualCount > 0 || pendingUnknownActualCount > 0
+  };
 }
 
 export function groupLifecycleCohorts(items: readonly LifecycleItem[]) {

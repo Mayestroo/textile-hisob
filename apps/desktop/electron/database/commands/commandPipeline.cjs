@@ -197,61 +197,84 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
     return {
       workerId: typeof workerId === 'number' ? workerId : String(workerId).trim(),
       opName,
+      qty: entry.qty === undefined || entry.qty === null ? qty : assertPositiveSafeInteger(entry.qty, `entries[${idx}].qty`),
       workerNameSnapshot: typeof entry.workerNameSnapshot === 'string' ? entry.workerNameSnapshot.trim() : null,
       rateSnapshot: entry.rateSnapshot !== undefined && entry.rateSnapshot !== null ? assertFiniteNumber(entry.rateSnapshot, 'rateSnapshot') : null,
       brak: typeof entry.brak === 'string' ? entry.brak : null
     };
   });
 
-  // Validate causal dependencies
-  const depOpId = typeof command.dependsOnOperationId === 'string' && command.dependsOnOperationId.trim() !== ''
-    ? command.dependsOnOperationId.trim()
-    : null;
-  const causalSeq = validateCausalOrdering(operationId, depOpId, command.causalSequence);
-
-  const submittedAt = typeof command.submittedAt === 'string' ? command.submittedAt : new Date().toISOString();
-
-  // Construct deterministic canonical command payload and fingerprint
-  const normalizedPayload = {
-    commandId,
-    operationId,
-    companyId,
-    ticketId,
-    modelId,
-    periodId,
-    partyNumber,
-    pattaNumber,
-    qty,
-    entries: entries.map((e) => ({
-      brak: e.brak || null,
-      opName: e.opName,
-      rateSnapshot: e.rateSnapshot !== null && e.rateSnapshot !== undefined ? e.rateSnapshot : null,
-      workerId: e.workerId,
-      workerNameSnapshot: e.workerNameSnapshot || null
-    })),
-    partyRecordId,
-    ...(command.strictParty === undefined ? {} : { strictParty: command.strictParty }),
-    ...(command.strictPatta === undefined ? {} : { strictPatta: command.strictPatta }),
-    konveyer: command.konveyer ? String(command.konveyer).trim() : null,
-    size: command.size ? String(command.size).trim() : null,
-    color: command.color ? String(command.color).trim() : null,
-    originDeviceId: command.originDeviceId ? String(command.originDeviceId).trim() : null,
-    originUserId: command.originUserId ? String(command.originUserId).trim() : null,
-    effectiveDate: command.effectiveDate ? String(command.effectiveDate).trim() : null,
-    dependsOnOperationId: depOpId,
-    causalSequence: causalSeq,
-    submittedAt: typeof command.submittedAt === 'string' ? command.submittedAt : null
-  };
-
-  const payloadJson = canonicalStringify(normalizedPayload);
-  const payloadHash = computePayloadHash(payloadJson);
+  // One operation may be split between workers, but an allocation identity is
+  // unique and the aggregate may never exceed the issued patta quantity.
+  const allocations = new Map();
+  for (const entry of entries) {
+    const key = JSON.stringify([entry.opName, String(entry.workerId)]);
+    if (allocations.has(key)) throw createCommandError('DUPLICATE_WORK_ALLOCATION', 'The same worker and operation cannot be allocated twice on one patta');
+    const total = (allocations.get(entry.opName) || 0) + entry.qty;
+    if (total > qty) throw createCommandError('PATTA_OPERATION_OVERALLOCATED', 'Operation allocations cannot exceed the issued patta quantity');
+    allocations.set(key, true);
+    allocations.set(entry.opName, total);
+  }
 
   const db = getCompanyDatabase(baseUserDataPath, companyId);
+  const submittedAt = typeof command.submittedAt === 'string' ? command.submittedAt : new Date().toISOString();
 
   // Execute inside an ACID SQLite IMMEDIATE transaction
   const result = db.transaction(() => {
     // 1. Check idempotency: operationId in local_outbox
     const existingOp = getOperation(db, companyId, operationId);
+    let depOpId = typeof command.dependsOnOperationId === 'string' && command.dependsOnOperationId.trim() !== ''
+      ? command.dependsOnOperationId.trim()
+      : null;
+    let causalSeq = validateCausalOrdering(operationId, depOpId, command.causalSequence);
+
+    // Preserve a saved dependency on an exact retry, and derive new issuance
+    // links under the same IMMEDIATE transaction as the ticket/outbox commit.
+    // This closes the read-before-write race with a concurrent local issuance.
+    if (existingOp && !depOpId) {
+      depOpId = existingOp.depends_on_operation_id || null;
+      causalSeq = Number(existingOp.causal_sequence || 0);
+    } else if (!existingOp && partyRecordId && !depOpId) {
+      const issuanceCandidates = db.prepare(`SELECT operation_id, command_type, payload_json, causal_sequence
+        FROM local_outbox WHERE company_id = ? AND command_type IN ('CreateParty', 'CompletePattaBatch')
+          AND status <> 'SUPERSEDED' ORDER BY rowid DESC`).all(companyId);
+      for (const candidate of issuanceCandidates) {
+        let body;
+        try { body = JSON.parse(candidate.payload_json); } catch { continue; }
+        const parties = candidate.command_type === 'CompletePattaBatch' ? body.parties : [body];
+        if (!Array.isArray(parties) || !parties.some((party) => String(party.partyRecordId || party.id || '') === partyRecordId)) continue;
+        depOpId = candidate.operation_id;
+        causalSeq = Math.max(1, Number(candidate.causal_sequence || 0) + 1);
+        break;
+      }
+    }
+    validateCausalOrdering(operationId, depOpId, causalSeq);
+
+    // Construct and fingerprint immutable intent after resolving its dependency.
+    const normalizedPayload = {
+      commandId, operationId, companyId, ticketId, modelId, periodId, partyNumber, pattaNumber, qty,
+      entries: entries.map((e) => ({
+        brak: e.brak || null, opName: e.opName, qty: e.qty,
+        rateSnapshot: e.rateSnapshot !== null && e.rateSnapshot !== undefined ? e.rateSnapshot : null,
+        workerId: e.workerId, workerNameSnapshot: e.workerNameSnapshot || null
+      })),
+      partyRecordId,
+      ...(command.strictParty === undefined ? {} : { strictParty: command.strictParty }),
+      ...(command.strictPatta === undefined ? {} : { strictPatta: command.strictPatta }),
+      ...(command.allocationVersion === 1 ? { allocationVersion: 1 } : {}),
+      konveyer: command.konveyer ? String(command.konveyer).trim() : null,
+      size: command.size ? String(command.size).trim() : null,
+      color: command.color ? String(command.color).trim() : null,
+      originDeviceId: command.originDeviceId ? String(command.originDeviceId).trim() : null,
+      originUserId: command.originUserId ? String(command.originUserId).trim() : null,
+      effectiveDate: command.effectiveDate ? String(command.effectiveDate).trim() : null,
+      dependsOnOperationId: depOpId,
+      causalSequence: causalSeq,
+      submittedAt: typeof command.submittedAt === 'string' ? command.submittedAt : null
+    };
+    const payloadJson = canonicalStringify(normalizedPayload);
+    const payloadHash = computePayloadHash(payloadJson);
+
     if (existingOp) {
       if (
         existingOp.company_id === companyId &&
@@ -381,7 +404,7 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
         e.workerNameSnapshot,
         e.rateSnapshot,
         e.brak,
-        qty,
+        e.qty,
         submittedAt
       );
     });

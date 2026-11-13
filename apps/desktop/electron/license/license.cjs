@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const https = require('https');
+const http = require('http');
 const { execSync } = require('child_process');
 const { DEFAULT__API_BASE_URL, resolveApiBaseUrl } = require('../config/apiConfig.cjs');
 const { authorizationUnavailable } = require('../security/licenseBoundary.cjs');
@@ -274,7 +275,8 @@ function requestJson(url, options = {}) {
       headers['Content-Type'] = 'application/json';
       headers['Content-Length'] = String(Buffer.byteLength(body));
     }
-    const request = https.request({
+    const transport = url.protocol === 'http:' ? http : https;
+    const request = transport.request({
       hostname: url.hostname,
       port: url.port || 443,
       path: `${url.pathname}${url.search}`,

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useWorkbookStore } from '../../../store/workbookStore';
-import { X, Check, AlertCircle } from 'lucide-react';
+import { X, Check, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
 import { SubmittedTicketRecord } from '../../../types/workbook';
 import { useAuthStore } from '../../../store/authStore';
@@ -76,27 +76,21 @@ export const EditSubmittedTicketModal: React.FC = () => {
       const originals = (ticket?.entries || []).filter((entry) => entry.opName === opName);
       return {
         name: opName,
-        rate: originals.length === 1 ? originals[0].rateSnapshot ?? null : null,
+        rate: originals[0]?.rateSnapshot ?? null,
         entryId: originals.length === 1 ? originals[0].entryId : undefined
       };
     });
   }, [model, ticket]);
 
-  // Form state: opName -> workerId string (e.g. "4")
-  const [entriesMap, setEntriesMap] = useState<Record<string, string>>({});
+  type AllocationDraft = { key: string; opName: string; workerId: string; qty: string; entryId?: string; rateSnapshot?: number };
+  const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Initialize form when ticket changes
   useEffect(() => {
     if (isOpen && ticket) {
-      const initial: Record<string, string> = {};
-      for (const e of ticket.entries || []) {
-        if (e.opName && e.workerId) {
-          initial[e.opName] = String(e.workerId);
-        }
-      }
-      setEntriesMap(initial);
+      setAllocations((ticket.entries || []).map((e, index) => ({ key: e.entryId || `existing-${index}`, opName: e.opName, workerId: String(e.workerId), qty: String(e.qty ?? ticket.qty), entryId: e.entryId, rateSnapshot: e.rateSnapshot })));
       setErrorMsg(null);
       setIsSaving(false);
     }
@@ -113,15 +107,21 @@ export const EditSubmittedTicketModal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, closeTicketModal]);
 
+  const ticketQty = ticket?.qty || 0;
+  const periodEditClosed = Boolean(currentPeriod?.isClosed || selectedArchiveFilename || (ticket?.periodId && ticket.periodId !== currentPeriod?.id));
+  const allocationProgress = useMemo(() => model?.operations.map((operation) => {
+    const total = allocations.filter((row) => row.opName === operation.name && row.workerId)
+      .reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+    return { name: operation.name, total, remaining: Math.max(0, ticketQty - total), complete: total === ticketQty };
+  }) || [], [model, allocations, ticketQty]);
+
   if (!isOpen) return null;
-  if (jumpContextInvalid || !ticket || !model || !canEditTickets) return <div role="alert" className="modal-overlay phase-c-dialog" style={{ zIndex: 9999, padding: 20 }}>
+  if (jumpContextInvalid || periodEditClosed || !ticket || !model || !canEditTickets) return <div role="alert" className="modal-overlay phase-c-dialog" style={{ zIndex: 9999, padding: 20 }}>
     <div className="modal-card" style={{ padding: 24, maxWidth: 520 }}>
       <p>Patta tahrirlash ochilmadi: tanlangan patta topilmadi yoki kompaniya, davr, arxiv holati yoxud ruxsat o‘zgardi.</p>
       <button className="soft-btn" onClick={closeTicketModal}>Yopish</button>
     </div>
   </div>;
-
-  const ticketQty = ticket.qty || 0;
 
   // Calculate live total sum for assigned operations
   let liveTotalAmount = 0;
@@ -129,20 +129,19 @@ export const EditSubmittedTicketModal: React.FC = () => {
   let unknownRateCount = 0;
 
   for (const op of operationsList) {
-    const val = entriesMap[op.name];
-    const wId = val ? parseInt(val, 10) : null;
+    const rows = allocations.filter((entry) => entry.opName === op.name);
+    for (const row of rows) {
+    const wId = row.workerId ? parseInt(row.workerId, 10) : null;
     if (wId && workerMap.has(wId)) {
-      if (op.rate !== null) liveTotalAmount += op.rate * ticketQty;
+      if (op.rate !== null) liveTotalAmount += op.rate * (Number(row.qty) || 0);
       else unknownRateCount++;
       assignedOpsCount++;
     }
+    }
   }
 
-  const handleWorkerChange = (opName: string, val: string) => {
-    setEntriesMap((prev) => ({
-      ...prev,
-      [opName]: val.trim()
-    }));
+  const updateAllocation = (key: string, field: 'opName' | 'workerId' | 'qty', val: string) => {
+    setAllocations((prev) => prev.map((row) => row.key === key ? { ...row, [field]: val.trim() } : row));
     if (errorMsg) setErrorMsg(null);
   };
 
@@ -150,7 +149,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
     setErrorMsg(null);
     const latest = useWorkbookStore.getState();
     const actor = useAuthStore.getState();
-    if (!latest.submittedTickets.some((item) => item.id === ticket.id && item.periodId === ticket.periodId)
+    if (periodEditClosed || !latest.submittedTickets.some((item) => item.id === ticket.id && item.periodId === ticket.periodId)
       || (jumpContext && (latest.licenseStatus?.companyId !== jumpContext.companyId
         || ((latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId && (latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId !== jumpContext.companyId)
         || (latest.payrollValuation.companyId && latest.payrollValuation.companyId !== jumpContext.companyId)
@@ -162,36 +161,34 @@ export const EditSubmittedTicketModal: React.FC = () => {
       setErrorMsg('Kontekst yoki tahrirlash ruxsati o‘zgardi. Patta qayta ochilib tekshirilishi kerak.');
       return;
     }
-    const names = (ticket.entries || []).map((entry) => entry.opName);
-    if (new Set(names).size !== names.length || new Set(operationsList.map((op) => op.name)).size !== operationsList.length) {
-      setErrorMsg('Takrorlangan operatsiyalarni bu oynada xavfsiz tahrirlab bo’lmaydi.');
-      return;
-    }
-    if (names.some((name) => !operationsList.some((op) => op.name === name))) {
+    if ((ticket.entries || []).some((entry) => !model.operations.some((op) => op.name === entry.opName))) {
       setErrorMsg('Avvalgi operatsiya modelda topilmadi; uning tarixiy narxini taxmin qilib bo’lmaydi.');
       return;
     }
 
     // Validate: Check if all non-empty IDs are valid workers
-    const updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string }> = [];
+    const updatedEntries: Array<{ opName: string; workerId: number; qty: number; rateSnapshot?: number; entryId?: string }> = [];
 
-    for (const op of operationsList) {
-      const valStr = entriesMap[op.name];
-      if (valStr !== undefined && valStr !== '') {
-        const wId = Number(valStr);
+    for (const row of allocations) {
+      if (row.workerId !== '') {
+        const wId = Number(row.workerId);
         if (!Number.isSafeInteger(wId) || wId <= 0) {
-          setErrorMsg(`«${op.name}» uchun ishchi ID raqami noto'g'ri kiritilgan: "${valStr}"`);
+          setErrorMsg(`«${row.opName}» uchun ishchi ID raqami noto'g'ri kiritilgan: "${row.workerId}"`);
           return;
         }
         if (!workerMap.has(wId)) {
-          setErrorMsg(`«${op.name}» uchun #${wId} ID ga ega ishchi ro'yxatda topilmadi!`);
+          setErrorMsg(`«${row.opName}» uchun #${wId} ID ga ega ishchi ro'yxatda topilmadi!`);
           return;
         }
+        const qty = Number(row.qty);
+        if (!Number.isSafeInteger(qty) || qty <= 0) { setErrorMsg('Har bir taqsimot miqdori musbat butun son bo‘lishi kerak.'); return; }
+        if (!model.operations.some((operation) => operation.name === row.opName)) { setErrorMsg('Operatsiya ushbu modelga tegishli emas.'); return; }
         updatedEntries.push({
-          opName: op.name,
+          opName: row.opName,
           workerId: wId,
-          ...(op.entryId ? { entryId: op.entryId } : {}),
-          ...(op.rate !== null ? { rateSnapshot: op.rate } : {})
+          qty,
+          ...(row.entryId ? { entryId: row.entryId } : {}),
+          ...(row.rateSnapshot !== undefined ? { rateSnapshot: row.rateSnapshot } : {})
         });
       }
     }
@@ -199,6 +196,16 @@ export const EditSubmittedTicketModal: React.FC = () => {
     if (updatedEntries.length === 0) {
       setErrorMsg("Hech bo'lmaganda bitta operatsiyaga ishchi ID sini kiriting.");
       return;
+    }
+    const totals = new Map<string, number>();
+    const identities = new Set<string>();
+    for (const entry of updatedEntries) {
+      const identity = `${entry.opName}\u0000${entry.workerId}`;
+      if (identities.has(identity)) { setErrorMsg('Bir operatsiyada bir ishchini ikki marta qo‘shib bo‘lmaydi.'); return; }
+      identities.add(identity);
+      const total = (totals.get(entry.opName) || 0) + entry.qty;
+      if (total > ticketQty) { setErrorMsg(`«${entry.opName}» jami ${total}; chiqarilgan miqdor ${ticketQty} dan oshmasligi kerak.`); return; }
+      totals.set(entry.opName, total);
     }
 
     setIsSaving(true);
@@ -335,21 +342,23 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 <th style={{ width: '90px', textAlign: 'right', paddingRight: '12px', color: 'var(--text-secondary)' }}>Narxi</th>
                 <th style={{ width: '110px', textAlign: 'center', color: 'var(--text-secondary)' }}>Ishchi ID</th>
                 <th style={{ textAlign: 'left', paddingLeft: '12px', color: 'var(--text-secondary)' }}>Ishchi F.I.O</th>
+                <th style={{ width: '90px', textAlign: 'center', color: 'var(--text-secondary)' }}>Dona</th>
                 <th style={{ width: '115px', textAlign: 'right', paddingRight: '12px', color: 'var(--text-secondary)' }}>Summa</th>
               </tr>
             </thead>
             <tbody>
-              {operationsList.map((op, idx) => {
-                const valStr = entriesMap[op.name] || '';
+              {allocations.map((row, idx) => {
+                const op = operationsList.find((item) => item.name === row.opName);
+                const valStr = row.workerId || '';
                 const wId = valStr ? parseInt(valStr, 10) : null;
                 const hasId = valStr !== '';
                 const isFound = wId ? workerMap.has(wId) : false;
                 const workerName = isFound && wId ? workerMap.get(wId) : '';
-                const opAmount = isFound && op.rate !== null ? op.rate * ticketQty : null;
+                const opAmount = isFound && op?.rate != null ? op.rate * (Number(row.qty) || 0) : null;
 
                 return (
                   <tr
-                    key={op.name}
+                    key={row.key}
                     style={{
                       height: '38px',
                       borderBottom: '1px solid var(--border-subtle)',
@@ -363,12 +372,14 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
                     {/* Operatsiya nomi */}
                     <td style={{ paddingLeft: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {op.name}
+                      <select className="soft-input" value={row.opName} onChange={(e) => updateAllocation(row.key, 'opName', e.target.value)}>
+                        {model.operations.map((operation) => <option key={operation.id} value={operation.name}>{operation.name}</option>)}
+                      </select>
                     </td>
 
                     {/* Dona narxi */}
                     <td style={{ textAlign: 'right', paddingRight: '12px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '15px' }}>
-                      {op.rate === null ? 'Noma’lum' : `${op.rate.toLocaleString()} so'm`}
+                      {op?.rate == null ? 'Noma’lum' : `${op.rate.toLocaleString()} so'm`}
                     </td>
 
                     {/* Worker ID input */}
@@ -377,7 +388,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                         type="number"
                         placeholder="ID"
                         value={valStr}
-                        onChange={(e) => handleWorkerChange(op.name, e.target.value)}
+                        onChange={(e) => updateAllocation(row.key, 'workerId', e.target.value)}
                         className="soft-input"
                         style={{
                           width: '100%',
@@ -420,13 +431,22 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
                     {/* Subtotal */}
                     <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: opAmount !== null && opAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {opAmount === null && isFound ? 'Noma’lum' : opAmount !== null && opAmount > 0 ? formatMoney(opAmount) : '—'}
+                      <input type="number" min="1" max={ticketQty} value={row.qty} onChange={(e) => updateAllocation(row.key, 'qty', e.target.value)} className="soft-input" aria-label={`${row.opName} allocation quantity`} style={{ width: 70 }} />
+                      {opAmount === null ? '—' : formatMoney(opAmount)}
                     </td>
+                    <td><button type="button" aria-label="Taqsimotni olib tashlash" onClick={() => setAllocations((prev) => prev.filter((item) => item.key !== row.key))}><Trash2 size={14} /></button></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          <div style={{ marginTop: 10 }}><button type="button" className="soft-btn" onClick={() => setAllocations((prev) => [...prev, { key: `new-${Date.now()}-${Math.random()}`, opName: model.operations[0]?.name || '', workerId: '', qty: '' }])}><Plus size={14} /> Ishchi taqsimoti qo‘shish</button></div>
+          <div aria-live="polite" style={{ marginTop: 12, padding: 10, background: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-md)' }}>
+            {allocationProgress.map((progress) => <div key={progress.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14 }}>
+              <span>{progress.name}: {progress.total}/{ticketQty} · qoldi {progress.remaining}</span>
+              <strong style={{ color: progress.complete ? '#15803d' : '#b45309' }}>{progress.complete ? 'Tugallangan' : 'Tugallanmagan'}</strong>
+            </div>)}
+          </div>
         </div>
 
         {/* Footer */}

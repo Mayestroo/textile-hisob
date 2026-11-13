@@ -33,7 +33,10 @@ const MIGRATIONS = Object.freeze([
   'deploy_model_batch_size_names_migration.sql',
   'deploy_party_size_order_migration.sql',
   'deploy_patta_lifecycle_provenance_migration.sql',
-  'deploy_worker_onboarding_profile_migration.sql'
+  'deploy_worker_onboarding_profile_migration.sql',
+  'deploy_historical_purge_fence_migration.sql',
+  'deploy_allocation_resolution_migration.sql',
+  'deploy_staj_debt_ledger_migration.sql'
 ]);
 
 const EXPECTED_MIGRATIONS = Object.freeze(Object.fromEntries(MIGRATIONS.map((name, index) => [index + 1, name])));

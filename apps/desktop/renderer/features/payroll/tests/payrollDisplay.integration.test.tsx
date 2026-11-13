@@ -67,10 +67,10 @@ describe('local SQLite db-read -> hydrated store -> rendered Hisob/Umumiy money'
 
   it('reprices captured 5 at active 7, applies +2 in original P and renders 84 gross / 76 net', () => {
     const { read, hydrated, display } = renderCurrent();
-    expect(read.payrollValuation.workers[0]).toMatchObject({ gross: 84, net: 76, pieces: 12 });
+    expect(read.payrollValuation.workers[0]).toMatchObject({ gross: 84, net: 77, pieces: 12 });
     expect(hydrated.models[0].hisobQuantities[7].Sew).toBe(12);
     expect(display.cellAmounts[JSON.stringify(['m', 7, 'Sew'])]).toBe(84);
-    expect(display.masterReport.workers[0]).toMatchObject({ umumiy: 84, sofFoyda: 76 });
+    expect(display.masterReport.workers[0]).toMatchObject({ umumiy: 84, sofFoyda: 77 });
     expect(display.incomplete).toBe(true);
   });
 
@@ -86,7 +86,7 @@ describe('local SQLite db-read -> hydrated store -> rendered Hisob/Umumiy money'
       const hesabSheet = generated.Sheets[hesabSheetName];
       const hisob = XLSX.utils.sheet_to_json(hesabSheet, { header: 1, defval: '' });
       expect(umumiy[0][0]).toContain('Taxminiy');
-      expect(umumiy[2].slice(0, 7)).toEqual([7, 'Local worker', 76, 1, 4, 3, 84]);
+      expect(umumiy[2].slice(0, 7)).toEqual([7, 'Local worker', 77, '', 4, 3, 84]);
       expect(hisob[1][2]).toBe(7);
       expect(hisob[2][2]).toBe(84);
       expect(hisob[2][3]).toBe(12);

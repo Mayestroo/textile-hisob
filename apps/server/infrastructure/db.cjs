@@ -105,6 +105,9 @@ async function resetServerDatabase(options = {}) {
     DROP TABLE IF EXISTS patta_batch_settings CASCADE;
     DROP TABLE IF EXISTS company_batch_settings CASCADE;
     DROP TABLE IF EXISTS schema_migrations CASCADE;
+    DROP TABLE IF EXISTS allocation_resolution_audit CASCADE;
+    DROP TABLE IF EXISTS allocation_resolution_fences CASCADE;
+    DROP TABLE IF EXISTS allocation_review_candidates CASCADE;
     DROP TABLE IF EXISTS printed_patta_operations CASCADE;
     DROP TABLE IF EXISTS printed_pattas CASCADE;
     DROP TABLE IF EXISTS worker_adjustments CASCADE;

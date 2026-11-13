@@ -10,6 +10,7 @@ dist-installer/
 build/Release/
 coverage/
 .nyc_output/
+ops/docs/
 
 # Environment
 .env
@@ -142,3 +143,6 @@ data/backups/
 data/archives/
 data/legacy_excel/
 opencode.json
+NOVDA-ARCHITECTURE-STAGE2-PROMPT.md
+NOVDA-FINAL-IMPLEMENTATION-AGENT-PROMPT.md
+NOVDA-OWNER-DECISIONS-38.md

@@ -53,6 +53,17 @@ async function loadPayroll(client, companyId, requestedPeriodId, boundWorker = n
         AND ($3::DATE IS NULL OR created_at::DATE >= $3::DATE)
         AND ($5::DATE IS NULL OR created_at::DATE <= $5::DATE)))
     GROUP BY worker_id, type`, [companyId, period.id, dateOnly(period.start_date), workerId, dateOnly(period.end_date)]) : { rows: [] };
+  if (period) {
+    const staj = await client.query(`SELECT c.worker_id,'STAJ_DEBT' AS type,
+        COALESCE(SUM(CASE WHEN e.event_type='DEDUCTION' THEN e.amount WHEN e.event_type='REVERSAL' THEN -source.amount ELSE 0 END),0)::text AS total
+      FROM staj_debt_events e JOIN staj_debt_claims c ON c.company_id=e.company_id AND c.debt_id=e.debt_id
+      LEFT JOIN staj_debt_events source ON source.company_id=e.company_id AND source.event_id=e.reverses_event_id
+      WHERE e.company_id=$1 AND ($3::INTEGER IS NULL OR c.worker_id=$3)
+        AND ((e.event_type='DEDUCTION' AND e.period_id=$2)
+          OR (e.event_type='REVERSAL' AND source.period_id=$2))
+      GROUP BY c.worker_id`, [companyId,period.id,workerId]);
+    deductions.rows.push(...staj.rows);
+  }
   const models = period && !period.is_closed ? await client.query(`SELECT id, operations_json AS operations
     FROM models WHERE company_id = $1`, [companyId]) : { rows: [] };
   let closingArchive = null;
@@ -71,7 +82,7 @@ async function loadPayroll(client, companyId, requestedPeriodId, boundWorker = n
     }
   }
   return reducePayroll(period, workers, facts.rows, adjustments.rows, deductions.rows,
-    { currentModels: models.rows, closingArchive });
+    { currentModels: models.rows, closingArchive, stajDebtLedgerVersion: closingArchive?.stajDebtLedgerVersion || 0 });
 }
 
 module.exports = { validatePeriodId, loadPayroll, reducePayroll };

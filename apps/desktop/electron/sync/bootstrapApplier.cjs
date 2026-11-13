@@ -2,6 +2,7 @@
 
 const { setLocalCursor } = require('./changeFeedApplier.cjs');
 const { recordSnapshotBaseline } = require('./feedEvidence.cjs');
+const { quarantinePurgedOutboxOperation, isOutboxOperationPreCutoff } = require('../database/outbox/outboxManager.cjs');
 
 const BOOTSTRAP_COMPLETE_KEY = '_bootstrap_complete';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -95,6 +96,10 @@ function validateBootstrapResponse(response, companyId) {
     requireCondition(requireString(companyId) && /^[A-Za-z0-9_-]{1,100}$/.test(companyId));
     requireCondition(isObject(response.snapshot));
     const snapshot = response.snapshot;
+    // New ledger collections are optional on older bootstrap servers. Normalize
+    // absent collections to empty so upgrades do not force a destructive reset.
+    snapshot.stajDebtClaims ||= [];
+    snapshot.stajDebtEvents ||= [];
     requireCondition(snapshot.schemaVersion === 1);
     requireCondition(isObject(snapshot.company) && snapshot.company.companyId === companyId);
 
@@ -109,7 +114,7 @@ function validateBootstrapResponse(response, companyId) {
 
     const arrayFields = [
       'models', 'workers', 'periods', 'legacyPartyCollisionExceptions', 'parties',
-      'workerAdjustments', 'tickets', 'productionAdjustments', 'periodArchives'
+      'workerAdjustments', 'stajDebtClaims', 'stajDebtEvents', 'tickets', 'productionAdjustments', 'periodArchives'
     ];
     for (const field of arrayFields) requireCondition(Array.isArray(snapshot[field]));
     requireCondition(isObject(snapshot.batchSettings));
@@ -125,6 +130,8 @@ function validateBootstrapResponse(response, companyId) {
     assertUnique(snapshot.periods, (row) => row.id);
     assertUnique(snapshot.parties, (row) => row.id);
     assertUnique(snapshot.workerAdjustments, (row) => row.id);
+    assertUnique(snapshot.stajDebtClaims, (row) => row.debtId);
+    assertUnique(snapshot.stajDebtEvents, (row) => row.eventId);
     assertUnique(snapshot.tickets, (row) => row.id);
     assertUnique(snapshot.productionAdjustments, (row) => row.adjustmentId);
     assertUnique(snapshot.periodArchives, (row) => row.periodId);
@@ -250,6 +257,25 @@ function validateBootstrapResponse(response, companyId) {
       if (adjustment.status !== undefined) requireCondition(adjustment.status === 'POSTED');
       requireCondition(requireString(adjustment.provenance));
       requireCondition(requireOptionalTimestamp(adjustment.createdAt));
+    }
+
+    const debtIds = new Set();
+    for (const claim of snapshot.stajDebtClaims) {
+      requireCondition(requireString(claim.debtId) && workerIds.has(Number(claim.workerId)));
+      requireCondition(typeof claim.originalAmount === 'string' && /^\d+(?:\.\d{1,2})?$/.test(claim.originalAmount) && Number(claim.originalAmount) > 0);
+      requireCondition(requireString(claim.evidenceReference) && /^[0-9a-f]{64}$/.test(claim.evidenceSha256));
+      requireCondition(requireString(claim.verifiedBy) && requireString(claim.registeredOperationId));
+      requireCondition(!debtIds.has(claim.debtId)); debtIds.add(claim.debtId);
+    }
+    const debtEventIds = new Set();
+    for (const event of snapshot.stajDebtEvents) {
+      requireCondition(debtIds.has(event.debtId) && requireString(event.eventId) && requireString(event.operationId));
+      requireCondition(['DEDUCTION','DEFICIT_REVIEW','REVERSAL'].includes(event.eventType));
+      requireCondition(typeof event.amount === 'string' && /^\d+(?:\.\d{1,2})?$/.test(event.amount) && Number(event.amount) > 0);
+      requireCondition(event.periodId == null || periodIds.has(event.periodId));
+      requireCondition(event.reversesEventId == null || typeof event.reversesEventId === 'string');
+      requireCondition(requireString(event.actorId) && requireString(event.reason));
+      requireCondition(!debtEventIds.has(event.eventId)); debtEventIds.add(event.eventId);
     }
 
     let entryCount = 0;
@@ -462,6 +488,16 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
       adjustment.createdAt || new Date().toISOString());
   }
 
+  const insertDebtClaim = db.prepare(`INSERT INTO staj_debt_claims(company_id,debt_id,worker_id,original_amount,
+    evidence_reference,evidence_sha256,verification_note,verified_by,registered_operation_id,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`);
+  for (const claim of snapshot.stajDebtClaims) insertDebtClaim.run(companyId,claim.debtId,claim.workerId,claim.originalAmount,
+    claim.evidenceReference,claim.evidenceSha256,claim.verificationNote,claim.verifiedBy,claim.registeredOperationId,claim.createdAt);
+  const insertDebtEvent = db.prepare(`INSERT INTO staj_debt_events(company_id,event_id,debt_id,operation_id,event_type,amount,
+    period_id,reverses_event_id,actor_id,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`);
+  for (const event of snapshot.stajDebtEvents) insertDebtEvent.run(companyId,event.eventId,event.debtId,event.operationId,
+    event.eventType,event.amount,event.periodId,event.reversesEventId,event.actorId,event.reason,event.createdAt);
+
   const insertTicket = db.prepare(`INSERT INTO tickets (
     id, company_id, model_id, period_id, party_number, party_record_id, patta_number, qty, size,
     color, konveyer, status, is_closed, submitted_at, created_at, provenance, server_revision
@@ -519,6 +555,38 @@ function insertBootstrapRows(db, companyId, snapshot, nextPattaNumber) {
   }
 }
 
+function extractPurgeEra(response) {
+  if (!response || typeof response !== 'object') return null;
+  if (response.purgeEra && typeof response.purgeEra === 'object') {
+    return response.purgeEra;
+  }
+  const gen = response.purgeGeneration ?? response.feedBaseline?.purgeGeneration;
+  if (gen === undefined || gen === null) return null;
+  return {
+    purgeGeneration: Number(gen),
+    cutoffDate: response.purgeCutoffDate || '2026-10-08',
+    cutoffUtc: response.purgeCutoffUtc || '2026-10-07T19:00:00.000Z',
+    timezone: 'Asia/Tashkent',
+    minValidCursor: response.minValidCursor !== undefined && response.minValidCursor !== null
+      ? String(response.minValidCursor)
+      : String(response.cursor ?? '0')
+  };
+}
+
+function persistPurgeEraMeta(db, purgeEra, nowIso) {
+  if (!purgeEra || typeof purgeEra !== 'object') return;
+  const upsert = db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`);
+  if (purgeEra.purgeGeneration !== undefined && purgeEra.purgeGeneration !== null) {
+    upsert.run('purge_generation', String(purgeEra.purgeGeneration), nowIso);
+  }
+  if (purgeEra.cutoffDate) upsert.run('purge_cutoff_date', String(purgeEra.cutoffDate), nowIso);
+  if (purgeEra.cutoffUtc) upsert.run('purge_cutoff_utc', String(purgeEra.cutoffUtc), nowIso);
+  if (purgeEra.minValidCursor !== undefined && purgeEra.minValidCursor !== null) {
+    upsert.run('purge_min_valid_cursor', String(purgeEra.minValidCursor), nowIso);
+  }
+}
+
 function applyBootstrapSnapshot(db, companyId, response, options = {}) {
   const validated = validateBootstrapResponse(response, companyId);
   let result;
@@ -533,15 +601,319 @@ function applyBootstrapSnapshot(db, companyId, response, options = {}) {
     if (foreignKeyViolations.length) {
       throw bootstrapError('BOOTSTRAP_FOREIGN_KEY_VIOLATION', 'Bootstrap rows violate canonical SQLite references');
     }
+    const now = new Date().toISOString();
     setLocalCursor(db, validated.cursor);
     recordSnapshotBaseline(db, companyId, response.feedBaseline, validated.cursor);
+    const appliedEra = extractPurgeEra(response);
+    persistPurgeEraMeta(db, appliedEra, now);
     db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, '1', ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
-      .run(BOOTSTRAP_COMPLETE_KEY, new Date().toISOString());
+      .run(BOOTSTRAP_COMPLETE_KEY, now);
     if (typeof options.testHookBeforeCommit === 'function') options.testHookBeforeCommit();
-    result = { status: 'APPLIED', cursor: validated.cursor, counts: validated.counts };
+    result = {
+      status: 'APPLIED',
+      cursor: validated.cursor,
+      counts: validated.counts,
+      purgeGeneration: appliedEra?.purgeGeneration ?? null
+    };
   });
   importTransaction.immediate();
+  return result;
+}
+
+/**
+ * Replaces stale pre-purge SQLite snapshot rows with an authoritative post-purge server bootstrap,
+ * quarantines pre-cutoff pending outbox commands (+ causal dependents) so they can never resurrect
+ * deleted historical records, and preserves valid pending operations dated on/after cutoff.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} companyId
+ * @param {object} response
+ * @param {object} [options={}]
+ * @returns {object}
+ */
+function reapplyBootstrapAfterHistoricalPurge(db, companyId, response, options = {}) {
+  const validated = validateBootstrapResponse(response, companyId);
+  const era = extractPurgeEra(response);
+  const cutoffDate = era?.cutoffDate || options.cutoffDate || '2026-10-08';
+  const cutoffUtcMs = era?.cutoffUtc ? Date.parse(era.cutoffUtc) : Date.parse(options.cutoffUtc || '2026-10-07T19:00:00Z');
+
+  let result;
+  const rebootstrapTx = db.transaction(() => {
+    const snapshotTicketIds = new Set(validated.snapshot.tickets.map((t) => t.id));
+    const snapshotPartyIds = new Set(validated.snapshot.parties.map((p) => p.id));
+    const snapshotPeriodIds = new Set(validated.snapshot.periods.map((p) => p.id));
+    const snapshotAdjustmentIds = new Set(validated.snapshot.productionAdjustments.map((a) => a.adjustmentId));
+
+    const localTicketSubmittedAtById = new Map(
+      db.prepare('SELECT id, submitted_at FROM tickets WHERE company_id = ?').all(companyId).map((r) => [r.id, r.submitted_at])
+    );
+    const localPeriodEndDateById = new Map(
+      db.prepare('SELECT id, end_date FROM periods WHERE company_id = ?').all(companyId).map((r) => [r.id, r.end_date])
+    );
+    const savedTicketForms = db.prepare('SELECT * FROM local_ticket_forms WHERE company_id = ?').all(companyId);
+
+    const pendingOps = db.prepare(`
+      SELECT * FROM local_outbox
+      WHERE company_id = ? AND status IN ('PENDING', 'SENDING', 'CONFLICT')
+      ORDER BY causal_sequence ASC, rowid ASC
+    `).all(companyId);
+
+    const quarantinedIds = new Set();
+    const quarantinedOps = [];
+    const preservedOps = [];
+    const preservedNewTicketIds = new Set();
+    const preservedNewPartyIds = new Set();
+    const preservedNewPeriodIds = new Set();
+    const preservedNewAdjustmentIds = new Set();
+
+    for (const op of pendingOps) {
+      const depId = typeof op.depends_on_operation_id === 'string' ? op.depends_on_operation_id.trim() : '';
+      if (depId && quarantinedIds.has(depId)) {
+        quarantinedIds.add(op.operation_id);
+        quarantinedOps.push({ operationId: op.operation_id, reason: 'DEPENDS_ON_PURGED_OPERATION' });
+        continue;
+      }
+      const verdict = isOutboxOperationPreCutoff(op, {
+        cutoffDate,
+        cutoffUtcMs,
+        timezone: era?.timezone || 'Asia/Tashkent',
+        snapshotTicketIds,
+        snapshotPartyIds,
+        snapshotPeriodIds,
+        snapshotAdjustmentIds,
+        preservedNewTicketIds,
+        preservedNewPartyIds,
+        preservedNewPeriodIds,
+        preservedNewAdjustmentIds,
+        localTicketSubmittedAtById,
+        localPeriodEndDateById
+      });
+      if (verdict.preCutoff) {
+        quarantinedIds.add(op.operation_id);
+        quarantinedOps.push({ operationId: op.operation_id, reason: verdict.reason || 'PURGED_IN_HISTORICAL_RESET' });
+        continue;
+      }
+      preservedOps.push(op);
+      if (op.command_type === 'SubmitTicket' && op.entity_id) preservedNewTicketIds.add(op.entity_id);
+      if (op.command_type === 'CreatePeriod' && op.entity_id) preservedNewPeriodIds.add(op.entity_id);
+      if (op.command_type === 'RecordProductionAdjustment' && op.entity_id) preservedNewAdjustmentIds.add(op.entity_id);
+      if (op.command_type === 'CreateParty' && op.entity_id) preservedNewPartyIds.add(op.entity_id);
+      if (op.command_type === 'CompletePattaBatch') {
+        try {
+          const pl = JSON.parse(op.payload_json || '{}');
+          for (const party of pl.parties || []) {
+            if (party?.partyRecordId) preservedNewPartyIds.add(party.partyRecordId);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }
+
+    for (const item of quarantinedOps) {
+      quarantinePurgedOutboxOperation(db, companyId, item.operationId, item.reason);
+    }
+
+    const provisionalPeriods = [];
+    const provisionalParties = [];
+    const provisionalTickets = [];
+    const provisionalEntriesByTicket = new Map();
+    const provisionalAdjustments = [];
+
+    for (const op of preservedOps) {
+      if (op.command_type === 'CreatePeriod' && !snapshotPeriodIds.has(op.entity_id)) {
+        const row = db.prepare('SELECT * FROM periods WHERE company_id = ? AND id = ? AND server_revision = 0').get(companyId, op.entity_id);
+        if (row) provisionalPeriods.push(row);
+      } else if (op.command_type === 'CreateParty' && !snapshotPartyIds.has(op.entity_id)) {
+        const row = db.prepare('SELECT * FROM parties WHERE company_id = ? AND id = ? AND server_revision = 0').get(companyId, op.entity_id);
+        if (row) provisionalParties.push(row);
+      } else if (op.command_type === 'CompletePattaBatch') {
+        let pl = {};
+        try { pl = JSON.parse(op.payload_json || '{}'); } catch { pl = {}; }
+        for (const p of pl.parties || []) {
+          if (p?.partyRecordId && !snapshotPartyIds.has(p.partyRecordId)) {
+            const row = db.prepare('SELECT * FROM parties WHERE company_id = ? AND id = ? AND server_revision = 0').get(companyId, p.partyRecordId);
+            if (row) provisionalParties.push(row);
+          }
+        }
+      } else if (op.command_type === 'SubmitTicket' && !snapshotTicketIds.has(op.entity_id)) {
+        const row = db.prepare('SELECT * FROM tickets WHERE company_id = ? AND id = ?').get(companyId, op.entity_id);
+        if (row) {
+          provisionalTickets.push(row);
+          const entries = db.prepare('SELECT * FROM ticket_entries WHERE company_id = ? AND ticket_id = ?').all(companyId, op.entity_id);
+          provisionalEntriesByTicket.set(op.entity_id, entries);
+        }
+      } else if (op.command_type === 'RecordProductionAdjustment' && !snapshotAdjustmentIds.has(op.entity_id)) {
+        const row = db.prepare('SELECT * FROM production_adjustments WHERE company_id = ? AND adjustment_id = ? AND server_revision = 0').get(companyId, op.entity_id);
+        if (row) provisionalAdjustments.push(row);
+      }
+    }
+
+    db.prepare('DELETE FROM ticket_entries WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM tickets WHERE company_id = ?').run(companyId);
+    db.prepare(`
+      DELETE FROM production_adjustments
+      WHERE company_id = ? AND original_adjustment_id IS NOT NULL
+        AND adjustment_id NOT IN (
+          SELECT created_adjustment_id FROM migration_reconciliation_resolutions
+          WHERE company_id = ? AND created_adjustment_id IS NOT NULL
+        )
+    `).run(companyId, companyId);
+    db.prepare(`
+      DELETE FROM production_adjustments
+      WHERE company_id = ?
+        AND adjustment_id NOT IN (
+          SELECT created_adjustment_id FROM migration_reconciliation_resolutions
+          WHERE company_id = ? AND created_adjustment_id IS NOT NULL
+        )
+    `).run(companyId, companyId);
+    db.prepare('DELETE FROM worker_adjustments WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM period_archives WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM protected_party_patta_ranges WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM legacy_party_collision_exceptions WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM parties WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM periods WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM patta_batch_settings WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM company_batch_settings WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM company_patta_sequences WHERE company_id = ?').run(companyId);
+    db.prepare('DELETE FROM local_ticket_forms WHERE company_id = ?').run(companyId);
+
+    const retainedWorkerIds = new Set(
+      db.prepare('SELECT DISTINCT worker_id FROM production_adjustments WHERE company_id = ?').all(companyId).map((r) => Number(r.worker_id))
+    );
+    const retainedModelIds = new Set(
+      db.prepare('SELECT DISTINCT model_id FROM production_adjustments WHERE company_id = ?').all(companyId).map((r) => r.model_id)
+    );
+    if (retainedWorkerIds.size === 0) db.prepare('DELETE FROM workers WHERE company_id = ?').run(companyId);
+    else {
+      for (const w of db.prepare('SELECT id FROM workers WHERE company_id = ?').all(companyId)) {
+        if (!retainedWorkerIds.has(Number(w.id))) db.prepare('DELETE FROM workers WHERE company_id = ? AND id = ?').run(companyId, w.id);
+      }
+    }
+    if (retainedModelIds.size === 0) db.prepare('DELETE FROM models WHERE company_id = ?').run(companyId);
+    else {
+      for (const m of db.prepare('SELECT id FROM models WHERE company_id = ?').all(companyId)) {
+        if (!retainedModelIds.has(m.id)) db.prepare('DELETE FROM models WHERE company_id = ? AND id = ?').run(companyId, m.id);
+      }
+    }
+
+    const filteredSnapshot = {
+      ...validated.snapshot,
+      models: retainedModelIds.size === 0 ? validated.snapshot.models : validated.snapshot.models.filter((m) => !retainedModelIds.has(m.id)),
+      workers: retainedWorkerIds.size === 0 ? validated.snapshot.workers : validated.snapshot.workers.filter((w) => !retainedWorkerIds.has(Number(w.id)))
+    };
+    insertBootstrapRows(db, companyId, filteredSnapshot, validated.nextPattaNumber);
+
+    const liveModelIds = new Set(validated.snapshot.models.map((m) => m.id));
+    if (savedTicketForms.length > 0) {
+      const restoreForm = db.prepare(`INSERT OR IGNORE INTO local_ticket_forms (
+        company_id, model_id, form_json, updated_at
+      ) VALUES (?, ?, ?, ?)`);
+      for (const form of savedTicketForms) {
+        if (!form.model_id || liveModelIds.has(form.model_id)) {
+          restoreForm.run(form.company_id, form.model_id, form.form_json, form.updated_at);
+        }
+      }
+    }
+
+    for (const p of provisionalPeriods) {
+      db.prepare(`INSERT OR IGNORE INTO periods (
+        id, company_id, name, start_date, end_date, is_closed, closed_at, notes, archive_filename,
+        status, created_at, updated_at, server_revision, provenance, close_operation_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        p.id, p.company_id, p.name, p.start_date, p.end_date, p.is_closed, p.closed_at, p.notes,
+        p.archive_filename, p.status, p.created_at, p.updated_at, p.server_revision, p.provenance, p.close_operation_id
+      );
+    }
+    for (const party of provisionalParties) {
+      if (!liveModelIds.has(party.model_id)) continue;
+      db.prepare(`INSERT OR IGNORE INTO parties (
+        id, company_id, party_number, physical_party_number, model_id, model_name, color, patta_count,
+        cumulative_patta_count, patta_start_number, patta_end_number, ish_soni_per_patta, total_ish_soni,
+        ish_soni, cumulative_ish_soni, sizes_json, size_order_json, printed_at, is_closed, closed_at,
+        archived_patta_numbers_json, status, created_at, updated_at, provenance, server_revision,
+        is_archived, ended_at, ended_operation_id, month_closed_period_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        party.id, party.company_id, party.party_number, party.physical_party_number, party.model_id,
+        party.model_name, party.color, party.patta_count, party.cumulative_patta_count,
+        party.patta_start_number, party.patta_end_number, party.ish_soni_per_patta, party.total_ish_soni,
+        party.ish_soni, party.cumulative_ish_soni, party.sizes_json, party.size_order_json, party.printed_at,
+        party.is_closed, party.closed_at, party.archived_patta_numbers_json, party.status, party.created_at,
+        party.updated_at, party.provenance, party.server_revision, party.is_archived, party.ended_at,
+        party.ended_operation_id, party.month_closed_period_id
+      );
+    }
+    const currentPartyIds = new Set(db.prepare('SELECT id FROM parties WHERE company_id = ?').all(companyId).map((r) => r.id));
+    const currentWorkerIds = new Set(db.prepare('SELECT id FROM workers WHERE company_id = ?').all(companyId).map((r) => Number(r.id)));
+    for (const ticket of provisionalTickets) {
+      if (!liveModelIds.has(ticket.model_id)) continue;
+      if (ticket.party_record_id && !currentPartyIds.has(ticket.party_record_id)) continue;
+      const entries = provisionalEntriesByTicket.get(ticket.id) || [];
+      if (entries.some((e) => !currentWorkerIds.has(Number(e.worker_id)))) continue;
+      db.prepare(`INSERT OR IGNORE INTO tickets (
+        id, company_id, model_id, period_id, party_number, party_record_id, patta_number, qty, size,
+        color, konveyer, status, is_closed, submitted_at, created_at, provenance, server_revision
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        ticket.id, ticket.company_id, ticket.model_id, ticket.period_id, ticket.party_number,
+        ticket.party_record_id, ticket.patta_number, ticket.qty, ticket.size, ticket.color,
+        ticket.konveyer, ticket.status, ticket.is_closed, ticket.submitted_at, ticket.created_at,
+        ticket.provenance, ticket.server_revision
+      );
+      for (const e of entries) {
+        db.prepare(`INSERT OR IGNORE INTO ticket_entries (
+          id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, brak, qty, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+          e.id, e.ticket_id, e.company_id, e.op_name, e.worker_id, e.worker_name_snapshot,
+          e.rate_snapshot, e.brak, e.qty, e.created_at
+        );
+      }
+    }
+    for (const adj of provisionalAdjustments) {
+      if (!liveModelIds.has(adj.model_id) || !currentWorkerIds.has(Number(adj.worker_id))) continue;
+      db.prepare(`INSERT OR IGNORE INTO production_adjustments (
+        adjustment_id, company_id, model_id, worker_id, op_name, delta_qty, reason, status,
+        server_revision, provenance, created_at, created_by, original_adjustment_id,
+        original_ticket_id, original_entry_id, original_period_id, original_rate_snapshot, attribution_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        adj.adjustment_id, adj.company_id, adj.model_id, adj.worker_id, adj.op_name, adj.delta_qty,
+        adj.reason, adj.status, adj.server_revision, adj.provenance, adj.created_at, adj.created_by,
+        adj.original_adjustment_id, adj.original_ticket_id, adj.original_entry_id, adj.original_period_id,
+        adj.original_rate_snapshot, adj.attribution_status
+      );
+    }
+
+    const foreignKeyViolations = db.prepare('PRAGMA foreign_key_check').all();
+    if (foreignKeyViolations.length) {
+      throw bootstrapError('BOOTSTRAP_FOREIGN_KEY_VIOLATION', 'Post-purge re-bootstrap rows violate canonical SQLite references');
+    }
+
+    const now = new Date().toISOString();
+    setLocalCursor(db, validated.cursor);
+    recordSnapshotBaseline(db, companyId, response.feedBaseline, validated.cursor);
+    persistPurgeEraMeta(db, era, now);
+    db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES (?, '1', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+      .run(BOOTSTRAP_COMPLETE_KEY, now);
+    db.prepare(`INSERT INTO local_meta (key, value, updated_at) VALUES ('last_rebootstrap_at', ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+      .run(now, now);
+
+    if (typeof options.testHookBeforeCommit === 'function') options.testHookBeforeCommit();
+
+    result = {
+      status: 'REBOOTSTRAPPED',
+      cursor: validated.cursor,
+      counts: validated.counts,
+      quarantinedCount: quarantinedOps.length,
+      quarantinedOperationIds: quarantinedOps.map((q) => q.operationId),
+      quarantinedReasons: quarantinedOps,
+      preservedPendingCount: preservedOps.length,
+      preservedOperationIds: preservedOps.map((p) => p.operation_id),
+      purgeGeneration: era?.purgeGeneration ?? null
+    };
+  });
+  rebootstrapTx.immediate();
   return result;
 }
 
@@ -549,5 +921,6 @@ module.exports = {
   BOOTSTRAP_COMPLETE_KEY,
   validateBootstrapResponse,
   getBootstrapState,
-  applyBootstrapSnapshot
+  applyBootstrapSnapshot,
+  reapplyBootstrapAfterHistoricalPurge
 };

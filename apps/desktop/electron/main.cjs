@@ -583,6 +583,29 @@ ipcMain.handle('outbox-pending', (event, args) => {
   }
 });
 
+ipcMain.handle('allocation-review-list', (event, args) => {
+  try {
+    const ready = assertRuntimeReady(typeof args === 'string' ? args : args?.companyId);
+    const limit = typeof args === 'object' && typeof args?.limit === 'number' ? args.limit : 100;
+    return { success: true, conflicts: outboxManager.listAllocationReviewOperations(ready.db, ready.companyId, limit) };
+  } catch (err) {
+    return ErrorResponse(err);
+  }
+});
+
+ipcMain.handle('allocation-review-retry', (event, args) => {
+  try {
+    const ready = assertRuntimeReady(args?.companyId);
+    if (typeof args?.operationId !== 'string' || !args.operationId.trim()) {
+      throw Object.assign(new Error('operationId talab qilinadi'), { code: 'INVALID_OPERATION_ID' });
+    }
+    const operation = outboxManager.requeueAllocationReviewOperation(ready.db, ready.companyId, args.operationId.trim());
+    return { success: true, operation };
+  } catch (err) {
+    return ErrorResponse(err);
+  }
+});
+
 ipcMain.handle('rebuild-projections', (event, targetCompanyId) => {
   try {
     const compId = assertRuntimeReady(targetCompanyId).companyId;
@@ -619,6 +642,76 @@ if (isSyncEnabled) {
       allowHttp: !app.isPackaged
     });
   }
+
+  async function deliverAllocationCancellations(db, compId, client) {
+    const intents = outboxManager.listPendingAllocationCancellations(db, compId);
+    let delivered = 0;
+    for (const intent of intents) {
+      try {
+        const result = await client.cancelAllocationReview({
+          companyId: compId, originalOperationId: intent.original_operation_id,
+          originalPayloadHash: intent.original_payload_hash, originalPayload: JSON.parse(intent.original_payload_json),
+          commandType: intent.command_type, resolutionOperationId: intent.resolution_operation_id,
+          reason: intent.reason, previousStatus: 'CONFLICT'
+        });
+        outboxManager.acknowledgeAllocationCancellation(db, compId, intent.resolution_operation_id, result);
+        delivered++;
+      } catch (error) {
+        if (!(error?.isTransient || error?.code === 'NETWORK_ERROR')) {
+          outboxManager.rejectAllocationCancellation(db, compId, intent.resolution_operation_id, error);
+        }
+      }
+    }
+    return delivered;
+  }
+
+  ipcMain.handle('allocation-review-cancel', async (event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      if (typeof args?.operationId !== 'string' || typeof args?.reason !== 'string' || !args.reason.trim()) {
+        throw Object.assign(new Error('Sabab va amaliyot raqami talab qilinadi'), { code: 'INVALID_ALLOCATION_CANCELLATION' });
+      }
+      const intent = outboxManager.queueAllocationCancellation(ready.db, ready.companyId, args.operationId, args.reason.trim());
+      try {
+        const result = await createSyncClient(ready.companyId).cancelAllocationReview({
+          companyId: ready.companyId, originalOperationId: intent.operationId,
+          originalPayloadHash: intent.payloadHash, originalPayload: intent.payload,
+          commandType: intent.commandType, resolutionOperationId: intent.resolutionOperationId,
+          reason: intent.reason, previousStatus: 'CONFLICT'
+        });
+        outboxManager.acknowledgeAllocationCancellation(ready.db, ready.companyId, intent.resolutionOperationId, result);
+        return { success: true, status: 'CANCELLED', result };
+      } catch (error) {
+        if (error?.isTransient || error?.code === 'NETWORK_ERROR') return { success: true, status: 'PENDING_SERVER_ACK', resolutionOperationId: intent.resolutionOperationId };
+        outboxManager.rejectAllocationCancellation(ready.db, ready.companyId, intent.resolutionOperationId, error);
+        throw error;
+      }
+    } catch (err) { return ErrorResponse(err, 'ALLOCATION_CANCELLATION_FAILED'); }
+  });
+
+  ipcMain.handle('allocation-review-history', async (event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      const history = await createSyncClient(ready.companyId).getAllocationReviewHistory(args?.operationId);
+      return { success: true, history: history.history || [] };
+    } catch (err) { return ErrorResponse(err, 'ALLOCATION_REVIEW_HISTORY_FAILED'); }
+  });
+
+  ipcMain.handle('staj-debt-history', async (event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      const result = await createSyncClient(ready.companyId).getStajDebtHistory(args?.debtId);
+      return { success: true, ...result };
+    } catch (err) { return ErrorResponse(err, 'STAJ_DEBT_HISTORY_FAILED'); }
+  });
+
+  ipcMain.handle('staj-debt-reviews', async (event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      const result = await createSyncClient(ready.companyId).getStajDebtReviews();
+      return { success: true, reviews: result.reviews || [] };
+    } catch (err) { return ErrorResponse(err, 'STAJ_DEBT_REVIEW_FAILED'); }
+  });
 
   ipcMain.handle('operator-login', async (event, args) => {
     try {
@@ -688,6 +781,7 @@ if (isSyncEnabled) {
       const userData = app.getPath('userData');
       const db = ready.db;
       const syncClient = createSyncClient(compId);
+      await deliverAllocationCancellations(db, compId, syncClient);
       const result = await executeReconnectProtocol(db, compId, syncClient, { baseUserDataPath: userData,
         isContextCurrent: () => { try { return assertRuntimeReady(compId).db === db; } catch { return false; } } });
       return { success: true, result };

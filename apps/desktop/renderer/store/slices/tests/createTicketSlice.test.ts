@@ -300,6 +300,37 @@ describe(' ticket command routing', () => {
     expect(WorkbookCommand.mock.calls[0][0].payload.entries[0]).toMatchObject({ entryId: 'original-sew', rateSnapshot: 5 });
   });
 
+  it('preserves an existing partial quantity while adding a second worker allocation for the same operation', async () => {
+    const WorkbookCommand = vi.fn().mockResolvedValue({ success: true, result: { status: 'PENDING_SYNC' } });
+    vi.stubGlobal('window', { electronAPI: {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      WorkbookCommand,
+      dbRead: vi.fn().mockResolvedValue({ success: true, data: { companyId: 'company-a' } })
+    } });
+    const { slice, state } = makeSlice();
+    state().workers.push({ id: 2, name: 'Worker B' });
+    state().submittedTickets = [{
+      id: 'ticket-a', modelId: 'model-a', partyNumber: '1', partyRecordId: 'party-a',
+      pattaNumber: 1, qty: 100, status: 'CONFIRMED', serverRevision: 1,
+      entries: [{ entryId: 'original-sew', opName: 'Sew', workerId: 1, workerNameSnapshot: 'Worker A',
+        rateSnapshot: 5, qty: 40 }]
+    }];
+
+    const result = await slice.updateSubmittedTicket('ticket-a', [
+      { entryId: 'original-sew', opName: 'Sew', workerId: 1, rateSnapshot: 5, qty: 40 },
+      { opName: 'Sew', workerId: 2, rateSnapshot: 5, qty: 60 }
+    ]);
+
+    expect(result).toBe(true);
+    const entries = WorkbookCommand.mock.calls[0][0].payload.entries;
+    expect(entries).toHaveLength(2);
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entryId: 'original-sew', workerId: 1, qty: 40 }),
+      expect.objectContaining({ workerId: 2, qty: 60 })
+    ]));
+    expect(entries.find((entry: any) => entry.workerId === 2)).not.toHaveProperty('entryId');
+  });
+
   it('shares one in-flight command for identical concurrent submissions', async () => {
     let resolveCommand: (value: { success: boolean }) => void = () => {};
     const SubmitTicketCommand = vi.fn().mockImplementation(() => new Promise((resolve) => {

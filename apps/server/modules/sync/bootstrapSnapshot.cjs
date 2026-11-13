@@ -4,6 +4,7 @@ const {
   acquireCompanyBootstrapLock,
   releaseCompanyBootstrapLock
 } = require('./changeFeedWatermark.cjs');
+const { readActivePurgeEra } = require('./historicalPurgeFence.cjs');
 
 function jsonValue(value, fallback) {
   if (value === null || value === undefined) return fallback;
@@ -172,6 +173,21 @@ async function readCompanySnapshot(client, companyId) {
     createdAt: dateValue(row.created_at)
   }));
 
+  const debtClaimResult = await client.query(`SELECT company_id,debt_id,worker_id,original_amount::text AS original_amount,
+      evidence_reference,evidence_sha256,verification_note,verified_by,registered_operation_id,created_at
+    FROM staj_debt_claims WHERE company_id=$1 ORDER BY debt_id`, [companyId]);
+  const stajDebtClaims = debtClaimResult.rows.map(row => ({ companyId: row.company_id, debtId: row.debt_id,
+    workerId: numberValue(row.worker_id), originalAmount: row.original_amount,
+    evidenceReference: row.evidence_reference, evidenceSha256: row.evidence_sha256,
+    verificationNote: row.verification_note, verifiedBy: row.verified_by,
+    registeredOperationId: row.registered_operation_id, createdAt: dateValue(row.created_at) }));
+  const debtEventResult = await client.query(`SELECT company_id,event_id,debt_id,operation_id,event_type,amount::text AS amount,
+      period_id,reverses_event_id,actor_id,reason,created_at FROM staj_debt_events WHERE company_id=$1 ORDER BY created_at,event_id`, [companyId]);
+  const stajDebtEvents = debtEventResult.rows.map(row => ({ companyId: row.company_id, eventId: row.event_id,
+    debtId: row.debt_id, operationId: row.operation_id, eventType: row.event_type, amount: row.amount,
+    periodId: row.period_id, reversesEventId: row.reverses_event_id, actorId: row.actor_id,
+    reason: row.reason, createdAt: dateValue(row.created_at) }));
+
   const ticketResult = await client.query(`
     SELECT id, company_id, model_id, period_id, party_number, party_record_id, patta_number,
       qty, size, color, konveyer, status, is_closed, submitted_at, created_at, server_revision
@@ -311,6 +327,8 @@ async function readCompanySnapshot(client, companyId) {
     legacyPartyCollisionExceptions,
     parties,
     workerAdjustments,
+    stajDebtClaims,
+    stajDebtEvents,
     tickets,
     productionAdjustments,
     batchSettings,
@@ -323,6 +341,8 @@ async function readCompanySnapshot(client, companyId) {
     legacyPartyCollisionExceptions: legacyPartyCollisionExceptions.length,
     parties: parties.length,
     workerAdjustments: workerAdjustments.length,
+    stajDebtClaims: stajDebtClaims.length,
+    stajDebtEvents: stajDebtEvents.length,
     tickets: tickets.length,
     ticketEntries: tickets.reduce((total, ticket) => total + ticket.entries.length, 0),
     productionAdjustments: productionAdjustments.length,
@@ -355,12 +375,13 @@ async function withCompanyBootstrapSnapshot(pool, companyId, options = {}) {
     );
     const cursor = String(watermarkResult.rows[0]?.cursor ?? '0');
     if (!/^\d+$/.test(cursor)) throw new Error('BOOTSTRAP_CURSOR_INVALID');
+    const purgeEra = await readActivePurgeEra(client, companyId);
     if (typeof options.testHookAfterSnapshot === 'function') {
       await options.testHookAfterSnapshot(snapshot, cursor);
     }
     await client.query('COMMIT');
     transactionStarted = false;
-    return { snapshot, cursor, counts, nextPattaNumber };
+    return { snapshot, cursor, counts, nextPattaNumber, purgeEra };
   } catch (error) {
     if (transactionStarted) {
       try { await client.query('ROLLBACK'); } catch { discardClient = true; }

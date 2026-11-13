@@ -317,12 +317,12 @@ describe(' workbook local command pipeline', () => {
     const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
       commandType: 'UpdateTicket', commandId: 'cmd_update_ticket', operationId: 'op_update_ticket',
       companyId, entityId: ticketId, baseRevision: 2,
-      payload: { ticketId, entries: [{ opName: 'Cut', workerId: 2, workerNameSnapshot: 'Worker B', rateSnapshot: 3 }] }
+      payload: { ticketId, entries: [{ opName: 'Cut', workerId: 2, workerNameSnapshot: 'Worker B', rateSnapshot: 3, qty: 3 }] }
     });
 
     expect(result).toMatchObject({ committed: true, entityId: ticketId, status: 'PENDING_SYNC' });
-    expect(db.prepare('SELECT op_name, worker_id, worker_name_snapshot FROM ticket_entries WHERE ticket_id = ?')
-      .all(ticketId)).toEqual([{ op_name: 'Cut', worker_id: 2, worker_name_snapshot: 'Worker B' }]);
+    expect(db.prepare('SELECT op_name, worker_id, worker_name_snapshot, qty FROM ticket_entries WHERE ticket_id = ?')
+      .all(ticketId)).toEqual([{ op_name: 'Cut', worker_id: 2, worker_name_snapshot: 'Worker B', qty: 3 }]);
     expect(db.prepare('SELECT id, rate_snapshot FROM ticket_entries WHERE ticket_id = ?').get(ticketId))
       .toEqual({ id: 'entry_before_edit', rate_snapshot: 5 });
     const outbox = db.prepare(`SELECT command_type, base_revision, local_archive_json FROM local_outbox WHERE operation_id = ?`)
@@ -346,6 +346,31 @@ describe(' workbook local command pipeline', () => {
       .toEqual([{ op_name: 'Cut', worker_id: 1 }]);
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_update_ticket').status)
       .toBe('DEAD_LETTER');
+  });
+
+  it('retains the original submission as the explicit causal parent of a ticket edit', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at) VALUES (1, ?, 'A', ?, ?)`)
+      .run(companyId, now, now);
+    const ticketId = '11111111-1111-4111-8111-111111111118';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty,
+      status, submitted_at, created_at, server_revision) VALUES (?, ?, 'model_one', '1', 1, 5, 'CONFIRMED', ?, ?, 1)`)
+      .run(ticketId, companyId, now, now);
+    const submitPayload = canonicalStringify({ ticketId, partyRecordId: 'party_1' });
+    outboxManager.insertOutboxOperation(db, {
+      operation_id: 'op_original_submit', company_id: companyId, command_type: 'SubmitTicket',
+      entity_type: 'ticket', entity_id: ticketId, payload_json: submitPayload,
+      payload_hash: computePayloadHash(submitPayload), status: 'SYNCED'
+    });
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateTicket', commandId: 'cmd_ticket_edit_after_offline',
+      operationId: 'op_ticket_edit_after_offline', companyId, entityId: ticketId,
+      payload: { ticketId, entries: [{ opName: 'Cut', workerId: 1, qty: 3 }] }
+    });
+    const edit = outboxManager.getOperation(db, companyId, 'op_ticket_edit_after_offline');
+    expect(edit.depends_on_operation_id).toBe('op_original_submit');
+    expect(JSON.parse(edit.payload_json).dependsOnOperationId).toBe('op_original_submit');
   });
 
   it('retains zero and unknown rates across local reorder and worker edits without accepting new tariff claims', () => {
@@ -412,6 +437,35 @@ describe(' workbook local command pipeline', () => {
       ]);
     expect(db.prepare('SELECT local_archive_json FROM local_outbox WHERE operation_id = ?').get('remove_sew'))
       .toMatchObject({ local_archive_json: expect.stringContaining(`${ticketId}_entry_2`) });
+  });
+
+  it('adds a second worker allocation for an operation without reusing the existing entry identity', () => {
+    const db = seedModel();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id, company_id, name, created_at, updated_at)
+      VALUES (1, ?, 'Ali', ?, ?), (2, ?, 'Vali', ?, ?)`)
+      .run(companyId, now, now, companyId, now, now);
+    const ticketId = '11111111-1111-4111-8111-111111111122';
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, party_number, patta_number, qty,
+      status, submitted_at, created_at, server_revision) VALUES (?, ?, 'model_one', '1', 1, 100,
+      'CONFIRMED', ?, ?, 1)`).run(ticketId, companyId, now, now);
+    db.prepare(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, qty, created_at)
+      VALUES ('entry-ali', ?, ?, 'Sew', 1, 40, ?)`).run(ticketId, companyId, now);
+
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'UpdateTicket', commandId: 'cmd_split_workers', operationId: 'op_split_workers',
+      companyId, entityId: ticketId, baseRevision: 1,
+      payload: { ticketId, entries: [
+        { entryId: 'entry-ali', opName: 'Sew', workerId: 1, qty: 40 },
+        { opName: 'Sew', workerId: 2, qty: 60 }
+      ] }
+    });
+
+    expect(db.prepare(`SELECT id,worker_id,qty FROM ticket_entries WHERE ticket_id=? ORDER BY worker_id`)
+      .all(ticketId)).toEqual([
+        { id: 'entry-ali', worker_id: 1, qty: 40 },
+        { id: `${ticketId}_edit_op_split_workers_entry_2`, worker_id: 2, qty: 60 }
+      ]);
   });
 
   it('rejects ambiguous historical operation matches without deleting existing entries', () => {

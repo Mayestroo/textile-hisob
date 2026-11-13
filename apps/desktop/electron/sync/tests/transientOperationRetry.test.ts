@@ -56,7 +56,8 @@ describe('HTTP retry through real SyncClient and isolated SQLite outbox', () => 
         if (sql.includes('FROM models') && sql.includes('operations_json')) {
           return { rows: [{ id: 'offline-model', operations_json: '[{"name":"Sew"}]', status: 'ACTIVE' }] };
         }
-        if (sql.includes('FROM workers') && sql.includes('status')) return { rows: [{ id: 71, status: 'ACTIVE' }] };
+         if (sql.includes('FROM workers') && sql.includes('status')) return { rows: [{ id: 71, status: 'ACTIVE' }] };
+         if (sql.includes('FROM parties p')) return { rows: [{ id: 'offline-party', party_number: '1', model_id: 'offline-model', ish_soni_per_patta: '1', patta_start_number: 1, patta_end_number: 1 }] };
         if (sql.includes('SELECT id FROM tickets')) return { rows: serverFacts.has(params[1]) ? [{ id: params[1] }] : [] };
         if (sql.includes('FROM tickets') && sql.includes('FOR UPDATE')) return { rows: opId === 'invalid' ? [] : [{ id: ticket, status: 'CONFIRMED', is_closed: 0 }] };
         if (sql.includes('UPDATE tickets SET status')) return { rows: [{ server_revision: 2 }] };
@@ -162,11 +163,13 @@ describe('HTTP retry through real SyncClient and isolated SQLite outbox', () => 
       VALUES (71, ?, 'Fixture worker', 'ACTIVE', '2026-09-01', '2026-09-01')`).run(company);
     db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, created_at)
       VALUES ('offline-period', ?, 'Offline period', '2026-09-01', 0, 'OPEN', '2026-09-01')`).run(company);
+    db.prepare(`INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, ish_soni_per_patta,
+      status, created_at, updated_at) VALUES ('offline-party', ?, '1', '1', 'offline-model', 1, 'ACTIVE', '2026-09-01', '2026-09-01')`).run(company);
 
     const command = {
       commandId: 'cmd_offline_restart_acceptance', operationId, companyId: company, ticketId,
       modelId: 'offline-model', periodId: 'offline-period', effectiveDate: '2026-09-01',
-      submittedAt: '2026-09-01T12:00:00.000Z', partyNumber: '1', pattaNumber: 1, qty: 1,
+       submittedAt: '2026-09-01T12:00:00.000Z', partyNumber: '1', partyRecordId: 'offline-party', pattaNumber: 1, qty: 1,
       strictParty: false, strictPatta: false,
       entries: [{ opName: 'Sew', workerId: 71, rateSnapshot: 0 }]
     };

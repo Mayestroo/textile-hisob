@@ -21,7 +21,12 @@ function reducePayroll(period, workers, facts, adjustments, deductions, tariffBa
   const closingArchiveAvailable = Array.isArray(archivedModels);
   const ratesForPeriod = period && Boolean(period.is_closed) ? closingRates : currentRates;
   const byWorker = new Map(workers.map((w) => [Number(w.worker_id), {
-    workerId: Number(w.worker_id), name: w.worker_name, staj: period ? Math.max(0, numeric(w.staj)) : 0,
+    workerId: Number(w.worker_id), name: w.worker_name,
+    // Preserve the old value in a closed-period projection as historical output;
+    // open periods no longer charge this static field.
+    staj: period && Boolean(period.is_closed) && tariffBasis.stajDebtLedgerVersion !== 1
+      ? Math.max(0, numeric(w.staj)) : 0,
+    legacyStaj: Math.max(0, numeric(w.staj)),
     avans: 0, jarima: 0, oklad: 0, magazin: 0,
     pieceworkGross: 0, gross: 0, net: 0, pieces: 0, rawQuantity: 0,
     unknownEntryCount: 0, unknownQuantity: 0, unresolvedAdjustmentCount: 0,
@@ -83,8 +88,10 @@ function reducePayroll(period, workers, facts, adjustments, deductions, tariffBa
     if (w && row.type === 'JARIMA') w.jarima = Math.max(0, numeric(row.total));
     if (w && row.type === 'OKLAD') w.oklad = numeric(row.total);
     if (w && row.type === 'MAGAZIN') w.magazin = numeric(row.total);
+    if (w && row.type === 'STAJ_DEBT') w.staj = Math.max(0, numeric(row.total));
   }
   for (const w of byWorker.values()) {
+    if (w.legacyStaj > 0) reason(w, 'LEGACY_STAJ_REQUIRES_RECONCILIATION');
     if (period && Boolean(period.is_closed)) reason(w, 'HISTORICAL_BASELINE_UNVERIFIED');
     const byOperation = new Map();
     for (const b of w.buckets.values()) {

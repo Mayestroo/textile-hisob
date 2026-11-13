@@ -301,11 +301,12 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       ON CONFLICT (company_id, id) DO NOTHING`, [COMPANY_B]);
   });
 
-  async function seedParty(companyId: string, id: string, partyNumber: string, modelId = 'm_1') {
+  async function seedParty(companyId: string, id: string, partyNumber: string, modelId = 'm_1', issuedPerPatta: number | null = null) {
     await pool.query(
-      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
-       VALUES ($1, $2, $3, $3, $4, 'ACTIVE')`,
-      [id, companyId, partyNumber, modelId]
+      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, patta_count,
+        patta_start_number, patta_end_number, ish_soni_per_patta, status)
+       VALUES ($1, $2, $3, $3, $4, 1, 1, 100, $5, 'ACTIVE')`,
+      [id, companyId, partyNumber, modelId, issuedPerPatta]
     );
   }
 
@@ -490,8 +491,8 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       modelId: 'm_1',
       partyNumber: '1',
       pattaNumber: 1,
-      qty: 15,
-      entries: [{ opName: 'Tikish', workerId: 2, qty: 15 }]
+      qty: 10,
+      entries: [{ opName: 'Tikish', workerId: 2, qty: 10 }]
     };
     const wrongHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -526,7 +527,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
   // 7-9: First Commit, Replay Idempotency, and Idempotency Conflict
   // ----------------------------------------------------------------
   it('6. first operation commits, and exact replay returns prior result without duplicate mutation', async () => {
-    await seedParty(COMPANY_A, 'party-ticket-100', '5', 'm_alpha');
+    await seedParty(COMPANY_A, 'party-ticket-100', '5', 'm_alpha', 25);
     const payload = {
       commandId: 'cmd_ticket_100',
       operationId: 'op_ticket_100',
@@ -598,7 +599,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
   });
 
   it('7. rejects second request with same operationId but different payload with IDEMPOTENCY_CONFLICT', async () => {
-    await seedParty(COMPANY_A, 'party-ticket-101', '1');
+    await seedParty(COMPANY_A, 'party-ticket-101', '1', 'm_1', 20);
     const payloadA = {
       commandId: 'cmd_101',
       operationId: 'op_conflict_101',
@@ -716,7 +717,7 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
 
   it('9. injected failure before commit rolls back all mutations completely (0 fact, 0 dedup, 0 changelog)', async () => {
     const { processSingleOperation } = require('../modules/sync/handlers/operations.cjs');
-    await seedParty(COMPANY_A, 'party-ticket-fail', '9');
+    await seedParty(COMPANY_A, 'party-ticket-fail', '9', 'm_1', 10);
     const payload = {
       commandId: 'cmd_fail_1',
       operationId: 'op_fail_1',
@@ -875,8 +876,8 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
   // 11-13: Change Feed, Cursor Monotonicity, and Multi-Tenant Gaps
   // ----------------------------------------------------------------
   it('11. multi-company interleaved changes do not skip tenant changes', async () => {
-    await seedParty(COMPANY_A, 'party-a-1', '1');
-    await seedParty(COMPANY_B, 'party-b-1', '1');
+    await seedParty(COMPANY_A, 'party-a-1', '1', 'm_1', 10);
+    await seedParty(COMPANY_B, 'party-b-1', '1', 'm_1', 20);
     // Submit for Company A (change 1)
     const pA1 = {
       commandId: 'cmd_a1',
@@ -930,8 +931,8 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       partyRecordId: 'party-a-1',
       effectiveDate: '2026-09-01',
       pattaNumber: 2,
-      qty: 15,
-      entries: [{ opName: 'Tikish', workerId: 2, qty: 15 }]
+      qty: 10,
+      entries: [{ opName: 'Tikish', workerId: 2, qty: 10 }]
     };
     await app.inject({
       method: 'POST',
@@ -1525,8 +1526,8 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
         gross: 12,
         avans: 5,
         jarima: 2,
-        staj: 3,
-        net: 2,
+        staj: 0,
+        net: 5,
         pieces: 4
       });
 

@@ -18,6 +18,7 @@ COPY packages/domain/partyPolicy.cjs ./packages/domain/partyPolicy.cjs
 COPY packages/domain/pattaSequence.cjs ./packages/domain/pattaSequence.cjs
 COPY packages/domain/pattaFinishScope.cjs ./packages/domain/pattaFinishScope.cjs
 COPY packages/domain/payrollReducer.cjs ./packages/domain/payrollReducer.cjs
+COPY packages/domain/stajDebtLedger.cjs ./packages/domain/stajDebtLedger.cjs
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \

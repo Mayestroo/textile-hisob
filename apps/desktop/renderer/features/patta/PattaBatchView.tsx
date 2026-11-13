@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
 import { Printer, Plus, X, CheckCircle2, AlertCircle, Pencil, Search } from 'lucide-react';
 import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
@@ -24,22 +24,19 @@ export const PattaBatchView: React.FC = () => {
   const batchPrintCompleted = useWorkbookStore((s) => s.batchPrintCompleted);
   const completePartySeries = useWorkbookStore((s) => s.completePartySeries);
   const addNotification = useWorkbookStore((s) => s.addNotification);
-  const [runtimeMode, setRuntimeMode] = useState<'checking' | 'legacy' | 'sync'>('checking');
   const [sizeSystem, setSizeSystem] = useState<PattaSizeSystem>('letters');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'filled' | 'empty'>('all');
 
-  useEffect(() => {
-    let active = true;
-    void resolveElectronRuntimeMode(getElectronApi()).then((runtime) => {
-      if (active) setRuntimeMode(runtime.mode === 'sync' ? 'sync' : 'legacy');
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const canUseBatchMutation = () => runtimeMode !== 'checking';
+  // Runtime readiness may change after activation/bootstrap without this view
+  // remounting. Never gate a durable issuance on a one-time renderer snapshot:
+  // ask the authoritative Electron bridge at the moment the action is taken.
+  const canUseBatchMutation = async () => {
+    const runtime = await resolveElectronRuntimeMode(getElectronApi());
+    if (runtime.success) return true;
+    addNotification('error', runtime.code || '_RUNTIME_NOT_READY', runtime.error || ' runtime readiness failed.');
+    return false;
+  };
 
   const guardedAddCustomSize = (modelId: string, sizeName: string) => addCustomSize(modelId, sizeName);
   const guardedDeleteCustomSize = (modelId: string, sizeName: string) => deleteCustomSize(modelId, sizeName);
@@ -52,8 +49,9 @@ export const PattaBatchView: React.FC = () => {
   const guardedUpdateBatchSize = (modelId: string, size: string, count: string) => {
     updatePattaBatchSize(modelId, size, count);
   };
-  const guardedBatchPrintCompleted = (printedSummary: any) => {
-    if (canUseBatchMutation()) batchPrintCompleted(printedSummary);
+  const guardedBatchPrintCompleted = async (printedSummary: any) => {
+    if (!(await canUseBatchMutation())) return false;
+    return batchPrintCompleted(printedSummary);
   };
 
   const getModelSizes = (modelId: string) => {
@@ -246,8 +244,8 @@ export const PattaBatchView: React.FC = () => {
 
   const canAttemptBatchPrint = totalBatchPattas > 0 || invalidPattaSizeModels.length > 0;
 
-  const handleOpenBatchPrint = () => {
-    if (!canUseBatchMutation()) return;
+  const handleOpenBatchPrint = async () => {
+    if (!(await canUseBatchMutation())) return;
 
     const normalizedSizesByModelId = new Map<string, ReturnType<typeof normalizePattaSizeCounts>>();
     for (const model of models) {
@@ -948,7 +946,7 @@ export const PattaBatchView: React.FC = () => {
                 onClick={async () => {
                   setIsClosingParty(true);
                   try {
-                     if (canUseBatchMutation()) {
+                     if (await canUseBatchMutation()) {
                        await completePartySeries();
                        setIsClosePartyModalOpen(false);
                      }
@@ -980,8 +978,9 @@ export const PattaBatchView: React.FC = () => {
       {printBatchItems && printBatchItems.length > 0 && (
         <PattaPrintModal
           items={printBatchItems}
+          onReserve={guardedBatchPrintCompleted}
           onPrinted={(printedSummary) => {
-             guardedBatchPrintCompleted(printedSummary);
+             void printedSummary;
           }}
           onClose={() => setPrintBatchItems(null)}
         />

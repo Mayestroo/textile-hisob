@@ -83,7 +83,7 @@ export interface TicketSlice {
   deleteSubmittedTicket: (ticketId: string) => Promise<boolean | void>;
   updateSubmittedTicket: (
     ticketId: string,
-    updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number }>
+    updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string; qty?: number }>
   ) => Promise<boolean>;
 }
 
@@ -238,7 +238,9 @@ export type WorkbookStore = ModelSlice &
   WorkerSlice &
   TicketSlice &
   PeriodSlice &
-  PattaBatchSlice &
+  Omit<PattaBatchSlice, 'batchPrintCompleted'> & {
+    batchPrintCompleted: (printedItems: Parameters<PattaBatchSlice['batchPrintCompleted']>[0]) => Promise<boolean> | boolean;
+  } &
   PattaSequenceSlice &
   LicenseSlice &
   UiSlice &

@@ -33,8 +33,23 @@ describe('production license IPC handler registration', () => {
     const { handlers, app, license } = setup();
     license.checkRemoteActivation.mockResolvedValue({ isActivated: true, companyId: 'company-a' });
     await expect(handlers.get('license-status')!(null)).resolves.toEqual({ isActivated: true, companyId: 'company-a' });
-    expect(license.checkRemoteActivation).toHaveBeenCalledWith('user-data');
+    expect(license.checkRemoteActivation).toHaveBeenCalledWith('user-data', {});
     expect(app.getPath).toHaveBeenCalledWith('userData');
+  });
+
+  it('passes only main-process supplied activation transport options to the licensing implementation', async () => {
+    const handlers = new Map<string, (...args: any[]) => any>();
+    const ipcMain = { handle: vi.fn((name: string, handler: (...args: any[]) => any) => handlers.set(name, handler)) };
+    const app = { getPath: vi.fn(() => 'isolated-user-data') };
+    const license = { checkRemoteActivation: vi.fn().mockResolvedValue({ isActivated: false }) };
+    const isolatedActivationOptions = vi.fn(() => ({ baseUrl: 'http://127.0.0.1:4567', allowHttp: true }));
+    registerLicenseIpcHandlers({ ipcMain, app, license, isolatedActivationOptions,
+      rejectRendererCompanyAssignment: vi.fn(), rejectRendererLicenseSettings: vi.fn() });
+    await handlers.get('license-status')!(null);
+    expect(isolatedActivationOptions).toHaveBeenCalledOnce();
+    expect(license.checkRemoteActivation).toHaveBeenCalledWith('isolated-user-data', {
+      baseUrl: 'http://127.0.0.1:4567', allowHttp: true
+    });
   });
 
   it('requests a replacement activation only through the main-process API', async () => {

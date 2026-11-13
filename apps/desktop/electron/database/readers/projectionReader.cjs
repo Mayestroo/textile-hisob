@@ -65,6 +65,7 @@ function loadTicketFactsFromSqlite(db, companyId, period = null) {
       opName: e.op_name,
       workerNameSnapshot: e.worker_name_snapshot,
       rateSnapshot: e.rate_snapshot !== null ? Number(e.rate_snapshot) : undefined,
+      qty: Number(e.qty),
       brak: e.brak || undefined
     });
   }
@@ -399,6 +400,7 @@ function toSubmittedTicket(fact) {
       workerName: entry.workerNameSnapshot || '',
       workerNameSnapshot: entry.workerNameSnapshot || undefined,
       rateSnapshot: entry.rateSnapshot,
+      qty: Number(entry.qty),
       brak: entry.brak
     }))
   };

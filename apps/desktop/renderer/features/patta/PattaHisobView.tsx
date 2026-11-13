@@ -16,12 +16,13 @@ import {
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
 import { PrintedPartyRecord, SubmittedTicketRecord } from '../../types/workbook';
 import { buildPartyTicketsList, getPartyHealth } from '../../domain/partyAnalytics';
-import { selectLifecycleItems, groupLifecycleCohorts, PattaLifecycle } from '../../domain/pattaLifecycle';
+import { selectLifecycleItems, groupLifecycleCohorts, countPendingActualUncertainty, summarizeActualWorkUncertainty, PattaLifecycle } from '../../domain/pattaLifecycle';
 import { selectPartyHistoryForView } from '../../domain/partyHistoryVisibility';
 import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
 import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { useAuthStore } from '../../store/authStore';
+import { AllocationReviewPanel } from './AllocationReviewPanel';
 
 export const PattaHisobView: React.FC = () => {
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
@@ -465,7 +466,8 @@ export const PattaHisobView: React.FC = () => {
 
       const partySlotsInTab = selectedCohortItems.filter((item) => item.partyId === record.id);
       if (partySlotsInTab.length === 0) continue;
-      grouped[mId].unknownActualCount += partySlotsInTab.filter((item) => item.lifecycle === 'legacy' && !item.accepted && item.actualQuantity === null).length;
+      grouped[mId].unknownActualCount += partySlotsInTab.filter((item) => item.lifecycle === 'legacy' && !item.accepted && item.actualQuantity === null).length
+        + countPendingActualUncertainty(partySlotsInTab);
       const validPattaNumbersInTab = new Set(partySlotsInTab.map((s) => s.pattaNumber));
       const allTickets = journalPartyRows.get(record.id) || [];
       const tickets = allTickets.filter((t) => validPattaNumbersInTab.has(t.pattaNumber));
@@ -584,7 +586,12 @@ export const PattaHisobView: React.FC = () => {
   const totalFreeActualSubmittedIshCount = selectedCohortItems
     .reduce((acc, item) => acc + (!item.partyId && item.accepted ? (item.actualQuantity || 0) : 0), 0);
   const unknownExpectedWorkCount = freeTicketItems.length;
-  const unknownPartyActualCount = selectedCohortItems.filter((item) => item.partyId && item.lifecycle === 'legacy' && !item.accepted && item.actualQuantity === null).length;
+  const workActualUncertainty = summarizeActualWorkUncertainty(selectedCohortItems, unknownExpectedWorkCount);
+  const { unknownLegacyActualCount, pendingUnknownActualCount, unknownPartyActualCount } = workActualUncertainty;
+  const unknownActualDescription = [
+    unknownLegacyActualCount > 0 ? `${unknownLegacyActualCount} ta tarixiy patta haqiqiy soni noma'lum` : '',
+    pendingUnknownActualCount > 0 ? `${pendingUnknownActualCount} ta patta bo'yicha PENDING_SYNC urinish kutilmoqda; haqiqiy son noma'lum` : ''
+  ].filter(Boolean).join('; ');
 
   const { totalPartiesCount, totalPattasCount, totalExpectedIshCount, totalSubmittedPattasCount, totalUnsubmittedPattasCount, totalUnsubmittedIshCount } = useMemo(() => {
     let totalP = 0;
@@ -623,7 +630,7 @@ export const PattaHisobView: React.FC = () => {
   }, [visiblePartyHistory, selectedCohortItems, freeTicketItems, journalPartyRows]);
 
   const ticketProgress = totalPattasCount > 0 ? Math.min(100, (totalSubmittedPattasCount / totalPattasCount) * 100) : 0;
-  const workProgress = unknownExpectedWorkCount > 0 || unknownPartyActualCount > 0
+  const workProgress = workActualUncertainty.hasUnknownActual
     ? null
     : totalExpectedIshCount > 0 ? Math.min(100, (totalActualSubmittedIshCount / totalExpectedIshCount) * 100) : 0;
 
@@ -647,6 +654,7 @@ export const PattaHisobView: React.FC = () => {
   return (
     <div className="phase-b-view phase-b-patta-journal" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="patta-hisob-scroll">
+        <AllocationReviewPanel companyId={companyId} canCancel={['accountant', 'admin'].includes(String(authRole).toLowerCase())} />
         {/* Top Header */}
         <div className="patta-hisob-header">
           <div className="patta-hisob-header-left">
@@ -883,7 +891,7 @@ export const PattaHisobView: React.FC = () => {
           </div>
 
           {/* Card 3: Kiritilgan ish */}
-          <div className="patta-hisob-kpi-card journal-kpi" data-kpi="work" data-actual-work={totalActualSubmittedIshCount} data-known-party-actual={totalPartyActualSubmittedIshCount} data-free-actual={totalFreeActualSubmittedIshCount} data-known-expected-work={totalExpectedIshCount} data-unknown-expected-count={unknownExpectedWorkCount} data-unknown-actual-count={unknownPartyActualCount} data-work-progress={workProgress === null ? 'unknown' : workProgress}>
+          <div className="patta-hisob-kpi-card journal-kpi" data-kpi="work" data-actual-work={totalActualSubmittedIshCount} data-known-party-actual={totalPartyActualSubmittedIshCount} data-free-actual={totalFreeActualSubmittedIshCount} data-known-expected-work={totalExpectedIshCount} data-unknown-expected-count={unknownExpectedWorkCount} data-unknown-actual-count={unknownPartyActualCount} data-pending-unknown-actual-count={pendingUnknownActualCount} data-work-progress={workProgress === null ? 'unknown' : workProgress}>
             <div className="patta-hisob-kpi-icon amber">
               <FileText size={22} strokeWidth={2.2} />
             </div>
@@ -897,7 +905,7 @@ export const PattaHisobView: React.FC = () => {
               {workProgress === null ? (
                 <div className="patta-hisob-kpi-sub journal-kpi-sub journal-work-progress-unknown" data-progress-state="unknown">
                   Reja/foiz noma'lum — {unknownPartyActualCount > 0
-                    ? `${unknownPartyActualCount} ta tarixiy patta haqiqiy soni noma'lum; qabul qilingan subtotal ${totalPartyActualSubmittedIshCount.toLocaleString('ru-RU')} dona`
+                    ? `${unknownActualDescription}; qabul qilingan subtotal ${totalPartyActualSubmittedIshCount.toLocaleString('ru-RU')} dona`
                     : totalPartiesCount > 0
                     ? `partiya: ${totalPartyActualSubmittedIshCount.toLocaleString('ru-RU')}/${totalExpectedIshCount.toLocaleString('ru-RU')} dona`
                     : 'partiyali ish yo‘q'}; erkin: {totalFreeActualSubmittedIshCount.toLocaleString('ru-RU')} dona ({unknownExpectedWorkCount} ta patta rejasi noma'lum)
@@ -1020,6 +1028,7 @@ export const PattaHisobView: React.FC = () => {
           <div className="journal-incomplete-notice" role="status" style={{ padding: '10px 14px', marginBottom: 10, borderRadius: 8 }}>
             {lifecycleDiagnostics.length > 0 && <div>Jurnal ogohlantirishlari: {lifecycleDiagnostics.join(', ')}</div>}
             {excludedAttempts.length > 0 && <div>Qabul qilinmagan urinishlar: {excludedAttempts.length} (qabul qilingan jami hisobiga kiritilmagan)</div>}
+            {pendingUnknownActualCount > 0 && <div>Sinxronlash kutilmoqda: {pendingUnknownActualCount} ta patta bo'yicha haqiqiy son noma'lum; urinish miqdori qabul qilingan jami hisobiga kiritilmagan.</div>}
           </div>
         )}
         {(!modelHistoryGroups || modelHistoryGroups.length === 0) && freeTicketItems.length === 0 ? (
@@ -1156,7 +1165,7 @@ export const PattaHisobView: React.FC = () => {
                             const totalIsh = partyTickets.reduce((sum, t) => sum + t.expectedQty, 0);
                             const partyActualIsh = partyTickets.filter((t) => t.isSubmitted).reduce((sum, t) => sum + t.enteredQty, 0);
                             const remainingIsh = Math.max(0, totalIsh - partyActualIsh);
-                            const hasUnknownLegacyActual = partyTickets.some((ticket) => selectedCohortItems.some((entry) => entry.partyId === row.id && entry.pattaNumber === ticket.pattaNumber && entry.lifecycle === 'legacy' && !entry.accepted && entry.actualQuantity === null));
+                            const hasUnknownActual = partyTickets.some((ticket) => selectedCohortItems.some((entry) => entry.partyId === row.id && entry.pattaNumber === ticket.pattaNumber && !entry.accepted && entry.actualQuantity === null && (entry.lifecycle === 'legacy' || entry.pendingAttempt)));
 
                             return (
                               <React.Fragment key={row.id}>
@@ -1235,7 +1244,7 @@ export const PattaHisobView: React.FC = () => {
                                           </div>
                                           <div className="tickets-header-right">
                                             <span className="stat-pill">Reja: {totalIsh.toLocaleString('ru-RU')} dona</span>
-                                            <span className="stat-pill">{hasUnknownLegacyActual
+                                            <span className="stat-pill">{hasUnknownActual
                                               ? `Qabul qilingan subtotal: ${partyActualIsh.toLocaleString('ru-RU')} dona; haqiqiy son noma'lum`
                                               : `Kiritilgan: ${partyActualIsh.toLocaleString('ru-RU')} dona`}</span>
                                             <span className="stat-pill highlight">Qoldi: {remainingIsh.toLocaleString('ru-RU')} dona</span>

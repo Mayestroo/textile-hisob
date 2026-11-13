@@ -79,7 +79,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
     return db;
   }
 
-  async function seedServerParty(partyNumber: string) {
+  async function seedServerParty(partyNumber: string, issuedPerPatta: number) {
     await serverPool.query(
       `INSERT INTO models (id, company_id, name, operations_json)
        VALUES ('m_test', $1, 'Test Model', '[{"name":"Bichish"},{"name":"Tikish"}]')
@@ -93,9 +93,10 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
       [COMPANY_A]
     );
     await serverPool.query(
-      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
-       VALUES ($1, $2, $3, $3, 'm_test', 'ACTIVE')`,
-      [`party-sync-${partyNumber}`, COMPANY_A, partyNumber]
+      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, patta_count,
+         patta_start_number, patta_end_number, ish_soni_per_patta, status)
+       VALUES ($1, $2, $3, $3, 'm_test', 100, 1, 100, $4, 'ACTIVE')`,
+      [`party-sync-${partyNumber}`, COMPANY_A, partyNumber, issuedPerPatta]
     );
   }
 
@@ -104,7 +105,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
   // ----------------------------------------------------------------
   it('1. outbox dispatcher pushes PENDING ticket; server acknowledges; ticket becomes CONFIRMED', async () => {
     const dbA = seedCompany(COMPANY_A);
-    await seedServerParty('1');
+    await seedServerParty('1', 50);
 
     // 1. Submit ticket locally in SQLite (initial state: PENDING_SYNC, outbox: PENDING)
     const cmdResult = executeSubmitTicketCommand(testUserDataDir, COMPANY_A, {
@@ -157,7 +158,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
 
   it.each([false, true])('edits work created on this desktop with exact entry identity (legacy local ID: %s)', async (legacy) => {
     const db = seedCompany(COMPANY_A);
-    await seedServerParty('1');
+    await seedServerParty('1', 2);
     db.prepare(`INSERT INTO workers(id, company_id, name, created_at, updated_at)
       VALUES (2, ?, 'Replacement', datetime('now'), datetime('now'))`).run(COMPANY_A);
     await serverPool.query(`INSERT INTO workers(id, company_id, name) VALUES (2, $1, 'Replacement')`, [COMPANY_A]);
@@ -192,7 +193,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
       .run(JSON.stringify([{ name: 'Bichish', rate: 7 }, { name: 'Tikish', rate: 3 }]), COMPANY_A, 'm_test');
     db.prepare(`INSERT INTO periods (id, company_id, name, start_date, end_date, is_closed, status, created_at)
       VALUES ('offline-P', ?, 'Offline P', '2026-09-01', '2026-09-30', 0, 'OPEN', '2026-09-01')`).run(COMPANY_A);
-    await seedServerParty('1');
+    await seedServerParty('1', 15);
     await serverPool.query(`INSERT INTO periods(id, company_id, start_date, end_date, is_closed)
       VALUES ('offline-P', $1, '2026-09-01', '2026-09-30', 0)`, [COMPANY_A]);
 
@@ -253,7 +254,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
       .run(COMPANY_A, now, now, COMPANY_A, now, now);
     db.prepare(`INSERT INTO periods (id, company_id, name, start_date, end_date, is_closed, status, created_at)
       VALUES ('conflict-P', ?, 'Conflict P', '2026-09-01', '2026-09-30', 0, 'OPEN', ?)`).run(COMPANY_A, now);
-    await seedServerParty('1');
+    await seedServerParty('1', 15);
     await serverPool.query(`INSERT INTO workers (id, company_id, name, status)
       VALUES (2, $1, 'Worker newer server', 'ACTIVE'), (3, $1, 'Worker local edit', 'ACTIVE')`, [COMPANY_A]);
     await serverPool.query(`INSERT INTO periods(id, company_id, start_date, end_date, is_closed)
@@ -393,9 +394,9 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
         status, created_at, updated_at) VALUES ('party-sync-20', ?, '20', '20', 'm_test', 'Test Model', 'ACTIVE', ?, ?),
         ('party-sync-21', ?, '21', '21', 'm_test', 'Test Model', 'ACTIVE', ?, ?)`)
         .run(COMPANY_A, now, now, COMPANY_A, now, now);
-      await seedServerParty('1');
-      await seedServerParty('20');
-      await seedServerParty('21');
+      await seedServerParty('1', 15);
+      await seedServerParty('20', 2);
+      await seedServerParty('21', 3);
       await serverPool.query(`INSERT INTO workers (id, company_id, name, status)
         VALUES (2, $1, 'Worker two', 'ACTIVE'), (3, $1, 'Worker three', 'ACTIVE')`, [COMPANY_A]);
       await serverPool.query(`INSERT INTO periods(id, company_id, start_date, end_date, is_closed)
@@ -541,7 +542,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
       dbA.prepare(`INSERT INTO ticket_entries(id, ticket_id, company_id, op_name, worker_id, rate_snapshot, qty, created_at)
         VALUES ('entry_closed_source', ?, ?, 'Bichish', ?, NULL, 4, ?)`)
         .run(closedTicketId, COMPANY_A, winnerWorkerId, closedNow);
-      await seedServerParty('30');
+      await seedServerParty('30', 4);
       await serverPool.query(`INSERT INTO periods(id, company_id, start_date, end_date, is_closed)
         VALUES ('closed-Q', $1, '2026-08-01', '2026-08-31', 1)`, [COMPANY_A]);
       await serverPool.query(`INSERT INTO tickets(id, company_id, model_id, period_id, party_number, party_record_id,
@@ -725,7 +726,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
   // ----------------------------------------------------------------
   it('2. lost HTTP response scenario: server commits, retry returns prior result, 1 fact exists', async () => {
     const dbA = seedCompany(COMPANY_A);
-    await seedServerParty('2');
+    await seedServerParty('2', 40);
 
     const cmdRes = executeSubmitTicketCommand(testUserDataDir, COMPANY_A, {
       commandId: 'cmd_lost_1',
@@ -791,7 +792,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
   // ----------------------------------------------------------------
   it('3. causal dependency ordering: dependent child is blocked until predecessor is SYNCED', async () => {
     const dbA = seedCompany(COMPANY_A);
-    await seedServerParty('3');
+    await seedServerParty('3', 15);
 
     // Operation 1 (parent)
     executeSubmitTicketCommand(testUserDataDir, COMPANY_A, {
@@ -804,8 +805,8 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
       partyRecordId: 'party-sync-3',
       effectiveDate: '2026-09-01',
       pattaNumber: 1,
-      qty: 10,
-      entries: [{ opName: 'Bichish', workerId: 1, qty: 10 }]
+      qty: 15,
+      entries: [{ opName: 'Bichish', workerId: 1, qty: 15 }]
     });
 
     // Operation 2 (child, depends on op_parent)
@@ -890,7 +891,7 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
   it('5. pull-first reconnect protocol pulls remote changes and applies them idempotently', async () => {
     const dbA = seedCompany(COMPANY_A);
     const syncClient = new SyncClient({ baseUrl, token: TOKEN_A });
-    await seedServerParty('10');
+    await seedServerParty('10', 100);
 
     // 1. Commit a ticket on the server from Workstation B for Company A
     const remotePayload = {
@@ -929,8 +930,8 @@ describe('Electron Client Sync & End-to-End Integration (Step 4)', () => {
       partyRecordId: 'party-sync-10',
       effectiveDate: '2026-09-01',
       pattaNumber: 2,
-      qty: 80,
-      entries: [{ opName: 'Tikish', workerId: 1, qty: 80 }]
+      qty: 100,
+      entries: [{ opName: 'Tikish', workerId: 1, qty: 100 }]
     });
 
     // 3. Execute full 4-phase reconnect protocol

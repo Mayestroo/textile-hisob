@@ -50,7 +50,7 @@ export interface TicketFormState {
   patta?: string;
   strictParty?: boolean;
   strictPatta?: boolean;
-  entries: Record<string, number | string>; // opName -> workerId
+  entries: Record<string, number | string | Array<{ workerId: number | string; qty: number | string }>>; // legacy opName -> workerId or per-worker allocations
 }
 
 export interface ModelPattaBatchConfig {
@@ -113,6 +113,7 @@ export interface SubmittedTicketRecord {
     workerId: number;
     workerNameSnapshot?: string;
     rateSnapshot?: number;
+    qty?: number;
   }>;
   submittedAt: string;
 }

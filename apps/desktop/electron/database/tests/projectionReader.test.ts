@@ -210,7 +210,8 @@ describe('SQLite Projection Reader Adapter (Narrow Read Seam)', () => {
       avans: 25, jarima: 7, oklad: 2000, magazin: 300 })]);
     expect(projection.printedPartyHistory).toEqual([expect.objectContaining({ id: 'party-a', partyNumber: '1' })]);
     expect(projection.submittedTickets).toEqual([
-      expect.objectContaining({ id: ticketId, partyRecordId: 'party-a', qty: 5, status: 'CONFIRMED' })
+      expect.objectContaining({ id: ticketId, partyRecordId: 'party-a', qty: 5, status: 'CONFIRMED',
+        entries: [expect.objectContaining({ entryId: 'entry-a', workerId: 1, opName: 'Sew', qty: 5 })] })
     ]);
     expect(projection.submittedTickets).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ id: pendingDeleteTicketId })

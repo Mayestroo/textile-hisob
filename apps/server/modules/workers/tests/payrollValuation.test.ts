@@ -43,6 +43,7 @@ function fixture(entries: object[], adjustments: object[] = [], selected: typeof
     if (sql.includes('FROM worker_adjustments')) return { rows: [
       { worker_id: 7, type: 'AVANS', total: '4' }, { worker_id: 7, type: 'JARIMA', total: '3' }
     ] };
+    if (sql.includes('FROM staj_debt_events')) return { rows: [] };
     if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'deleted-model', operations: [{ name: 'Old operation', rate: currentRate }] }] };
     if (sql.includes('FROM period_archives')) return { rows: closingRate === null ? [] : [archiveRow] };
     throw new Error(`Unexpected query ${sql}`);
@@ -93,7 +94,8 @@ describe('shared payroll service/query contract', () => {
     const profile = await f.profile();
     expect(profile.period_name).toContain('qayta hisoblangan');
     for (const result of [admin.workers[0], profile]) {
-      expect(result).toMatchObject({ gross: 84, pieces: 12, net: 76, accountingStatus: 'INCOMPLETE', accountingReasons: ['HISTORICAL_BASELINE_UNVERIFIED'] });
+      expect(result).toMatchObject({ gross: 84, pieces: 12, net: 76, accountingStatus: 'INCOMPLETE',
+        accountingReasons: expect.arrayContaining(['HISTORICAL_BASELINE_UNVERIFIED', 'LEGACY_STAJ_REQUIRES_RECONCILIATION']) });
       expect(result.models_breakdown['deleted-model'].operations).toMatchObject([{ rate: 7, qty: 12, amount: 84 }]);
     }
     expect(admin.period).toMatchObject({ periodId: 'P', isClosed: true, restated: true });
@@ -127,7 +129,7 @@ describe('shared payroll service/query contract', () => {
       { worker_id: 7, type: 'OKLAD', total: 2000000 }, { worker_id: 7, type: 'MAGAZIN', total: 100000 }
     ], { currentModels: [{ id: 'deleted-model', operations: [{ name: 'Old operation', rate: null }] }] }).workers[0];
     expect(result).toMatchObject({ pieceworkGross: 0, oklad: 2000000, magazin: 100000,
-      gross: 2000000, net: 1899999, unknownEntryCount: 1, accountingStatus: 'INCOMPLETE' });
+      gross: 2000000, net: 1900000, unknownEntryCount: 1, accountingStatus: 'INCOMPLETE' });
     expect(result.models_breakdown['deleted-model'].operations[0].amount).toBeNull();
   });
 

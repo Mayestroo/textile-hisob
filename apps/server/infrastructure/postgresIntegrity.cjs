@@ -106,6 +106,7 @@ async function verifyPostgresReleaseState(client) {
     pattaSequencePrivileges: { canSelect: false, canInsert: false, canUpdate: false },
     operations: { unmatchedChangeLogOperations: 0, duplicateOperationIdentities: 0 },
     businessMutations: { requiredTables: 3, presentTables: 0, requiredColumns: 18, presentColumns: 0 },
+    purgeFence: { requiredTables: 3, presentTables: 0, baselinePurgedCompanies: 0 },
     baseline: {
       ownerExclusionRows: 0,
       ownerExcludedQuantity: 0,
@@ -181,6 +182,18 @@ async function verifyPostgresReleaseState(client) {
   report.businessMutations.presentTables = businessTableRows.length;
   if (businessTableRows.length !== requiredBusinessTables.length) {
     problems.push('workbook mutation persistence tables are missing');
+  }
+
+  const purgeFenceTableRows = await rowsFor('historical purge fence tables', `
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name IN ('historical_purge_eras', 'purged_entity_tombstones', 'purged_operation_tombstones')
+  `);
+  const requiredPurgeFenceTables = ['historical_purge_eras', 'purged_entity_tombstones', 'purged_operation_tombstones'];
+  report.purgeFence.requiredTables = requiredPurgeFenceTables.length;
+  report.purgeFence.presentTables = purgeFenceTableRows.length;
+  if (purgeFenceTableRows.length !== requiredPurgeFenceTables.length) {
+    problems.push('historical purge fence tables are missing');
   }
 
   const businessColumnRows = await rowsFor('workbook mutation columns', `
@@ -376,6 +389,15 @@ async function verifyPostgresReleaseState(client) {
           AND change_row.change_type = 'UPDATE'
           AND change_row.operation_id = 'migration-patta-quantity-v1-'
             || substr(md5(change_row.company_id || ':' || change_row.entity_id), 1, 32)
+        )
+        AND NOT (
+          change_row.entity_type = 'purge_era'
+          AND EXISTS (
+            SELECT 1 FROM historical_purge_eras era
+            WHERE era.company_id = change_row.company_id
+              AND era.purge_id = change_row.entity_id
+              AND era.status = 'COMMITTED'
+          )
         )) AS unmatched_change_log_operations,
       (SELECT COUNT(*) FROM (
          SELECT company_id, operation_id
@@ -488,20 +510,25 @@ async function verifyPostgresReleaseState(client) {
          AND operation_row.command_type = 'RecordProductionAdjustment') AS accepted_production_adjustment_operations,
       (SELECT COUNT(*) FROM migration_baseline_exclusions exclusion_row
        WHERE exclusion_row.company_id = decision_row.company_id
-         AND exclusion_row.baseline_decision_id = decision_row.baseline_decision_id) AS baseline_exclusion_rows
+         AND exclusion_row.baseline_decision_id = decision_row.baseline_decision_id) AS baseline_exclusion_rows,
+      COALESCE((
+        SELECT BOOL_OR(era.baseline_purged)
+        FROM historical_purge_eras era
+        WHERE era.company_id = decision_row.company_id AND era.status = 'COMMITTED'
+      ), FALSE) AS baseline_purged
     FROM migration_baseline_decisions decision_row
     WHERE decision_row.decision = 'CLEAN_PRODUCTION_LEDGER_BASELINE'
       AND decision_row.scope_json->>'recordingMode' = 'RETROSPECTIVE_EVIDENCE_RECONCILIATION'
   `);
   const validNonnegativeInteger = (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0;
-  report.baseline.retrospectiveEvidenceChecks = retrospectiveBaselineRows.map((row) => {
+  const evaluateRetrospectiveBaselineRow = (row) => {
     const scope = row.scope_json;
     const source = scope?.source;
     const sourceCounts = scope?.sourceTableCounts;
     const evidence = scope?.evidence;
     const baselineTicketIds = evidence?.baselineTicketIds;
     if (!scope || !source || !sourceCounts || !evidence || !Array.isArray(baselineTicketIds)) {
-      return { evidencePresent: false };
+      return { checks: { evidencePresent: false }, isMismatch: true };
     }
     const baselineTicketCount = Number(sourceCounts.tickets);
     const baselineEntryCount = Number(sourceCounts.ticket_entries);
@@ -514,7 +541,9 @@ async function verifyPostgresReleaseState(client) {
     const liveAdjustmentOperationCount = Number(row.accepted_production_adjustment_operations);
     const liveTicketCount = Number(row.current_ticket_rows);
     const liveAdjustmentCount = Number(row.current_production_adjustments);
-    return {
+    const expectedBaselineTicketCount = row.baseline_purged ? 0 : baselineTicketCount;
+    const expectedBaselineEntryCount = row.baseline_purged ? 0 : baselineEntryCount;
+    const checks = {
       evidencePresent: true,
       decisionTypeMatches: scope.decisionType === row.decision,
       transactionalImportDocumented: evidence.historicalTransactionalImportDocumented === true,
@@ -532,63 +561,18 @@ async function verifyPostgresReleaseState(client) {
       baselineAdjustmentsMatchSource: Number(evidence.baselineProductionAdjustments) === baselineAdjustmentCount,
       recordedTicketSnapshotMatchesImportEvidence: recordedTicketSnapshot === baselineTicketCount + recordedSubmitSnapshot,
       recordedAdjustmentSnapshotMatchesImportEvidence: recordedAdjustmentSnapshot === baselineAdjustmentCount + recordedAdjustmentOperationSnapshot,
-      currentTicketsMatchLiveOperations: liveTicketCount === baselineTicketCount + liveSubmitCount,
-      presentBaselineTicketsMatchSource: Number(row.present_baseline_ticket_rows) === baselineTicketCount,
-      presentBaselineEntriesMatchSource: Number(row.present_baseline_ticket_entries) === baselineEntryCount,
+      currentTicketsMatchLiveOperations: liveTicketCount === expectedBaselineTicketCount + liveSubmitCount,
+      presentBaselineTicketsMatchSource: Number(row.present_baseline_ticket_rows) === expectedBaselineTicketCount,
+      presentBaselineEntriesMatchSource: Number(row.present_baseline_ticket_entries) === expectedBaselineEntryCount,
       currentAdjustmentsMatchLiveOperations: liveAdjustmentCount === baselineAdjustmentCount + liveAdjustmentOperationCount,
       noBaselineExclusionRows: Number(row.baseline_exclusion_rows) === 0
     };
-  });
-  const retrospectiveBaselineMismatches = retrospectiveBaselineRows.filter((row) => {
-    const scope = row.scope_json;
-    const source = scope?.source;
-    const sourceCounts = scope?.sourceTableCounts;
-    const evidence = scope?.evidence;
-    const baselineTicketIds = evidence?.baselineTicketIds;
-    if (!scope || !source || !sourceCounts || !evidence || !Array.isArray(baselineTicketIds)) return true;
-    const baselineTicketCount = Number(sourceCounts.tickets);
-    const baselineEntryCount = Number(sourceCounts.ticket_entries);
-    const baselineAdjustmentCount = Number(sourceCounts.production_adjustments);
-    const recordedSubmitSnapshot = Number(evidence.currentPostImportAcceptedSubmitTicketOperations);
-    const recordedAdjustmentOperationSnapshot = Number(evidence.currentAcceptedProductionAdjustmentOperations);
-    const recordedTicketSnapshot = Number(evidence.currentTicketRows);
-    const recordedAdjustmentSnapshot = Number(evidence.currentProductionAdjustments);
-    const liveSubmitCount = Number(row.accepted_submit_operations);
-    const liveAdjustmentOperationCount = Number(row.accepted_production_adjustment_operations);
-    const liveTicketCount = Number(row.current_ticket_rows);
-    const liveAdjustmentCount = Number(row.current_production_adjustments);
-    return scope.decisionType !== row.decision
-      || scope.businessRowsReimported !== false
-      || scope.localOutboxImported !== false
-      || source.integrityCheck !== 'ok'
-      || Number(source.sqliteSchemaVersion) !== 15
-      || source.sha256 !== row.source_snapshot_hash
-      || source.stagedSha256 !== row.source_snapshot_hash
-      || evidence.historicalTransactionalImportDocumented !== true
-      || !Array.isArray(evidence.postgresSchemaMigrations)
-      || ![16, 17].every((version) => evidence.postgresSchemaMigrations.includes(version))
-      || !validNonnegativeInteger(baselineTicketCount)
-      || !validNonnegativeInteger(baselineEntryCount)
-      || !validNonnegativeInteger(baselineAdjustmentCount)
-      || !validNonnegativeInteger(recordedSubmitSnapshot)
-      || !validNonnegativeInteger(recordedAdjustmentOperationSnapshot)
-      || !validNonnegativeInteger(recordedTicketSnapshot)
-      || !validNonnegativeInteger(recordedAdjustmentSnapshot)
-      || !validNonnegativeInteger(liveSubmitCount)
-      || !validNonnegativeInteger(liveAdjustmentOperationCount)
-      || !validNonnegativeInteger(liveTicketCount)
-      || !validNonnegativeInteger(liveAdjustmentCount)
-      || baselineTicketIds.length !== baselineTicketCount
-      || Number(evidence.baselineTicketEntries) !== baselineEntryCount
-      || Number(evidence.baselineProductionAdjustments) !== baselineAdjustmentCount
-      || recordedTicketSnapshot !== baselineTicketCount + recordedSubmitSnapshot
-      || recordedAdjustmentSnapshot !== baselineAdjustmentCount + recordedAdjustmentOperationSnapshot
-      || liveTicketCount !== baselineTicketCount + liveSubmitCount
-      || Number(row.present_baseline_ticket_rows) !== baselineTicketCount
-      || Number(row.present_baseline_ticket_entries) !== baselineEntryCount
-      || liveAdjustmentCount !== baselineAdjustmentCount + liveAdjustmentOperationCount
-      || Number(row.baseline_exclusion_rows) !== 0;
-  });
+    return { checks, isMismatch: Object.values(checks).some((passed) => passed !== true) };
+  };
+  const evaluatedRetrospectiveRows = retrospectiveBaselineRows.map(evaluateRetrospectiveBaselineRow);
+  report.purgeFence.baselinePurgedCompanies = retrospectiveBaselineRows.filter((row) => row.baseline_purged === true).length;
+  report.baseline.retrospectiveEvidenceChecks = evaluatedRetrospectiveRows.map((item) => item.checks);
+  const retrospectiveBaselineMismatches = evaluatedRetrospectiveRows.filter((item) => item.isMismatch);
   report.baseline.retrospectiveEvidenceMismatchCount = retrospectiveBaselineMismatches.length;
   report.baseline.ownerDecisionQuantityMismatchCount += report.baseline.retrospectiveEvidenceMismatchCount;
   report.baseline.scopePreserved = report.baseline.ownerScopeMismatchRows === 0

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { WorkbookStore } from './types';
+import { PattaBatchSlice, WorkbookStore } from './types';
 import { createUiSlice } from './slices/createUiSlice';
 import { createLicenseSlice } from './slices/createLicenseSlice';
 import { createWorkerSlice } from './slices/createWorkerSlice';
@@ -13,7 +13,7 @@ import { getElectronApi, resolveElectronRuntimeMode } from './runtimeMode';
 import { cancelDebouncedSave, triggerDebouncedSave } from './helpers/debounceSave';
 import { DEFAULT_BATCH_SIZES } from '../constants/batchConstants';
 import { buildBatchSettingsPayload, buildBatchPrintMutation, buildPartySummary } from './pattaBatch';
-import { createWorkbookCommand, localCommitSyncNotice, submitWorkbookCommand } from './businessMutations';
+import { createWorkbookCommand, localCommitSyncNotice, reloadWorkbookProjection, submitWorkbookCommand } from './businessMutations';
 import { normalizePattaSizeCounts } from '../domain/pattaQuantity';
 import { formatDateIso } from '../utils/formatters';
 
@@ -29,7 +29,7 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
     ...createPattaSequenceSlice(...args),
     ...createTicketSlice(...args),
     ...createPersistenceSlice(...args)
-  } as WorkbookStore;
+  } as Omit<WorkbookStore, 'batchPrintCompleted'> & Pick<PattaBatchSlice, 'batchPrintCompleted'>;
 
   const getContext = async () => {
     const state = get();
@@ -218,12 +218,27 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
         const mutation = buildBatchPrintMutation({ ...get(), batchSettingsPrintRevision: get().batchSettingsServerRevision }, printedItems);
         await slices.batchPrintCompleted(printedItems);
         set({ nextPattaNumber: mutation.nextPattaNumber });
-        return;
+        return true;
       }
-      if (!context.success) return;
+      if (!context.success) return false;
       cancelDebouncedSave(batchTimerKey(context.companyId));
       try {
-        const mutation = buildBatchPrintMutation(get(), printedItems);
+        let state = get();
+        if (!Number.isSafeInteger(state.batchSettingsPrintRevision) || state.batchSettingsPrintRevision === null || state.batchSettingsPrintRevision < 0) {
+          // Recover only the missing CAS authority from the canonical SQLite
+          // projection. Keep the user's current batch draft untouched; a read
+          // must never replace in-progress inputs with persisted settings.
+          const projection = await reloadWorkbookProjection(getElectronApi(), context.companyId);
+          const printRevision = projection.batchSettingsPrintRevision;
+          const serverRevision = projection.batchSettingsServerRevision;
+          if (!Number.isSafeInteger(printRevision) || printRevision === null || printRevision < 0
+            || !Number.isSafeInteger(serverRevision) || serverRevision === null || serverRevision < 0) {
+            throw new Error('REVISION_CONFLICT: canonical batch settings revision is unavailable');
+          }
+          set({ batchSettingsPrintRevision: printRevision, batchSettingsServerRevision: serverRevision });
+          state = get();
+        }
+        const mutation = buildBatchPrintMutation(state, printedItems);
         const parties = mutation.parties.map((party) => {
           const normalizedSizes = normalizePattaSizeCounts(party.sizes);
           if (normalizedSizes.pattaCount !== party.pattaCount) {
@@ -242,8 +257,10 @@ export const useWorkbookStore = create<WorkbookStore>((...args) => {
           set({ nextPartyNumber: mutation.nextPartyNumber, nextPattaNumber: mutation.nextPattaNumber, deletedPartyIds: mutation.deletedPartyIds });
           get().addNotification('info', 'Sinxronlash navbatda', localCommitSyncNotice(`${mutation.parties.length} ta partiya saqlandi.`));
         }
+        return success;
       } catch (error) {
         get().addNotification('error', '_BATCH_INVALID', error instanceof Error ? error.message : 'Patta batch was invalid.');
+        return false;
       }
     },
     deletePrintedPartyRecord: async (id: string) => {

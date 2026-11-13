@@ -227,7 +227,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     for (const entry of filledEntries) {
       const currentWorkerOps = { ...(updatedHisobQuantities[entry.workerId] || {}) };
       const currentQty = currentWorkerOps[entry.opName] || 0;
-      currentWorkerOps[entry.opName] = currentQty + qty;
+      currentWorkerOps[entry.opName] = currentQty + (entry.qty ?? qty);
       updatedHisobQuantities[entry.workerId] = currentWorkerOps;
     }
 
@@ -321,7 +321,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       strictPatta,
       qty,
       entries: filledEntries
-        .map(({ opName, workerId, rateSnapshot }) => ({ opName, workerId, rateSnapshot }))
+        .map(({ opName, workerId, rateSnapshot, qty: allocationQty }) => ({ opName, workerId, rateSnapshot, qty: allocationQty }))
         .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
       effectiveDate
     });
@@ -388,6 +388,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
             pattaNumber: actualPattaNum,
             strictParty,
             strictPatta,
+            allocationVersion: 1,
             qty,
             size: form.size || '',
             color: form.color || '',
@@ -589,7 +590,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
 
   updateSubmittedTicket: async (
     ticketId: string,
-    updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string }>
+    updatedEntries: Array<{ opName: string; workerId: number; rateSnapshot?: number; entryId?: string; qty?: number }>
   ): Promise<boolean> => {
     const state = get();
     const initialLicenseStatus = state.licenseStatus;
@@ -623,7 +624,12 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       workerNameSnapshot: string;
       rateSnapshot?: number;
       entryId?: string;
+      qty: number;
     }> = [];
+    const inputCountsByOperation = new Map<string, number>();
+    for (const entry of updatedEntries) {
+      inputCountsByOperation.set(entry.opName, (inputCountsByOperation.get(entry.opName) || 0) + 1);
+    }
 
     for (const e of updatedEntries) {
       if (typeof e.workerId === 'number' && Number.isSafeInteger(e.workerId) && e.workerId > 0) {
@@ -639,7 +645,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         const originals = (ticket.entries || []).filter((old) => old.opName === e.opName);
         const original = e.entryId
           ? originals.find((old) => old.entryId === e.entryId)
-          : originals.length === 1 ? originals[0] : undefined;
+          : originals.length === 1 && inputCountsByOperation.get(e.opName) === 1 ? originals[0] : undefined;
         if ((!e.entryId && originals.length > 1) || (e.entryId && !original) || (original && validEntries.some((item) => item.entryId === original.entryId && item.opName === e.opName))) {
           state.addNotification('error', 'Operatsiya noaniq', `«${e.opName}» uchun avvalgi ishni aniqlab bo'lmadi.`);
           return false;
@@ -649,7 +655,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
           ...(original?.entryId ? { entryId: original.entryId } : {}),
           workerId: e.workerId,
           workerNameSnapshot: workerMap.get(e.workerId) || `#${e.workerId}`,
-          ...(original?.rateSnapshot !== undefined && original.rateSnapshot !== null ? { rateSnapshot: original.rateSnapshot } : {})
+          ...(original?.rateSnapshot !== undefined && original.rateSnapshot !== null ? { rateSnapshot: original.rateSnapshot } : {}),
+          qty: e.qty ?? original?.qty ?? ticket.qty
         });
       }
     }
@@ -657,6 +664,27 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     if (validEntries.length === 0) {
       state.addNotification('warning', 'Ishchilar kiritilmadi', "Hech bo'lmaganda bitta operatsiyaga ishchi ID sini kiriting.");
       return false;
+    }
+
+    const totals = new Map<string, number>();
+    const assignments = new Set<string>();
+    for (const entry of validEntries) {
+      if (!Number.isSafeInteger(entry.qty) || entry.qty <= 0) {
+        state.addNotification('error', 'Noto‘g‘ri miqdor', 'Har bir ishchi taqsimoti musbat butun son bo‘lishi kerak.');
+        return false;
+      }
+      const identity = `${entry.opName}\u0000${entry.workerId}`;
+      if (assignments.has(identity)) {
+        state.addNotification('error', 'Takroriy taqsimot', 'Bir operatsiyada bir ishchi faqat bir marta kiritilishi mumkin.');
+        return false;
+      }
+      assignments.add(identity);
+      const total = (totals.get(entry.opName) || 0) + entry.qty;
+      if (total > ticket.qty) {
+        state.addNotification('error', 'Miqdor oshib ketdi', `Operatsiya taqsimoti patta miqdoridan (${ticket.qty}) oshmasligi kerak.`);
+        return false;
+      }
+      totals.set(entry.opName, total);
     }
 
     if (runtime.mode === 'sync') {
@@ -669,14 +697,27 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         notifyMutation(state, makeMutationResult('_COMMAND_REQUIRED', 'An active company is required to edit a ticket.'));
         return false;
       }
+      // A server ACK/change-feed update can advance SQLite after the renderer
+      // ticket object was loaded. Read the authoritative local projection just
+      // before capturing the optimistic-concurrency revision.
+      let currentTicket = ticket;
+      try {
+        const projection = await reloadProjection(getElectronApi(), companyId);
+        const refreshed = projection.submittedTickets.find((item: SubmittedTicketRecord) => item.id === ticketId);
+        if (refreshed) currentTicket = refreshed;
+      } catch (error) {
+        notifyMutation(state, makeMutationResult('_PROJECTION_READ_FAILED',
+          error instanceof Error ? error.message : 'Ticket revision could not be refreshed'));
+        return false;
+      }
       const command = createWorkbookCommand('UpdateTicket', companyId, ticketId, {
         ticketId,
         entries: validEntries
       }, {
         entries: (ticket.entries || []).map((entry) => ({ ...entry }))
       });
-      if (Number.isSafeInteger(ticket.serverRevision) && ticket.serverRevision! >= 0) {
-        command.baseRevision = ticket.serverRevision;
+      if (Number.isSafeInteger(currentTicket.serverRevision) && currentTicket.serverRevision! >= 0) {
+        command.baseRevision = currentTicket.serverRevision;
       }
       const result = await submitWorkbookCommand(command, get, set);
       if (!result.success) {
@@ -694,7 +735,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       if (updatedHisobQuantities[oldEntry.workerId]) {
         const currentOps = { ...updatedHisobQuantities[oldEntry.workerId] };
         if (currentOps[oldEntry.opName] !== undefined) {
-          currentOps[oldEntry.opName] = Math.max(0, currentOps[oldEntry.opName] - ticket.qty);
+      currentOps[oldEntry.opName] = Math.max(0, currentOps[oldEntry.opName] - (oldEntry.qty ?? ticket.qty));
           if (currentOps[oldEntry.opName] === 0) {
             delete currentOps[oldEntry.opName];
           }
@@ -711,7 +752,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     for (const newEntry of validEntries) {
       const currentOps = { ...(updatedHisobQuantities[newEntry.workerId] || {}) };
       const curQty = currentOps[newEntry.opName] || 0;
-      currentOps[newEntry.opName] = curQty + ticket.qty;
+      currentOps[newEntry.opName] = curQty + newEntry.qty;
       updatedHisobQuantities[newEntry.workerId] = currentOps;
     }
 

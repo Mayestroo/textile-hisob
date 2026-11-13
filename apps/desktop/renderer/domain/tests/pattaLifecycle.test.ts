@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupLifecycleCohorts, selectLifecycleItems, type LifecycleParty, type LifecycleTicket } from '../pattaLifecycle';
+import { countPendingActualUncertainty, groupLifecycleCohorts, selectLifecycleItems, summarizeActualWorkUncertainty, type LifecycleParty, type LifecycleTicket } from '../pattaLifecycle';
 
 describe('exact-ID lifecycle cohorts separate from payroll', () => {
   const parties: LifecycleParty[] = [
@@ -91,6 +91,8 @@ describe('exact-ID lifecycle cohorts separate from payroll', () => {
     expect(res.items[0].lifecycle).toBe('active');
     expect(res.items[0].accepted).toBe(false);
     expect(res.items[0].actualQuantity).toBe(null);
+    expect(res.items[0].pendingAttempt).toBe(false);
+    expect(countPendingActualUncertainty(res.items)).toBe(0);
   });
 
   it('Case 16: Free mode tickets show CLOSED without fabricated party; groups can be 0', () => {
@@ -162,9 +164,11 @@ describe('exact-ID lifecycle cohorts separate from payroll', () => {
     const party: LifecycleParty = { id: 'A', companyId: 'own', modelId: 'M', pattaCount: 1, pattaStartNumber: 11, isClosed: true };
     const legacy = selectLifecycleItems({ parties: [party], tickets: [], periods: [Q] });
     expect(legacy.items.map(item => [item.ticketId, item.accepted, item.actualQuantity])).toEqual([[null, false, null]]);
-    const pending: LifecycleTicket = { id: 'pending', companyId: 'own', modelId: 'M', partyRecordId: 'A', pattaNumber: 11, status: 'PENDING_SYNC', qty: 10 };
+    const pending: LifecycleTicket = { id: 'pending', companyId: 'own', modelId: 'M', partyRecordId: 'A', pattaNumber: 11, periodId: 'Q', status: 'PENDING_SYNC', qty: 10 };
     const pendingResult = selectLifecycleItems({ parties: [party], tickets: [pending], periods: [Q] });
     expect(pendingResult.items.map(item => [item.accepted, item.actualQuantity])).toEqual([[false, null]]);
+    expect(pendingResult.items[0].pendingAttempt).toBe(false);
+    expect(countPendingActualUncertainty(pendingResult.items)).toBe(0);
     expect(pendingResult.excludedAttempts.map(ticket => ticket.id)).toEqual(['pending']);
     const absolute: LifecycleTicket = { ...pending, id: 'z_absolute', status: 'CONFIRMED', qty: 10 };
     const relative: LifecycleTicket = { ...pending, id: 'a_relative', pattaNumber: 1, status: 'CONFIRMED', qty: 99 };
@@ -172,5 +176,47 @@ describe('exact-ID lifecycle cohorts separate from payroll', () => {
     expect(duplicate.items.filter(item => item.ticketId)).toHaveLength(1);
     expect(duplicate.items.map(item => [item.ticketId, item.accepted, item.actualQuantity])).toContainEqual(['z_absolute', true, 10]);
     expect(duplicate.incomplete).toContain('DUPLICATE_SLOT:own:A:11');
+  });
+
+  it('marks only an active matching PENDING_SYNC slot as actual-unknown, preserving accepted work and ordinary/VOIDED/legacy slots', () => {
+    const party: LifecycleParty = { id: 'R', companyId: 'own', modelId: 'M', pattaCount: 2, pattaStartNumber: 11 };
+    const pending: LifecycleTicket = { id: 'pending-11', companyId: 'own', modelId: 'M', partyRecordId: 'R', pattaNumber: 11, periodId: 'Q', status: 'PENDING_SYNC', qty: 10 };
+    const pendingOnly = selectLifecycleItems({ parties: [party], tickets: [pending], periods: [Q], mode: 'current' });
+    expect(pendingOnly.items.map(item => [item.pattaNumber, item.accepted, item.actualQuantity, item.pendingAttempt]))
+      .toEqual([[11, false, null, true], [12, false, null, false]]);
+    expect(countPendingActualUncertainty(pendingOnly.items)).toBe(1);
+    expect(summarizeActualWorkUncertainty(pendingOnly.items)).toEqual({
+      unknownLegacyActualCount: 0, pendingUnknownActualCount: 1, unknownPartyActualCount: 1, hasUnknownActual: true
+    });
+    const ordinaryUnsubmitted = selectLifecycleItems({ parties: [party], tickets: [], periods: [Q], mode: 'current' });
+    expect(summarizeActualWorkUncertainty(ordinaryUnsubmitted.items)).toMatchObject({
+      unknownLegacyActualCount: 0, pendingUnknownActualCount: 0, unknownPartyActualCount: 0, hasUnknownActual: false
+    });
+
+    const accepted: LifecycleTicket = { ...pending, id: 'accepted-11', status: 'CONFIRMED', qty: 7 };
+    const acceptedAndPending = selectLifecycleItems({ parties: [party], tickets: [pending, accepted], periods: [Q], mode: 'current' });
+    expect(acceptedAndPending.items.filter(item => item.pattaNumber === 11)
+      .map(item => [item.ticketId, item.accepted, item.actualQuantity, item.pendingAttempt]))
+      .toEqual([['accepted-11', true, 7, true]]);
+    expect(countPendingActualUncertainty(acceptedAndPending.items)).toBe(0);
+    expect(acceptedAndPending.items.find(item => item.ticketId === 'accepted-11')?.actualQuantity).toBe(7);
+    expect(summarizeActualWorkUncertainty(acceptedAndPending.items)).toMatchObject({
+      pendingUnknownActualCount: 0, unknownPartyActualCount: 0, hasUnknownActual: false
+    });
+
+    const voided: LifecycleTicket = { ...pending, id: 'voided-11', status: 'VOIDED', qty: 10 };
+    const voidedResult = selectLifecycleItems({ parties: [party], tickets: [voided], periods: [Q], mode: 'current' });
+    expect(voidedResult.items[0].pendingAttempt).toBe(false);
+    expect(countPendingActualUncertainty(voidedResult.items)).toBe(0);
+    expect(summarizeActualWorkUncertainty(voidedResult.items).hasUnknownActual).toBe(false);
+
+    const legacyParty: LifecycleParty = { ...party, isClosed: true };
+    const legacyPending = selectLifecycleItems({ parties: [legacyParty], tickets: [pending], periods: [Q], mode: 'current' });
+    expect(legacyPending.items[0].lifecycle).toBe('legacy');
+    expect(legacyPending.items[0].pendingAttempt).toBe(false);
+    expect(countPendingActualUncertainty(legacyPending.items)).toBe(0);
+    expect(summarizeActualWorkUncertainty(legacyPending.items)).toMatchObject({
+      unknownLegacyActualCount: 2, pendingUnknownActualCount: 0, hasUnknownActual: true
+    });
   });
 });

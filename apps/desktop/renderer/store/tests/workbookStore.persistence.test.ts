@@ -95,16 +95,31 @@ describe(' workbook batch command routing', () => {
     expect(useWorkbookStore.getState().saveToDisk).not.toHaveBeenCalled();
   });
 
-  it('refuses a sync print when the canonical projection did not provide a revision', async () => {
+  it('refreshes a missing print revision from SQLite while preserving the current draft', async () => {
     const api = installApi();
+    api.WorkbookCommand.mockResolvedValue({ success: false, code: 'TEST_REJECTION' });
     const addNotification = vi.fn();
-    useWorkbookStore.setState({ batchSettingsPrintRevision: null, addNotification });
+    useWorkbookStore.setState({
+      batchSettingsPrintRevision: null,
+      batchSettingsServerRevision: 1,
+      pattaBatchConfigs: { 'model-a': { partyNumber: 'draft-9', isCustomParty: true, totalIshSoni: '972', color: 'Blue', sizes: { M: '9', L: '2' } } },
+      addNotification
+    });
     await useWorkbookStore.getState().batchPrintCompleted([{
       modelId: 'model-a', partyNumber: '1', pattaCount: 9,
       ...buildPartyWorkSummary(972, 9), sizes: { M: '9' }, color: 'Qora'
     }]);
-    expect(api.WorkbookCommand).not.toHaveBeenCalled();
-    expect(addNotification).toHaveBeenCalledWith('error', '_BATCH_INVALID', expect.stringContaining('reload batch settings'));
+    expect(api.dbRead).toHaveBeenCalledWith('company-a');
+    expect(api.WorkbookCommand).toHaveBeenCalledWith(expect.objectContaining({
+      commandType: 'CompletePattaBatch',
+      payload: expect.objectContaining({ batchSettingsBaseRevision: 7 })
+    }));
+    expect(useWorkbookStore.getState()).toMatchObject({
+      batchSettingsPrintRevision: 7,
+      batchSettingsServerRevision: 7,
+      pattaBatchConfigs: { 'model-a': { partyNumber: 'draft-9', isCustomParty: true, totalIshSoni: '972', color: 'Blue', sizes: { M: '9', L: '2' } } }
+    });
+    expect(addNotification).not.toHaveBeenCalledWith('error', '_BATCH_INVALID', expect.anything());
   });
 
   it('updates controlled batch-setting input state before async runtime readiness resolves', async () => {

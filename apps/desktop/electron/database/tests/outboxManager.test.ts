@@ -9,6 +9,12 @@ const {
   getOutboxDiagnostics,
   insertOutboxOperation,
   listOutboxReconciliationCandidates,
+  listAllocationReviewOperations,
+  requeueAllocationReviewOperation,
+  queueAllocationCancellation,
+  listPendingAllocationCancellations,
+  acknowledgeAllocationCancellation,
+  rejectAllocationCancellation,
   recoverPeriodScopeMismatchTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
@@ -46,6 +52,94 @@ describe('outbox server-acceptance reconciliation', () => {
     });
     return computePayloadHash(payloadJson);
   }
+
+  it('lists durable allocation-review evidence read-only and isolates company scope', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const payload = { operationId: 'review-op', partyNumber: 'P-4', pattaNumber: 8, qty: 25,
+      entries: [{ workerId: 41 }] };
+    const payloadJson = canonicalStringify(payload);
+    db.transaction(() => insertOutboxOperation(db, {
+      operation_id: 'review-op', company_id: companyId, command_type: 'SubmitTicket', entity_type: 'ticket',
+      entity_id: 'ticket-review', base_revision: 0, payload_json: payloadJson,
+      payload_hash: computePayloadHash(payloadJson), status: 'CONFLICT',
+      last_error: JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED', message: 'missing canonical issuance' }),
+      causal_sequence: 2, depends_on_operation_id: 'issue-op', created_at: '2026-01-02T03:04:05.000Z'
+    }))();
+    expect(listAllocationReviewOperations(db, companyId)).toMatchObject([{
+      operation_id: 'review-op', status: 'CONFLICT', depends_on_operation_id: 'issue-op', payload,
+      created_at: '2026-01-02T03:04:05.000Z'
+    }]);
+    expect(listAllocationReviewOperations(db, 'other-company')).toEqual([]);
+    expect(db.prepare('SELECT status FROM local_outbox WHERE company_id = ? AND operation_id = ?')
+      .get(companyId, 'review-op')).toEqual({ status: 'CONFLICT' });
+  });
+
+  it('retries a review conflict only after exact parent acceptance and leaves child evidence immutable', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const parentPayload = canonicalStringify({ partyRecordId: 'party-1' });
+    const parentHash = computePayloadHash(parentPayload);
+    db.transaction(() => insertOutboxOperation(db, {
+      operation_id: 'issue-parent', company_id: companyId, command_type: 'CreateParty', entity_type: 'party',
+      entity_id: 'party-1', base_revision: 0, payload_json: parentPayload, payload_hash: parentHash,
+      status: 'PENDING', causal_sequence: 1
+    }))();
+    const childPayload = canonicalStringify({ ticketId: 'ticket-1', qty: 25 });
+    const childHash = computePayloadHash(childPayload);
+    db.transaction(() => insertOutboxOperation(db, {
+      operation_id: 'allocation-child', company_id: companyId, command_type: 'SubmitTicket', entity_type: 'ticket',
+      entity_id: 'ticket-1', base_revision: 0, payload_json: childPayload, payload_hash: childHash,
+      depends_on_operation_id: 'issue-parent', status: 'CONFLICT', causal_sequence: 2,
+      last_error: JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED' })
+    }))();
+    expect(() => requeueAllocationReviewOperation(db, companyId, 'allocation-child'))
+      .toThrowError(expect.objectContaining({ code: 'ISSUANCE_NOT_ACCEPTED' }));
+    db.prepare(`UPDATE local_outbox SET status = 'SYNCED', accepted_payload_hash = ?,
+      accepted_server_revision = 1, accepted_change_id = '22' WHERE company_id = ? AND operation_id = ?`)
+      .run(parentHash, companyId, 'issue-parent');
+    expect(requeueAllocationReviewOperation(db, companyId, 'allocation-child')).toMatchObject({ status: 'PENDING' });
+    expect(db.prepare('SELECT payload_hash, payload_json, created_at FROM local_outbox WHERE company_id = ? AND operation_id = ?')
+      .get(companyId, 'allocation-child')).toMatchObject({ payload_hash: childHash, payload_json: childPayload });
+  });
+
+  it('persists cancellation intent across reopen and terminalizes only after exact server receipt', () => {
+    let db = databaseManager.getCompanyDatabase(userData, companyId);
+    const payload = canonicalStringify({ ticketId: 'ticket-cancel', qty: 40 });
+    const hash = computePayloadHash(payload);
+    db.transaction(() => insertOutboxOperation(db, {
+      operation_id: 'cancel-child', company_id: companyId, command_type: 'SubmitTicket', entity_type: 'ticket',
+      entity_id: 'ticket-cancel', base_revision: 0, payload_json: payload, payload_hash: hash,
+      status: 'CONFLICT', causal_sequence: 1, last_error: 'ALLOCATION_REVIEW_REQUIRED'
+    }))();
+    const intent = queueAllocationCancellation(db, companyId, 'cancel-child', 'Erroneous duplicate');
+    expect(listPendingAllocationCancellations(db, companyId)).toHaveLength(1);
+    databaseManager.closeAllCompanyDatabases();
+    db = databaseManager.getCompanyDatabase(userData, companyId);
+    expect(listPendingAllocationCancellations(db, companyId)[0]).toMatchObject({
+      resolution_operation_id: intent.resolutionOperationId, original_payload_hash: hash, status: 'PENDING'
+    });
+    expect(db.prepare('SELECT status FROM local_outbox WHERE company_id=? AND operation_id=?').get(companyId, 'cancel-child')).toEqual({ status: 'CONFLICT' });
+    expect(() => acknowledgeAllocationCancellation(db, companyId, intent.resolutionOperationId, { status: 'CANCELLED', resolutionOperationId: 'wrong-id' })).toThrow();
+    acknowledgeAllocationCancellation(db, companyId, intent.resolutionOperationId, { status: 'CANCELLED', resolutionOperationId: intent.resolutionOperationId });
+    expect(db.prepare('SELECT status, payload_hash, payload_json FROM local_outbox WHERE company_id=? AND operation_id=?')
+      .get(companyId, 'cancel-child')).toMatchObject({ status: 'SUPERSEDED', payload_hash: hash, payload_json: payload });
+    expect(listPendingAllocationCancellations(db, companyId)).toHaveLength(0);
+  });
+
+  it('retains rejected cancellation details on the review row and stops retrying the intent', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const payload = canonicalStringify({ operationId: 'cancel-rejected', companyId, ticketId: 'ticket-rejected', qty: 8 });
+    insertOutboxOperation(db, { operation_id: 'cancel-rejected', company_id: companyId, command_type: 'SubmitTicket',
+      entity_type: 'ticket', entity_id: 'ticket-rejected', base_revision: 0, payload_json: payload,
+      payload_hash: computePayloadHash(payload), status: 'CONFLICT', last_error: 'ALLOCATION_REVIEW_REQUIRED' });
+    const intent = queueAllocationCancellation(db, companyId, 'cancel-rejected', 'Incorrect allocation');
+    rejectAllocationCancellation(db, companyId, intent.resolutionOperationId,
+      { code: 'PERIOD_CLOSED', message: 'Closed period requires a separate correction' });
+    const row = listAllocationReviewOperations(db, companyId)[0];
+    expect(row).toMatchObject({ cancellation_status: 'REJECTED', cancellation_result: {
+      code: 'PERIOD_CLOSED', message: 'Closed period requires a separate correction'
+    } });
+    expect(listPendingAllocationCancellations(db, companyId)).toHaveLength(0);
+  });
 
   it('marks only exact server-accepted operations synced and unblocks their dependents', () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);

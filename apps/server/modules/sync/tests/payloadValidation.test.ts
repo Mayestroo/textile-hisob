@@ -78,6 +78,33 @@ function expectCode(action: () => unknown, code: string) {
 }
 
 describe(' payload and authority validation', () => {
+  it.each(['RegisterStajDebt', 'AllocateStajDebt', 'ReverseStajDebtAllocation'])(
+    'fails closed on new %s writes until evidence verification policy is approved', async (commandType) => {
+      const queries: string[] = [];
+      const client = {
+        query: async (sql: string) => {
+          queries.push(sql);
+          if (sql.includes('FROM operations_dedup')) return { rows: [] };
+          return { rows: [] };
+        },
+        release: () => undefined
+      };
+      const pool = { connect: async () => client } as any;
+      const payload = { commandId: `cmd-${commandType}`, operationId: `op-${commandType}`,
+        companyId: COMPANY, debtId: 'debt-test-1' };
+      const operation = {
+        operationId: payload.operationId, companyId: COMPANY, commandType,
+        entityType: 'staj_debt', entityId: payload.debtId,
+        payloadHash: computePayloadHash(canonicalStringify(payload)), payload
+      };
+
+      await expect(processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1', operator: OPERATOR } }, operation))
+        .resolves.toMatchObject({ status: 'REJECTED', error: { code: 'STAJ_DEBT_OPERATIONS_DISABLED' } });
+      expect(queries.some(sql => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+      expect(queries).toContain('ROLLBACK');
+    }
+  );
+
   it('refuses to replace a captured period with the current open period', async () => {
     const client = {
       query: async () => ({ rows: [
@@ -96,13 +123,14 @@ describe(' payload and authority validation', () => {
         if (sql.includes('FROM periods') && sql.includes('is_closed = 0')) return { rows: [{ id: 'period-original', start_date: '2026-09-01', end_date: null }] };
         if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-1', status: 'ACTIVE', operations_json: [{ name: 'Bichish', rate: 9 }] }] };
         if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
+        if (sql.includes('FROM parties p')) return { rows: [{ id: 'rec_1788774889449_vrbkv', party_number: '2', model_id: 'model-1', ish_soni_per_patta: 10, patta_start_number: null, patta_end_number: null }] };
         if (sql.includes('INSERT INTO ticket_entries')) insertedRates.push(args[6]);
         if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: 7, committed_at: '2026-09-22T10:00:00.000Z' }] };
         return { rows: [] };
       }, release: () => undefined
     }) } as any;
     const payload = ticketPayload({ periodId: 'period-original', strictParty: false, strictPatta: false,
-      partyRecordId: null, entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: rate }] });
+      entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: rate }] });
     const result = await processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1' } }, envelope('SubmitTicket', payload));
     expect(result).toMatchObject({ status: 'APPLIED', periodId: 'period-original' });
     expect(insertedRates).toEqual([rate]);
@@ -118,12 +146,13 @@ describe(' payload and authority validation', () => {
         ] };
         if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-1', status: 'ACTIVE', operations_json: [{ name: 'Bichish', rate: 9 }] }] };
         if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
+        if (sql.includes('FROM parties p')) return { rows: [{ id: 'rec_1788774889449_vrbkv', party_number: '2', model_id: 'model-1', ish_soni_per_patta: 10, patta_start_number: null, patta_end_number: null }] };
         if (sql.includes('INSERT INTO ticket_entries')) writes.push(args[6]);
         if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: 8, committed_at: '2026-09-22T10:00:00.000Z' }] };
         return { rows: [] };
       }, release: () => undefined
     }) } as any;
-    const payload = ticketPayload({ strictParty: false, strictPatta: false, partyRecordId: null,
+    const payload = ticketPayload({ strictParty: false, strictPatta: false,
       entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: 5 }] });
     const result = await processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1', operator: OPERATOR } },
       envelope('SubmitTicket', payload));
@@ -138,13 +167,14 @@ describe(' payload and authority validation', () => {
         if (sql.includes('FROM periods') && sql.includes('is_closed = 0')) return { rows: [{ id: 'period-original', start_date: '2026-09-01', end_date: null }] };
         if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-1', status: 'ACTIVE', operations_json: [{ name: 'Bichish', rate: 9 }] }] };
         if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
+        if (sql.includes('FROM parties p')) return { rows: [{ id: 'rec_1788774889449_vrbkv', party_number: '2', model_id: 'model-1', ish_soni_per_patta: 10, patta_start_number: null, patta_end_number: null }] };
         if (sql.includes('INSERT INTO ticket_entries')) insertedRates.push(args[6]);
         if (sql.includes('INSERT INTO change_log')) return { rows: [{ change_id: 7, committed_at: '2026-09-22T10:00:00.000Z' }] };
         return { rows: [] };
       }, release: () => undefined
     }) } as any;
     const payload = ticketPayload({ periodId: 'period-original', strictParty: false, strictPatta: false,
-      partyRecordId: null, entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: null }] });
+      entries: [{ opName: 'Bichish', workerId: 1, rateSnapshot: null }] });
     const result = await processSingleOperation(pool, { auth: { companyId: COMPANY, deviceId: 'device-1' } }, envelope('SubmitTicket', payload));
     expect(result).toMatchObject({ status: 'APPLIED', periodId: 'period-original' });
     expect(insertedRates).toEqual([null]);
@@ -223,8 +253,9 @@ describe(' payload and authority validation', () => {
     const client = {
       query: async (sql: string, values: any[] = []) => {
         calls.push({ sql, values });
+        if (sql.includes('FROM parties WHERE')) return { rows: [{ ish_soni_per_patta: 5 }] };
         if (sql.includes('FROM tickets WHERE company_id')) {
-          return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 5, status: 'CONFIRMED', is_closed: false, server_revision: 3 }] };
+          return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 5, status: 'CONFIRMED', is_closed: false, server_revision: 3, party_record_id: 'party-test' }] };
         }
         if (sql.includes('FROM models')) {
           return { rows: [{ operations_json: [{ name: 'Sew', rate: 7 }], status: 'ACTIVE' }] };
@@ -253,7 +284,8 @@ describe(' payload and authority validation', () => {
   it('keeps original rates and identities across reorder, ignores spoofed rates, and leaves new work unknown', async () => {
     const inserts: any[][] = [];
     const client = { query: async (sql: string, values: any[] = []) => {
-      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 4, status: 'CONFIRMED', is_closed: false, server_revision: 2 }] };
+      if (sql.includes('FROM parties WHERE')) return { rows: [{ ish_soni_per_patta: 4 }] };
+      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 4, status: 'CONFIRMED', is_closed: false, server_revision: 2, party_record_id: 'party-test' }] };
       if (sql.includes('FROM models')) return { rows: [{ operations_json: [{ name: 'A', rate: 9 }, { name: 'B', rate: 9 }, { name: 'New', rate: 9 }], status: 'ACTIVE' }] };
       if (sql.includes('FROM ticket_entries')) return { rows: [
         { id: 'old-a', op_name: 'A', rate_snapshot: 5, brak: 'old' },
@@ -279,7 +311,8 @@ describe(' payload and authority validation', () => {
     ];
     const changes: any[] = [];
     const client = { query: async (sql: string, values: any[] = []) => {
-      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 4, status: 'CONFIRMED', is_closed: false, server_revision: revision }] };
+      if (sql.includes('FROM parties WHERE')) return { rows: [{ ish_soni_per_patta: 4 }] };
+      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 4, status: 'CONFIRMED', is_closed: false, server_revision: revision, party_record_id: 'party-test' }] };
       if (sql.includes('FROM models')) return { rows: [{ operations_json: ['Cut', 'Sew', 'Pack'], status: 'ACTIVE' }] };
       if (sql.startsWith('DELETE FROM ticket_entries')) { rows = []; return { rows: [] }; }
       if (sql.includes('FROM ticket_entries')) return { rows: rows.map((row) => ({ ...row })) };
@@ -310,7 +343,8 @@ describe(' payload and authority validation', () => {
   it('does not replace a missing historical rate with a current tariff or a client claim', async () => {
     const inserts: any[][] = [];
     const client = { query: async (sql: string, values: any[] = []) => {
-      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 3, status: 'CONFIRMED', is_closed: false, server_revision: 1 }] };
+      if (sql.includes('FROM parties WHERE')) return { rows: [{ ish_soni_per_patta: 3 }] };
+      if (sql.includes('FROM tickets WHERE')) return { rows: [{ id: TICKET_ID, model_id: 'model-a', qty: 3, status: 'CONFIRMED', is_closed: false, server_revision: 1, party_record_id: 'party-test' }] };
       if (sql.includes('FROM models')) return { rows: [{ operations_json: [{ name: 'A', rate: 9 }], status: 'ACTIVE' }] };
       if (sql.includes('FROM ticket_entries')) return { rows: [{ id: 'old-unknown', op_name: 'A', rate_snapshot: null, brak: null }] };
       if (sql.includes('FROM workers')) return { rows: [{ id: 71, name: 'Worker 71', status: 'ACTIVE' }] };
@@ -425,6 +459,16 @@ describe(' payload and authority validation', () => {
       ticketId: TICKET_ID,
       partyRecordId: 'rec_1788774889449_vrbkv'
     });
+
+    const split = ticketPayload({
+      qty: 100,
+      entries: [
+        { opName: 'Bichish', workerId: 7, qty: 40 },
+        { opName: 'Bichish', workerId: 8, qty: 60 }
+      ]
+    });
+    expect(validateCommandPayload('SubmitTicket', split, context(envelope('SubmitTicket', split))).entries.map((entry: any) => entry.qty))
+      .toEqual([40, 60]);
 
     const adjustment = {
       commandId: 'command-adjust', operationId: 'operation-adjust', companyId: COMPANY,

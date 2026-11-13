@@ -30,4 +30,11 @@ describe('production API Dockerfile', () => {
       expect(dockerfile, dependency).toContain(`COPY ${dependency} ./${dependency}`);
     }
   });
+
+  it('keeps credentials, tests, and development artifacts out of the image build context', () => {
+    const dockerignore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8');
+    for (const excluded of ['.git', '.opencode', 'node_modules', '**/tests', '**/*.test.*', '.env.*', '*.key', 'secrets']) {
+      expect(dockerignore, excluded).toContain(excluded);
+    }
+  });
 });

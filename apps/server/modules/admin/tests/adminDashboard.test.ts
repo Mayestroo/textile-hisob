@@ -142,6 +142,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
       ] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ worker_id: 1, type: 'AVANS', total: '12' }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ archive_json: archive, sha256: computePayloadHash(canonicalStringify(archive)) }] });
     const result = await serviceFor(query).getPayroll({ companyId: 'company-a', periodId: 'period-closed' });
     expect(result.workers).toMatchObject([

@@ -205,6 +205,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
   let conflict = 0;
   let deadLetter = 0;
   let operatorReauthRequired = 0;
+  let rebootstrapRequired = 0;
   let factsUpdated = 0;
 
   // 5. Process each operation response transactionally
@@ -371,7 +372,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
       })();
       if (accepted === false) conflict++;
       else synced++;
-    } else if (res.status === 'CONFLICT') {
+    } else if (res.status === 'CONFLICT' || ['ALLOCATION_REVIEW_REQUIRED', 'ISSUED_QUANTITY_MISMATCH', 'ISSUED_QUANTITY_UNAVAILABLE'].includes(res.error?.code)) {
       const errJson = JSON.stringify(res.error || { code: 'CONFLICT' });
       updateOperationStatus(db, companyId, op.operation_id, 'CONFLICT', errJson);
       if (op.command_type === 'CompletePattaBatch') {
@@ -411,6 +412,11 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         operatorReauthRequired++;
         continue;
       }
+      if (errorCode === 'HISTORY_PURGED_REBOOTSTRAP_REQUIRED') {
+        updateOperationStatus(db, companyId, op.operation_id, 'PENDING', JSON.stringify(res.error));
+        rebootstrapRequired++;
+        continue;
+      }
       // REJECTED / permanent failure -> DEAD_LETTER
       const errJson = JSON.stringify(res.error || { code: 'REJECTED' });
       updateOperationStatus(db, companyId, op.operation_id, 'DEAD_LETTER', errJson);
@@ -442,8 +448,9 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
     synced,
     conflict,
     deadLetter,
-    transientErrors: 0
-    ,operatorReauthRequired
+    transientErrors: 0,
+    operatorReauthRequired,
+    rebootstrapRequired
   };
 }
 

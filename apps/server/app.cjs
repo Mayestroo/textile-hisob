@@ -12,8 +12,10 @@ const { registerActivationRoutes } = require('./modules/activation/activationRou
 const { registerWorkerRoutes } = require('./modules/workers/workerRoutes.cjs');
 const { registerAdminDashboardRoutes } = require('./modules/admin/adminDashboardRoutes.cjs');
 const { getPeriodArchive } = require('./modules/sync/workbookOperations.cjs');
+const { createAllocationResolutionHandler, readAudit } = require('./modules/sync/allocationResolution.cjs');
 const { createWorker } = require('./modules/workers/workerCreation.cjs');
 const { mutationFenceEnabled, createBusinessMutationFence } = require('./modules/sync/businessMutationFence.cjs');
+const { getDebtHistory, listDebtReviews, requireReviewer } = require('./modules/sync/stajDebtOperations.cjs');
 
 /**
  * Builds and configures Fastify server for Authoritative Distributed Sync.
@@ -94,6 +96,25 @@ function buildFastifyServer(options = {}) {
     // Distributed Operations Endpoint
     apiScope.post('/api/sync/operations', { preHandler: businessMutationFence }, operationsHandler);
     apiScope.post('/api/sync/operations/status', operationStatusHandler);
+    apiScope.post('/api/sync/allocation-review/cancel', { preHandler: businessMutationFence }, createAllocationResolutionHandler(pool, { testHookBeforeCommit: options.allocationResolutionTestHook }));
+    apiScope.get('/api/staj-debts/reviews', async (req, reply) => {
+      try { requireReviewer(req, req.auth.companyId); return reply.send({ success: true, reviews: await listDebtReviews(pool, req.auth.companyId) }); }
+      catch (error) { return reply.code(error.statusCode || 403).send({ success: false, error: { code: error.code || 'STAJ_DEBT_UNAUTHORIZED', message: error.message } }); }
+    });
+    apiScope.get('/api/staj-debts/:debtId', async (req, reply) => {
+      try {
+        requireReviewer(req, req.auth.companyId);
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(req.params.debtId || '')) return reply.code(400).send({ success: false, error: { code: 'INVALID_DEBT_ID', message: 'debtId is invalid' } });
+        return reply.send({ success: true, ...(await getDebtHistory(pool, req.auth.companyId, req.params.debtId)) });
+      } catch (error) { return reply.code(error.statusCode || 403).send({ success: false, error: { code: error.code || 'STAJ_DEBT_UNAUTHORIZED', message: error.message } }); }
+    });
+    apiScope.get('/api/sync/allocation-review/history/:operationId', async (req, reply) => {
+      const operator = req.auth?.operator;
+      if (!operator || !operator.isActive || operator.companyId !== req.auth.companyId || !['admin', 'accountant'].includes(operator.role)) {
+        return reply.code(403).send({ success: false, error: { code: 'ALLOCATION_REVIEW_UNAUTHORIZED', message: 'Active company accountant/admin operator session required' } });
+      }
+      return reply.send({ success: true, history: await readAudit(pool, req.auth.companyId, req.params.operationId) });
+    });
 
     // Single atomic create: operationId is only idempotency; worker.id is assigned by PostgreSQL.
     apiScope.post('/api/workers', { preHandler: businessMutationFence }, async (req, reply) => {

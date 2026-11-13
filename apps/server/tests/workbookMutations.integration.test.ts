@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { canonicalStringify, computePayloadHash } from '../modules/sync/canonicalPayload.cjs';
 
 const { processSingleOperation } = require('../modules/sync/handlers/operations.cjs');
@@ -23,6 +23,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
   let adminPool: Pool | undefined;
   let pool: Pool | undefined;
   let schemaCreated = false;
+let splitPeriodId: string | null = null;
+let splitPartyId: string | null = null;
 
   beforeAll(async () => {
     if (!disposableUrl || process.env.NOVDA_DISPOSABLE_PG !== '1' || process.env.DATABASE_URL) {
@@ -62,7 +64,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       'deploy_model_batch_size_names_migration.sql',
       'deploy_party_size_order_migration.sql',
       'deploy_patta_lifecycle_provenance_migration.sql',
-      'deploy_worker_onboarding_profile_migration.sql'
+      'deploy_worker_onboarding_profile_migration.sql',
+      'deploy_historical_purge_fence_migration.sql'
     ];
     for (const migration of migrations) {
       const sqlPath = migration === 'schema.sql'
@@ -98,6 +101,151 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
   async function apply(commandType: string, entityType: string, entityId: string, payload: Record<string, any>, baseRevision = 0) {
     return processSingleOperation(pool, req, operation(commandType, entityType, entityId, payload, baseRevision));
   }
+
+  it('accepts split patta allocations from canonical quantity and serializes competing stale updates', async () => {
+    await apply('UpsertModel', 'model', 'patta_split_model', {
+      commandId: 'cmd_patta_split_model', operationId: 'op_patta_split_model', companyId,
+      modelId: 'patta_split_model', name: 'Split model',
+      operations: [{ id: 'sew', name: 'Sew', rate: 2 }, { id: 'cut', name: 'Cut', rate: 1 }], pattaOpsOrder: ['Sew', 'Cut']
+    });
+    await pool!.query(`INSERT INTO workers (id, company_id, name, status) VALUES
+      (901, $1, 'Ali', 'ACTIVE'), (902, $1, 'Vali', 'ACTIVE')`, [companyId]);
+    splitPeriodId = `patta_split_period_${Date.now()}`;
+    await pool!.query(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status)
+      VALUES ($2, $1, 'Open', '2026-01-01', 0, 'OPEN')`, [companyId, splitPeriodId]);
+    const partyRecordId = `patta_split_party_${Date.now()}`;
+    splitPartyId = partyRecordId;
+    const earlyTicketId = '00000000-0000-4000-8000-000000009900';
+    const earlySubmission = {
+      commandId: 'cmd_before_issuance', operationId: 'op_before_issuance', companyId,
+      ticketId: earlyTicketId, modelId: 'patta_split_model', periodId: splitPeriodId,
+      partyNumber: 'Split-1', partyRecordId, pattaNumber: 3, qty: 100,
+      effectiveDate: '2026-01-02', submittedAt: '2026-01-02T09:59:00.000Z',
+      entries: [{ opName: 'Sew', workerId: 901, qty: 100 }]
+    };
+    const earlyResult = await apply('SubmitTicket', 'ticket', earlyTicketId, earlySubmission);
+    expect(earlyResult.status).not.toBe('APPLIED');
+    expect((await pool!.query('SELECT id FROM tickets WHERE company_id=$1 AND id=$2', [companyId, earlyTicketId])).rows)
+      .toEqual([]);
+    expect(await apply('CreateParty', 'party', partyRecordId, {
+      commandId: 'cmd_split_party_issue', operationId: 'op_split_party_issue', companyId,
+      partyRecordId, partyNumber: 'Split-1', modelId: 'patta_split_model', modelName: 'Split model',
+      pattaCount: 3, ishSoniPerPatta: 100, totalIshSoni: 300, ishSoni: 300,
+      sizes: { M: 3 }, printedAt: '2026-01-02T09:58:00.000Z'
+    })).toMatchObject({ status: 'APPLIED' });
+
+    expect(await apply('SubmitTicket', 'ticket', earlyTicketId, earlySubmission)).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT id FROM tickets WHERE company_id=$1 AND id=$2', [companyId, earlyTicketId])).rows)
+      .toEqual([{ id: earlyTicketId }]);
+
+    const issuedQuantityEdit = await apply('UpdateParty', 'party', partyRecordId, {
+      commandId: 'cmd_patta_prework_issuance_change', operationId: 'op_patta_prework_issuance_change', companyId,
+      partyRecordId, partyNumber: 'Split-1', modelId: 'patta_split_model', modelName: 'Split model',
+      pattaCount: 2, cumulativePattaCount: 2, ishSoniPerPatta: 101, totalIshSoni: 202,
+      ishSoni: 202, cumulativeIshSoni: 202, sizes: { M: 2 }
+    }, 1);
+    expect(issuedQuantityEdit).toMatchObject({ status: 'REJECTED', error: { code: 'IMMUTABLE_PATTA_RANGE' } });
+
+    const ticketId = '00000000-0000-4000-8000-000000009901';
+    const submission = {
+      commandId: 'cmd_patta_split_submit', operationId: 'op_patta_split_submit', companyId,
+      ticketId, modelId: 'patta_split_model', periodId: splitPeriodId,
+      partyNumber: 'Split-1', partyRecordId, pattaNumber: 1, qty: 100,
+      strictParty: false, strictPatta: false, effectiveDate: '2026-01-02',
+      submittedAt: '2026-01-02T10:00:00.000Z',
+       entries: [{ opName: 'Sew', workerId: 901, qty: 40 }]
+    };
+    expect(await apply('SubmitTicket', 'ticket', ticketId, submission)).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT qty FROM tickets WHERE company_id = $1 AND id = $2', [companyId, ticketId])).rows[0].qty)
+      .toBe('100');
+    expect((await pool!.query('SELECT worker_id,qty FROM ticket_entries WHERE company_id=$1 AND ticket_id=$2',
+      [companyId, ticketId])).rows).toEqual([{ worker_id: 901, qty: '40' }]);
+    expect(await apply('UpdateTicket', 'ticket', ticketId, {
+      commandId: 'cmd_patta_add_second_worker', operationId: 'op_patta_add_second_worker', companyId,
+      ticketId, baseRevision: 1,
+      entries: [
+        { entryId: `${ticketId}_entry_1`, opName: 'Sew', workerId: 901, qty: 40 },
+        { opName: 'Sew', workerId: 902, qty: 60 }
+      ]
+    }, 1)).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT worker_id, qty FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2 ORDER BY worker_id', [companyId, ticketId])).rows)
+      .toEqual([{ worker_id: 901, qty: '40' }, { worker_id: 902, qty: '60' }]);
+    const issuanceEdit = await apply('UpdateParty', 'party', partyRecordId, {
+      commandId: 'cmd_patta_issuance_change', operationId: 'op_patta_issuance_change', companyId,
+      partyRecordId, partyNumber: 'Split-1', modelId: 'patta_split_model', modelName: 'Split model',
+      pattaCount: 2, cumulativePattaCount: 2, ishSoniPerPatta: 101, totalIshSoni: 202,
+      ishSoni: 202, cumulativeIshSoni: 202, sizes: { M: 2 }
+    }, 1);
+    expect(issuanceEdit).toMatchObject({ status: 'REJECTED', error: { code: 'IMMUTABLE_PATTA_RANGE' } });
+
+    const splitEntryRows = (await pool!.query(`SELECT id,worker_id FROM ticket_entries
+      WHERE company_id=$1 AND ticket_id=$2 AND op_name='Sew'`, [companyId, ticketId])).rows;
+    const splitEntryIds = new Map(splitEntryRows.map((row) => [Number(row.worker_id), row.id]));
+    const edit = (operationId: string, allocations: Array<{ workerId: number; qty: number }>) => ({
+      commandId: `cmd_${operationId}`, operationId, companyId, ticketId, baseRevision: 2,
+      entries: allocations.map(({ workerId, qty }) => ({
+        opName: 'Sew', workerId, qty, entryId: splitEntryIds.get(workerId)
+      }))
+    });
+    const competing = await Promise.all([
+      apply('UpdateTicket', 'ticket', ticketId, edit('op_split_update_a', [{ workerId: 901, qty: 40 }, { workerId: 902, qty: 60 }]), 2),
+      apply('UpdateTicket', 'ticket', ticketId, edit('op_split_update_b', [{ workerId: 901, qty: 40 }, { workerId: 902, qty: 61 }]), 2)
+    ]);
+    expect(competing.map((result) => result.status).sort()).toEqual(['APPLIED', 'CONFLICT']);
+    expect(competing.find((result) => result.status === 'CONFLICT')?.error?.code).toBe('REVISION_CONFLICT');
+    // Race a valid completion against an over-allocation from a second database
+    // connection. processSingleOperation checks out its own PG client/transaction.
+    const racingFinalization = await Promise.all([
+      apply('UpdateTicket', 'ticket', ticketId, { ...edit('op_concurrent_60_40', [{ workerId: 901, qty: 60 }, { workerId: 902, qty: 40 }]), baseRevision: 3 }, 3),
+      apply('UpdateTicket', 'ticket', ticketId, { ...edit('op_concurrent_60_60', [{ workerId: 901, qty: 60 }, { workerId: 902, qty: 60 }]), baseRevision: 3 }, 3)
+    ]);
+    expect(racingFinalization.some((result) => result.status === 'APPLIED')).toBe(true);
+    const afterConcurrent = await pool!.query('SELECT server_revision FROM tickets WHERE company_id=$1 AND id=$2', [companyId, ticketId]);
+    const multiOperation = await apply('UpdateTicket', 'ticket', ticketId, {
+      commandId: 'cmd_multi_operation_bounds', operationId: 'op_multi_operation_bounds', companyId,
+      ticketId, baseRevision: Number(afterConcurrent.rows[0].server_revision), entries: [
+        { entryId: splitEntryIds.get(901), opName: 'Sew', workerId: 901, qty: 40 },
+        { entryId: splitEntryIds.get(902), opName: 'Sew', workerId: 902, qty: 60 },
+        { opName: 'Cut', workerId: 901, qty: 100 }
+      ]
+    }, Number(afterConcurrent.rows[0].server_revision));
+    expect(multiOperation.status).toBe('APPLIED');
+    const finalTotal = await pool!.query(`SELECT e.op_name, SUM(e.qty)::INTEGER AS allocated, MAX(t.qty)::INTEGER AS issued
+      FROM ticket_entries e JOIN tickets t ON t.company_id=e.company_id AND t.id=e.ticket_id
+      WHERE e.company_id=$1 AND e.ticket_id=$2 GROUP BY e.op_name`, [companyId, ticketId]);
+    expect(finalTotal.rows).toEqual(expect.arrayContaining([
+      { op_name: 'Sew', allocated: 100, issued: 100 }, { op_name: 'Cut', allocated: 100, issued: 100 }
+    ]));
+    const duplicateRaceRevision = Number((await pool!.query('SELECT server_revision FROM tickets WHERE company_id=$1 AND id=$2', [companyId, ticketId])).rows[0].server_revision);
+    const duplicateRacePayload = {
+      commandId: 'cmd_dup_a', operationId: 'op_duplicate_business_a', companyId, ticketId,
+      baseRevision: duplicateRaceRevision, entries: [
+        { entryId: splitEntryIds.get(901), opName: 'Sew', workerId: 901, qty: 40 },
+        { entryId: splitEntryIds.get(902), opName: 'Sew', workerId: 902, qty: 60 },
+        { opName: 'Cut', workerId: 901, qty: 100 }
+      ]
+    };
+    const duplicateRace = await Promise.all([
+      apply('UpdateTicket', 'ticket', ticketId, duplicateRacePayload, duplicateRaceRevision),
+      apply('UpdateTicket', 'ticket', ticketId, { ...duplicateRacePayload, commandId: 'cmd_dup_b', operationId: 'op_duplicate_business_b' }, duplicateRaceRevision)
+    ]);
+    expect(duplicateRace.filter((result) => result.status === 'APPLIED')).toHaveLength(1);
+    const earnings = await pool!.query(`SELECT op_name, worker_id, COUNT(*)::INTEGER AS rows
+      FROM ticket_entries WHERE company_id=$1 AND ticket_id=$2 GROUP BY op_name, worker_id`, [companyId, ticketId]);
+    expect(earnings.rows.every((row) => row.rows === 1)).toBe(true);
+  });
+
+  afterEach(async () => {
+    if (splitPartyId && pool) {
+      await pool.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1 WHERE company_id = $1 AND id = $2`, [companyId, splitPartyId]);
+      splitPartyId = null;
+    }
+    if (splitPeriodId && pool) {
+      await pool.query(`UPDATE periods SET is_closed = 1, status = 'CLOSED', end_date = '2026-01-31'
+        WHERE company_id = $1 AND id = $2`, [companyId, splitPeriodId]);
+      splitPeriodId = null;
+    }
+  });
 
   it('creates and updates stable model identity with replay and revision conflict handling', async () => {
     const create = {
@@ -194,11 +342,18 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(await apply('CreateParty', 'party', party.partyRecordId, party)).toMatchObject({ status: 'APPLIED', serverRevision: 1 });
     expect((await pool!.query('SELECT size_order_json FROM parties WHERE company_id=$1 AND id=$2', [companyId, party.partyRecordId])).rows[0].size_order_json)
       .toEqual(['XXL', 'M']);
+    const beforeFirstTicketChange = await apply('UpdateParty', 'party', party.partyRecordId, {
+      commandId: 'cmd_party_change_issued_qty_before_work', operationId: 'op_party_change_issued_qty_before_work', companyId,
+      partyRecordId: party.partyRecordId, partyNumber: party.partyNumber, modelId: party.modelId,
+      modelName: party.modelName, color: party.color, pattaCount: 2, cumulativePattaCount: 2,
+      ishSoniPerPatta: 55, totalIshSoni: 110, ishSoni: 110, cumulativeIshSoni: 110, sizes: { XXL: 1, M: 1 }
+    }, 1);
+    expect(beforeFirstTicketChange).toMatchObject({ status: 'REJECTED', error: { code: 'ISSUED_PATTA_QUANTITY_IMMUTABLE' } });
     const partyUpdate = await apply('UpdateParty', 'party', party.partyRecordId, {
       commandId: 'cmd_party_update', operationId: 'op_party_update', companyId,
       partyRecordId: party.partyRecordId, partyNumber: party.partyNumber, modelId: party.modelId,
       modelName: party.modelName, color: party.color, pattaCount: 2, cumulativePattaCount: 2,
-       ishSoniPerPatta: 55, totalIshSoni: 110, ishSoni: 110, cumulativeIshSoni: 110, sizes: { XXL: 1, M: 1 }
+       ishSoniPerPatta: 50, totalIshSoni: 100, ishSoni: 100, cumulativeIshSoni: 100, sizes: { XXL: 1, M: 1 }
     }, 1);
     if (partyUpdate.status !== 'APPLIED') throw new Error(`UpdateParty failed: ${JSON.stringify(partyUpdate)}`);
     expect(partyUpdate).toMatchObject({ status: 'APPLIED', serverRevision: 2 });
@@ -262,8 +417,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       VALUES ($1, $2, 'Delete Reuse Worker', 'ACTIVE')`, [workerId, companyId]);
     await pool!.query(`INSERT INTO parties (
       id, company_id, party_number, physical_party_number, model_id, patta_count,
-      patta_start_number, patta_end_number, status
-    ) VALUES ($1, $2, '51', '51', $3, 1, 7, 7, 'ACTIVE')`, [partyId, companyId, modelId]);
+      patta_start_number, patta_end_number, ish_soni_per_patta, status
+    ) VALUES ($1, $2, '51', '51', $3, 1, 7, 7, 100, 'ACTIVE')`, [partyId, companyId, modelId]);
     await pool!.query(`INSERT INTO tickets (
       id, company_id, model_id, party_number, party_record_id, patta_number, qty, status,
       is_closed, submitted_at
@@ -273,12 +428,20 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     expect(await apply('DeleteTicket', 'ticket', oldTicketId, {
       commandId: 'cmd_ticket_delete_reuse', operationId: 'op_ticket_delete_reuse', companyId, ticketId: oldTicketId
     })).toMatchObject({ status: 'APPLIED' });
+    expect(await apply('UpdateTicket', 'ticket', oldTicketId, {
+      commandId: 'cmd_cancelled_replay', operationId: 'op_cancelled_replay', companyId,
+      ticketId: oldTicketId, baseRevision: 1, entries: [{ opName: 'Sew', workerId, qty: 100 }]
+    }, 1)).toMatchObject({ status: 'REJECTED', error: { code: 'TICKET_NOT_EDITABLE' } });
 
     const submit = (ticketId: string, operationId: string) => ({
       commandId: `cmd_${operationId}`, operationId, companyId, ticketId, modelId,
-      partyNumber: '51', partyRecordId: partyId, pattaNumber: 7, qty: 1,
+      partyNumber: '51', partyRecordId: partyId, pattaNumber: 7, qty: 100,
       effectiveDate: '2026-10-07', entries: [{ opName: 'Sew', workerId }]
     });
+    expect(await apply('SubmitTicket', 'ticket', '00000000-0000-4000-8000-000000000894', {
+      ...submit('00000000-0000-4000-8000-000000000894', 'op_ticket_forged_issued_qty'), qty: 101,
+      entries: [{ opName: 'Sew', workerId, qty: 40 }]
+    })).toMatchObject({ status: 'CONFLICT', error: { code: 'ALLOCATION_REVIEW_REQUIRED' } });
     expect(await apply('SubmitTicket', 'ticket', replacementTicketId,
       submit(replacementTicketId, 'op_ticket_replacement'))).toMatchObject({ status: 'APPLIED' });
     expect(await apply('SubmitTicket', 'ticket', duplicateTicketId,
@@ -294,9 +457,13 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       VALUES ('ticket-edit-model', $1, 'Ticket Edit Model', '[{"name":"Cut","rate":3},{"name":"Sew","rate":7}]', 'ACTIVE')`, [companyId]);
     await pool!.query(`INSERT INTO workers (id, company_id, name, status)
       VALUES (741, $1, 'Worker A', 'ACTIVE'), (742, $1, 'Worker B', 'ACTIVE')`, [companyId]);
+    await pool!.query(`INSERT INTO parties (
+      id, company_id, party_number, physical_party_number, model_id, patta_count,
+      patta_start_number, patta_end_number, ish_soni_per_patta, status
+    ) VALUES ('ticket-edit-party', $1, '29', '29', 'ticket-edit-model', 1, 303, 303, 116, 'ACTIVE')`, [companyId]);
     await pool!.query(`INSERT INTO tickets (
       id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, is_closed, server_revision, submitted_at
-    ) VALUES ($1, $2, 'ticket-edit-model', '29', NULL, 303, 116, 'CONFIRMED', 0, 4, CURRENT_TIMESTAMP)`, [ticketId, companyId]);
+    ) VALUES ($1, $2, 'ticket-edit-model', '29', 'ticket-edit-party', 303, 116, 'CONFIRMED', 0, 4, CURRENT_TIMESTAMP)`, [ticketId, companyId]);
     await pool!.query(`INSERT INTO ticket_entries (
       id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, qty
     ) VALUES ('ticket-edit-old-entry', $1, $2, 'Cut', 741, 'Worker A', 3, 116)`, [ticketId, companyId]);
@@ -323,9 +490,10 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       WHERE company_id = $1 AND entity_type = 'ticket' AND entity_id = $2
       ORDER BY change_id DESC LIMIT 1`, [companyId, ticketId]);
     expect(change.rows[0].payload_json.entries).toMatchObject([{ opName: 'Sew', workerId: 742, qty: 116 }]);
+    await pool!.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1 WHERE company_id = $1 AND id = 'ticket-edit-party'`, [companyId]);
   });
 
-  it('accepts a canonical free-mode ticket without creating or inventing a printed party', async () => {
+  it('routes free-mode work without canonical issuance to review instead of accepting it', async () => {
     const partyCountBefore = Number((await pool!.query('SELECT COUNT(*)::int AS count FROM parties WHERE company_id = $1', [companyId])).rows[0].count);
     await pool!.query(`INSERT INTO company_batch_settings (company_id, available_sizes_json) VALUES ($1, '[]')
       ON CONFLICT (company_id) DO UPDATE SET available_sizes_json = EXCLUDED.available_sizes_json`, [companyId]);
@@ -351,9 +519,9 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       qty: 5, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601 }]
     });
 
-    expect(result).toMatchObject({ status: 'APPLIED' });
-    expect((await pool!.query('SELECT party_record_id FROM tickets WHERE company_id = $1 AND id = $2', [companyId, ticketId])).rows)
-      .toEqual([{ party_record_id: null }]);
+    expect(result).toMatchObject({ status: 'CONFLICT', error: { code: 'ALLOCATION_REVIEW_REQUIRED' } });
+    expect((await pool!.query('SELECT id FROM tickets WHERE company_id = $1 AND id = $2', [companyId, ticketId])).rows)
+      .toEqual([]);
     expect((await pool!.query('SELECT COUNT(*)::int AS count FROM parties WHERE company_id = $1', [companyId])).rows[0].count).toBe(partyCountBefore);
 
     await pool!.query('UPDATE activation_companies SET require_ticket_validation = TRUE WHERE company_id = $1', [companyId]);
@@ -373,9 +541,9 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
       partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false,
       qty: 3, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601 }]
     });
-    expect(perTicketFreeResult).toMatchObject({ status: 'APPLIED' });
-    expect((await pool!.query('SELECT party_record_id, party_number, patta_number FROM tickets WHERE company_id = $1 AND id = $2', [companyId, perTicketFreeId])).rows)
-      .toEqual([{ party_record_id: null, party_number: "No'malum Partiya", patta_number: 0 }]);
+    expect(perTicketFreeResult).toMatchObject({ status: 'CONFLICT', error: { code: 'ALLOCATION_REVIEW_REQUIRED' } });
+    expect((await pool!.query('SELECT id FROM tickets WHERE company_id = $1 AND id = $2', [companyId, perTicketFreeId])).rows)
+      .toEqual([]);
   });
 
   it('closes a period atomically, rolls parties, stores an archive, and archives history without deletes', async () => {
@@ -401,7 +569,8 @@ describeDisposable('PostgreSQL 16 workbook business mutation operations', () => 
     const closed = await apply('ClosePeriod', 'period', payload.periodId, payload, 2);
     if (closed.status !== 'APPLIED') throw new Error(`ClosePeriod failed: ${JSON.stringify(closed)}`);
     expect(closed).toMatchObject({ status: 'APPLIED', serverRevision: 3 });
-    const periodRows = await pool!.query('SELECT id, is_closed FROM periods WHERE company_id = $1 ORDER BY id', [companyId]);
+    const periodRows = await pool!.query(`SELECT id, is_closed FROM periods WHERE company_id = $1
+      AND id IN ('period_2026_09', 'period_2026_10') ORDER BY id`, [companyId]);
     expect(periodRows.rows).toEqual([
       expect.objectContaining({ id: 'period_2026_09', is_closed: 1 }),
       expect.objectContaining({ id: 'period_2026_10', is_closed: 0 })

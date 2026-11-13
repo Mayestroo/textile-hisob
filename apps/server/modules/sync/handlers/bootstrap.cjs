@@ -23,7 +23,19 @@ function createBootstrapHandler(pool, options = {}) {
         success: true,
         snapshot: result.snapshot,
         cursor: result.cursor,
-        feedBaseline: { protocolVersion: 1, companyId, headCursor: result.cursor },
+        feedBaseline: {
+          protocolVersion: 1,
+          companyId,
+          headCursor: result.cursor,
+          ...(result.purgeEra ? { purgeGeneration: result.purgeEra.purgeGeneration } : {})
+        },
+        ...(result.purgeEra ? {
+          purgeEra: result.purgeEra,
+          purgeGeneration: result.purgeEra.purgeGeneration,
+          purgeCutoffDate: result.purgeEra.cutoffDate,
+          purgeCutoffUtc: result.purgeEra.cutoffUtc,
+          minValidCursor: result.purgeEra.minValidCursor
+        } : {}),
         nextPattaNumber: result.nextPattaNumber,
         counts: result.counts
       });

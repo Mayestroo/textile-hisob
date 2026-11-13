@@ -40,7 +40,10 @@ const exactMigrations = [
   'deploy_model_batch_size_names_migration.sql',
   'deploy_party_size_order_migration.sql',
   'deploy_patta_lifecycle_provenance_migration.sql',
-  'deploy_worker_onboarding_profile_migration.sql'
+  'deploy_worker_onboarding_profile_migration.sql',
+  'deploy_historical_purge_fence_migration.sql',
+  'deploy_allocation_resolution_migration.sql',
+  'deploy_staj_debt_ledger_migration.sql'
 ].map((name, index) => ({ version: index + 1, name }));
 
 const exactForeignKeys = [
@@ -135,6 +138,7 @@ function createEvidenceClient(overrides: Record<string, any> = {}) {
       queries.push(sql);
       if (sql.includes('FROM schema_migrations')) return { rows: evidence.migrations };
       if (sql.includes("'company_batch_settings'")) return { rows: evidence.businessTables };
+      if (sql.includes("'historical_purge_eras'")) return { rows: evidence.purgeFenceTables ?? ['historical_purge_eras', 'purged_entity_tombstones', 'purged_operation_tombstones'].map((table_name) => ({ table_name })) };
       if (sql.includes("table_name = 'models'")) return { rows: evidence.businessColumns };
       if (sql.includes('FROM information_schema.tables')) return { rows: evidence.activationTables };
       if (sql.includes('FROM information_schema.columns')) return { rows: evidence.workerStajColumn };
@@ -363,6 +367,54 @@ describe('PostgreSQL release-integrity evidence', () => {
     });
   });
 
+  it('accepts retrospective baseline checks when baseline rows were purged under a committed purge era', async () => {
+    const sourceSnapshotHash = 'd'.repeat(64);
+    const client = createEvidenceClient({
+      baseline: [{
+        owner_decision_count: '1', owner_exclusion_rows: '0', owner_excluded_quantity: '0',
+        owner_scope_mismatch_rows: '0', owner_decision_quantity_mismatch_count: '0'
+      }],
+      retrospectiveBaselines: [{
+        company_id: 'company-a', decision: 'CLEAN_PRODUCTION_LEDGER_BASELINE',
+        source_snapshot_hash: sourceSnapshotHash,
+        scope_json: {
+          decisionType: 'CLEAN_PRODUCTION_LEDGER_BASELINE',
+          recordingMode: 'RETROSPECTIVE_EVIDENCE_RECONCILIATION',
+          businessRowsReimported: false,
+          localOutboxImported: false,
+          source: {
+            sha256: sourceSnapshotHash, stagedSha256: sourceSnapshotHash,
+            sqliteSchemaVersion: 15, integrityCheck: 'ok'
+          },
+          sourceTableCounts: { tickets: 3, ticket_entries: 12, production_adjustments: 1 },
+          evidence: {
+            historicalTransactionalImportDocumented: true,
+            postgresSchemaMigrations: [16, 17],
+            baselineTicketIds: ['base-1', 'base-2', 'base-3'],
+            baselineTicketEntries: 12,
+            currentPostImportAcceptedSubmitTicketOperations: 5,
+            currentTicketRows: 8,
+            baselineProductionAdjustments: 1,
+            currentAcceptedProductionAdjustmentOperations: 1,
+            currentProductionAdjustments: 2
+          }
+        },
+        baseline_purged: true,
+        current_ticket_rows: '4', present_baseline_ticket_rows: '0',
+        present_baseline_ticket_entries: '0', accepted_submit_operations: '4',
+        current_production_adjustments: '2', accepted_production_adjustment_operations: '1',
+        baseline_exclusion_rows: '0'
+      }]
+    });
+
+    const report = await verifyPostgresReleaseState(client);
+    expect(report.baseline).toMatchObject({
+      ownerDecisionCount: 1,
+      retrospectiveEvidenceMismatchCount: 0,
+      scopePreserved: true
+    });
+  });
+
   it('fails closed when retrospective baseline counts no longer reconcile with server rows', async () => {
     const sourceSnapshotHash = 'c'.repeat(64);
     const client = createEvidenceClient({
@@ -515,5 +567,80 @@ describeDisposablePostgres('DISPOSABLE PostgreSQL 16 release-integrity integrati
       ownerDecisionQuantityMismatchCount: 0,
       scopePreserved: true
     });
+  });
+
+  it('reapplies the STAJ ledger migration without changing existing receipts or lineage', async () => {
+    const migration = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_staj_debt_ledger_migration.sql'), 'utf8');
+    await isolatedPool!.query(`INSERT INTO operations_dedup
+      (company_id,operation_id,command_type,entity_type,entity_id,payload_hash,result_json,server_revision)
+      VALUES('staj-migration-company','staj-migration-receipt','Fixture','fixture','staj-1',repeat('b',64),'{}'::jsonb,1)
+      ON CONFLICT DO NOTHING`);
+    await isolatedPool!.query('DELETE FROM schema_migrations WHERE version=32');
+    await isolatedPool!.query(migration);
+    await isolatedPool!.query(migration);
+    const result = await isolatedPool!.query(`SELECT
+      (SELECT COUNT(*) FROM operations_dedup WHERE operation_id='staj-migration-receipt') AS receipts,
+      (SELECT COUNT(*) FROM schema_migrations WHERE version=32 AND name='deploy_staj_debt_ledger_migration.sql') AS lineage,
+      (SELECT COUNT(*) FROM pg_tables WHERE schemaname=current_schema() AND tablename IN ('staj_debt_claims','staj_debt_events')) AS ledger_tables,
+      (SELECT COUNT(*) FROM pg_trigger WHERE tgrelid='staj_debt_claims'::regclass AND NOT tgisinternal) AS claim_triggers,
+      (SELECT COUNT(*) FROM pg_trigger WHERE tgrelid='staj_debt_events'::regclass AND NOT tgisinternal) AS event_triggers`);
+    expect(result.rows[0]).toMatchObject({ receipts: '1', lineage: '1', ledger_tables: '2', claim_triggers: '1', event_triggers: '1' });
+  });
+
+  it('rolls back an interrupted STAJ ledger migration without certifying version 32', async () => {
+    const migration = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_staj_debt_ledger_migration.sql'), 'utf8');
+    await isolatedPool!.query('DELETE FROM schema_migrations WHERE version=32');
+    await isolatedPool!.query('DROP TABLE staj_debt_events, staj_debt_claims CASCADE');
+    await isolatedPool!.query(`CREATE OR REPLACE FUNCTION reject_staj_migration_marker() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.version=32 THEN RAISE EXCEPTION 'INJECTED_STAJ_MIGRATION_FAILURE'; END IF; RETURN NEW; END $$`);
+    await isolatedPool!.query(`CREATE TRIGGER reject_staj_migration_marker BEFORE INSERT ON schema_migrations
+      FOR EACH ROW EXECUTE FUNCTION reject_staj_migration_marker()`);
+    await expect(isolatedPool!.query(migration)).rejects.toThrow('INJECTED_STAJ_MIGRATION_FAILURE');
+    await isolatedPool!.query('ROLLBACK');
+    const state = await isolatedPool!.query(`SELECT to_regclass('${schemaName}.staj_debt_claims') AS claims_table,
+      to_regclass('${schemaName}.staj_debt_events') AS events_table,
+      (SELECT COUNT(*) FROM schema_migrations WHERE version=32) AS marker`);
+    expect(state.rows[0]).toEqual({ claims_table: null, events_table: null, marker: '0' });
+    await isolatedPool!.query('DROP TRIGGER reject_staj_migration_marker ON schema_migrations');
+    await isolatedPool!.query('DROP FUNCTION reject_staj_migration_marker()');
+    await isolatedPool!.query(migration);
+    expect((await isolatedPool!.query("SELECT COUNT(*) FROM schema_migrations WHERE version=32")).rows[0].count).toBe('1');
+  });
+
+  it('applies the additive allocation migration repeatedly without losing existing receipts', async () => {
+    const migration = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_allocation_resolution_migration.sql'), 'utf8');
+    await isolatedPool!.query(`INSERT INTO operations_dedup
+      (company_id,operation_id,command_type,entity_type,entity_id,payload_hash,result_json,server_revision)
+      VALUES('migration-company','migration-preserved-receipt','Fixture','fixture','fixture-1',repeat('a',64),'{}'::jsonb,1)
+      ON CONFLICT DO NOTHING`);
+    await isolatedPool!.query('DELETE FROM schema_migrations WHERE version=31');
+    await isolatedPool!.query('DROP TABLE allocation_resolution_audit, allocation_resolution_fences, allocation_review_candidates CASCADE');
+    await isolatedPool!.query(migration);
+    await isolatedPool!.query(migration);
+    const result = await isolatedPool!.query(`SELECT
+      (SELECT COUNT(*) FROM operations_dedup WHERE operation_id='migration-preserved-receipt') AS receipts,
+      (SELECT COUNT(*) FROM schema_migrations WHERE version=31 AND name='deploy_allocation_resolution_migration.sql') AS lineage,
+      (SELECT COUNT(*) FROM pg_constraint WHERE conrelid='allocation_resolution_fences'::regclass AND contype IN ('p','u')) AS fence_constraints,
+      (SELECT COUNT(*) FROM pg_trigger WHERE tgrelid='allocation_resolution_audit'::regclass AND NOT tgisinternal) AS audit_triggers`);
+    expect(result.rows[0]).toMatchObject({ receipts: '1', lineage: '1', fence_constraints: '2', audit_triggers: '1' });
+  });
+
+  it('rolls back a failed additive cancellation migration without certifying version 31', async () => {
+    const migration = fs.readFileSync(path.join(__dirname, '..', '..', 'database', 'migrations', 'deploy_allocation_resolution_migration.sql'), 'utf8');
+    await isolatedPool!.query("DELETE FROM schema_migrations WHERE version=31");
+    await isolatedPool!.query('DROP TABLE allocation_resolution_audit, allocation_resolution_fences, allocation_review_candidates CASCADE');
+    await isolatedPool!.query(`CREATE OR REPLACE FUNCTION reject_allocation_migration_marker() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.version=31 THEN RAISE EXCEPTION 'INJECTED_MIGRATION_FAILURE'; END IF; RETURN NEW; END $$`);
+    await isolatedPool!.query(`CREATE TRIGGER reject_allocation_migration_marker BEFORE INSERT ON schema_migrations
+      FOR EACH ROW EXECUTE FUNCTION reject_allocation_migration_marker()`);
+    await expect(isolatedPool!.query(migration)).rejects.toThrow('INJECTED_MIGRATION_FAILURE');
+    await isolatedPool!.query('ROLLBACK');
+    const state = await isolatedPool!.query(`SELECT to_regclass('${schemaName}.allocation_review_candidates') AS candidate_table,
+      (SELECT COUNT(*) FROM schema_migrations WHERE version=31) AS marker`);
+    expect(state.rows[0]).toEqual({ candidate_table: null, marker: '0' });
+    await isolatedPool!.query('DROP TRIGGER reject_allocation_migration_marker ON schema_migrations');
+    await isolatedPool!.query('DROP FUNCTION reject_allocation_migration_marker()');
+    await isolatedPool!.query(migration);
+    expect((await isolatedPool!.query("SELECT COUNT(*) FROM schema_migrations WHERE version=31")).rows[0].count).toBe('1');
   });
 });

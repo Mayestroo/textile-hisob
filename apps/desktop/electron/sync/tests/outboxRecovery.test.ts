@@ -89,7 +89,7 @@ describe('Phase 2 Step 4 — Stranded SENDING Recovery & Crash Invariants', () =
     return db;
   }
 
-  async function seedServerParty() {
+  async function seedServerParty(issuedPerPatta: number) {
     await serverPool.query(
       `INSERT INTO models (id, company_id, name, operations_json)
        VALUES ('m_test', $1, 'Test Model', '[{"name":"Bichish","rate":1000}]')
@@ -103,9 +103,10 @@ describe('Phase 2 Step 4 — Stranded SENDING Recovery & Crash Invariants', () =
       [COMPANY_ALPHA]
     );
     await serverPool.query(
-      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
-       VALUES ('party-recovery-1', $1, '1', '1', 'm_test', 'ACTIVE')`,
-      [COMPANY_ALPHA]
+      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, patta_count,
+         patta_start_number, patta_end_number, ish_soni_per_patta, status)
+       VALUES ('party-recovery-1', $1, '1', '1', 'm_test', 100, 1, 100, $2, 'ACTIVE')`,
+      [COMPANY_ALPHA, issuedPerPatta]
     );
   }
 
@@ -256,7 +257,7 @@ describe('Phase 2 Step 4 — Stranded SENDING Recovery & Crash Invariants', () =
   it('4. causal child ordering: child remains blocked until recovered parent retries and becomes SYNCED', async () => {
     const db = seedCompany(COMPANY_ALPHA);
     const syncClient = new SyncClient({ baseUrl, token: TOKEN_ALPHA });
-    await seedServerParty();
+    await seedServerParty(10);
 
     // Seed server model & worker
     await serverPool.query(`
@@ -350,7 +351,7 @@ describe('Phase 2 Step 4 — Stranded SENDING Recovery & Crash Invariants', () =
       VALUES ('m_test', $1, 'Test Model', '[{"name":"Bichish","rate":1000}]')
       ON CONFLICT DO NOTHING
     `, [COMPANY_ALPHA]);
-    await seedServerParty();
+    await seedServerParty(15);
     await serverPool.query(`
       INSERT INTO workers (id, company_id, name)
       VALUES (1, $1, 'Alisher')

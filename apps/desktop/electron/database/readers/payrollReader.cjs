@@ -2,6 +2,7 @@
 const { ticketEntryId, legacyLocalTicketEntryId } = require('../../../../../packages/contracts/ticketEntryIdentity.cjs');
 
 const { reducePayroll } = require('../../../../../packages/domain/payrollReducer.cjs');
+const { toMinorUnits, fromMinorUnits } = require('../../../../../packages/domain/stajDebtLedger.cjs');
 const { canonicalStringify, computePayloadHash } = require('../core/canonicalPayload.cjs');
 const { readFeedEvidence, cursor } = require('../../sync/feedEvidence.cjs');
 const { getLocalCursor } = require('../../sync/changeFeedApplier.cjs');
@@ -219,6 +220,17 @@ function loadPayrollValuationFromSqlite(db, companyId, periodId, options = {}) {
       .reduce((sum, fact) => sum + Number(fact.amount), 0);
     return conflictAmount ? { ...row, total: Number(row.total) - conflictAmount } : row;
   });
+  const stajDebtEvents = db.prepare(`SELECT c.worker_id,e.event_type,e.amount,source.amount AS reversed_amount
+    FROM staj_debt_events e JOIN staj_debt_claims c ON c.company_id=e.company_id AND c.debt_id=e.debt_id
+    LEFT JOIN staj_debt_events source ON source.company_id=e.company_id AND source.event_id=e.reverses_event_id
+    WHERE e.company_id=? AND ((e.event_type='DEDUCTION' AND e.period_id=?)
+      OR (e.event_type='REVERSAL' AND source.period_id=?))`).all(companyId, periodId, periodId);
+  const stajByWorker = new Map();
+  for (const event of stajDebtEvents) {
+    const signed = event.event_type === 'REVERSAL' ? -toMinorUnits(event.reversed_amount) : toMinorUnits(event.amount);
+    stajByWorker.set(Number(event.worker_id), (stajByWorker.get(Number(event.worker_id)) || 0n) + signed);
+  }
+  for (const [worker_id,total] of stajByWorker) acceptedDeductions.push({ worker_id, type: 'STAJ_DEBT', total: fromMinorUnits(total) });
   for (const row of pendingTickets) {
     uncertain(row.worker_id, 'LOCAL_MUTATION_PENDING', true);
   }
@@ -258,7 +270,8 @@ function loadPayrollValuationFromSqlite(db, companyId, periodId, options = {}) {
   if (options.closingArchive && typeof options.closingArchive === 'object') closingArchive = options.closingArchive;
   // One row per immutable entry/adjustment. Do not add the optimistic aggregate again.
   // LOCAL provenance survives server ACK/feed: it describes origin, not eligibility.
-  const result = reducePayroll(period, workers, facts, adjustments, acceptedDeductions, { currentModels, closingArchive });
+  const result = reducePayroll(period, workers, facts, adjustments, acceptedDeductions, { currentModels, closingArchive,
+    stajDebtLedgerVersion: closingArchive?.stajDebtLedgerVersion || 0 });
   // A coherent snapshot plus fully applied terminal feed page proves only an
   // as-of server head, never instantaneous global freshness.
   if (!feedVerified) result.accountingReasons.push('SYNC_FRESHNESS_UNVERIFIED');

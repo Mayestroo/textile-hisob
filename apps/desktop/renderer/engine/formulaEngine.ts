@@ -190,7 +190,8 @@ export function calculateMasterPayroll(models: ModelConfig[], workers: Worker[])
       return Number.isFinite(num) ? Math.max(0, num) : 0;
     };
 
-    const staj = safeNumber(worker.staj);
+    // Static legacy roster values are not verified debt allocations.
+    const staj = 0;
     const avans = safeNumber(worker.avans);
     const jarima = safeNumber(worker.jarima);
     const sofFoyda = workerUmumiy - avans - staj - jarima;

@@ -13,6 +13,8 @@ const { isAllowedGrandfatheredPair } = require('../../../../../packages/domain/p
 const { findAvailablePattaStart } = require('../../../../../packages/domain/pattaSequence.cjs');
 const { executeWorkbookOperation, appendChange } = require('../workbookOperations.cjs');
 const { acquireCompanyChangeLock } = require('../changeFeedWatermark.cjs');
+const { assertOperationAllowedUnderPurgeFence } = require('../historicalPurgeFence.cjs');
+const { executeStajDebtCommand } = require('../stajDebtOperations.cjs');
 
 function dateOnly(value) {
   return value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
@@ -224,16 +226,11 @@ async function processSingleOperation(pool, req, op, options = {}) {
       );
     }
 
-    // Validate the command before deduplication and before the command switch.
-    // This keeps replay requests behind the same authority and shape checks.
-    const validatedPayload = validateCommandPayload(commandType, parsedPayload, {
-      companyId,
-      operation: envelope,
-      baseRevision,
-      auth: req.auth
-    });
-
-    // 3. Operations Deduplication & Distributed Idempotency Check
+    // Resolve accepted receipts before applying today's business validation.
+    // A retry cannot mutate facts, and it must return the persisted acceptance
+    // result even if current rules would route a brand-new command to review.
+    // Envelope/company and canonical payload-hash checks above still bind the
+    // receipt to the authenticated tenant and exact original payload.
     const dedupRes = await client.query(
       `SELECT company_id, operation_id, command_type, entity_type, entity_id,
               payload_hash, result_json, server_revision, accepted_at
@@ -273,6 +270,41 @@ async function processSingleOperation(pool, req, op, options = {}) {
       }
     }
 
+    // STAJ writes stay fail-closed until an owner-approved evidence and verifier
+    // workflow exists. A reference/hash/note supplied by the submitting client
+    // is not proof that a debt was verified. Exact receipts accepted before a
+    // future policy change remain replayable above; no new STAJ write can be
+    // accepted through the generic workbook outbox in the meantime.
+    if (['RegisterStajDebt', 'AllocateStajDebt', 'ReverseStajDebtAllocation'].includes(commandType)) {
+      throw createOpError('STAJ_DEBT_OPERATIONS_DISABLED',
+        'STAJ debt writes require an approved evidence-verification workflow and are currently disabled');
+    }
+
+    // Accepted receipts take precedence over cancellation state. The shared
+    // company/operation lock ensures cancellation cannot race a first accept:
+    // whichever transaction commits first determines the authoritative result.
+    const cancellationFence = await client.query(`SELECT original_payload_hash FROM allocation_resolution_fences
+      WHERE company_id = $1 AND original_operation_id = $2 FOR UPDATE`, [companyId, operationId]);
+    if (cancellationFence.rows.length) {
+      const fence = cancellationFence.rows[0];
+      const result = fence.original_payload_hash === serverHash
+        ? { operationId, status: 'REJECTED', payloadHash: serverHash, error: { code: 'ALLOCATION_CANCELLED', message: 'Allocation was authoritatively cancelled' } }
+        : { operationId, status: 'REJECTED', payloadHash: serverHash, error: { code: 'ALLOCATION_CANCELLED_IDENTITY_MISMATCH', message: 'Operation id is fenced by a different immutable payload' } };
+      await client.query('COMMIT');
+      transactionStarted = false;
+      return result;
+    }
+
+    // 3. New operations must satisfy current payload, purge-generation and
+    // business validation. Rejections retain the client's immutable outbox row.
+    const validatedPayload = validateCommandPayload(commandType, parsedPayload, {
+      companyId,
+      operation: envelope,
+      baseRevision,
+      auth: req.auth
+    });
+    await assertOperationAllowedUnderPurgeFence(client, companyId, req, envelope, validatedPayload);
+
     // 4. Authoritative Command Execution & CAS Validation
     let mutationResult = null;
     if (commandType === 'SubmitTicket') {
@@ -289,6 +321,8 @@ async function processSingleOperation(pool, req, op, options = {}) {
       mutationResult = await executeCloseParty(client, companyId, operationId, validatedPayload, serverCanonical);
     } else if (commandType === 'ResolveMigrationReconciliationCandidate') {
       mutationResult = await executeResolveCandidate(client, companyId, operationId, validatedPayload, serverCanonical, req);
+    } else if (['RegisterStajDebt', 'AllocateStajDebt', 'ReverseStajDebtAllocation'].includes(commandType)) {
+      mutationResult = await executeStajDebtCommand(client, companyId, operationId, commandType, validatedPayload, req);
     } else if ([
       'UpsertModel', 'DeactivateModel', 'UpsertWorker', 'DeactivateWorker', 'ActivateWorker',
        'CreatePeriod', 'UpdatePeriod', 'ClosePeriod', 'UpdateParty', 'ArchivePartyHistory',
@@ -375,8 +409,21 @@ async function processSingleOperation(pool, req, op, options = {}) {
     if (discardClient) throw err;
 
     const code = err.code || 'OPERATION_FAILED';
-    const isConflict = code === 'IDEMPOTENCY_CONFLICT' || code === 'REVISION_CONFLICT';
+    const isConflict = code === 'IDEMPOTENCY_CONFLICT' || code === 'REVISION_CONFLICT' || code === 'ALLOCATION_REVIEW_REQUIRED';
     const status = isConflict ? 'CONFLICT' : 'REJECTED';
+
+    // Preserve server-authenticated immutable identity for a later authorized
+    // cancellation. Do not let a reviewer manufacture an operation/hash pair.
+    if (code === 'ALLOCATION_REVIEW_REQUIRED' && client && envelope) {
+      const canonical = canonicalStringify(envelope.payload);
+      await client.query(`INSERT INTO allocation_review_candidates
+        (company_id,original_operation_id,command_type,entity_type,entity_id,original_payload_hash,
+         original_payload_json,review_code,review_reason)
+        VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,'ALLOCATION_REVIEW_REQUIRED',$8)
+        ON CONFLICT (company_id,original_operation_id) DO NOTHING`,
+      [envelope.companyId, envelope.operationId, envelope.commandType, envelope.entityType, envelope.entityId,
+        computePayloadHash(canonical), canonical, err.message]);
+    }
 
     return {
       operationId: envelope?.operationId || (typeof op?.operationId === 'string' && op.operationId.trim() ? op.operationId.trim() : 'unknown'),
@@ -402,16 +449,33 @@ function resolveTicketValidationMode(payload = {}, companyPolicy = null) {
   };
 }
 
+async function assertCanonicalTicketIssuance(client, companyId, ticket, commandType) {
+  if (!ticket.party_record_id) {
+    throw createOpError('ALLOCATION_REVIEW_REQUIRED', `${commandType} has no canonical printed-party link; preserve this operation for reconciliation instead of applying it`);
+  }
+  const result = await client.query(`SELECT ish_soni_per_patta
+    FROM parties WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, ticket.party_record_id]);
+  const issued = Number(result.rows[0]?.ish_soni_per_patta);
+  if (!Number.isSafeInteger(issued) || issued <= 0) {
+    throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'The printed party has no trustworthy per-patta issuance quantity; preserve this operation for review');
+  }
+  if (Number(ticket.qty) !== issued) {
+    throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'Ticket quantity does not match authoritative issuance; preserve this operation for correction and review');
+  }
+  return issued;
+}
+
 async function executeUpdateTicket(client, companyId, operationId, payload) {
   const ticketId = payload.ticketId;
   await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':ticket:' || $2))`, [companyId, ticketId]);
-  const ticketResult = await client.query(`SELECT id, model_id, qty, status, is_closed, server_revision
+  const ticketResult = await client.query(`SELECT id, model_id, qty, status, is_closed, server_revision, party_record_id, party_number, patta_number
     FROM tickets WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, ticketId]);
   const ticket = ticketResult.rows[0];
   if (!ticket) throw createOpError('TICKET_NOT_FOUND', `Ticket "${ticketId}" was not found`);
   if (ticket.status === 'VOIDED' || ticket.is_closed) {
     throw createOpError('TICKET_NOT_EDITABLE', 'Deleted or closed-period tickets cannot be edited');
   }
+  await assertCanonicalTicketIssuance(client, companyId, ticket, 'UpdateTicket');
   if (Number(ticket.server_revision || 0) !== payload.baseRevision) {
     throw createOpError('REVISION_CONFLICT', `Ticket revision conflict; current revision is ${ticket.server_revision}`);
   }
@@ -435,7 +499,7 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
 
   // Lock the existing work before replacing rows. A model's current tariff is not
   // evidence of the rate at which this ticket's work was originally recorded.
-  const oldResult = await client.query(`SELECT id, op_name, worker_id, rate_snapshot, brak FROM ticket_entries
+  const oldResult = await client.query(`SELECT id, op_name, worker_id, rate_snapshot, brak, qty FROM ticket_entries
     WHERE company_id = $1 AND ticket_id = $2 FOR UPDATE`, [companyId, ticketId]);
   const oldById = new Map(oldResult.rows.map((row) => [row.id, row]));
   // Older desktop versions persisted a different deterministic ID for their own
@@ -455,9 +519,14 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
     oldByName.set(row.op_name, list);
   }
   const claimedIds = new Set();
+  const inputCountsByOperation = new Map();
+  for (const entry of payload.entries) {
+    inputCountsByOperation.set(entry.opName, (inputCountsByOperation.get(entry.opName) || 0) + 1);
+  }
   const resolvedEntries = payload.entries.map((entry) => {
     const candidates = oldByName.get(entry.opName) || [];
-    const original = entry.entryId ? oldById.get(entry.entryId) : candidates.length === 1 ? candidates[0] : null;
+    const original = entry.entryId ? oldById.get(entry.entryId)
+      : candidates.length === 1 && inputCountsByOperation.get(entry.opName) === 1 ? candidates[0] : null;
     if ((entry.entryId && (!original || original.op_name !== entry.opName)) ||
         (!entry.entryId && candidates.length > 1) || (original && claimedIds.has(original.id))) {
       throw createOpError('AMBIGUOUS_TICKET_ENTRY', `Cannot identify original work for operation "${entry.opName}"`);
@@ -479,6 +548,8 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
   const serverRevision = Number(ticket.server_revision || 0) + 1;
   const committedAt = new Date().toISOString();
   const reservedIds = new Set(oldById.keys());
+  const editQtyByOperation = new Map();
+  const editIdentities = new Set();
   const entries = resolvedEntries.map(({ entry, original }, index) => ({
     entryId: original?.id || (() => {
       let candidate = index + 1;
@@ -492,8 +563,19 @@ async function executeUpdateTicket(client, companyId, operationId, payload) {
     workerNameSnapshot: workers.get(Number(entry.workerId)).name,
     rateSnapshot: original?.rate_snapshot == null ? null : Number(original.rate_snapshot),
     brak: original?.brak ?? null,
-    qty: Number(ticket.qty)
+    qty: entry.qty ?? Number(original?.qty ?? ticket.qty)
   }));
+  for (const entry of entries) {
+    if (!Number.isSafeInteger(entry.qty) || entry.qty <= 0) {
+      throw createOpError('INVALID_ALLOCATION_QTY', 'Worker allocation quantity must be a positive whole number');
+    }
+    const identity = JSON.stringify([entry.opName, entry.workerId]);
+    if (editIdentities.has(identity)) throw createOpError('DUPLICATE_WORK_ALLOCATION', 'The same worker-operation allocation was submitted more than once');
+    editIdentities.add(identity);
+    const total = (editQtyByOperation.get(entry.opName) || 0) + entry.qty;
+    if (total > Number(ticket.qty)) throw createOpError('PATTA_OPERATION_OVERALLOCATED', 'Operation allocations cannot exceed the issued patta quantity');
+    editQtyByOperation.set(entry.opName, total);
+  }
   await client.query(`DELETE FROM ticket_entries WHERE company_id = $1 AND ticket_id = $2`, [companyId, ticketId]);
   for (const entry of entries) {
     await client.query(`INSERT INTO ticket_entries (
@@ -602,6 +684,30 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
     }
   }
 
+  // A patta-operation can be split across workers. The issued quantity remains
+  // on the ticket; each entry stores only its worker's allocation. Retain the
+  // legacy default for old clients that submit one full-quantity entry.
+  const allocatedByOperation = new Map();
+  const allocationIdentities = new Set();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const allocatedQty = entry.qty == null ? Number(qty) : Number(entry.qty);
+    if (!Number.isSafeInteger(allocatedQty) || allocatedQty <= 0) {
+      throw createOpError('INVALID_ALLOCATION_QTY', `entries[${index}].qty must be a positive whole-number allocation`);
+    }
+    const identity = JSON.stringify([String(entry.opName), String(entry.workerId)]);
+    if (allocationIdentities.has(identity)) {
+      throw createOpError('DUPLICATE_WORK_ALLOCATION', 'The same worker-operation allocation was submitted more than once');
+    }
+    allocationIdentities.add(identity);
+    const total = (allocatedByOperation.get(entry.opName) || 0) + allocatedQty;
+    if (total > Number(qty)) {
+      throw createOpError('PATTA_OPERATION_OVERALLOCATED', 'Operation allocations cannot exceed the issued patta quantity');
+    }
+    allocatedByOperation.set(entry.opName, total);
+    entry.qty = allocatedQty;
+  }
+
   const workerIds = [...new Set(entries.map((entry) => entry.workerId))];
   for (const workerId of workerIds) {
     const workerRes = await client.query(
@@ -616,12 +722,12 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
 
   if (partyRecordId) {
     const partyRes = await client.query(
-      `SELECT p.id, p.party_number, p.model_id, p.patta_count,
+      `SELECT p.id, p.party_number, p.model_id, p.patta_count, p.ish_soni_per_patta,
         COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,
         COALESCE(p.patta_end_number, r.patta_end_number) AS patta_end_number
        FROM parties p
        LEFT JOIN protected_party_patta_ranges r ON r.company_id = p.company_id AND r.party_record_id = p.id
-       WHERE p.company_id = $1 AND p.id = $2`, [companyId, partyRecordId]
+       WHERE p.company_id = $1 AND p.id = $2 FOR UPDATE OF p`, [companyId, partyRecordId]
     );
     if (partyRes.rows.length === 0) {
       throw createOpError('PARTY_NOT_FOUND', `Party "${partyRecordId}" not found for company "${companyId}"`);
@@ -633,15 +739,34 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
     if (party.party_number !== partyNumber || canonicalPartyModelId !== modelId) {
       throw createOpError('PARTY_IDENTITY_MISMATCH', 'Ticket party identity does not match its printed party record');
     }
+    // Explicit worker allocations are accepted only against persisted issuance
+    // evidence. The ticket's client-provided qty is a claim, not its authority.
+    const issuedQty = Number(party.ish_soni_per_patta);
+    if (!Number.isSafeInteger(issuedQty) || issuedQty <= 0) {
+      throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'This printed party has no reliable per-patta issued quantity; preserve this operation for review');
+    }
+    if (Number(qty) !== issuedQty) {
+      throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'Ticket quantity does not match authoritative issuance; preserve this operation for correction and review');
+    }
     if (party.patta_start_number !== null && party.patta_end_number !== null
       && (Number(pattaNumber) < Number(party.patta_start_number) || Number(pattaNumber) > Number(party.patta_end_number))) {
       throw createOpError('PATTA_NUMBER_OUT_OF_RANGE', 'Ticket patta number is outside the assigned party-series range');
     }
+  } else {
+    throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'This ticket has no canonical printed-party link; preserve it for reconciliation instead of applying it');
   }
 
   const serverRevision = 1;
   const now = submittedAt || new Date().toISOString();
   const periodId = await resolveTicketPeriodForDate(client, companyId, effectiveDate, payload.periodId || null);
+  // New allocation-aware clients must carry verifiable accounting-period
+  // evidence. Keep the no-period fallback only for legacy payloads; never turn
+  // a newly entered ticket into an unattributed fact when period authority is
+  // unavailable.
+  if (!periodId && Number(payload.allocationVersion) >= 1) {
+    throw createOpError('ALLOCATION_REVIEW_REQUIRED',
+      'New ticket has no verifiable open accounting period; preserve this operation for review');
+  }
 
   // 3. Insert Authoritative Ticket Fact
   await client.query(
@@ -691,7 +816,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
           e.workerNameSnapshot || null,
           e.rateSnapshot !== undefined ? e.rateSnapshot : null,
           e.brak || null,
-          qty
+          e.qty
         ]
       );
     }

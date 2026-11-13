@@ -12,6 +12,7 @@ export interface TicketValidationResult {
     workerId: number;
     workerNameSnapshot?: string;
     rateSnapshot?: number;
+    qty?: number;
   }>;
   partyOwner?: PrintedPartyRecord;
 }
@@ -199,8 +200,19 @@ export function validateTicketForSubmission(
     workerId: number;
     workerNameSnapshot?: string;
     rateSnapshot?: number;
+    qty?: number;
   }> = [];
-  for (const [opName, wVal] of Object.entries(form.entries)) {
+  const identities = new Set<string>();
+  const totals = new Map<string, number>();
+  for (const [opName, rawValue] of Object.entries(form.entries)) {
+    const allocations = Array.isArray(rawValue)
+      ? rawValue
+      : rawValue !== '' && rawValue !== undefined && rawValue !== null
+        ? [{ workerId: rawValue, qty }]
+        : [];
+    for (const allocation of allocations) {
+      const wVal = typeof allocation === 'object' ? allocation.workerId : allocation;
+      const allocationQty = typeof allocation === 'object' ? Number(allocation.qty) : qty;
     if (wVal !== '' && wVal !== undefined && wVal !== null) {
       if (!model.operations.some((operation) => operation.name === opName)) {
         return {
@@ -228,14 +240,23 @@ export function validateTicketForSubmission(
           message: `Ishchi topilmadi (hisob varaqda)! Kodi: ${wId}`
         };
       }
+      if (!Number.isSafeInteger(allocationQty) || allocationQty <= 0) return { isValid: false, errorType: 'error', title: 'Noto‘g‘ri taqsimot', message: 'Har bir ishchi miqdori musbat butun son bo‘lishi kerak.' };
+      const identity = `${opName}\u0000${wId}`;
+      if (identities.has(identity)) return { isValid: false, errorType: 'error', title: 'Takroriy taqsimot', message: `«${opName}» operatsiyasida bir ishchini ikki marta kiritib bo‘lmaydi.` };
+      identities.add(identity);
+      const total = (totals.get(opName) || 0) + allocationQty;
+      if (total > qty) return { isValid: false, errorType: 'error', title: 'Miqdor oshib ketdi', message: `«${opName}» taqsimoti ${qty} donadan oshmasligi kerak.` };
+      totals.set(opName, total);
       const matchedOp = model.operations.find((operation) => operation.name === opName);
       filledEntries.push({
         opName,
         workerId: wId,
         workerNameSnapshot: matchedWorker.name,
         ...(typeof matchedOp?.rate === 'number' && Number.isFinite(matchedOp.rate)
-          ? { rateSnapshot: matchedOp.rate } : {})
+          ? { rateSnapshot: matchedOp.rate } : {}),
+        qty: allocationQty
       });
+    }
     }
   }
 

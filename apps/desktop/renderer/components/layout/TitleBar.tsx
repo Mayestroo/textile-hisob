@@ -103,6 +103,20 @@ export const TitleBar: React.FC = () => {
             <span className="titlebar-brand-subtitle">hisobot</span>
           </div>
         </div>
+        {isLicActive && licenseStatus?.companyName && (
+          <span
+            data-testid="active-company-name"
+            title={`Faol korxona: ${licenseStatus.companyName}`}
+            aria-label={`Faol korxona: ${licenseStatus.companyName}`}
+            style={{
+              maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              color: 'var(--text-muted)', fontSize: '12px', fontWeight: 650,
+              padding: '4px 9px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-full)'
+            }}
+          >
+            {licenseStatus.companyName}
+          </span>
+        )}
 
         {/* Period Pill */}
         <div className="titlebar-period-pill">

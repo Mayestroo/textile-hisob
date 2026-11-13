@@ -2,6 +2,11 @@
 
 const { validateCompanyScope } = require('../../../auth/auth.cjs');
 const { acquireCompanyBootstrapLock, releaseCompanyBootstrapLock } = require('../changeFeedWatermark.cjs');
+const {
+  formatPurgeEraMetadata,
+  parseOptionalPurgeGeneration,
+  assertChangeFeedAllowedUnderPurgeFence
+} = require('../historicalPurgeFence.cjs');
 
 /**
  * Creates change feed GET handler for Fastify.
@@ -54,10 +59,21 @@ function createChangeFeedHandler(pool) {
       }
     }
 
+    let clientPurgeGeneration = null;
+    try {
+      clientPurgeGeneration = parseOptionalPurgeGeneration(req.query?.purgeGeneration);
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        error: { code: error.code || 'INVALID_PURGE_GENERATION', message: error.message }
+      });
+    }
+
     const client = await pool.connect();
     let lockHeld = false;
     let transactionStarted = false;
     let discardClient = false;
+    let activePurgeEra = null;
     let res;
     let headCursor;
     let sequenceResult;
@@ -68,8 +84,34 @@ function createChangeFeedHandler(pool) {
       lockHeld = true;
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       transactionStarted = true;
-      const head = await client.query(`SELECT COALESCE(MAX(change_id), 0)::text AS cursor
+      const head = await client.query(`SELECT COALESCE(MAX(change_id), 0)::text AS cursor,
+        (SELECT row_to_json(era) FROM (
+          SELECT purge_id, company_id, purge_generation, cutoff_date::text AS cutoff_date,
+                 cutoff_utc, timezone, min_valid_cursor::text AS min_valid_cursor,
+                 manifest_sha256, baseline_purged, executed_at
+          FROM historical_purge_eras
+          WHERE company_id = $1 AND status = UPPER('committed')
+          ORDER BY purge_generation DESC
+          LIMIT 1
+        ) era) AS purge_era
         FROM change_log WHERE company_id = $1`, [companyId]);
+      activePurgeEra = formatPurgeEraMetadata(head.rows[0]?.purge_era || null);
+      const fenceResult = assertChangeFeedAllowedUnderPurgeFence(activePurgeEra, cursor, clientPurgeGeneration);
+      if (!fenceResult.allowed) {
+        await client.query('COMMIT');
+        transactionStarted = false;
+        return reply.code(409).send({
+          success: false,
+          error: {
+            code: fenceResult.code,
+            message: fenceResult.message,
+            purgeGeneration: activePurgeEra.purgeGeneration,
+            cutoffDate: activePurgeEra.cutoffDate,
+            cutoffUtc: activePurgeEra.cutoffUtc,
+            minValidCursor: activePurgeEra.minValidCursor
+          }
+        });
+      }
       headCursor = String(head.rows[0]?.cursor ?? '0');
       if (!/^\d{1,19}$/.test(headCursor) || BigInt(headCursor) > 9223372036854775807n)
         throw new Error('FEED_HEAD_INVALID');
@@ -131,6 +173,12 @@ function createChangeFeedHandler(pool) {
       companyId,
       feedProtocolVersion: 1,
       hasMore,
+      ...(activePurgeEra ? {
+        purgeGeneration: activePurgeEra.purgeGeneration,
+        purgeCutoffDate: activePurgeEra.cutoffDate,
+        purgeCutoffUtc: activePurgeEra.cutoffUtc,
+        minValidCursor: activePurgeEra.minValidCursor
+      } : {}),
       nextPattaNumber,
       // This capability is served only by releases whose ordered migration
       // set includes the VOIDED-ticket patta-key release.

@@ -29,7 +29,6 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
   const updateTicketField = useWorkbookStore((s) => s.updateTicketField);
-  const setTicketWorker = useWorkbookStore((s) => s.setTicketWorker);
   const clearTicketForm = useWorkbookStore((s) => s.clearTicketForm);
   const jonatish = useWorkbookStore((s) => s.jonatish);
   const addNotification = useWorkbookStore((s) => s.addNotification);
@@ -37,13 +36,18 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const syncNewOperation = useWorkbookStore((s) => s.syncNewOperation);
   const syncDeleteOperation = useWorkbookStore((s) => s.syncDeleteOperation);
   const reorderOperations = useWorkbookStore((s) => s.reorderOperations);
+  const openModal = useWorkbookStore((s) => s.openModal);
+  const selectedPattaTicket = useMemo(() => (submittedTickets || []).find((ticket) =>
+    ticket.modelId === model.id && String(ticket.partyNumber) === String(form.party).trim()
+    && Number(ticket.pattaNumber) === Number(form.patta)
+    && !['VOIDED', 'PENDING_DELETE'].includes(ticket.status || '')
+  ), [submittedTickets, model.id, form.party, form.patta]);
 
   const currentPartyStr = String(form.party || '1');
   const { isNonExistentParty, isWrongModelParty, hasBlockingError, errorBannerText } =
     getTicketPartyStatus(form, model, printedPartyHistory, submittedTickets, { strictParty, strictPatta });
 
   // Active operation row tracking for focus outline
-  const [activeOpIndex, setActiveOpIndex] = useState<number | null>(null);
 
   // Helper to parse printedAt into YYYY-MM-DD for date input
   const parseToIsoDate = (val: string | undefined): string | null => {
@@ -250,8 +254,13 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     }
   }, [isAddingInline]);
 
-  const handleWorkerIdChange = (opName: string, val: string) => {
-    setTicketWorker(model.id, opName, val);
+  const getOpAllocations = (opName: string): Array<{ workerId: string; qty: string }> => {
+    const entry = form.entries?.[opName];
+    if (Array.isArray(entry)) return entry.map((allocation) => ({ workerId: String(allocation.workerId ?? ''), qty: String(allocation.qty ?? '') }));
+    return entry !== undefined && entry !== null && entry !== '' ? [{ workerId: String(entry), qty: String(form.qty || '') }] : [{ workerId: '', qty: '' }];
+  };
+  const setOpAllocations = (opName: string, allocations: Array<{ workerId: string; qty: string }>) => {
+    updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: allocations });
   };
 
   const safeFocus = (el: HTMLInputElement | null) => {
@@ -325,35 +334,6 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       safeFocus(pattaInputRef.current);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIndex: number) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < model.pattaOpsOrder.length) {
-        const nextOp = model.pattaOpsOrder[nextIndex];
-        safeFocus(inputRefs.current[nextOp]);
-      } else {
-        submitTicketAndFocusKonveyer();
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < model.pattaOpsOrder.length) {
-        const nextOp = model.pattaOpsOrder[nextIndex];
-        safeFocus(inputRefs.current[nextOp]);
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevIndex = currentIndex - 1;
-      if (prevIndex >= 0) {
-        const prevOp = model.pattaOpsOrder[prevIndex];
-        safeFocus(inputRefs.current[prevOp]);
-      } else {
-        safeFocus(qtyInputRef.current);
-      }
     }
   };
 
@@ -434,10 +414,10 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const filledOpsCount = useMemo(() => {
     return model.pattaOpsOrder.filter((opName) => {
       const val = form.entries?.[opName];
-      const num = Number(val);
-      return val && num && workerMap.has(num);
+      const allocations = Array.isArray(val) ? val : val ? [{ workerId: val, qty: form.qty }] : [];
+      return allocations.some((entry) => workerMap.has(Number(entry.workerId)) && Number(entry.qty) > 0);
     }).length;
-  }, [model.pattaOpsOrder, form.entries, workerMap]);
+  }, [model.pattaOpsOrder, form.entries, form.qty, workerMap]);
 
   const progressPct = useMemo(() => {
     const total = model.pattaOpsOrder.length;
@@ -659,7 +639,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 <th className="patta-ops-th" style={{ textAlign: 'center' }}>Nº</th>
                 <th className="patta-ops-th" style={{ textAlign: 'left', paddingLeft: '12px' }}>OPERATSIYA</th>
                 <th className="patta-ops-th" style={{ textAlign: 'right', paddingRight: '18px' }}>NARX</th>
-                <th className="patta-ops-th" style={{ textAlign: 'center' }}>ISHCHI RAQAMI</th>
+               <th className="patta-ops-th" style={{ textAlign: 'center' }}>ISHCHI / DONA</th>
                 <th className="patta-ops-th" style={{ textAlign: 'left', paddingLeft: '14px' }}>ISHCHI</th>
                 <th className="patta-ops-th" style={{ width: '44px' }}></th>
               </tr>
@@ -667,12 +647,13 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
             <tbody>
               {model.pattaOpsOrder.map((opName, idx) => {
-                const rowNum = 7 + idx;
-                const workerIdVal = (form.entries && form.entries[opName] !== undefined && form.entries[opName] !== null) ? String(form.entries[opName]) : '';
+                const opAllocations = getOpAllocations(opName);
+                const workerIdVal = opAllocations[0]?.workerId || '';
                 const workerNum = Number(workerIdVal);
                 const workerName = workerNum && workerMap.has(workerNum) ? workerMap.get(workerNum) : '';
                 const isInvalidWorker = workerIdVal !== '' && (!workerNum || !workerMap.has(workerNum));
-                const isComplete = Boolean(workerIdVal && !isInvalidWorker);
+                const allocated = opAllocations.reduce((sum, allocation) => sum + (Number(allocation.qty) || 0), 0);
+                const isComplete = allocated === Number(form.qty) && allocated > 0;
                 const opConfig = model.operations.find((o) => o.name === opName);
                 const isBeingDragged = draggedOpIdx === idx;
                 const isOver = dragOverOpIdx === idx && draggedOpIdx !== null && draggedOpIdx !== idx;
@@ -731,31 +712,25 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
                     {/* Col 4: Ishchi Raqami Input */}
                     <td style={{ textAlign: 'center', padding: '3px 8px' }}>
-                      <input
-                        ref={(el) => { inputRefs.current[opName] = el; }}
-                        type="number"
-                        disabled={hasBlockingError}
-                        value={workerIdVal}
-                        onChange={(e) => handleWorkerIdChange(opName, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, idx)}
-                        onWheel={(e) => e.currentTarget.blur()}
-                        onFocus={() => {
-                          setActiveOpIndex(idx);
-                          handleCellFocus(`C${rowNum}`, workerIdVal);
-                        }}
-                        onBlur={() => {
-                          if (activeOpIndex === idx) {
-                            setActiveOpIndex(null);
-                          }
-                        }}
-                        className={isComplete ? "patta-worker-pill" : "patta-worker-input"}
-                        placeholder="Raqam"
-                      />
+                      {opAllocations.map((allocation, allocationIndex) => (
+                        <div key={`${opName}-${allocationIndex}`} style={{ display: 'flex', gap: 5, margin: '3px 0' }}>
+                          <select aria-label={`${opName} worker ${allocationIndex + 1}`} disabled={hasBlockingError} value={allocation.workerId} onChange={(e) => setOpAllocations(opName, opAllocations.map((item, i) => i === allocationIndex ? { ...item, workerId: e.target.value } : item))} className="patta-input" style={{ minWidth: 95 }}>
+                            <option value="">Ishchini tanlang</option>
+                            {workers.filter((worker) => worker.status !== 'INACTIVE').map((worker) => <option key={worker.id} value={worker.id}>{worker.id} — {worker.name}</option>)}
+                          </select>
+                          <input aria-label={`${opName} worker ${allocationIndex + 1} quantity`} type="number" min="1" max={form.qty || undefined} disabled={hasBlockingError} value={allocation.qty} onChange={(e) => setOpAllocations(opName, opAllocations.map((item, i) => i === allocationIndex ? { ...item, qty: e.target.value } : item))} className="patta-input" style={{ width: 74 }} placeholder="Dona" />
+                          {opAllocations.length > 1 && <button type="button" aria-label="Taqsimotni olib tashlash" onClick={() => setOpAllocations(opName, opAllocations.filter((_, i) => i !== allocationIndex))}><Trash2 size={13} /></button>}
+                        </div>
+                      ))}
+                      <div style={{ fontSize: 12, color: allocated > Number(form.qty) ? '#dc2626' : 'var(--text-muted)' }}>Ajratildi {allocated} · Qoldi {Math.max(0, Number(form.qty || 0) - allocated)}</div>
+                      <button type="button" disabled={hasBlockingError} className="soft-btn" onClick={() => setOpAllocations(opName, [...opAllocations, { workerId: '', qty: '' }])}><Plus size={12} /> Ishchi qo‘shish</button>
                     </td>
 
                     {/* Col 5: Ishchi Nomi */}
                     <td style={{ paddingLeft: '14px' }}>
-                      {workerName ? (
+                      {opAllocations.some((allocation) => Number(allocation.workerId) > 0) ? (
+                        <span className="patta-worker-name">{opAllocations.filter((allocation) => Number(allocation.workerId) > 0).map((allocation) => workerMap.get(Number(allocation.workerId)) || `#${allocation.workerId}`).join(', ')}</span>
+                      ) : workerName ? (
                         <span className="patta-worker-name">{workerName}</span>
                       ) : isInvalidWorker ? (
                         <span style={{ fontSize: '14.5px', color: '#dc2626', fontStyle: 'italic' }}>
@@ -857,6 +832,21 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         </div>
 
         {/* Footer */}
+        {selectedPattaTicket && (
+          <section aria-label="Patta operatsiya taqsimotlari" style={{ margin: '12px 20px', padding: 14, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <strong>Saqlangan patta taqsimotlari</strong>
+                <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>Partiya {selectedPattaTicket.partyNumber} · Patta #{selectedPattaTicket.pattaNumber} · Berilgan: {selectedPattaTicket.qty} dona</div>
+                {(selectedPattaTicket.entries || []).map((entry, index) => <div key={entry.entryId || `${entry.opName}-${entry.workerId}-${index}`} style={{ fontSize: 14, marginTop: 3 }}>{entry.opName}: {workerMap.get(entry.workerId) || `#${entry.workerId}`} — {entry.qty ?? selectedPattaTicket.qty} dona</div>)}
+                <div style={{ color: selectedPattaTicket.status === 'CONFLICT' ? '#dc2626' : 'var(--text-muted)', marginTop: 4 }}>Holat: {selectedPattaTicket.status === 'CONFLICT' ? 'Nizoli — tuzatish kerak' : selectedPattaTicket.status === 'CONFIRMED' ? 'Server tasdiqlagan' : 'Lokal saqlangan / sinxronlash kutilmoqda'}</div>
+              </div>
+              <button type="button" className="patta-btn-submit" disabled={Boolean(currentPeriod?.isClosed)} onClick={() => openModal({ type: 'edit_ticket', data: selectedPattaTicket })}>
+                Taqsimotni boshqarish
+              </button>
+            </div>
+          </section>
+        )}
         <div className="patta-entry-footer">
           <div className="patta-footer-stats">
             <span>

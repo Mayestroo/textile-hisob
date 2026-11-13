@@ -66,6 +66,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   company_patta_sequences
 TO novda_app;
 
+-- Resolution evidence is append-only. Application code can read/insert but
+-- cannot mutate or delete fences and audit rows.
+GRANT SELECT, INSERT ON TABLE allocation_review_candidates TO novda_app;
+GRANT SELECT, INSERT ON TABLE allocation_resolution_fences, allocation_resolution_audit TO novda_app;
+GRANT SELECT, INSERT ON TABLE staj_debt_claims, staj_debt_events TO novda_app;
+
 GRANT SELECT ON TABLE schema_migrations TO novda_app;
 
 -- Bootstrap snapshots and canonical-ID resolution read these server-owned maps.
@@ -73,6 +79,13 @@ GRANT SELECT ON TABLE
   model_id_aliases,
   party_id_aliases,
   protected_party_patta_ranges
+TO novda_app;
+
+-- Sync push/pull/bootstrap and purge fences read historical purge eras and tombstones.
+GRANT SELECT ON TABLE
+  historical_purge_eras,
+  purged_entity_tombstones,
+  purged_operation_tombstones
 TO novda_app;
 
 -- 5. Grant sequence usage for auto-incrementing change_log

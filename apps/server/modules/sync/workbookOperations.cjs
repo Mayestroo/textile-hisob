@@ -310,6 +310,7 @@ async function readPeriodArchiveSource(client, companyId, period) {
   };
   return {
     period: periodData,
+    stajDebtLedgerVersion: 1,
     archivedAt: new Date().toISOString(),
     models: models.rows.map((row) => ({
       id: row.id, name: row.name, hisobSheetName: row.hisob_sheet_name, title: row.title, party: row.party,
@@ -455,6 +456,13 @@ async function executeUpdateParty(client, companyId, operationId, payload, canon
   if (!current) throw workbookError('PARTY_NOT_FOUND', `Party "${partyRecordId}" was not found`);
   if (current.status === 'CLOSED') throw workbookError('PARTY_ALREADY_CLOSED', 'Closed parties cannot be updated');
   if (Number(current.patta_count) !== Number(payload.pattaCount)) throw workbookError('IMMUTABLE_PATTA_RANGE', 'An existing printed party cannot change its patta count');
+  const currentIssuedQty = current.ish_soni_per_patta;
+  const requestedIssuedQty = payload.ishSoniPerPatta;
+  const issuanceChanged = currentIssuedQty == null
+    ? requestedIssuedQty != null
+    : Number(currentIssuedQty) !== Number(requestedIssuedQty);
+  if (issuanceChanged) throw workbookError('ISSUED_PATTA_QUANTITY_IMMUTABLE',
+    'Per-patta issued quantity is fixed when the party issuance is accepted and cannot be changed through UpdateParty');
   const modelAlias = await client.query(`SELECT canonical_model_id FROM model_id_aliases
     WHERE company_id = $1 AND legacy_model_id = $2`, [companyId, current.model_id]);
   const canonicalCurrentModelId = modelAlias.rows[0]?.canonical_model_id || current.model_id;

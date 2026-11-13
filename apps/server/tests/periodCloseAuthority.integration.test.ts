@@ -4,6 +4,7 @@ import { provisionDevice } from '../auth/deviceProvisioning.cjs';
 import { provisionOperator } from '../auth/operatorAuth.cjs';
 import { closeServerPool, getServerPool, resetServerDatabase } from '../infrastructure/db.cjs';
 import { canonicalStringify, computePayloadHash } from '../modules/sync/canonicalPayload.cjs';
+import { processSingleOperation } from '../modules/sync/handlers/operations.cjs';
 
 describe('authoritative period-close enforcement', () => {
   const companyId = 'period-close-authority';
@@ -39,7 +40,9 @@ describe('authoritative period-close enforcement', () => {
     operatorToken = JSON.parse(login.payload).session.token;
     await pool.query(`INSERT INTO models (id, company_id, name, operations_json) VALUES ('model-period', $1, 'Period Model', '[{"name":"Bichish"}]')`, [companyId]);
     await pool.query(`INSERT INTO workers (id, company_id, name) VALUES (1, $1, 'Period Worker')`, [companyId]);
-    await pool.query(`INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status) VALUES ('party-period', $1, '1', '1', 'model-period', 'ACTIVE')`, [companyId]);
+    await pool.query(`INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, patta_count,
+      patta_start_number, patta_end_number, ish_soni_per_patta, status)
+      VALUES ('party-period', $1, '1', '1', 'model-period', 999, 1, 999, 1, 'ACTIVE')`, [companyId]);
     await pool.query(`INSERT INTO periods (id, company_id, start_date, end_date, is_closed) VALUES ('august-closed', $1, '2026-08-01', '2026-08-31', 1)`, [companyId]);
   });
 
@@ -95,7 +98,7 @@ describe('authoritative period-close enforcement', () => {
     for (const [ticketId, operationId, effectiveDate, status] of cases) {
       const payload = ticket(ticketId, operationId, effectiveDate);
       const result = JSON.parse((await send(descriptor('SubmitTicket', operationId, ticketId, payload))).payload).results[0];
-      expect(result.status).toBe(status);
+      expect(result.status, JSON.stringify(result)).toBe(status);
       if (status === 'REJECTED') expect(result.error.code).toBe('PERIOD_CLOSED');
     }
 
@@ -106,6 +109,18 @@ describe('authoritative period-close enforcement', () => {
     const fallbackPayload = ticket('00000000-0000-4000-8000-000000000406', 'op-period-submitted', undefined, '2026-09-01T00:00:00.000Z');
     const fallbackResult = JSON.parse((await send(descriptor('SubmitTicket', 'op-period-submitted', fallbackPayload.ticketId, fallbackPayload))).payload).results[0];
     expect(fallbackResult.status).toBe('APPLIED');
+  });
+
+  it('keeps a new allocation-aware ticket unresolved when no verifiable open period exists', async () => {
+    await pool.query('DELETE FROM periods WHERE company_id=$1', [companyId]);
+    const payload = { ...ticket('00000000-0000-4000-8000-000000000407', 'op-period-missing', '2026-11-12'), allocationVersion: 1 };
+    const result = await processSingleOperation(pool, { auth: { companyId, deviceId } },
+      descriptor('SubmitTicket', payload.operationId, payload.ticketId, payload));
+    expect(result).toMatchObject({ status: 'CONFLICT', error: { code: 'ALLOCATION_REVIEW_REQUIRED' } });
+    expect(await pool.query('SELECT COUNT(*)::int n FROM tickets WHERE company_id=$1 AND id=$2',
+      [companyId, payload.ticketId]).then((r: any) => r.rows[0].n)).toBe(0);
+    expect(await pool.query('SELECT original_payload_json FROM allocation_review_candidates WHERE company_id=$1 AND original_operation_id=$2',
+      [companyId, payload.operationId]).then((r: any) => r.rows[0]?.original_payload_json?.allocationVersion)).toBe(1);
   });
 
   it('enforces period close for production adjustments and reversals', async () => {

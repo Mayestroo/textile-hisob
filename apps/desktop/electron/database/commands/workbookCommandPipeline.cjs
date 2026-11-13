@@ -9,6 +9,7 @@ const { canonicalStringify, computePayloadHash } = require('../core/canonicalPay
 const { validateCausalOrdering } = require('./commandPipeline.cjs');
 const { findAvailablePattaStart } = require('../../../../../packages/domain/pattaSequence.cjs');
 const { finishScopeHash } = require('../../../../../packages/domain/pattaFinishScope.cjs');
+const { toMinorUnits, fromMinorUnits } = require('../../../../../packages/domain/stajDebtLedger.cjs');
 
 const LIFECYCLE_AUTHORITY_FIELDS = ['endedAt', 'endedOperationId', 'monthClosedPeriodId', 'closeOperationId',
   'ended_at', 'ended_operation_id', 'month_closed_period_id', 'close_operation_id'];
@@ -30,7 +31,10 @@ const COMMAND_ENTITY_TYPES = Object.freeze({
   CompletePattaBatch: 'patta_batch',
   CompletePartySeries: 'party_series',
   UpdateTicket: 'ticket',
-  DeleteTicket: 'ticket'
+  DeleteTicket: 'ticket',
+  RegisterStajDebt: 'staj_debt',
+  AllocateStajDebt: 'staj_debt',
+  ReverseStajDebtAllocation: 'staj_debt'
 });
 
 function createCommandError(code, message, details = {}) {
@@ -509,6 +513,28 @@ function normalizeCommand(command, activeCompanyId) {
       periodId,
       endDate: assertCalendarDate(command.payload?.endDate || new Date().toISOString().slice(0, 10), 'endDate')
     };
+  } else if (['RegisterStajDebt','AllocateStajDebt','ReverseStajDebtAllocation'].includes(commandType)) {
+    const debtId = assertEntityKey(command.payload?.debtId ?? entityId, 'debtId');
+    if (debtId !== entityId) throw createCommandError('ENTITY_ID_MISMATCH', 'debtId does not match entityId');
+    payload = { commandId, operationId, companyId, debtId };
+    if (commandType === 'RegisterStajDebt') {
+      const workerId = Number(command.payload?.workerId);
+      if (!Number.isSafeInteger(workerId) || workerId <= 0) throw createCommandError('INVALID_WORKER_ID', 'workerId must be positive');
+      let amount;
+      try { amount = fromMinorUnits(toMinorUnits(command.payload?.amount)); }
+      catch { throw createCommandError('INVALID_STAJ_DEBT_AMOUNT', 'amount must be exact decimal money'); }
+      if (toMinorUnits(amount) <= 0n) throw createCommandError('INVALID_STAJ_DEBT_AMOUNT', 'amount must be positive');
+      const evidenceSha256 = assertText(command.payload?.evidenceSha256, 'evidenceSha256', 64);
+      if (!/^[0-9a-f]{64}$/.test(evidenceSha256)) throw createCommandError('INVALID_STAJ_EVIDENCE_HASH', 'evidenceSha256 must be lowercase SHA-256 hex');
+      Object.assign(payload, { workerId, amount,
+        evidenceReference: assertText(command.payload?.evidenceReference, 'evidenceReference', 1024),
+        evidenceSha256, verificationNote: assertText(command.payload?.verificationNote, 'verificationNote', 1000) });
+    } else if (commandType === 'AllocateStajDebt') {
+      payload.periodId = assertEntityKey(command.payload?.periodId, 'periodId');
+    } else {
+      payload.deductionEventId = assertEntityKey(command.payload?.deductionEventId, 'deductionEventId');
+      payload.reason = assertText(command.payload?.reason, 'reason', 1000);
+    }
   } else if (commandType === 'DeleteTicket') {
     const ticketId = assertEntityKey(command.payload?.ticketId ?? entityId, 'ticketId');
     if (ticketId !== entityId) throw createCommandError('ENTITY_ID_MISMATCH', 'ticketId does not match entityId');
@@ -534,6 +560,7 @@ function normalizeCommand(command, activeCompanyId) {
         return {
           opName: assertText(entry.opName, `entries[${index}].opName`, 256),
           workerId,
+          ...(entry.qty === undefined || entry.qty === null ? {} : { qty: assertFiniteNumber(entry.qty, `entries[${index}].qty`) }),
           ...(entry.entryId ? { entryId: assertEntityKey(entry.entryId, `entries[${index}].entryId`) } : {}),
           ...(entry.workerNameSnapshot ? { workerNameSnapshot: assertText(entry.workerNameSnapshot, `entries[${index}].workerNameSnapshot`, 256) } : {}),
           ...(entry.rateSnapshot === undefined || entry.rateSnapshot === null ? {} : { rateSnapshot: assertFiniteNumber(entry.rateSnapshot, `entries[${index}].rateSnapshot`) }),
@@ -831,6 +858,7 @@ function executeDeactivateEntity(db, normalized, table, idColumn, status) {
 
 function executeWorkbookMutation(db, normalized, options) {
   const { commandType, companyId, entityId, payload } = normalized;
+  if (['RegisterStajDebt','AllocateStajDebt','ReverseStajDebtAllocation'].includes(commandType)) return 0;
   if (commandType === 'UpdateTicket') {
     const current = db.prepare(`SELECT status, is_closed, qty, server_revision
       FROM tickets WHERE company_id = ? AND id = ?`).get(companyId, entityId);
@@ -861,9 +889,14 @@ function executeWorkbookMutation(db, normalized, options) {
     }
     const claimedIds = new Set();
     const reservedIds = new Set(oldById.keys());
+    const inputCountsByOperation = new Map();
+    for (const entry of payload.entries) {
+      inputCountsByOperation.set(entry.opName, (inputCountsByOperation.get(entry.opName) || 0) + 1);
+    }
     const resolved = payload.entries.map((entry, index) => {
       const candidates = oldByName.get(entry.opName) || [];
-      const original = entry.entryId ? oldById.get(entry.entryId) : candidates.length === 1 ? candidates[0] : null;
+      const original = entry.entryId ? oldById.get(entry.entryId)
+        : candidates.length === 1 && inputCountsByOperation.get(entry.opName) === 1 ? candidates[0] : null;
       if ((entry.entryId && (!original || original.op_name !== entry.opName)) ||
           (!entry.entryId && candidates.length > 1) || (original && claimedIds.has(original.id))) {
         throw createCommandError('AMBIGUOUS_TICKET_ENTRY', `Cannot identify original work for operation "${entry.opName}"`);
@@ -878,8 +911,19 @@ function executeWorkbookMutation(db, normalized, options) {
         entryId = `${entityId}_edit_${normalized.operationId}_entry_${candidate}`;
         reservedIds.add(entryId);
       }
-      return { ...entry, entryId, rateSnapshot: original?.rate_snapshot == null ? null : Number(original.rate_snapshot), brak: original?.brak ?? null };
+      return { ...entry, entryId, qty: entry.qty ?? Number(original?.qty ?? current.qty), rateSnapshot: original?.rate_snapshot == null ? null : Number(original.rate_snapshot), brak: original?.brak ?? null };
     });
+    const allocationTotals = new Map();
+    const allocationKeys = new Set();
+    for (const entry of resolved) {
+      if (!Number.isSafeInteger(entry.qty) || entry.qty <= 0) throw createCommandError('INVALID_ALLOCATION_QTY', 'Worker allocation quantity must be a positive whole number');
+      const key = JSON.stringify([entry.opName, String(entry.workerId)]);
+      if (allocationKeys.has(key)) throw createCommandError('DUPLICATE_WORK_ALLOCATION', 'The same worker-operation allocation was submitted more than once');
+      allocationKeys.add(key);
+      const total = (allocationTotals.get(entry.opName) || 0) + entry.qty;
+      if (total > Number(current.qty)) throw createCommandError('PATTA_OPERATION_OVERALLOCATED', 'Operation allocations cannot exceed the issued patta quantity');
+      allocationTotals.set(entry.opName, total);
+    }
     db.prepare('DELETE FROM ticket_entries WHERE company_id = ? AND ticket_id = ?').run(companyId, entityId);
     const insertEntry = db.prepare(`INSERT INTO ticket_entries (
       id, ticket_id, company_id, op_name, worker_id, worker_name_snapshot, rate_snapshot, brak, qty, created_at
@@ -895,7 +939,7 @@ function executeWorkbookMutation(db, normalized, options) {
         entry.workerNameSnapshot || null,
         entry.rateSnapshot ?? null,
         entry.brak,
-        current.qty,
+        entry.qty,
         now
       );
     });
@@ -1288,6 +1332,15 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
   const db = getCompanyDatabase(baseUserDataPath, normalized.companyId);
   const result = db.transaction(() => {
     const previous = getOperation(db, normalized.companyId, normalized.operationId);
+    if (!previous && normalized.commandType === 'UpdateTicket' && !normalized.dependsOnOperationId) {
+      const submit = db.prepare(`SELECT operation_id, status, causal_sequence FROM local_outbox
+        WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
+        ORDER BY rowid DESC LIMIT 1`).get(normalized.companyId, normalized.entityId);
+      if (submit) {
+        normalized.dependsOnOperationId = submit.operation_id;
+        normalized.causalSequence = Math.max(1, Number(submit.causal_sequence || 0) + 1);
+      }
+    }
     if (normalized.commandType === 'CompletePartySeries') {
       if (previous) {
         const saved = JSON.parse(previous.payload_json);

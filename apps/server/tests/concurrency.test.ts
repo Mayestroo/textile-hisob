@@ -27,7 +27,7 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
     await resetServerDatabase();
   });
 
-  async function seedParty(id: string, partyNumber: string, companyId = COMPANY) {
+  async function seedParty(id: string, partyNumber: string, companyId = COMPANY, issuedPerPatta = 10) {
     await pool.query(
       `INSERT INTO models (id, company_id, name, operations_json)
        VALUES ('m_1', $1, 'Concurrency Model', '[{"name":"Bichish"},{"name":"Tikish"}]')
@@ -41,9 +41,10 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
       [companyId]
     );
     await pool.query(
-      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status)
-       VALUES ($1, $2, $3, $3, 'm_1', 'ACTIVE')`,
-      [id, companyId, partyNumber]
+      `INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, patta_count,
+        patta_start_number, patta_end_number, ish_soni_per_patta, status)
+       VALUES ($1, $2, $3, $3, 'm_1', 1, 1, 1, $4, 'ACTIVE')`,
+      [id, companyId, partyNumber, issuedPerPatta]
     );
   }
 
@@ -141,7 +142,7 @@ describe('Authoritative Server Concurrency & Safety (Step 4)', () => {
   it('2. concurrent conflicting requests under same operationId produce one winner and IDEMPOTENCY_CONFLICT', async () => {
     const opId = 'op_concurrent_conflict_1';
     await seedParty('party-concurrent-a', '1');
-    await seedParty('party-concurrent-b', '2');
+    await seedParty('party-concurrent-b', '2', COMPANY, 20);
 
     const payloadA = {
       commandId: 'cmd_a',

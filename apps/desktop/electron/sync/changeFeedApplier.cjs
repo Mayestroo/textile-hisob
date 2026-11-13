@@ -137,6 +137,9 @@ function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
         applyWorkerChange(db, companyId, entityId, changeType, payload, item.entityRevision,
           item.operationId, item.changeId);
         appliedCount++;
+      } else if (entityType === 'staj_debt') {
+        applyStajDebtChange(db, companyId, payload, item.operationId, item.committedAt);
+        appliedCount++;
       } else if (entityType === 'period') {
         applyPeriodChange(db, companyId, entityId, changeType, payload, item.entityRevision);
         appliedCount++;
@@ -178,6 +181,35 @@ function applyChangesBatch(db, companyId, items, nextCursor, options = {}) {
     appliedCount,
     nextCursor: getLocalCursor(db)
   };
+}
+
+function applyStajDebtChange(db, companyId, payload, operationId, committedAt) {
+  const insertClaim = db.prepare(`INSERT OR IGNORE INTO staj_debt_claims(company_id,debt_id,worker_id,original_amount,
+    evidence_reference,evidence_sha256,verification_note,verified_by,registered_operation_id,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`);
+  const insertEvent = db.prepare(`INSERT OR IGNORE INTO staj_debt_events(company_id,event_id,debt_id,operation_id,event_type,
+    amount,period_id,reverses_event_id,actor_id,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`);
+  const addEvent = (eventId,eventType,amount,periodId,reversesEventId,actorId,reason) => {
+    if (!eventId || !amount || Number(amount) <= 0) return;
+    insertEvent.run(companyId,eventId,payload.debtId,operationId,eventType,String(amount),periodId || null,
+      reversesEventId || null,actorId || 'SERVER',reason || eventType,committedAt || new Date().toISOString());
+  };
+  if (payload.eventType === 'CLAIM_REGISTERED') {
+    insertClaim.run(companyId,payload.debtId,payload.workerId,String(payload.amount),payload.evidenceReference,
+      payload.evidenceSha256,payload.verificationNote,payload.verifiedBy,operationId,committedAt || new Date().toISOString());
+    return;
+  }
+  if (payload.eventType === 'DEDUCTION_ATTEMPT') {
+    addEvent(payload.deductionEventId,'DEDUCTION',payload.deductedAmount,payload.periodId,null,payload.actorId,'STAJ-001 one-time allocation');
+    addEvent(payload.reviewEventId,'DEFICIT_REVIEW',payload.deficit,null,null,payload.actorId,
+      'Unpaid debt remainder requires explicit manager review; no next-period auto-deduction');
+    return;
+  }
+  if (payload.eventType === 'DEDUCTION_REVERSED') {
+    addEvent(payload.reversalEventId,'REVERSAL',payload.amount,null,payload.deductionEventId,payload.actorId,payload.reason);
+    return;
+  }
+  throw new Error('UNKNOWN_STAJ_DEBT_CHANGE');
 }
 
 function applyTicketChange(db, companyId, ticketId, changeType, payload, entityRevision = 1) {

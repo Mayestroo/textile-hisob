@@ -1654,6 +1654,40 @@ const MIGRATIONS = [
         WHEN (NEW.ended_at IS NULL) != (NEW.ended_operation_id IS NULL)
         BEGIN SELECT RAISE(ABORT, 'INVALID_PARTY_FINISH_PAIR'); END;`);
     }
+  },
+  {
+    version: 26,
+    name: '026_allocation_resolution_intents',
+    up: (db) => db.exec(`CREATE TABLE IF NOT EXISTS allocation_resolution_intents (
+      resolution_operation_id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      original_operation_id TEXT NOT NULL,
+      original_payload_hash TEXT NOT NULL,
+      command_type TEXT NOT NULL,
+      original_payload_json TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      result_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(company_id, original_operation_id)
+    );`)
+  },
+  {
+    version: 27,
+    name: '027_staj_debt_ledger_replica',
+    up: (db) => db.exec(`CREATE TABLE IF NOT EXISTS staj_debt_claims (
+      company_id TEXT NOT NULL, debt_id TEXT NOT NULL, worker_id INTEGER NOT NULL,
+      original_amount TEXT NOT NULL, evidence_reference TEXT NOT NULL, evidence_sha256 TEXT NOT NULL,
+      verification_note TEXT NOT NULL, verified_by TEXT NOT NULL, registered_operation_id TEXT NOT NULL,
+      created_at TEXT NOT NULL, PRIMARY KEY(company_id,debt_id), UNIQUE(company_id,evidence_sha256));
+      CREATE TABLE IF NOT EXISTS staj_debt_events (
+      company_id TEXT NOT NULL, event_id TEXT NOT NULL, debt_id TEXT NOT NULL, operation_id TEXT NOT NULL,
+      event_type TEXT NOT NULL, amount TEXT NOT NULL, period_id TEXT, reverses_event_id TEXT,
+      actor_id TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL,
+      PRIMARY KEY(company_id,event_id), UNIQUE(company_id,operation_id,event_type));
+      CREATE INDEX IF NOT EXISTS idx_local_staj_debt_worker ON staj_debt_claims(company_id,worker_id);
+      CREATE INDEX IF NOT EXISTS idx_local_staj_debt_period ON staj_debt_events(company_id,period_id,event_type);`)
   }
 ];
 

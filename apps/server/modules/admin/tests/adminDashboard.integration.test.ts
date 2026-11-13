@@ -225,7 +225,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     expect(JSON.stringify(workers.json())).not.toContain('pin_hash');
     expect(payroll.statusCode).toBe(200);
     // The open period uses the current model rate (9) rather than the historical snapshot (5).
-    expect(payroll.json().payroll.workers[0]).toMatchObject({ gross: 90, avans: 4, jarima: 3, staj: 1, net: 82, pieces: 10 });
+    expect(payroll.json().payroll.workers[0]).toMatchObject({ gross: 90, avans: 4, jarima: 3, staj: 0, net: 83, pieces: 10 });
     expect(crossCompany.statusCode).toBe(403);
     expect(crossCompany.json().error.code).toBe('ADMIN_COMPANY_SCOPE_REQUIRED');
     expect(page.statusCode).toBe(200);

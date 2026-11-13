@@ -1,7 +1,8 @@
-function registerLicenseIpcHandlers({ ipcMain, app, license, rejectRendererCompanyAssignment, rejectRendererLicenseSettings }) {
+function registerLicenseIpcHandlers({ ipcMain, app, license, rejectRendererCompanyAssignment, rejectRendererLicenseSettings,
+  isolatedActivationOptions = () => ({}) }) {
   ipcMain.handle('license-status', async () => {
     try {
-      return await license.checkRemoteActivation(app.getPath('userData'));
+      return await license.checkRemoteActivation(app.getPath('userData'), isolatedActivationOptions());
     } catch (err) {
       return {
         isActivated: false,

@@ -114,7 +114,7 @@ describe('local period completion from active facts (isolated SQLite)', () => {
       if (sql.includes('FROM periods') && sql.includes('is_closed = 0')) return { rows: [{ id: 'period-b', start_date: '2026-10-01', end_date: null }] };
       if (sql.includes('FROM models WHERE')) return { rows: [{ id: 'model-a', status: 'ACTIVE', operations_json: [{ name: 'Sew', rate: 9 }] }] };
       if (sql.includes('FROM workers WHERE')) return { rows: [{ id: 1, status: 'ACTIVE' }] };
-      if (sql.includes('FROM parties p')) return { rows: [{ id: 'party-a', party_number: '1', model_id: 'model-a', patta_start_number: null, patta_end_number: null }] };
+       if (sql.includes('FROM parties p')) return { rows: [{ id: 'party-a', party_number: '1', model_id: 'model-a', ish_soni_per_patta: '10', patta_start_number: null, patta_end_number: null }] };
       if (sql.includes('INSERT INTO ticket_entries')) entryRates.push(args[6]);
       if (sql.includes('INSERT INTO change_log')) {
         authoritative = JSON.parse(args[4]);
