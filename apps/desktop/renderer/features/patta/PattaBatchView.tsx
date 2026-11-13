@@ -1,13 +1,13 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
-import { Printer, X, CheckCircle2, AlertCircle, Search } from 'lucide-react';
-import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
-import { ModelConfig } from '../../types/workbook';
+import { AlertCircle, CheckCircle2, Printer, Search, X } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { calculateBatchWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
-import { isDefaultPattaSize, isNumericPattaSize, PattaSizeSystem, sortPattaSizes, DEFAULT_NUMERIC_BATCH_SIZES } from '../../domain/pattaSizeSystem';
+import { DEFAULT_NUMERIC_BATCH_SIZES, isNumericPattaSize, PattaSizeSystem, sortPattaSizes } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { selectPartyDashboardRecords } from '../../store/selectors';
+import { DEFAULT_BATCH_SIZES, useWorkbookStore } from '../../store/workbookStore';
+import { ModelConfig } from '../../types/workbook';
+import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 
 export const PattaBatchView: React.FC = () => {
   const models = useWorkbookStore((s) => s.models);
@@ -25,7 +25,7 @@ export const PattaBatchView: React.FC = () => {
     try {
       const saved = localStorage.getItem('patta_size_system');
       if (saved === 'letters' || saved === 'numbers') return saved;
-    } catch {}
+    } catch { }
     return 'letters';
   });
 
@@ -33,7 +33,7 @@ export const PattaBatchView: React.FC = () => {
     setSizeSystem(sys);
     try {
       localStorage.setItem('patta_size_system', sys);
-    } catch {}
+    } catch { }
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'filled' | 'empty'>('all');
@@ -449,12 +449,12 @@ export const PattaBatchView: React.FC = () => {
               !canAttemptBatchPrint
                 ? 'Kamida bitta modelga razmer kiriting'
                 : invalidPattaSizeModels.length > 0
-                ? 'Razmer sonlarida xatolik bor!'
-                : missingColorModels.length > 0
-                ? 'Rang kiritilmagan modellar bor!'
-                : missingIshSoniModels.length > 0
-                ? 'Ish soni kiritilmagan modellar bor!'
-                : `Barcha to'ldirilgan modellarni chop etish (${totalBatchPattas} ta patta)`
+                  ? 'Razmer sonlarida xatolik bor!'
+                  : missingColorModels.length > 0
+                    ? 'Rang kiritilmagan modellar bor!'
+                    : missingIshSoniModels.length > 0
+                      ? 'Ish soni kiritilmagan modellar bor!'
+                      : `Barcha to'ldirilgan modellarni chop etish (${totalBatchPattas} ta patta)`
             }
           >
             <Printer size={16} />
@@ -462,10 +462,10 @@ export const PattaBatchView: React.FC = () => {
               {invalidPattaSizeModels.length > 0
                 ? `Razmerlarni tekshiring (${invalidPattaSizeModels.length})`
                 : missingColorModels.length > 0
-                ? `Rangni kiriting (${missingColorModels.length})`
-                : missingIshSoniModels.length > 0
-                ? `Ish sonini kiriting (${missingIshSoniModels.length})`
-                : `Pechat · ${totalBatchPattas} ta patta`}
+                  ? `Rangni kiriting (${missingColorModels.length})`
+                  : missingIshSoniModels.length > 0
+                    ? `Ish sonini kiriting (${missingIshSoniModels.length})`
+                    : `Pechat · ${totalBatchPattas} ta patta`}
             </span>
           </button>
         </div>
@@ -820,10 +820,10 @@ export const PattaBatchView: React.FC = () => {
                 onClick={async () => {
                   setIsClosingParty(true);
                   try {
-                     if (await canUseBatchMutation()) {
-                       await completePartySeries();
-                       setIsClosePartyModalOpen(false);
-                     }
+                    if (await canUseBatchMutation()) {
+                      await completePartySeries();
+                      setIsClosePartyModalOpen(false);
+                    }
                   } finally {
                     setIsClosingParty(false);
                   }
@@ -854,7 +854,7 @@ export const PattaBatchView: React.FC = () => {
           items={printBatchItems}
           onReserve={guardedBatchPrintCompleted}
           onPrinted={(printedSummary) => {
-             void printedSummary;
+            void printedSummary;
           }}
           onClose={() => setPrintBatchItems(null)}
         />
