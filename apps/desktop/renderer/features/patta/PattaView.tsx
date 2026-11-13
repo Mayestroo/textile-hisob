@@ -333,6 +333,20 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     }
   };
 
+  const handleWorkerIdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIndex: number) => {
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextOp = model.pattaOpsOrder[currentIndex + 1];
+      if (nextOp) safeFocus(inputRefs.current[nextOp]);
+      else if (e.key === 'Enter') submitTicketAndFocusKonveyer();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const previousOp = model.pattaOpsOrder[currentIndex - 1];
+      if (previousOp) safeFocus(inputRefs.current[previousOp]);
+      else safeFocus(qtyInputRef.current);
+    }
+  };
+
   const handleCellFocus = (cellId: string, value: string, formula?: string) => {
     setActiveCell({
       cellId,
@@ -707,20 +721,21 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                       {opConfig ? `${opConfig.rate} so'm` : "0 so'm"}
                     </td>
 
-                    {/* Col 4: Single worker for the full patta quantity */}
+                    {/* Col 4: Worker ID input; keyboard navigation matches the original workflow */}
                     <td style={{ textAlign: 'center', padding: '3px 8px' }}>
-                      <select
-                        aria-label={`${opName} worker`}
+                      <input
+                        ref={(el) => { inputRefs.current[opName] = el; }}
+                        type="number"
                         disabled={hasBlockingError}
                         value={workerIdVal}
                         onChange={(e) => updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: e.target.value })}
-                        className="patta-input"
-                        style={{ minWidth: 95 }}
-                      >
-                        <option value="">Ishchini tanlang</option>
-                        {workers.filter((worker) => worker.status !== 'INACTIVE').map((worker) => <option key={worker.id} value={worker.id}>{worker.id} — {worker.name}</option>)}
-                      </select>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Patta miqdori: {Number(form.qty || 0)} dona</div>
+                        onKeyDown={(e) => handleWorkerIdKeyDown(e, idx)}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        onFocus={() => handleCellFocus(`C${idx + 6}`, workerIdVal)}
+                        className={isComplete ? 'patta-worker-pill' : 'patta-worker-input'}
+                        placeholder="Raqam"
+                        aria-label={`${opName} worker ID`}
+                      />
                       {hasSplitAllocation && (
                         <div role="status" style={{ fontSize: 11, color: '#b45309', marginTop: 3 }}>
                           Draftda oldingi taqsimot bor.{' '}

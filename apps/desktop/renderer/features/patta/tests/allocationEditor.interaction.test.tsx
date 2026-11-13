@@ -76,9 +76,9 @@ describe('Patta worker assignment and allocation editor interactions', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
   });
 
-  it('lets first-time entry assign the full patta quantity to one worker and retains the draft on remount', () => {
+  it('keeps numeric worker entry and Enter/up/down navigation while retaining the draft on remount', () => {
     const model: any = { id: 'model-one', name: 'Model', party: '15', color: 'Blue', size: 'M',
-      operations: [{ id: 'op-one', name: 'Yeng tikish', rate: 5 }], pattaOpsOrder: ['Yeng tikish'], hisobQuantities: {} };
+      operations: [{ id: 'op-one', name: 'Yeng tikish', rate: 5 }, { id: 'op-two', name: 'Ikkinchi', rate: 7 }], pattaOpsOrder: ['Yeng tikish', 'Ikkinchi'], hisobQuantities: {} };
     useWorkbookStore.setState({
       modalState: { type: null }, models: [model], workers: [{ id: 1, name: 'Ali' }, { id: 2, name: 'Vali' }] as any,
       printedPartyHistory: [{ id: 'party-15', partyNumber: '15', modelId: 'model-one', modelName: 'Model', color: 'Blue', pattaCount: 1,
@@ -87,17 +87,24 @@ describe('Patta worker assignment and allocation editor interactions', () => {
       currentPeriod: { id: 'period-open', isClosed: false } as any, availableSizes: ['M'], jonatish: vi.fn().mockResolvedValue(true)
     } as any);
     const first = render(<PattaView model={model} />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'Yeng tikish worker' }), { target: { value: '1' } });
+    const workerOne = screen.getByRole('spinbutton', { name: 'Yeng tikish worker ID' });
+    const workerTwo = screen.getByRole('spinbutton', { name: 'Ikkinchi worker ID' });
+    fireEvent.change(workerOne, { target: { value: '1' } });
     expect(screen.getByText('Ali')).toBeTruthy();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Yeng tikish worker' }), { target: { value: '2' } });
+    fireEvent.keyDown(workerOne, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(workerTwo);
+    fireEvent.keyDown(workerTwo, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(workerOne);
+    fireEvent.keyDown(workerOne, { key: 'Enter' });
+    expect(document.activeElement).toBe(workerTwo);
+    fireEvent.change(workerTwo, { target: { value: '2' } });
     expect(screen.getByText('Vali')).toBeTruthy();
-    expect(screen.getByText('Patta miqdori: 100 dona')).toBeTruthy();
     first.unmount();
     render(<PattaView model={model} />);
-    expect((screen.getByRole('combobox', { name: 'Yeng tikish worker' }) as HTMLSelectElement).value).toBe('2');
-    expect(screen.getByText('Patta miqdori: 100 dona')).toBeTruthy();
+    expect((screen.getByRole('spinbutton', { name: 'Yeng tikish worker ID' }) as HTMLInputElement).value).toBe('1');
+    expect((screen.getByRole('spinbutton', { name: 'Ikkinchi worker ID' }) as HTMLInputElement).value).toBe('2');
     expect(useWorkbookStore.getState().ticketForms['model-one']).toMatchObject({
-      qty: '100', entries: { 'Yeng tikish': '2' }
+      qty: '100', entries: { 'Yeng tikish': '1', Ikkinchi: '2' }
     });
   });
 });
