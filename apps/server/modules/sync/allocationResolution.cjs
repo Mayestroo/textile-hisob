@@ -39,7 +39,9 @@ async function cancelAllocation(pool, req, input, options = {}) {
     await client.query('BEGIN');
     await acquireCompanyChangeLock(client, companyId);
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))", [companyId, originalOperationId]);
-    const prior = await client.query(`SELECT * FROM allocation_resolution_fences WHERE company_id=$1 AND original_operation_id=$2 FOR UPDATE`, [companyId, originalOperationId]);
+    // Immutable evidence needs no row locks: the company/operation locks above
+    // serialize competing cancellations and acceptance, including absent rows.
+    const prior = await client.query(`SELECT * FROM allocation_resolution_fences WHERE company_id=$1 AND original_operation_id=$2`, [companyId, originalOperationId]);
     if (prior.rows.length) {
       const row = prior.rows[0];
       if (row.original_payload_hash !== originalPayloadHash || row.resolution_operation_id !== resolutionOperationId ||
@@ -50,12 +52,12 @@ async function cancelAllocation(pool, req, input, options = {}) {
       return { success: true, status: 'CANCELLED', resolutionOperationId, replay: true, audit: await readAudit(pool, companyId, originalOperationId) };
     }
     const reusedResolution = await client.query(`SELECT original_operation_id, original_payload_hash, action
-      FROM allocation_resolution_fences WHERE company_id=$1 AND resolution_operation_id=$2 FOR UPDATE`, [companyId, resolutionOperationId]);
+      FROM allocation_resolution_fences WHERE company_id=$1 AND resolution_operation_id=$2`, [companyId, resolutionOperationId]);
     if (reusedResolution.rows.length) throw failure('ALLOCATION_RESOLUTION_CONFLICT', 'Resolution operation id is already bound to different content');
     const accepted = await client.query('SELECT payload_hash FROM operations_dedup WHERE company_id=$1 AND operation_id=$2 FOR UPDATE', [companyId, originalOperationId]);
     if (accepted.rows.length) throw failure('ALLOCATION_ALREADY_ACCEPTED', 'Accepted allocation facts cannot be cancelled as pending work; use the business correction process');
     const reviewEvidence = await client.query(`SELECT command_type, entity_type, entity_id, original_payload_hash, original_payload_json
-      FROM allocation_review_candidates WHERE company_id=$1 AND original_operation_id=$2 FOR UPDATE`, [companyId, originalOperationId]);
+      FROM allocation_review_candidates WHERE company_id=$1 AND original_operation_id=$2`, [companyId, originalOperationId]);
     const evidence = reviewEvidence.rows[0];
     if (!evidence || evidence.command_type !== commandType || evidence.entity_type !== 'ticket' ||
         evidence.entity_id !== originalPayload.ticketId || evidence.original_payload_hash !== originalPayloadHash ||

@@ -81,7 +81,9 @@ function createOperationsHandler(pool) {
     for (const op of operations) {
       try {
         results.push(await processSingleOperation(pool, req, op));
-      } catch (_error) {
+      } catch (error) {
+        req.log?.error({ err: error, operationId: op?.operationId, commandType: op?.commandType },
+          'Sync operation failed; identical retry required');
         // Earlier operations may have committed. The caller must replay the identical batch.
         return reply.code(503).send({
           success: false,
@@ -283,8 +285,10 @@ async function processSingleOperation(pool, req, op, options = {}) {
     // Accepted receipts take precedence over cancellation state. The shared
     // company/operation lock ensures cancellation cannot race a first accept:
     // whichever transaction commits first determines the authoritative result.
+    // The company/operation advisory locks already serialize cancellation with acceptance.
+    // Immutable evidence is SELECT/INSERT-only for the runtime role; row locks require UPDATE.
     const cancellationFence = await client.query(`SELECT original_payload_hash FROM allocation_resolution_fences
-      WHERE company_id = $1 AND original_operation_id = $2 FOR UPDATE`, [companyId, operationId]);
+      WHERE company_id = $1 AND original_operation_id = $2`, [companyId, operationId]);
     if (cancellationFence.rows.length) {
       const fence = cancellationFence.rows[0];
       const result = fence.original_payload_hash === serverHash

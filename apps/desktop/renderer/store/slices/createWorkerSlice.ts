@@ -178,6 +178,15 @@ export const createWorkerSlice: StateCreator<WorkbookStore, [], [], WorkerSlice>
       state.addNotification('error', 'OPEN_PERIOD_REQUIRED', 'Create an open period before changing AVANS or JARIMA balances.');
       return false;
     }
+    // Blur and formatted-value roundtrips must not create commands or advance revisions.
+    // Manual payroll values have already been checked against the persisted period above.
+    if (currentWorker && adjustments.length === 0 && Object.entries(sanitized).every(([field, value]) => {
+      if (value === undefined) return true;
+      if (['avans', 'jarima', 'oklad', 'magazin', 'staj'].includes(field)) {
+        return Number(value) === Number(currentWorker[field as keyof Worker] || 0);
+      }
+      return value === currentWorker[field as keyof Worker];
+    })) return true;
     const sync = await tryWorkerMutation(state, get, set, 'UpsertWorker', String(workerId), {
       workerId,
       name: sanitized.name === undefined ? currentWorker?.name || '' : sanitized.name,

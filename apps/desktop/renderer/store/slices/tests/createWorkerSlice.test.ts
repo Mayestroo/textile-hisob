@@ -125,6 +125,24 @@ describe(' worker mutation boundary', () => {
     expect(state.saveToDisk).not.toHaveBeenCalled();
   });
 
+  it('does not create an outbox command or reconnect for unchanged normalized worker values', async () => {
+    const state: any = { licenseStatus: { companyId: 'company-a' },
+      workers: [{ id: 1, name: 'Worker', staj: 0, avans: 1000, jarima: 0 }],
+      addNotification: vi.fn(), saveToDisk: vi.fn() };
+    const api = { getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
+      WorkbookCommand: vi.fn(), SyncReconnect: vi.fn() };
+    vi.stubGlobal('window', { electronAPI: api });
+    const set = vi.fn();
+    const slice = createWorkerSlice(set as any, (() => state) as any, {} as any);
+    for (const updates of [{ avans: 1000 }, { jarima: 0 }, { name: '  Worker  ' }, { staj: 0 }, {}]) {
+      expect(await slice.updateWorker(1, updates)).toBe(true);
+    }
+    expect(api.WorkbookCommand).not.toHaveBeenCalled();
+    expect(api.SyncReconnect).not.toHaveBeenCalled();
+    expect(state.saveToDisk).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it('queues a worker create without a client worker ID even when deletedWorkerIds is populated', async () => {
     const licenseStatus = { companyId: 'company-a' };
     const state: any = {

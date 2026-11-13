@@ -177,7 +177,7 @@ const ManualMoneyCell = React.memo<ManualMoneyCellProps>(({
         suppressBlur.current = false;
         focused.current = true;
         setIsFocused(true);
-        setDraft(value > 0 ? String(value) : '');
+        setDraft(null);
         setError(false);
         onCellFocus(cellId, String(value));
         onSelectRow?.(workerId, false);
@@ -186,7 +186,7 @@ const ManualMoneyCell = React.memo<ManualMoneyCellProps>(({
         if (event.key === 'Enter') {
           event.preventDefault();
           suppressBlur.current = true;
-          void commit(draftRef.current ?? '');
+          if (draftRef.current !== null) void commit(draftRef.current);
           inputRef.current?.blur();
         } else if (event.key === 'Escape') {
           event.preventDefault();
@@ -234,6 +234,8 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
   const [isAvansFocused, setIsAvansFocused] = useState(false);
   const [jarimaDraft, setJarimaDraft] = useState<string | null>(null);
   const [isJarimaFocused, setIsJarimaFocused] = useState(false);
+  const avansEdited = useRef(false);
+  const jarimaEdited = useRef(false);
 
   const lastClickTimeRef = useRef(0);
 
@@ -413,24 +415,30 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           type="text"
           inputMode="numeric"
           className="umumiy-manual-input"
+          aria-label={`Avans #${w.workerId}`}
           value={avansShown}
           disabled={!canEditPayrollAdjustments || !moneyReady}
-          onChange={(e) => setAvansDraft(e.target.value)}
+          onChange={(e) => { avansEdited.current = true; setAvansDraft(e.target.value); }}
           onFocus={() => {
+            avansEdited.current = false;
             setIsAvansFocused(true);
             setAvansDraft(w.avans > 0 ? String(w.avans) : '');
             onCellFocus(`E${rowNum}`, String(w.avans));
             onSelectRow && onSelectRow(w.workerId, false);
           }}
           onBlur={async (e) => {
+            const raw = e.currentTarget.value;
+            const changed = avansEdited.current && Math.max(0, Number(raw.replace(/[\s,]/g, '')) || 0) !== w.avans;
+            avansEdited.current = false;
             setIsAvansFocused(false);
-            await onAvansChange(w.workerId, e.currentTarget.value);
+            if (changed) await onAvansChange(w.workerId, raw);
             setAvansDraft(null);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.currentTarget.blur();
             } else if (e.key === 'Escape') {
+              avansEdited.current = false;
               setIsAvansFocused(false);
               setAvansDraft(null);
               e.currentTarget.blur();
@@ -456,24 +464,30 @@ const WorkerSummaryRow = React.memo<WorkerSummaryRowProps>(({
           type="text"
           inputMode="numeric"
           className="umumiy-manual-input"
+          aria-label={`Jarima #${w.workerId}`}
           value={jarimaShown}
           disabled={!canEditPayrollAdjustments || !moneyReady}
-          onChange={(e) => setJarimaDraft(e.target.value)}
+          onChange={(e) => { jarimaEdited.current = true; setJarimaDraft(e.target.value); }}
           onFocus={() => {
+            jarimaEdited.current = false;
             setIsJarimaFocused(true);
             setJarimaDraft(w.jarima > 0 ? String(w.jarima) : '');
             onCellFocus(`F${rowNum}`, String(w.jarima));
             onSelectRow && onSelectRow(w.workerId, false);
           }}
           onBlur={async (e) => {
+            const raw = e.currentTarget.value;
+            const changed = jarimaEdited.current && Math.max(0, Number(raw.replace(/[\s,]/g, '')) || 0) !== w.jarima;
+            jarimaEdited.current = false;
             setIsJarimaFocused(false);
-            await onJarimaChange(w.workerId, e.currentTarget.value);
+            if (changed) await onJarimaChange(w.workerId, raw);
             setJarimaDraft(null);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.currentTarget.blur();
             } else if (e.key === 'Escape') {
+              jarimaEdited.current = false;
               setIsJarimaFocused(false);
               setJarimaDraft(null);
               e.currentTarget.blur();

@@ -317,19 +317,19 @@ export const ConnectionStatus: React.FC<{ style?: React.CSSProperties }> = ({ st
     return () => clearInterval(interval);
   }, [activeCompanyId]);
 
-  // Periodically run the full protocol to flush/recover local outbox operations.
+  // Writes request reconnect after committing. Only retry outstanding local work here;
+  // input focus/blur and scrolling are not evidence of a business mutation.
   useEffect(() => {
     const syncWhileVisible = () => {
       if (!shouldRunBackgroundSync(online, Boolean(activeCompanyId), document.visibilityState === 'visible')) return;
+      const { pendingChanges, failedChanges } = useSyncStore.getState();
+      // Failed rows can still need receipt recovery or queued cancellation delivery.
+      if (pendingChanges === 0 && failedChanges === 0) return;
       void synchronize(false);
     };
     const timer = setInterval(syncWhileVisible, 15_000);
-    // Let the ticket/batch draft persistence debounce finish before the full reconnect.
-    const handleFocusOut = () => window.setTimeout(syncWhileVisible, 1_500);
-    document.addEventListener('focusout', handleFocusOut);
     return () => {
       clearInterval(timer);
-      document.removeEventListener('focusout', handleFocusOut);
     };
   }, [activeCompanyId, online]);
 
