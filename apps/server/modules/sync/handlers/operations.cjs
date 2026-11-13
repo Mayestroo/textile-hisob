@@ -20,7 +20,7 @@ function dateOnly(value) {
   return value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
 }
 
-async function resolveTicketPeriodForDate(client, companyId, effectiveDate, requestedPeriodId = null) {
+async function resolveTicketPeriodForDate(client, companyId, effectiveDate, requestedPeriodId = null, allowPrintedPattaCarryForward = false) {
   const openPeriodsResult = await client.query(`SELECT id, start_date::text AS start_date, end_date::text AS end_date FROM periods
     WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC, id DESC`, [companyId]);
   const openPeriods = openPeriodsResult.rows || [];
@@ -38,6 +38,14 @@ async function resolveTicketPeriodForDate(client, companyId, effectiveDate, requ
     if (!requestedPeriodId || requestedPeriodId === matchingPeriod.id) return matchingPeriod.id;
     throw createOpError('PERIOD_SCOPE_MISMATCH', 'Captured ticket period differs from the open period containing the work date',
       { effectiveDate, requestedPeriodId, openPeriodId: matchingPeriod.id });
+  }
+
+  // A printed party can remain unentered across month close. In that case the
+  // captured (current) open period is the accounting period, even though the
+  // ticket retains the original work/print date.
+  if (allowPrintedPattaCarryForward && requestedPeriodId) {
+    const requestedPeriod = openPeriods.find((period) => period.id === requestedPeriodId);
+    if (requestedPeriod) return requestedPeriod.id;
   }
 
   // Legacy companies without periods retain an unknown period, not a fabricated one.
@@ -762,7 +770,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
 
   const serverRevision = 1;
   const now = submittedAt || new Date().toISOString();
-  const periodId = await resolveTicketPeriodForDate(client, companyId, effectiveDate, payload.periodId || null);
+  const periodId = await resolveTicketPeriodForDate(client, companyId, effectiveDate, payload.periodId || null, Boolean(partyRecordId));
   // New allocation-aware clients must carry verifiable accounting-period
   // evidence. Keep the no-period fallback only for legacy payloads; never turn
   // a newly entered ticket into an unattributed fact when period authority is

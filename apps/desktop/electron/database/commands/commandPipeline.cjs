@@ -296,12 +296,16 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
         `Operation "${operationId}" was already executed with different semantic payload or parameters`
       );
     }
-    assertPeriodOpen(db, companyId, command.effectiveDate, submittedAt);
+    // Printed pattas may be entered after their print month has closed. Keep
+    // their original effective date, but account them in the current open
+    // period when the command is tied to a canonical printed party.
+    const carryForwardPrintedPatta = Boolean(periodId && partyRecordId);
+    if (!carryForwardPrintedPatta) assertPeriodOpen(db, companyId, command.effectiveDate, submittedAt);
 
     if (periodId) {
       const period = db.prepare(`SELECT id FROM periods WHERE company_id = ? AND id = ? AND is_closed = 0
-        AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)`)
-        .get(companyId, periodId, command.effectiveDate || submittedAt.slice(0, 10), command.effectiveDate || submittedAt.slice(0, 10));
+        ${carryForwardPrintedPatta ? '' : 'AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)'} `)
+        .get(companyId, periodId, ...(carryForwardPrintedPatta ? [] : [command.effectiveDate || submittedAt.slice(0, 10), command.effectiveDate || submittedAt.slice(0, 10)]));
       if (!period) throw createCommandError('PERIOD_SCOPE_MISMATCH', 'Captured ticket period does not contain the work date or is not open');
     }
 

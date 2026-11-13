@@ -116,6 +116,15 @@ describe(' payload and authority validation', () => {
       .rejects.toMatchObject({ code: 'PERIOD_SCOPE_MISMATCH' });
   });
 
+  it('carries an old-dated printed patta into its explicitly captured current open period', async () => {
+    const client = { query: async () => ({ rows: [
+      { id: 'period-november', start_date: '2026-11-05', end_date: null }
+    ] }) };
+
+    await expect(resolveTicketPeriodForDate(client, COMPANY, '2026-09-25', 'period-november', true))
+      .resolves.toBe('period-november');
+  });
+
   it.each([5, 0, 9])('accepts captured rate %s without turning it into current tariff 9', async (rate) => {
     const insertedRates: unknown[] = [];
     const pool = { connect: async () => ({

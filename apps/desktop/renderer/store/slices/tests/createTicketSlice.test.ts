@@ -213,7 +213,7 @@ describe(' ticket command routing', () => {
   });
 
   it.each([0, undefined])('captures original period and rate %s without inferring zero for unknown', async (rate) => {
-    const SubmitTicketCommand = vi.fn().mockResolvedValue({ success: true });
+    const SubmitTicketCommand = vi.fn().mockResolvedValue({ success: true, result: { committed: true } });
     vi.stubGlobal('window', { electronAPI: {
       getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
       SubmitTicketCommand,
@@ -227,8 +227,8 @@ describe(' ticket command routing', () => {
     expect(SubmitTicketCommand.mock.calls[0][0].entries[0].rateSnapshot).toBe(rate);
   });
 
-  it('blocks a ticket date outside the active period before it reaches the local outbox', async () => {
-    const SubmitTicketCommand = vi.fn();
+  it('carries an old-dated printed patta into the current open period', async () => {
+    const SubmitTicketCommand = vi.fn().mockResolvedValue({ success: true, result: { committed: true } });
     vi.stubGlobal('window', {
       electronAPI: {
         getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }),
@@ -241,13 +241,10 @@ describe(' ticket command routing', () => {
 
     const result = await slice.jonatish('model-a');
 
-    expect(result).toBe(false);
-    expect(SubmitTicketCommand).not.toHaveBeenCalled();
-    expect(state().addNotification).toHaveBeenCalledWith(
-      'error',
-      'PERIOD_SCOPE_MISMATCH',
-      expect.stringContaining('2026-09-23')
-    );
+    expect(result).toBe(false); // The mocked command does not include projection reload data.
+    expect(SubmitTicketCommand).toHaveBeenCalledWith(expect.objectContaining({
+      effectiveDate: '2026-09-23', periodId: 'period-current', partyRecordId: 'party-a'
+    }));
   });
 
   it('routes ticket worker edits through the canonical workbook command', async () => {

@@ -303,7 +303,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const effectiveDate = form.date || formatDateIso();
     const activePeriod = state.periods?.find((period) => !period.isClosed)
       || (state.currentPeriod?.id !== 'period_default' && !state.currentPeriod?.isClosed ? state.currentPeriod : null);
-    if (activePeriod && !isTicketDateWithinPeriod(effectiveDate, activePeriod)) {
+    const isPrintedPattaCarryForward = Boolean(validation.partyOwner?.id);
+    if (activePeriod && !isPrintedPattaCarryForward && !isTicketDateWithinPeriod(effectiveDate, activePeriod)) {
       const rejected = makeMutationResult(
         'PERIOD_SCOPE_MISMATCH',
         `Ticket sanasi (${effectiveDate}) ochiq davr (${activePeriod.startDate}${activePeriod.endDate ? ` — ${activePeriod.endDate}` : ' dan boshlab'}) oralig‘ida bo‘lishi kerak.`
