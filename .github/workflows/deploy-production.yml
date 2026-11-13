@@ -22,16 +22,16 @@ jobs:
         env:
           POSTGRES_USER: novda_test
           POSTGRES_PASSWORD: novda_test
-          POSTGRES_DB: novda_test
+          POSTGRES_DB: hisob_test_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U novda_test -d novda_test"
+          --health-cmd "pg_isready -U novda_test -d hisob_test_ci"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
     env:
-      NOVDA_PG_URL: postgresql://novda_test:novda_test@localhost:5432/novda_test
+      NOVDA_PG_URL: postgresql://novda_test:novda_test@localhost:5432/hisob_test_ci
       NOVDA_DISPOSABLE_PG: "1"
     steps:
       - uses: actions/checkout@v4
