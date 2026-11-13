@@ -124,6 +124,52 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     fetchImpl.mockClear();
   });
 
+  it('counts printed party quantities and pattas independently of submitted work', async () => {
+    await pool.query(`INSERT INTO parties
+      (id, company_id, party_number, physical_party_number, model_id, patta_count, total_ish_soni, ish_soni, printed_at, created_at)
+      VALUES
+      ('print-1', $1, '41', '41', 'model-1', 10, 280, 280, '2026-11-13T03:31:19Z', '2026-11-14T00:00:00Z'),
+      ('print-2', $1, '42', '42', 'model-1', 10, 140, 140, '2026-11-13T03:33:13Z', '2026-11-14T00:00:00Z'),
+      ('print-3', $1, '43', '43', 'model-1', 10, 1040, 1040, '2026-11-13T03:59:58Z', '2026-11-14T00:00:00Z')`, [COMPANY_ID]);
+    await pool.query(`UPDATE ticket_entries SET created_at = '2026-09-10T12:00:00Z' WHERE company_id = $1`, [COMPANY_ID]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/internal/admin/daily-report?date=2026-11-13&companyId=${COMPANY_ID}`,
+      headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().report.cutProduction).toEqual({
+      totalQty: 1460, totalTickets: 30,
+      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 1460, ticketCount: 30 }]
+    });
+    expect(response.json().report.enteredProduction).toEqual({ totalQty: 0, totalEntries: 0, byModel: [] });
+  });
+
+  it('uses the Tashkent print day and legacy quantity fallback without counting other companies', async () => {
+    await pool.query(`INSERT INTO parties
+      (id, company_id, party_number, physical_party_number, model_id, patta_count, total_ish_soni, ish_soni, printed_at, created_at, status)
+      VALUES
+      ('start', $1, '41', '41', 'model-1', 2, 100, 999, '2026-11-12T19:00:00Z', NOW(), 'CLOSED'),
+      ('end', $1, '42', '42', 'model-1', 3, 150, 999, '2026-11-13T18:59:59Z', NOW(), 'ACTIVE'),
+      ('before', $1, '43', '43', 'model-1', 7, 700, 700, '2026-11-12T18:59:59Z', NOW(), 'ACTIVE'),
+      ('after', $1, '44', '44', 'model-1', 8, 800, 800, '2026-11-13T19:00:00Z', NOW(), 'ACTIVE'),
+      ('legacy', $1, '45', '45', 'model-1', 4, NULL, 200, NULL, '2026-11-13T08:00:00Z', 'ACTIVE'),
+      ('zero', $1, '46', '46', 'model-1', 1, 0, 999, '2026-11-13T08:00:00Z', NOW(), 'ACTIVE'),
+      ('other', 'other_company', '41', '41', 'model-1', 9, 900, 900, '2026-11-13T08:00:00Z', NOW(), 'ACTIVE')`, [COMPANY_ID]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/internal/admin/daily-report?date=2026-11-13&companyId=${COMPANY_ID}`,
+      headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().report.cutProduction).toEqual({
+      totalQty: 450, totalTickets: 10,
+      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 450, ticketCount: 10 }]
+    });
+  });
+
   it('seeds the requested Telegram admin with a company-scoped grant', async () => {
     const grant = await pool.query(`SELECT telegram_id, company_id, is_active, assignment_source
       FROM activation_company_admins WHERE telegram_id = $1`, ['274466315']);

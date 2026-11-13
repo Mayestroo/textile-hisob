@@ -227,6 +227,29 @@ describe(' admin dashboard PostgreSQL projections', () => {
 
     expect(query).toHaveBeenCalledTimes(4);
     expect(query.mock.calls[0][1]).toEqual(['comp_novda', '2026-11-10']);
+    const cutSql = query.mock.calls[0][0];
+    expect(cutSql).toContain('FROM parties p');
+    expect(cutSql).toContain('SUM(p.patta_count)');
+    expect(cutSql).toContain('COALESCE(p.total_ish_soni, p.ish_soni)');
+    expect(cutSql).toContain("COALESCE(p.printed_at, p.created_at) AT TIME ZONE 'Asia/Tashkent'");
+    expect(cutSql).not.toContain('FROM tickets');
+    expect(query.mock.calls[1][0]).toContain('FROM ticket_entries e');
+  });
+
+  it('reports issued pattas even when no work entries have been submitted', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [
+        { company_id: 'comp_novda', model_id: 'm1', model_name: 'Model 1', ticket_count: 20, qty: '420' },
+        { company_id: 'comp_novda', model_id: 'm2', model_name: 'Model 2', ticket_count: 10, qty: '1040' }
+      ] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ company_id: 'comp_novda', telegram_id: '274466315' }] })
+      .mockResolvedValueOnce({ rows: [{ company_id: 'comp_novda', company_name: 'Novda' }] });
+
+    const { report } = await serviceFor(query).dailyProductionReport({ companyId: 'comp_novda', date: '2026-11-13' });
+    expect(report.cutProduction).toMatchObject({ totalQty: 1460, totalTickets: 30 });
+    expect(report.cutProduction.byModel).toHaveLength(2);
+    expect(report.enteredProduction).toEqual({ totalQty: 0, totalEntries: 0, byModel: [] });
   });
 
   it('computes Tashkent date string helper properly', () => {

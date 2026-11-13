@@ -334,21 +334,24 @@ function createAdminDashboardService(options = {}) {
       : getTashkentDateString();
 
     const [cutResult, entryResult, adminsResult, companiesResult] = await Promise.all([
+      // Printing creates party issuance records, not submitted work tickets.
+      // Keep the ticket_count alias for the existing bot/WebApp response contract.
       pool.query(`
         SELECT 
-          t.company_id,
-          COALESCE(c.company_name, t.company_id) AS company_name,
-          t.model_id,
-          COALESCE(m.name, t.model_id, 'Noma''lum') AS model_name,
-          COUNT(t.id)::int AS ticket_count,
-          COALESCE(SUM(t.qty), 0)::numeric AS qty
-        FROM tickets t
-        LEFT JOIN activation_companies c ON c.company_id = t.company_id
-        LEFT JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
-        WHERE ($1::VARCHAR IS NULL OR t.company_id = $1)
-          AND (COALESCE(t.submitted_at, t.created_at) AT TIME ZONE 'Asia/Tashkent')::date = $2::date
-        GROUP BY t.company_id, c.company_name, t.model_id, m.name
-        ORDER BY t.company_id, qty DESC, model_name ASC
+          p.company_id,
+          COALESCE(c.company_name, p.company_id) AS company_name,
+          p.model_id,
+          COALESCE(m.name, p.model_name, p.model_id, 'Noma''lum') AS model_name,
+          COALESCE(SUM(p.patta_count), 0)::int AS ticket_count,
+          COALESCE(SUM(COALESCE(p.total_ish_soni, p.ish_soni)), 0)::numeric AS qty
+        FROM parties p
+        LEFT JOIN activation_companies c ON c.company_id = p.company_id
+        LEFT JOIN models m ON m.company_id = p.company_id AND m.id = p.model_id
+        WHERE ($1::VARCHAR IS NULL OR p.company_id = $1)
+          AND (COALESCE(p.printed_at, p.created_at) AT TIME ZONE 'Asia/Tashkent')::date = $2::date
+        GROUP BY p.company_id, c.company_name, p.model_id,
+          COALESCE(m.name, p.model_name, p.model_id, 'Noma''lum')
+        ORDER BY p.company_id, qty DESC, model_name ASC
       `, [companyId, targetDate]),
       pool.query(`
         SELECT 
