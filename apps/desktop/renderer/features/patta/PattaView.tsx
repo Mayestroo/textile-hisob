@@ -259,10 +259,6 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     if (Array.isArray(entry)) return entry.map((allocation) => ({ workerId: String(allocation.workerId ?? ''), qty: String(allocation.qty ?? '') }));
     return entry !== undefined && entry !== null && entry !== '' ? [{ workerId: String(entry), qty: String(form.qty || '') }] : [{ workerId: '', qty: '' }];
   };
-  const setOpAllocations = (opName: string, allocations: Array<{ workerId: string; qty: string }>) => {
-    updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: allocations });
-  };
-
   const safeFocus = (el: HTMLInputElement | null) => {
     if (!el) return;
     el.focus();
@@ -653,6 +649,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 const workerName = workerNum && workerMap.has(workerNum) ? workerMap.get(workerNum) : '';
                 const isInvalidWorker = workerIdVal !== '' && (!workerNum || !workerMap.has(workerNum));
                 const allocated = opAllocations.reduce((sum, allocation) => sum + (Number(allocation.qty) || 0), 0);
+                const hasSplitAllocation = opAllocations.filter((allocation) => Number(allocation.workerId) > 0).length > 1;
                 const isComplete = allocated === Number(form.qty) && allocated > 0;
                 const opConfig = model.operations.find((o) => o.name === opName);
                 const isBeingDragged = draggedOpIdx === idx;
@@ -710,26 +707,39 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                       {opConfig ? `${opConfig.rate} so'm` : "0 so'm"}
                     </td>
 
-                    {/* Col 4: Ishchi Raqami Input */}
+                    {/* Col 4: Single worker for the full patta quantity */}
                     <td style={{ textAlign: 'center', padding: '3px 8px' }}>
-                      {opAllocations.map((allocation, allocationIndex) => (
-                        <div key={`${opName}-${allocationIndex}`} style={{ display: 'flex', gap: 5, margin: '3px 0' }}>
-                          <select aria-label={`${opName} worker ${allocationIndex + 1}`} disabled={hasBlockingError} value={allocation.workerId} onChange={(e) => setOpAllocations(opName, opAllocations.map((item, i) => i === allocationIndex ? { ...item, workerId: e.target.value } : item))} className="patta-input" style={{ minWidth: 95 }}>
-                            <option value="">Ishchini tanlang</option>
-                            {workers.filter((worker) => worker.status !== 'INACTIVE').map((worker) => <option key={worker.id} value={worker.id}>{worker.id} — {worker.name}</option>)}
-                          </select>
-                          <input aria-label={`${opName} worker ${allocationIndex + 1} quantity`} type="number" min="1" max={form.qty || undefined} disabled={hasBlockingError} value={allocation.qty} onChange={(e) => setOpAllocations(opName, opAllocations.map((item, i) => i === allocationIndex ? { ...item, qty: e.target.value } : item))} className="patta-input" style={{ width: 74 }} placeholder="Dona" />
-                          {opAllocations.length > 1 && <button type="button" aria-label="Taqsimotni olib tashlash" onClick={() => setOpAllocations(opName, opAllocations.filter((_, i) => i !== allocationIndex))}><Trash2 size={13} /></button>}
+                      <select
+                        aria-label={`${opName} worker`}
+                        disabled={hasBlockingError}
+                        value={workerIdVal}
+                        onChange={(e) => updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: e.target.value })}
+                        className="patta-input"
+                        style={{ minWidth: 95 }}
+                      >
+                        <option value="">Ishchini tanlang</option>
+                        {workers.filter((worker) => worker.status !== 'INACTIVE').map((worker) => <option key={worker.id} value={worker.id}>{worker.id} — {worker.name}</option>)}
+                      </select>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Patta miqdori: {Number(form.qty || 0)} dona</div>
+                      {hasSplitAllocation && (
+                        <div role="status" style={{ fontSize: 11, color: '#b45309', marginTop: 3 }}>
+                          Draftda oldingi taqsimot bor.{' '}
+                          <button
+                            type="button"
+                            disabled={hasBlockingError || !workerIdVal}
+                            onClick={() => updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: workerIdVal })}
+                            style={{ border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                          >
+                            Butun patta miqdorini shu ishchiga biriktirish
+                          </button>
                         </div>
-                      ))}
-                      <div style={{ fontSize: 12, color: allocated > Number(form.qty) ? '#dc2626' : 'var(--text-muted)' }}>Ajratildi {allocated} · Qoldi {Math.max(0, Number(form.qty || 0) - allocated)}</div>
-                      <button type="button" disabled={hasBlockingError} className="soft-btn" onClick={() => setOpAllocations(opName, [...opAllocations, { workerId: '', qty: '' }])}><Plus size={12} /> Ishchi qo‘shish</button>
+                      )}
                     </td>
 
                     {/* Col 5: Ishchi Nomi */}
                     <td style={{ paddingLeft: '14px' }}>
                       {opAllocations.some((allocation) => Number(allocation.workerId) > 0) ? (
-                        <span className="patta-worker-name">{opAllocations.filter((allocation) => Number(allocation.workerId) > 0).map((allocation) => workerMap.get(Number(allocation.workerId)) || `#${allocation.workerId}`).join(', ')}</span>
+                        <span className="patta-worker-name">{workerMap.get(workerNum) || `#${workerIdVal}`}</span>
                       ) : workerName ? (
                         <span className="patta-worker-name">{workerName}</span>
                       ) : isInvalidWorker ? (

@@ -1,11 +1,11 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { useWorkbookStore, DEFAULT_BATCH_SIZES } from '../../store/workbookStore';
-import { Printer, Plus, X, CheckCircle2, AlertCircle, Pencil, Search } from 'lucide-react';
+import { Printer, X, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import { PattaPrintModal, PrintBatchItem } from './modals/PattaPrintModal';
 import { ModelConfig } from '../../types/workbook';
 import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { calculateBatchWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
-import { isDefaultPattaSize, PattaSizeSystem, sortPattaSizes, DEFAULT_NUMERIC_BATCH_SIZES } from '../../domain/pattaSizeSystem';
+import { isDefaultPattaSize, isNumericPattaSize, PattaSizeSystem, sortPattaSizes, DEFAULT_NUMERIC_BATCH_SIZES } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { selectPartyDashboardRecords } from '../../store/selectors';
 
@@ -15,9 +15,6 @@ export const PattaBatchView: React.FC = () => {
   const submittedTickets = useWorkbookStore((s) => s.submittedTickets);
   const pattaBatchConfigs = useWorkbookStore((s) => s.pattaBatchConfigs);
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
-  const addCustomSize = useWorkbookStore((s) => s.addCustomSize);
-  const deleteCustomSize = useWorkbookStore((s) => s.deleteCustomSize);
-  const confirmAction = useWorkbookStore((s) => s.confirmAction);
   const nextPartyNumber = useWorkbookStore((s) => s.nextPartyNumber);
   const updatePattaBatchConfig = useWorkbookStore((s) => s.updatePattaBatchConfig);
   const updatePattaBatchSize = useWorkbookStore((s) => s.updatePattaBatchSize);
@@ -38,8 +35,6 @@ export const PattaBatchView: React.FC = () => {
     return false;
   };
 
-  const guardedAddCustomSize = (modelId: string, sizeName: string) => addCustomSize(modelId, sizeName);
-  const guardedDeleteCustomSize = (modelId: string, sizeName: string) => deleteCustomSize(modelId, sizeName);
   const guardedUpdateBatchConfig = (modelId: string, updates: any) => {
     // Keep controlled inputs responsive while runtime readiness is checked.
     // The store applies the change locally first and resolves persistence mode
@@ -56,27 +51,16 @@ export const PattaBatchView: React.FC = () => {
 
   const getModelSizes = (modelId: string) => {
     const config = pattaBatchConfigs[modelId];
-    if (config && config.isConfigured !== false && Array.isArray(config.sizeNames) && config.sizeNames.length > 0) {
-      // Model has explicitly configured sizes in ModelSizesView!
-      const activeFromConfig = config.sizeNames;
-      const withCounts = Object.entries(config.sizes || {})
-        .filter(([, count]) => Number(count) > 0)
-        .map(([size]) => size);
-      return sortPattaSizes(Array.from(new Set([...activeFromConfig, ...withCounts])));
-    }
-
-    // Fallback for unconfigured models:
-    const scale = config?.scaleType || (sizeSystem === 'numbers' ? 'numbers' : 'letters');
-    if (scale === 'numbers') {
-      const withCounts = Object.entries(config?.sizes || {})
-        .filter(([, count]) => Number(count) > 0)
-        .map(([size]) => size);
-      return sortPattaSizes(Array.from(new Set([...DEFAULT_NUMERIC_BATCH_SIZES, ...withCounts])));
-    }
-    const withCounts = Object.entries(config?.sizes || {})
-      .filter(([, count]) => Number(count) > 0)
-      .map(([size]) => size);
-    return sortPattaSizes(Array.from(new Set([...(availableSizes?.length ? availableSizes : DEFAULT_BATCH_SIZES), ...withCounts])));
+    const defaults = sizeSystem === 'numbers' ? DEFAULT_NUMERIC_BATCH_SIZES : DEFAULT_BATCH_SIZES;
+    const configured = config?.isConfigured !== false && Array.isArray(config?.sizeNames)
+      ? config.sizeNames
+      : [];
+    // Keep this grid to the selected standard scale. Older saved/custom sizes
+    // (including sizes with existing counts) must not mix into the batch UI.
+    const eligibleConfigured = configured.filter((size) =>
+      isDefaultPattaSize(size) && isNumericPattaSize(size) === (sizeSystem === 'numbers')
+    );
+    return sortPattaSizes(Array.from(new Set([...defaults, ...eligibleConfigured])));
   };
   const allKnownSizes = useMemo(() => sortPattaSizes([...new Set(models.flatMap((model) => getModelSizes(model.id)))]), [models, pattaBatchConfigs, availableSizes, sizeSystem]);
 
@@ -86,14 +70,8 @@ export const PattaBatchView: React.FC = () => {
   };
 
   const [printBatchItems, setPrintBatchItems] = useState<PrintBatchItem[] | null>(null);
-  const [isAddSizeModalOpen, setIsAddSizeModalOpen] = useState(false);
-  const [addSizeModelId, setAddSizeModelId] = useState<string | null>(null);
-  const [renameSize, setRenameSize] = useState<{ modelId: string; sizeName: string } | null>(null);
-  const [renameSizeInput, setRenameSizeInput] = useState('');
   const [isClosePartyModalOpen, setIsClosePartyModalOpen] = useState(false);
   const [isClosingParty, setIsClosingParty] = useState(false);
-  const [newCustomSizeInput, setNewCustomSizeInput] = useState('');
-  const customSizeInputRef = useRef<HTMLInputElement>(null);
 
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -390,19 +368,6 @@ export const PattaBatchView: React.FC = () => {
     }
   };
 
-  const handleAddCustomSizeSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const clean = newCustomSizeInput.trim();
-    if (!clean) return;
-    if (!addSizeModelId) return;
-    await guardedAddCustomSize(addSizeModelId, clean);
-    if (useWorkbookStore.getState().pattaBatchConfigs[addSizeModelId]?.sizeNames?.some((size) => size.toUpperCase() === clean.toUpperCase())) {
-      setNewCustomSizeInput('');
-      setIsAddSizeModalOpen(false);
-    }
-  };
-
-
   // Active unclosed parties and their unsubmitted pattas count for warning dialog
   const activeUnclosedParties = useMemo(() => {
     return (printedPartyHistory || []).filter((h) => !h.isClosed);
@@ -655,45 +620,14 @@ export const PattaBatchView: React.FC = () => {
                 {getModelSizes(model.id).map((sizeName) => {
                   const sizeVal = config.sizes ? config.sizes[sizeName] || '' : '';
                   const key = `size_${model.id}_${sizeName}`;
-                  const isCustom = !isDefaultPattaSize(sizeName);
                   const hasVal = Number(sizeVal) > 0;
 
                   return (
                     <div key={sizeName} className="patta-size-box">
                       <div className="patta-size-label-row">
-                        <span className={`patta-size-label ${isCustom ? 'custom-size' : ''}`}>
+                        <span className="patta-size-label">
                           {sizeName}
                         </span>
-                        {isCustom && (
-                          <button
-                            type="button"
-                            className="patta-size-del-btn"
-                            aria-label={`${sizeName} razmerini nomlash`}
-                            title="Nomini o'zgartirish"
-                            onClick={() => { setRenameSize({ modelId: model.id, sizeName }); setRenameSizeInput(sizeName); }}
-                          >
-                            <Pencil size={9} />
-                          </button>
-                        )}
-                        {isCustom && (
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              const ok = await confirmAction({
-                                title: "Razmerni o'chirish",
-                                message: `«${sizeName}» razmerini o'chirmoqchimisiz?`,
-                                confirmText: "Ha, o'chirilsin",
-                                isDanger: true
-                              });
-                              if (ok) guardedDeleteCustomSize(model.id, sizeName);
-                            }}
-                            className="patta-size-del-btn"
-                            title="O'chirish"
-                          >
-                            <X size={9} />
-                          </button>
-                        )}
                       </div>
                       <input
                         ref={(el) => { inputRefs.current[key] = el; }}
@@ -716,18 +650,6 @@ export const PattaBatchView: React.FC = () => {
                 <span className="patta-card-patta-count">
                   Patta: <strong>{totalPattaCount} ta</strong>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewCustomSizeInput('');
-                    setAddSizeModelId(model.id);
-                    setIsAddSizeModalOpen(true);
-                    setTimeout(() => customSizeInputRef.current?.focus(), 50);
-                  }}
-                  className="patta-card-add-size-btn"
-                >
-                  + Razmer
-                </button>
               </div>
             </div>
           );
@@ -740,87 +662,6 @@ export const PattaBatchView: React.FC = () => {
         </div>
       )}
 
-      {/* Add Custom Size Modal */}
-      {isAddSizeModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsAddSizeModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
-                <Plus size={18} />
-                <span>Yangi Razmer Qo'shish</span>
-              </div>
-              <button onClick={() => setIsAddSizeModalOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddCustomSizeSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '15px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Razmer nomi (masalan: 4XL, 5XL, 40-42, Standart):
-                </label>
-                <input
-                  ref={customSizeInputRef}
-                  type="text"
-                  value={newCustomSizeInput}
-                  onChange={(e) => setNewCustomSizeInput(e.target.value)}
-                  placeholder="Masalan: 40-42"
-                  className="soft-input"
-                />
-              </div>
-
-              <div style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
-                 Ushbu razmer faqat {models.find((model) => model.id === addSizeModelId)?.name || 'tanlangan model'} jadvaliga qo'shiladi.
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
-                <button type="button" onClick={() => setIsAddSizeModalOpen(false)} className="soft-btn soft-btn-secondary">
-                  Bekor qilish
-                </button>
-                <button type="submit" disabled={!newCustomSizeInput.trim()} className="soft-btn soft-btn-primary">
-                  Qo'shish
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {renameSize && (
-        <div className="modal-overlay" onClick={() => setRenameSize(null)}>
-          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header"><div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)' }}><Pencil size={17} /> Razmer nomini o'zgartirish</div>
-              <button type="button" aria-label="Rename dialog close" onClick={() => setRenameSize(null)}><X size={18} /></button></div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const renamed = renameSizeInput.trim().toUpperCase();
-              if (!renamed) return;
-              const config = useWorkbookStore.getState().pattaBatchConfigs[renameSize.modelId];
-              const names = getModelSizes(renameSize.modelId);
-              if (renamed.toUpperCase() !== renameSize.sizeName.toUpperCase() && names.some((name) => name.toUpperCase() === renamed.toUpperCase())) {
-                addNotification('warning', 'Mavjud razmer', `«${renamed}» razmeri ushbu modelda mavjud.`);
-                return;
-              }
-              const sizes = { ...(config?.sizes || {}) };
-              const oldKey = Object.keys(sizes).find((name) => name.toUpperCase() === renameSize.sizeName.toUpperCase());
-              if (oldKey) { sizes[renamed] = sizes[oldKey]; delete sizes[oldKey]; }
-              const owned = config?.sizeNames ?? [...new Set([...(availableSizes || DEFAULT_BATCH_SIZES), ...Object.keys(config?.sizes || {})])];
-              void guardedUpdateBatchConfig(renameSize.modelId, {
-                sizeNames: owned.map((name) => name.toUpperCase() === renameSize.sizeName.toUpperCase() ? renamed : name), sizes
-              });
-              setRenameSize(null);
-            }} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <label style={{ fontSize: 15, fontWeight: 700 }}>Yangi razmer nomi
-                <input autoFocus value={renameSizeInput} onChange={(e) => setRenameSizeInput(e.target.value)} className="soft-input" />
-              </label>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" onClick={() => setRenameSize(null)} className="soft-btn soft-btn-secondary">Bekor qilish</button>
-                <button type="submit" disabled={!renameSizeInput.trim()} className="soft-btn soft-btn-primary">Saqlash</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Confirm Close Party Series Modal */}
       {isClosePartyModalOpen && (
