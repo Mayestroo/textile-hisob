@@ -105,6 +105,9 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
   // Only persisted SYNCED parents qualify, never another member of this request.
   // The indexed, tenant-scoped parent lookup is non-recursive; at most batchSize
   // payloads enter JS/memory/the network, regardless of the blocked queue size.
+  // Archives also depend on every issuance of their exact party IDs, even when
+  // an older client omitted depends_on_operation_id. A no-op archive must not
+  // overtake a failed/pending creation and later resurrect the archived party.
   const candidates = db.prepare(`
     SELECT op.* FROM local_outbox op
     WHERE op.company_id = ? AND op.status = 'PENDING'
@@ -113,8 +116,19 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           SELECT 1 FROM local_outbox parent
           WHERE parent.company_id = op.company_id
             AND parent.operation_id = TRIM(op.depends_on_operation_id)
-            AND parent.status = 'SYNCED'
-        ))
+             AND parent.status = 'SYNCED'
+         ))
+      AND (op.command_type <> 'ArchivePartyHistory' OR NOT EXISTS (
+        SELECT 1 FROM json_each(op.payload_json, '$.partyRecordIds') target
+        JOIN local_outbox issuance ON issuance.company_id = op.company_id
+          AND issuance.command_type IN ('CreateParty','CompletePattaBatch')
+          AND issuance.status NOT IN ('SYNCED','SUPERSEDED')
+        WHERE (issuance.command_type = 'CreateParty' AND issuance.entity_id = target.value)
+          OR (issuance.command_type = 'CompletePattaBatch' AND EXISTS (
+            SELECT 1 FROM json_each(issuance.payload_json, '$.parties') party
+            WHERE json_extract(party.value, '$.partyRecordId') = target.value
+          ))
+      ))
     ORDER BY op.causal_sequence ASC, op.rowid ASC
     LIMIT ?
   `).all(companyId, batchSize);

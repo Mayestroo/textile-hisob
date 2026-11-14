@@ -254,6 +254,9 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
   const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
   const recoveredLegacyPattaBatchCount = legacyPattaBatchReplaySupported ? recoverLegacyPattaBatches(db, companyId) : 0;
+  const deferredPartyArchives = legacyPattaBatchReplaySupported
+    ? await require('./deferredPartyArchiveRecovery.cjs').recoverDeferredPartyArchives(db, companyId, syncClient)
+    : { queued: 0, retried: 0 };
 
   // ----------------------------------------------------
   // STEP 3 & 4 & 5: Push pending local outbox operations
@@ -311,6 +314,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     recoveredPeriodScopeMismatchCount,
     recoveredCapturedTicketCount,
     recoveredLegacyPattaBatchCount,
+    deferredPartyArchives,
     reconciledCount,
     pushed: pushRes,
     pulledFinal,
