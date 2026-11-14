@@ -4,6 +4,7 @@ import { buildPartyTicketsList } from '../../domain/partyAnalytics';
 import { calculateBatchWorkQuantities, normalizePattaSizeCounts } from '../../domain/pattaQuantity';
 import { DEFAULT_NUMERIC_BATCH_SIZES, isNumericPattaSize, PattaSizeSystem, sortPattaSizes } from '../../domain/pattaSizeSystem';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
+import { findNextPartyNumber } from '../../store/pattaBatch';
 import { selectPartyDashboardRecords } from '../../store/selectors';
 import { DEFAULT_BATCH_SIZES, useWorkbookStore } from '../../store/workbookStore';
 import { ModelConfig } from '../../types/workbook';
@@ -124,15 +125,10 @@ export const PattaBatchView: React.FC = () => {
     // 1. Gather all existing party numbers in the current series (both active and closed from previous months)
     const seriesHistory = (printedPartyHistory || []).filter((h) => h.isArchived !== true);
     const existingSeriesPartyNumbers = new Set<string>();
-    let maxExistingPartyNum = 0;
     for (const h of seriesHistory) {
       const pStr = String(h.partyNumber || '').trim();
       if (pStr) {
         existingSeriesPartyNumbers.add(pStr);
-        const pInt = parseInt(pStr, 10);
-        if (!isNaN(pInt) && pInt > maxExistingPartyNum) {
-          maxExistingPartyNum = pInt;
-        }
       }
     }
 
@@ -165,7 +161,8 @@ export const PattaBatchView: React.FC = () => {
       }
     }
 
-    let partyCounter = Math.max(1, maxExistingPartyNum + 1);
+    // Reuse archived/deleted numbers, including gaps before later printed parties.
+    let partyCounter = findNextPartyNumber(seriesHistory);
 
     const getNextSequential = () => {
       while (usedPartyNumbers.has(String(partyCounter))) {

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { PattaBatchView } from '../PattaBatchView';
 import { useWorkbookStore } from '../../../store/workbookStore';
 
@@ -85,5 +85,37 @@ describe('PattaBatchView - Custom sizes in grid', () => {
     expect(html).toContain('98');
     expect(html).toContain('104');
     expect(html).toContain('110');
+  });
+
+  const partyHistory = (archived200 = false) => Array.from({ length: 201 }, (_, index) => ({
+    id: `party-${index + 1}`,
+    partyNumber: String(index + 1),
+    modelId: 'dz-369',
+    modelName: 'DZ-369',
+    color: 'Qora',
+    pattaCount: 1,
+    cumulativePattaCount: index + 1,
+    ishSoni: 1,
+    cumulativeIshSoni: index + 1,
+    printedAt: '',
+    isClosed: index === 199,
+    isArchived: index === 199 && archived200,
+  }));
+
+  it('reuses deleted party 200 even when party 201 exists and the saved counter is stale', () => {
+    useWorkbookStore.setState({ printedPartyHistory: partyHistory(), nextPartyNumber: 202 });
+    render(<PattaBatchView />);
+    const partyInput = () => screen.getByTitle("Partiya raqami avtomatik hisoblanadi (o'zgartirilmaydi)") as HTMLInputElement;
+    expect(partyInput().value).toBe('202');
+
+    act(() => useWorkbookStore.setState({ printedPartyHistory: partyHistory(true) }));
+
+    expect(partyInput().value).toBe('200');
+  });
+
+  it('reuses deleted party 200 when it was the last printed party', () => {
+    useWorkbookStore.setState({ printedPartyHistory: partyHistory(true).slice(0, 200), nextPartyNumber: 201 });
+    render(<PattaBatchView />);
+    expect((screen.getByTitle("Partiya raqami avtomatik hisoblanadi (o'zgartirilmaydi)") as HTMLInputElement).value).toBe('200');
   });
 });
