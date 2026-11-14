@@ -135,13 +135,12 @@ postgres('legacy printed batch recovery over HTTP / PostgreSQL / SQLite', () => 
 
   it('recovers an old ACTIVE_PARTY_EXISTS refusal for the same authoritative issuance', async () => {
     expect((await client.pushOperations([wire(batch())])).results[0].status).toBe('APPLIED');
-    const duplicate = batch(2);
-    duplicate.parties = batch().parties.map(p => ({ ...p, commandId: duplicate.commandId, operationId: duplicate.operationId }));
-    const operation = queue(duplicate, 'DEAD_LETTER');
+    const operation = queue(batch(), 'DEAD_LETTER');
     db.prepare('UPDATE local_outbox SET last_error=? WHERE operation_id=?').run(
       JSON.stringify({ code: 'ACTIVE_PARTY_EXISTS', message: 'Active party already exists' }), operation.operationId);
     const result = await executeReconnectProtocol(db, companyId, client);
-    expect(result.recoveredLegacyPattaBatchCount).toBe(1);
+    expect(result.recoveredLegacyPattaBatchCount).toBe(0);
+    expect(result.pushed.attempted).toBe(0);
     expect(getOperation(db, companyId, operation.operationId)).toMatchObject({ status: 'SYNCED',
       payload_json: canonicalStringify(operation.payload), payload_hash: operation.payloadHash });
     expect((await pool.query('SELECT COUNT(*)::int n FROM parties WHERE company_id=$1', [companyId])).rows[0].n).toBe(1);

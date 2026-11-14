@@ -82,11 +82,11 @@ describe('legacy print outbox upgrade', () => {
       last_error: JSON.stringify({ code: 'ACTIVE_PARTY_EXISTS', message: 'Existing active party' }) });
   }
 
-  it('retries an obsolete duplicate refusal only once, with unchanged issuance and payload', () => {
+  it('does not resend an active-party refusal based on local party facts alone', () => {
     const before = queueActivePartyConflict('same-paper');
-    expect(recoverLegacyPattaBatches(db, companyId)).toBe(1);
+    expect(recoverLegacyPattaBatches(db, companyId)).toBe(0);
     const after = db.prepare('SELECT * FROM local_outbox WHERE operation_id=?').get('same-paper');
-    expect(after).toMatchObject({ status: 'PENDING', payload_json: before.payload_json,
+    expect(after).toMatchObject({ status: 'DEAD_LETTER', payload_json: before.payload_json,
       payload_hash: before.payload_hash, attempt_count: before.attempt_count });
     db.prepare(`UPDATE local_outbox SET status='DEAD_LETTER',last_error=? WHERE operation_id=?`)
       .run(before.last_error, before.operation_id);
@@ -106,25 +106,26 @@ describe('legacy print outbox upgrade', () => {
     expect(recoverLegacyPattaBatches(db, companyId)).toBe(0);
   });
 
-  it('resolves persisted company-scoped identity aliases, not party numbers', () => {
+  it('does not treat persisted identity aliases as a server acceptance receipt', () => {
     queueActivePartyConflict('aliased', { modelId: 'old-model' }, { id: 'canonical-party' });
     db.prepare(`INSERT INTO party_id_aliases(company_id,legacy_party_id,canonical_party_id,created_at)
       VALUES (?, 'party-aliased', 'canonical-party', ?)`).run(companyId, new Date().toISOString());
     db.prepare(`INSERT INTO model_id_aliases(company_id,legacy_model_id,canonical_model_id,created_at)
       VALUES (?, 'old-model', 'model', ?)`).run(companyId, new Date().toISOString());
-    expect(recoverLegacyPattaBatches(db, companyId)).toBe(1);
+    expect(recoverLegacyPattaBatches(db, companyId)).toBe(0);
   });
 
-  it('recovers over reconnect only with capability and preserves current settings on ACK', async () => {
+  it('acknowledges an already accepted batch over reconnect without any push', async () => {
     const before = queueActivePartyConflict('reconnect-paper');
     const timestamp = '2026-11-01T12:00:00.000Z';
     db.prepare(`INSERT INTO company_batch_settings(company_id,available_sizes_json,server_revision,updated_at)
       VALUES (?, '["XL"]', 7, ?)`).run(companyId, timestamp);
-    let supportsReplay = false;
     let pushes = 0;
     const client = {
       pullChanges: async () => ({ items: [], nextCursor: '0', hasMore: false,
-        capabilities: { legacyPattaBatchReplayV1: supportsReplay } }),
+        capabilities: { legacyPattaBatchReplayV1: true } }),
+      getOperationStatuses: async () => ({ results: [{ operationId: before.operation_id,
+        status: 'APPLIED', payloadHash: before.payload_hash, serverRevision: 1 }] }),
       pushOperations: async (operations: any[]) => {
         pushes++;
         expect(operations[0].payloadHash).toBe(before.payload_hash);
@@ -132,17 +133,14 @@ describe('legacy print outbox upgrade', () => {
         return { results: operations.map(op => ({ operationId: op.operationId, status: 'APPLIED', serverRevision: 1 })) };
       }
     };
-    expect((await executeReconnectProtocol(db, companyId, client)).recoveredLegacyPattaBatchCount).toBe(0);
-    expect(pushes).toBe(0);
-    supportsReplay = true;
     expect(await executeReconnectProtocol(db, companyId, client)).toMatchObject({
-      recoveredLegacyPattaBatchCount: 1, pushed: { synced: 1, conflict: 0, deadLetter: 0 }
+      recoveredLegacyPattaBatchCount: 0, reconciledCount: 1, pushed: { attempted: 0, synced: 0, conflict: 0, deadLetter: 0 }
     });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id=?').get(before.operation_id).status).toBe('SYNCED');
     expect(db.prepare('SELECT available_sizes_json,server_revision,updated_at FROM company_batch_settings WHERE company_id=?').get(companyId))
       .toEqual({ available_sizes_json: '["XL"]', server_revision: 7, updated_at: timestamp });
     await executeReconnectProtocol(db, companyId, client);
-    expect(pushes).toBe(1);
+    expect(pushes).toBe(0);
   });
 
   it('does not count legacy issuance as a future batch-settings revision', () => {

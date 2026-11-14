@@ -102,6 +102,61 @@ describe('reconnect accepted-operation reconciliation', () => {
     expect(syncClient.pushOperations).not.toHaveBeenCalled();
   });
 
+  it('checks receipts beyond 100 unaccepted rows and clears accepted batch errors without resending', async () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    for (let i = 0; i < 100; i++) insertOperation(db, `blocked-${i}`, i, 'missing-parent');
+    const hashes = new Map<string, string>();
+    for (const [index, status] of ['CONFLICT', 'DEAD_LETTER'].entries()) {
+      const id = `accepted-batch-${index}`;
+      const payloadJson = canonicalStringify({ operationId: id, batchId: id, companyId,
+        ...(index === 1 ? { batchSettingsBaseRevision: 3 } : {}) });
+      const hash = computePayloadHash(payloadJson);
+      hashes.set(id, hash);
+      insertOutboxOperation(db, { operation_id: id, company_id: companyId, command_type: 'CompletePattaBatch',
+        entity_type: 'patta_batch', entity_id: id, payload_json: payloadJson, payload_hash: hash,
+        causal_sequence: 100 + index, status, last_error: 'ACTIVE_PARTY_EXISTS', error_message: 'Active party already exists' });
+    }
+    const getOperationStatuses = vi.fn(async (operations: any[]) => ({ results: operations.map(op => hashes.has(op.operationId)
+      ? { operationId: op.operationId, status: 'APPLIED', payloadHash: hashes.get(op.operationId), serverRevision: 1 }
+      : { operationId: op.operationId, status: 'NOT_FOUND' }) }));
+    const pushOperations = vi.fn();
+    const client = { getOperationStatuses, pushOperations,
+      pullChanges: async () => ({ items: [], nextCursor: '0', hasMore: false }) };
+    expect(await executeReconnectProtocol(db, companyId, client)).toMatchObject({
+      reconciledCount: 2, pushed: { attempted: 0 }
+    });
+    expect(getOperationStatuses.mock.calls.map(([ops]) => ops.length)).toEqual([100, 2]);
+    expect(pushOperations).not.toHaveBeenCalled();
+    for (const [id, hash] of hashes) {
+      expect(getOperation(db, companyId, id)).toMatchObject({ status: 'SYNCED', accepted_payload_hash: hash,
+        last_error: null, error_message: null, attempt_count: 0 });
+    }
+    // The unchanged first page must not starve a later page on subsequent reconnects either.
+    insertOperation(db, 'accepted-later', 103);
+    hashes.set('accepted-later', getOperation(db, companyId, 'accepted-later').payload_hash);
+    expect((await executeReconnectProtocol(db, companyId, client)).reconciledCount).toBe(1);
+    expect(pushOperations).not.toHaveBeenCalled();
+  });
+
+  it('reconciles acceptance before legacy retry recovery touches the failed command', async () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const payload = { companyId, commandId: 'legacy', operationId: 'legacy', batchId: 'legacy',
+      parties: [{ partyRecordId: 'party', pattaCount: 2, cumulativePattaCount: 12, printedAt: '2026-11-01T00:00:00.000Z' }] };
+    const json = canonicalStringify(payload);
+    const hash = computePayloadHash(json);
+    insertOutboxOperation(db, { company_id: companyId, operation_id: 'legacy', command_type: 'CompletePattaBatch',
+      entity_type: 'patta_batch', entity_id: 'legacy', payload_json: json, payload_hash: hash, status: 'CONFLICT',
+      last_error: JSON.stringify({ code: 'REVISION_CONFLICT', message: 'Batch settings revision is missing; reload before printing' }) });
+    const pushOperations = vi.fn();
+    const result = await executeReconnectProtocol(db, companyId, {
+      pullChanges: async () => ({ items: [], nextCursor: '0', hasMore: false, capabilities: { legacyPattaBatchReplayV1: true } }),
+      getOperationStatuses: async () => ({ results: [{ operationId: 'legacy', status: 'APPLIED', payloadHash: hash, serverRevision: 1 }] }),
+      pushOperations
+    });
+    expect(result).toMatchObject({ reconciledCount: 1, recoveredLegacyPattaBatchCount: 0, pushed: { attempted: 0 } });
+    expect(pushOperations).not.toHaveBeenCalled();
+  });
+
   it('does not open a SQLite write transaction for an unchanged empty poll', async () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)

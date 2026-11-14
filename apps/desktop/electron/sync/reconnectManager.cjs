@@ -18,49 +18,55 @@ const {
 
 async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
   if (typeof syncClient?.getOperationStatuses !== 'function') return 0;
-  const candidates = listOutboxReconciliationCandidates(db, companyId, 100);
-  if (!candidates.length) return 0;
-
-  const response = await syncClient.getOperationStatuses(candidates.map(({ operation_id, payload_hash }) => ({
-    operationId: operation_id,
-    payloadHash: payload_hash
-  })));
-  if (!Array.isArray(response?.results)) return 0;
-  const results = new Map(response.results.map((result) => [result.operationId, result]));
   let reconciledCount = 0;
-  db.transaction(() => {
-    for (const candidate of candidates) {
-      const result = results.get(candidate.operation_id);
-      if (result?.status !== 'APPLIED' || result.payloadHash !== candidate.payload_hash) continue;
-      const op = db.prepare(`SELECT command_type, entity_type, entity_id, base_revision, causal_sequence FROM local_outbox
-        WHERE company_id = ? AND operation_id = ?`).get(companyId, candidate.operation_id);
-      if (op?.entity_type === 'ticket' && ['SubmitTicket', 'UpdateTicket', 'DeleteTicket'].includes(op.command_type)
-        && Number(result.serverRevision) !== Number(op.base_revision) + 1) continue;
-      if (!op || (op.command_type === 'SubmitTicket' && result.periodId &&
-        db.prepare('SELECT period_id FROM tickets WHERE company_id = ? AND id = ?').get(companyId, op.entity_id)?.period_id !== result.periodId)) continue;
-      if (acknowledgeOutboxOperation(db, companyId, candidate.operation_id, result.payloadHash, result.serverRevision)) {
-        reconciledCount++;
-        if (op.entity_type === 'ticket' && !db.prepare(`SELECT 1 FROM local_outbox WHERE company_id = ?
-          AND entity_type = 'ticket' AND entity_id = ? AND operation_id <> ?
-          AND (base_revision > ? OR causal_sequence > ?) LIMIT 1`)
-          .get(companyId, op.entity_id, candidate.operation_id, op.base_revision, op.causal_sequence)) {
-          if (op.command_type === 'SubmitTicket') db.prepare(`UPDATE tickets SET status = 'CONFIRMED',
-            server_revision = MAX(server_revision, ?) WHERE company_id = ? AND id = ?
-            AND status = 'PENDING_SYNC'`).run(result.serverRevision, companyId, op.entity_id);
-          if (op.command_type === 'UpdateTicket') db.prepare(`UPDATE tickets SET server_revision = MAX(server_revision, ?)
-            WHERE company_id = ? AND id = ? AND status = 'CONFIRMED'`)
-            .run(result.serverRevision, companyId, op.entity_id);
-          if (op.command_type === 'DeleteTicket') db.prepare(`UPDATE tickets SET status = 'VOIDED',
-            server_revision = MAX(server_revision, ?) WHERE company_id = ? AND id = ?
-            AND status = 'PENDING_DELETE'`).run(result.serverRevision, companyId, op.entity_id);
-        }
-        if (op.command_type === 'RecordProductionAdjustment' || op.command_type === 'ReverseProductionAdjustment') {
-          db.prepare(`UPDATE production_adjustments SET server_revision = MAX(server_revision, ?)
-            WHERE company_id = ? AND adjustment_id = ?`).run(result.serverRevision, companyId, op.entity_id);
+  let afterRowId = 0;
+  // Keyset pagination is essential: the first 100 unaccepted operations must
+  // not permanently hide accepted CONFLICT/DEAD_LETTER rows further down.
+  while (true) {
+    const candidates = listOutboxReconciliationCandidates(db, companyId, 100, afterRowId);
+    if (!candidates.length) break;
+    afterRowId = candidates[candidates.length - 1].reconciliation_cursor;
+
+    const response = await syncClient.getOperationStatuses(candidates.map(({ operation_id, payload_hash }) => ({
+      operationId: operation_id,
+      payloadHash: payload_hash
+    })));
+    if (!Array.isArray(response?.results)) break;
+    const results = new Map(response.results.map((result) => [result.operationId, result]));
+    db.transaction(() => {
+      for (const candidate of candidates) {
+        const result = results.get(candidate.operation_id);
+        if (result?.status !== 'APPLIED' || result.payloadHash !== candidate.payload_hash) continue;
+        const op = db.prepare(`SELECT command_type, entity_type, entity_id, base_revision, causal_sequence FROM local_outbox
+          WHERE company_id = ? AND operation_id = ?`).get(companyId, candidate.operation_id);
+        if (op?.entity_type === 'ticket' && ['SubmitTicket', 'UpdateTicket', 'DeleteTicket'].includes(op.command_type)
+          && Number(result.serverRevision) !== Number(op.base_revision) + 1) continue;
+        if (!op || (op.command_type === 'SubmitTicket' && result.periodId &&
+          db.prepare('SELECT period_id FROM tickets WHERE company_id = ? AND id = ?').get(companyId, op.entity_id)?.period_id !== result.periodId)) continue;
+        if (acknowledgeOutboxOperation(db, companyId, candidate.operation_id, result.payloadHash, result.serverRevision)) {
+          reconciledCount++;
+          if (op.entity_type === 'ticket' && !db.prepare(`SELECT 1 FROM local_outbox WHERE company_id = ?
+            AND entity_type = 'ticket' AND entity_id = ? AND operation_id <> ?
+            AND (base_revision > ? OR causal_sequence > ?) LIMIT 1`)
+            .get(companyId, op.entity_id, candidate.operation_id, op.base_revision, op.causal_sequence)) {
+            if (op.command_type === 'SubmitTicket') db.prepare(`UPDATE tickets SET status = 'CONFIRMED',
+              server_revision = MAX(server_revision, ?) WHERE company_id = ? AND id = ?
+              AND status = 'PENDING_SYNC'`).run(result.serverRevision, companyId, op.entity_id);
+            if (op.command_type === 'UpdateTicket') db.prepare(`UPDATE tickets SET server_revision = MAX(server_revision, ?)
+              WHERE company_id = ? AND id = ? AND status = 'CONFIRMED'`)
+              .run(result.serverRevision, companyId, op.entity_id);
+            if (op.command_type === 'DeleteTicket') db.prepare(`UPDATE tickets SET status = 'VOIDED',
+              server_revision = MAX(server_revision, ?) WHERE company_id = ? AND id = ?
+              AND status = 'PENDING_DELETE'`).run(result.serverRevision, companyId, op.entity_id);
+          }
+          if (op.command_type === 'RecordProductionAdjustment' || op.command_type === 'ReverseProductionAdjustment') {
+            db.prepare(`UPDATE production_adjustments SET server_revision = MAX(server_revision, ?)
+              WHERE company_id = ? AND adjustment_id = ?`).run(result.serverRevision, companyId, op.entity_id);
+          }
         }
       }
-    }
-  }).immediate();
+    }).immediate();
+  }
   return reconciledCount;
 }
 
@@ -230,16 +236,9 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     hasMore = Boolean(pullRes.hasMore);
   } } catch (error) { if (!options.isContextCurrent || options.isContextCurrent()) markFeedUnavailable(db); throw error; }
 
-  const supersededBatchSettingsCount = supersedeBatchSettingsAlreadyApplied(db, companyId);
-  const recoveredVoidedPattaDuplicateCount = voidedPattaReuseSupported
-    ? recoverVoidedPattaDuplicateTickets(db, companyId)
-    : 0;
-  const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
-  const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
-  const recoveredLegacyPattaBatchCount = legacyPattaBatchReplaySupported ? recoverLegacyPattaBatches(db, companyId) : 0;
-
   // A previous process can lose the HTTP acknowledgement after the server commits.
-  // Reconcile those exact operation IDs before local causal dependencies are evaluated.
+  // Reconcile BEFORE any retry/supersession so accepted commands are acknowledged,
+  // not resent or hidden by local recovery decisions.
   let reconciledCount = 0;
   try {
     reconciledCount = await reconcileAcceptedOutboxOperations(db, companyId, syncClient);
@@ -247,6 +246,14 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     // Status reconciliation is a recovery aid; the normal idempotent push path still runs.
     options.onOperationStatusReconciliationError?.(error);
   }
+
+  const supersededBatchSettingsCount = supersedeBatchSettingsAlreadyApplied(db, companyId);
+  const recoveredVoidedPattaDuplicateCount = voidedPattaReuseSupported
+    ? recoverVoidedPattaDuplicateTickets(db, companyId)
+    : 0;
+  const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
+  const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
+  const recoveredLegacyPattaBatchCount = legacyPattaBatchReplaySupported ? recoverLegacyPattaBatches(db, companyId) : 0;
 
   // ----------------------------------------------------
   // STEP 3 & 4 & 5: Push pending local outbox operations
