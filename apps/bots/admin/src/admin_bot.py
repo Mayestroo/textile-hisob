@@ -240,7 +240,7 @@ def format_daily_report_message(report, date_str=None):
 
     lines = [
         "📊 <b>Kunlik ishlab chiqarish hisoboti</b>",
-        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (18:00)",
+        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (16:55)",
         f"🏢 <b>Kompaniya:</b> {html.escape(str(company_name))}",
         "",
         f"✂️ <b>Bichilgan son:</b> {cut_qty} dona" + (f" ({cut_tickets} ta patta)" if cut_tickets else ""),
@@ -318,7 +318,7 @@ def check_and_send_daily_reports(now=None):
     global LAST_DAILY_REPORT_DATE
     now_dt = datetime.now(TASHKENT_TZ) if now is None else now
     today_str = now_dt.strftime("%Y-%m-%d")
-    if now_dt.hour >= 18 and LAST_DAILY_REPORT_DATE != today_str:
+    if (now_dt.hour, now_dt.minute) >= (16, 55) and LAST_DAILY_REPORT_DATE != today_str:
         sent = send_daily_production_reports(target_date=today_str)
         LAST_DAILY_REPORT_DATE = today_str
         return sent

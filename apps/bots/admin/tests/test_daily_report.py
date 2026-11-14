@@ -60,7 +60,7 @@ def test_format_daily_report_message_full():
     message = admin_bot.format_daily_report_message(report)
 
     assert "📊 <b>Kunlik ishlab chiqarish hisoboti</b>" in message
-    assert "📅 <b>Sana:</b> 10.11.2026 (18:00)" in message
+    assert "📅 <b>Sana:</b> 10.11.2026 (16:55)" in message
     assert "🏢 <b>Kompaniya:</b> Novda Textile" in message
     assert "✂️ <b>Bichilgan son:</b> 1 250 dona (25 ta patta)" in message
     assert "(Bugun chiqarilgan pattalardagi umumiy ish soni)" in message
@@ -110,15 +110,15 @@ def test_format_daily_report_message_html_escape():
 def test_check_and_send_daily_reports_trigger_logic(mock_send):
     mock_send.return_value = 2
 
-    # Case 1: 17:59 (before 18:00) -> Should NOT send
-    dt_17_59 = datetime(2026, 11, 10, 17, 59, 0, tzinfo=TASHKENT_TZ)
-    assert admin_bot.check_and_send_daily_reports(now=dt_17_59) == 0
+    # Case 1: 16:54:59 (before 16:55) -> Should NOT send
+    dt_before = datetime(2026, 11, 10, 16, 54, 59, tzinfo=TASHKENT_TZ)
+    assert admin_bot.check_and_send_daily_reports(now=dt_before) == 0
     assert mock_send.call_count == 0
     assert admin_bot.LAST_DAILY_REPORT_DATE is None
 
-    # Case 2: 18:00 -> Should send once
-    dt_18_00 = datetime(2026, 11, 10, 18, 0, 0, tzinfo=TASHKENT_TZ)
-    assert admin_bot.check_and_send_daily_reports(now=dt_18_00) == 2
+    # Case 2: 16:55 -> Should send once
+    dt_report = datetime(2026, 11, 10, 16, 55, 0, tzinfo=TASHKENT_TZ)
+    assert admin_bot.check_and_send_daily_reports(now=dt_report) == 2
     assert mock_send.call_count == 1
     mock_send.assert_called_with(target_date="2026-11-10")
     assert admin_bot.LAST_DAILY_REPORT_DATE == "2026-11-10"
@@ -128,9 +128,9 @@ def test_check_and_send_daily_reports_trigger_logic(mock_send):
     assert admin_bot.check_and_send_daily_reports(now=dt_18_05) == 0
     assert mock_send.call_count == 1
 
-    # Case 4: 18:00 next day -> Should send for new date
-    dt_next_18 = datetime(2026, 11, 11, 18, 0, 0, tzinfo=TASHKENT_TZ)
-    assert admin_bot.check_and_send_daily_reports(now=dt_next_18) == 2
+    # Case 4: 16:55 next day -> Should send for new date
+    dt_next_report = datetime(2026, 11, 11, 16, 55, 0, tzinfo=TASHKENT_TZ)
+    assert admin_bot.check_and_send_daily_reports(now=dt_next_report) == 2
     assert mock_send.call_count == 2
     mock_send.assert_called_with(target_date="2026-11-11")
     assert admin_bot.LAST_DAILY_REPORT_DATE == "2026-11-11"
