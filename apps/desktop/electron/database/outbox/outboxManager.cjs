@@ -543,16 +543,48 @@ function recoverLegacyPattaBatches(db, companyId) {
         payload = JSON.parse(row.payload_json);
         error = JSON.parse(row.last_error || row.error_message || '{}');
       } catch { continue; }
-      // Retry only the obsolete missing-revision refusal. A real CAS, range or
-      // identity conflict is not fixed by retrying and must remain visible.
-      if (error?.code !== 'REVISION_CONFLICT'
-        || !/^Batch settings revision is missing(?: or invalid)?; reload before printing$/.test(error.message || '')
+      const missingRevision = error?.code === 'REVISION_CONFLICT'
+        && /^Batch settings revision is missing(?: or invalid)?; reload before printing$/.test(error.message || '');
+      const activePartyConflict = error?.code === 'ACTIVE_PARTY_EXISTS';
+      // Real CAS, range and identity conflicts remain visible. An old duplicate
+      // refusal is retryable only with authoritative evidence of the SAME paper.
+      if ((!missingRevision && !activePartyConflict)
         || !isLegacyPattaBatch(payload) || payload?.companyId !== companyId
         || payload.operationId !== row.operation_id || payload.batchId !== row.entity_id
         || row.entity_type !== 'patta_batch'
         || computePayloadHash(canonicalStringify(payload)) !== row.payload_hash
         || !Array.isArray(payload.parties) || !payload.parties.length
         || payload.parties.some((party) => !capturedPattaRange(party) || !party.printedAt)) continue;
+      if (activePartyConflict) {
+        const recoveryKey = `legacy_patta_active_party_retry_v1:${row.operation_id}`;
+        if (db.prepare('SELECT 1 FROM local_meta WHERE key = ?').get(recoveryKey)) continue;
+        const matches = payload.parties.every((party) => {
+          const alias = db.prepare(`SELECT canonical_party_id FROM party_id_aliases
+            WHERE company_id = ? AND legacy_party_id = ?`).get(companyId, party.partyRecordId);
+          const current = db.prepare(`SELECT * FROM parties WHERE company_id = ? AND id = ? AND server_revision > 0`)
+            .get(companyId, alias?.canonical_party_id || party.partyRecordId);
+          if (!current) return false;
+          const modelAlias = db.prepare(`SELECT canonical_model_id FROM model_id_aliases
+            WHERE company_id = ? AND legacy_model_id = ?`).get(companyId, party.modelId);
+          const range = capturedPattaRange(party);
+          const sameQuantity = (a, b) => a == null ? b == null : b != null && Number(a) === Number(b);
+          try {
+            return current.party_number === party.partyNumber
+              && current.model_id === (modelAlias?.canonical_model_id || party.modelId)
+              && Number(current.patta_count) === party.pattaCount
+              && Number(current.patta_start_number) === range.start
+              && Number(current.patta_end_number) === range.end
+              && sameQuantity(current.ish_soni_per_patta, party.ishSoniPerPatta)
+              && canonicalStringify(JSON.parse(current.sizes_json || '{}')) === canonicalStringify(party.sizes || {})
+              && (party.sizeOrder == null || canonicalStringify(JSON.parse(current.size_order_json)) === canonicalStringify(party.sizeOrder));
+          } catch { return false; }
+        });
+        if (!matches) continue;
+        // Persist the retry together with its status transition. If the server
+        // refuses again, reconnect must not repeatedly resend the same command.
+        db.prepare(`INSERT INTO local_meta(key, value, updated_at) VALUES (?, ?, ?)`)
+          .run(recoveryKey, row.payload_hash, new Date().toISOString());
+      }
       updateOperationStatus(db, companyId, row.operation_id, 'PENDING', 'RETRY_LEGACY_PATTA_BATCH_UNCHANGED');
       recovered++;
     }

@@ -133,6 +133,23 @@ postgres('legacy printed batch recovery over HTTP / PostgreSQL / SQLite', () => 
     expect((await pool.query('SELECT COUNT(*)::int n FROM operations_dedup WHERE company_id=$1', [companyId])).rows[0].n).toBe(1);
   });
 
+  it('recovers an old ACTIVE_PARTY_EXISTS refusal for the same authoritative issuance', async () => {
+    expect((await client.pushOperations([wire(batch())])).results[0].status).toBe('APPLIED');
+    const duplicate = batch(2);
+    duplicate.parties = batch().parties.map(p => ({ ...p, commandId: duplicate.commandId, operationId: duplicate.operationId }));
+    const operation = queue(duplicate, 'DEAD_LETTER');
+    db.prepare('UPDATE local_outbox SET last_error=? WHERE operation_id=?').run(
+      JSON.stringify({ code: 'ACTIVE_PARTY_EXISTS', message: 'Active party already exists' }), operation.operationId);
+    const result = await executeReconnectProtocol(db, companyId, client);
+    expect(result.recoveredLegacyPattaBatchCount).toBe(1);
+    expect(getOperation(db, companyId, operation.operationId)).toMatchObject({ status: 'SYNCED',
+      payload_json: canonicalStringify(operation.payload), payload_hash: operation.payloadHash });
+    expect((await pool.query('SELECT COUNT(*)::int n FROM parties WHERE company_id=$1', [companyId])).rows[0].n).toBe(1);
+    expect((await pool.query('SELECT available_sizes_json,server_revision FROM company_batch_settings WHERE company_id=$1', [companyId])).rows[0])
+      .toEqual({ available_sizes_json: ['XL'], server_revision: 7 });
+    expect((await executeReconnectProtocol(db, companyId, client)).recoveredLegacyPattaBatchCount).toBe(0);
+  });
+
   it('rejects overlapping printed paper atomically and does not loop the new conflict', async () => {
     const first = wire(batch());
     expect((await client.pushOperations([first])).results[0].status).toBe('APPLIED');

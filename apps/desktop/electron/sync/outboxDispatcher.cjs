@@ -350,9 +350,13 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
           factsUpdated++;
         } else if (op.command_type === 'CompletePattaBatch') {
           const payload = JSON.parse(op.payload_json);
-          const acceptedSettingsRevision = payload.batchSettingsBaseRevision + 1;
-          db.prepare(`UPDATE company_batch_settings SET server_revision = MAX(server_revision, ?), updated_at = ?
-            WHERE company_id = ?`).run(acceptedSettingsRevision, res.committedAt || new Date().toISOString(), companyId);
+          // Legacy issuance replay certifies printed paper only; it does not
+          // update today's settings or consume a settings revision on the server.
+          if (Number.isSafeInteger(payload.batchSettingsBaseRevision) && payload.batchSettingsBaseRevision >= 0) {
+            const acceptedSettingsRevision = payload.batchSettingsBaseRevision + 1;
+            db.prepare(`UPDATE company_batch_settings SET server_revision = MAX(server_revision, ?), updated_at = ?
+              WHERE company_id = ?`).run(acceptedSettingsRevision, res.committedAt || new Date().toISOString(), companyId);
+          }
           factsUpdated++;
         } else if (op.command_type === 'CompletePartySeries') {
           factsUpdated++;
