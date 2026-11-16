@@ -227,7 +227,9 @@ export const KonveyerView: React.FC = () => {
     for (const entry of ticket.entries || []) {
       const rate = display.operationRates[ticket.modelId]?.[entry.opName];
       if (rate === null || rate === undefined || !display.masterReport.workers.some((w) => w.workerId === entry.workerId)) return null;
-      total += rate * ticket.qty;
+      // Each entry is a worker allocation, not another full issued patta.
+      // Keep the full-ticket fallback only for legacy entries without a qty.
+      total += rate * (entry.qty ?? ticket.qty);
     }
     return total;
   }, [display, currentPeriod.id]);
@@ -573,13 +575,23 @@ export const KonveyerView: React.FC = () => {
   ]);
 
   const unpricedModel = useMemo(() => {
+    // An unavailable amount is not evidence of a missing model price: payroll
+    // may still be loading, the worker may be unknown, or the ticket may belong
+    // to another period. A known zero rate is also a valid payroll rate.
+    if (!display.ready) return null;
     const unpricedTicket = (filteredTickets || []).find((t) => {
       const m = modelMap.get(t.modelId);
-      const amount = calculateTicketAmount(t);
-      return (amount === 0 || amount === null) && m;
+      if (!m || t.periodId !== currentPeriod.id) return false;
+      return (t.entries || []).some((entry) => {
+        const operation = m.operations.find((op) => op.name === entry.opName);
+        if (!operation) return false;
+        const rate = operation.rate as unknown;
+        return !((typeof rate === 'number' || (typeof rate === 'string' && rate.trim() !== ''))
+          && Number.isFinite(Number(rate)) && Number(rate) >= 0);
+      });
     });
     return unpricedTicket ? modelMap.get(unpricedTicket.modelId) : null;
-  }, [filteredTickets, modelMap, calculateTicketAmount]);
+  }, [filteredTickets, modelMap, display.ready, currentPeriod.id]);
 
   const visibleDetailsTickets = useMemo(() => {
     return filteredTickets.slice(0, detailsDisplayLimit);
@@ -1368,7 +1380,7 @@ export const KonveyerView: React.FC = () => {
               <div className="konveyer-warning-content">
                 <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0 }} />
                 <span>
-                  Jami summa 0. <strong>{unpricedModel.name}</strong> modelining narxi kiritilmagan, shu sabab operatsiyalar summasi hisoblanmagan.
+                  <strong>{unpricedModel.name}</strong> modelining pattada ishlatilgan ayrim operatsiyalariga narx kiritilmagan. Ushbu pattalar summasi to‘liq hisoblanmagan.
                 </span>
               </div>
               <button
@@ -1486,7 +1498,7 @@ export const KonveyerView: React.FC = () => {
                                 </button>
                               </td>
                               <td style={{ textAlign: 'right', fontWeight: 700, color: amount && amount > 0 ? '#0f172a' : '#94a3b8', fontSize: '14.5px' }}>
-                                {amount && amount > 0 ? `${formatMoney(amount)} so'm` : '—'}
+                                {amount !== null ? `${formatMoney(amount)} so'm` : '—'}
                               </td>
                               {!isArchiveMode && (
                                 <td style={{ textAlign: 'center' }}>

@@ -74,7 +74,7 @@ export const ModellarJamiView: React.FC = () => {
       const qty = modelSewnQuantities[m.id] || 0;
       const amount = masterReport.modelTotals[m.id] || 0;
       const modelPrice = display.modelPrices[m.id];
-      const hasPrice = modelPrice !== null && modelPrice > 0;
+      const hasPrice = modelPrice != null && Number.isFinite(modelPrice) && modelPrice >= 0;
       const unknownAmount = workers.some((w) =>
         m.operations.some((op) => display.unknown.has(display.key(m.id, w.id, op.name)))
       );
@@ -308,6 +308,8 @@ export const ModellarJamiView: React.FC = () => {
                   <td style={{ textAlign: 'right', paddingRight: '14px' }}>
                     {r.hasPrice ? (
                       <span style={{ fontWeight: 500, color: '#0f172a' }}>{formatMoney(r.price!)}</span>
+                    ) : !display.ready ? (
+                      <span style={{ color: '#64748b' }}>Narx ma’lumoti kutilmoqda</span>
                     ) : (
                       <button
                         type="button"
@@ -393,4 +395,3 @@ export const ModellarJamiView: React.FC = () => {
     </div>
   );
 };
-

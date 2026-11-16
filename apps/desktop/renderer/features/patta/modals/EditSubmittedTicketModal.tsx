@@ -4,6 +4,7 @@ import { X, Check, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { formatMoney } from '../../../engine/formulaEngine';
 import { SubmittedTicketRecord } from '../../../types/workbook';
 import { useAuthStore } from '../../../store/authStore';
+import './EditSubmittedTicketModal.css';
 
 export const EditSubmittedTicketModal: React.FC = () => {
   const modalType = useWorkbookStore((s) => s.modalState.type);
@@ -221,51 +222,21 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
   return (
     <div
-      className="modal-overlay phase-c-dialog"
+      className="modal-overlay phase-c-dialog ticket-edit-dialog"
       onClick={closeTicketModal}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        backdropFilter: 'blur(4px)',
-        padding: '20px'
-      }}
     >
       <div
-        className="modal-card"
+        className="modal-card ticket-edit-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ticket-edit-title"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: '780px',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: 'var(--bg-surface)',
-          borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--shadow-xl)',
-          border: '1px solid var(--border-subtle)',
-          overflow: 'hidden'
-        }}
       >
         {/* Header */}
-        <div style={{
-          padding: '16px 22px',
-          borderBottom: '1px solid var(--border-subtle)',
-          background: 'var(--bg-surface-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+        <div className="ticket-edit-header">
+          <div className="ticket-edit-heading">
+            <div className="ticket-edit-title-row">
+              <h2 id="ticket-edit-title" style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
                 Patta #{ticket.pattaNumber} ni tahrirlash
               </h2>
               <span style={{
@@ -293,6 +264,8 @@ export const EditSubmittedTicketModal: React.FC = () => {
           </div>
 
           <button
+            type="button"
+            aria-label="Tahrirlash oynasini yopish"
             onClick={closeTicketModal}
             className="soft-btn"
             style={{
@@ -310,7 +283,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
         {/* Error notification if any */}
         {errorMsg && (
-          <div style={{
+          <div role="alert" style={{
             margin: '12px 20px 0 20px',
             padding: '10px 14px',
             background: 'rgba(239, 68, 68, 0.12)',
@@ -328,13 +301,19 @@ export const EditSubmittedTicketModal: React.FC = () => {
           </div>
         )}
 
-        {/* 1 Column Operations Table */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+        {/* Allocation editor with a separate scroll area on narrow screens. */}
+        <div className="ticket-edit-body">
           <div style={{ fontSize: '15px', color: 'var(--text-muted)', marginBottom: '10px' }}>
             ℹ️ Xato kiritilgan operatsiyalarda kerakli <strong>Ishchi ID raqamini</strong> o'zgartiring. Saqlanganda ish sonlari va summalar butun tizim bo'ylab avtomatik yangilanadi.
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px' }}>
+          <div className="ticket-edit-table-scroll" role="region" aria-label="Ishchi taqsimotlari" tabIndex={0}>
+          <table className="ticket-edit-table">
+            <colgroup>
+              <col style={{ width: 48 }} /><col style={{ width: 240 }} /><col style={{ width: 120 }} />
+              <col style={{ width: 100 }} /><col /><col style={{ width: 104 }} />
+              <col style={{ width: 140 }} /><col style={{ width: 56 }} />
+            </colgroup>
             <thead>
               <tr style={{ background: 'var(--bg-surface-subtle)', borderBottom: '2px solid var(--border-subtle)', height: '34px' }}>
                 <th style={{ width: '45px', textAlign: 'center', color: 'var(--text-secondary)' }}>№</th>
@@ -344,6 +323,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
                 <th style={{ textAlign: 'left', paddingLeft: '12px', color: 'var(--text-secondary)' }}>Ishchi F.I.O</th>
                 <th style={{ width: '90px', textAlign: 'center', color: 'var(--text-secondary)' }}>Dona</th>
                 <th style={{ width: '115px', textAlign: 'right', paddingRight: '12px', color: 'var(--text-secondary)' }}>Summa</th>
+                <th><span className="ticket-edit-sr-only">Amallar</span></th>
               </tr>
             </thead>
             <tbody>
@@ -372,7 +352,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
 
                     {/* Operatsiya nomi */}
                     <td style={{ paddingLeft: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      <select className="soft-input" value={row.opName} onChange={(e) => updateAllocation(row.key, 'opName', e.target.value)}>
+                      <select className="soft-input" aria-label={`${idx + 1}-taqsimot operatsiyasi`} value={row.opName} onChange={(e) => updateAllocation(row.key, 'opName', e.target.value)}>
                         {model.operations.map((operation) => <option key={operation.id} value={operation.name}>{operation.name}</option>)}
                       </select>
                     </td>
@@ -387,12 +367,12 @@ export const EditSubmittedTicketModal: React.FC = () => {
                       <input
                         type="number"
                         placeholder="ID"
+                        aria-label={`${idx + 1}-taqsimot ishchi ID`}
                         value={valStr}
                         onChange={(e) => updateAllocation(row.key, 'workerId', e.target.value)}
                         className="soft-input"
                         style={{
                           width: '100%',
-                          height: '28px',
                           textAlign: 'center',
                           fontWeight: 700,
                           fontSize: '15px',
@@ -429,20 +409,23 @@ export const EditSubmittedTicketModal: React.FC = () => {
                       )}
                     </td>
 
-                    {/* Subtotal */}
+                      {/* Allocation quantity and amount must occupy separate columns. */}
+                    <td className="ticket-edit-qty">
+                      <input type="number" min="1" max={ticketQty} value={row.qty} onChange={(e) => updateAllocation(row.key, 'qty', e.target.value)} className="soft-input" aria-label={`${row.opName} allocation quantity`} />
+                    </td>
                     <td style={{ textAlign: 'right', paddingRight: '12px', fontWeight: 700, color: opAmount !== null && opAmount > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      <input type="number" min="1" max={ticketQty} value={row.qty} onChange={(e) => updateAllocation(row.key, 'qty', e.target.value)} className="soft-input" aria-label={`${row.opName} allocation quantity`} style={{ width: 70 }} />
                       {opAmount === null ? '—' : formatMoney(opAmount)}
                     </td>
-                    <td><button type="button" aria-label="Taqsimotni olib tashlash" onClick={() => setAllocations((prev) => prev.filter((item) => item.key !== row.key))}><Trash2 size={14} /></button></td>
+                    <td><button type="button" className="ticket-edit-remove" aria-label="Taqsimotni olib tashlash" onClick={() => setAllocations((prev) => prev.filter((item) => item.key !== row.key))}><Trash2 size={16} /></button></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          </div>
           <div style={{ marginTop: 10 }}><button type="button" className="soft-btn" onClick={() => setAllocations((prev) => [...prev, { key: `new-${Date.now()}-${Math.random()}`, opName: model.operations[0]?.name || '', workerId: '', qty: '' }])}><Plus size={14} /> Ishchi taqsimoti qo‘shish</button></div>
-          <div aria-live="polite" style={{ marginTop: 12, padding: 10, background: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-md)' }}>
-            {allocationProgress.map((progress) => <div key={progress.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14 }}>
+          <div aria-live="polite" className="ticket-edit-progress">
+            {allocationProgress.map((progress) => <div key={progress.name} className="ticket-edit-progress-row">
               <span>{progress.name}: {progress.total}/{ticketQty} · qoldi {progress.remaining}</span>
               <strong style={{ color: progress.complete ? '#15803d' : '#b45309' }}>{progress.complete ? 'Tugallangan' : 'Tugallanmagan'}</strong>
             </div>)}
@@ -450,16 +433,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div style={{
-          padding: '14px 22px',
-          borderTop: '1px solid var(--border-subtle)',
-          background: 'var(--bg-surface-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}>
+        <div className="ticket-edit-footer">
           <div>
             <div style={{ fontSize: '14.5px', color: 'var(--text-muted)' }}>
               Tanlangan operatsiyalar: <strong>{assignedOpsCount} ta</strong>
@@ -469,7 +443,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="ticket-edit-footer-actions">
             <button
               onClick={closeTicketModal}
               disabled={isSaving}

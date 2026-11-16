@@ -57,6 +57,24 @@ describe('Patta worker assignment and allocation editor interactions', () => {
     expect(updateSubmittedTicket).not.toHaveBeenCalled();
   });
 
+  it('keeps quantity, amount and remove action aligned under separate table headers', () => {
+    render(<EditSubmittedTicketModal />);
+    const dialog = screen.getByRole('dialog', { name: 'Patta #8 ni tahrirlash' });
+    expect(dialog.classList.contains('ticket-edit-card')).toBe(true);
+    const headers = dialog.querySelectorAll('thead th');
+    expect(Array.from(headers, (header) => header.textContent)).toEqual([
+      '№', 'Operatsiya nomi', 'Narxi', 'Ishchi ID', 'Ishchi F.I.O', 'Dona', 'Summa', 'Amallar'
+    ]);
+    const cells = dialog.querySelectorAll('tbody tr:first-child td');
+    expect(cells).toHaveLength(8);
+    expect(cells[5].contains(screen.getByLabelText('Yeng tikish allocation quantity'))).toBe(true);
+    expect(cells[6].textContent).toBe('200');
+    expect(cells[7].contains(screen.getByRole('button', { name: 'Taqsimotni olib tashlash' }))).toBe(true);
+    expect(screen.getByRole('region', { name: 'Ishchi taqsimotlari' }).tabIndex).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Tahrirlash oynasini yopish' }));
+    expect(useWorkbookStore.getState().closeModal).toHaveBeenCalled();
+  });
+
   it('resumes 40/100, adds Vali to complete 100, and submits actual worker quantities', async () => {
     render(<EditSubmittedTicketModal />);
     await screen.findByDisplayValue('40');
