@@ -1,10 +1,12 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { EditSubmittedTicketModal } from '../modals/EditSubmittedTicketModal';
 import { useWorkbookStore } from '../../../store/workbookStore';
 import { useAuthStore } from '../../../store/authStore';
 import { PattaView } from '../PattaView';
+import { formatDateIso } from '../../../utils/formatters';
 
 const ticket: any = {
   id: 'ticket-one', modelId: 'model-one', partyNumber: '15', partyRecordId: 'party-15', periodId: 'period-open',
@@ -76,6 +78,62 @@ describe('Patta worker assignment and allocation editor interactions', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
   });
 
+  it.each([true, false])('allows clearing and typing party 45 without restoring party 1 (strict=%s)', async (strictParty) => {
+    const model: any = { id: 'model-one', name: 'Model', operations: [], pattaOpsOrder: [], hisobQuantities: {} };
+    const party = (partyNumber: string) => ({ id: `party-${partyNumber}`, partyNumber, modelId: model.id,
+      modelName: model.name, pattaCount: 1, pattaStartNumber: Number(partyNumber), pattaEndNumber: Number(partyNumber),
+      cumulativePattaCount: Number(partyNumber), ishSoniPerPatta: 100, ishSoni: 100,
+      cumulativeIshSoni: 100, printedAt: '2026-11-11' });
+    useWorkbookStore.setState({ models: [model], printedPartyHistory: [party('1'), party('45')],
+      submittedTickets: [], availableSizes: ['M'], ticketForms: { [model.id]: {
+        date: '2026-11-11', party: '1', patta: '1', qty: '100', color: '', size: '', entries: {}, strictParty
+      } } } as any);
+    const user = userEvent.setup();
+    const view = render(<PattaView model={model} />);
+    const input = screen.getByRole('textbox', { name: 'Partiya raqami' }) as HTMLInputElement;
+    await user.clear(input);
+    expect(input.value).toBe('');
+    await user.type(input, '4');
+    expect(input.value).toBe('4');
+    await user.type(input, '5');
+    expect(input.value).toBe('45');
+    expect(useWorkbookStore.getState().ticketForms[model.id].party).toBe('45');
+    view.unmount();
+    render(<PattaView model={model} />);
+    expect((screen.getByRole('textbox', { name: 'Partiya raqami' }) as HTMLInputElement).value).toBe('45');
+  });
+
+  it.each([
+    ['party', 'Partiya raqami', '45'],
+    ['patta', 'Patta raqami', '27'],
+    ['qty', 'Ish soni', '63']
+  ])('allows deleting and replacing %s without auto-filling over the edit', async (field, label, replacement) => {
+    const model: any = { id: 'model-edit', name: 'Model', operations: [], pattaOpsOrder: [], hisobQuantities: {} };
+    useWorkbookStore.setState({ models: [model], printedPartyHistory: [{
+      id: 'party-edit', partyNumber: '1', modelId: model.id, modelName: model.name,
+      pattaStartNumber: 1, pattaEndNumber: 100, pattaCount: 100, cumulativePattaCount: 100,
+      ishSoniPerPatta: 120, ishSoni: 12000, cumulativeIshSoni: 12000, printedAt: '2026-11-11'
+    }], submittedTickets: [], availableSizes: ['M'], ticketForms: { [model.id]: {
+      date: '2026-11-11', party: '1', patta: '12', qty: '120', color: '', size: '', entries: {}
+    } } } as any);
+    const user = userEvent.setup();
+    const view = render(<PattaView model={model} />);
+    const input = screen.getByLabelText(label) as HTMLInputElement;
+    await user.click(input);
+    await user.keyboard('{End}{Backspace}');
+    const previous = field === 'qty' ? '12' : field === 'patta' ? '1' : '';
+    expect(input.value).toBe(previous);
+    await user.clear(input);
+    expect(input.value).toBe('');
+    // An unrelated update must not treat an intentionally empty field as missing.
+    fireEvent.change(screen.getByLabelText('Patta raqami'), { target: { value: field === 'patta' ? '' : '13' } });
+    view.rerender(<PattaView model={model} />);
+    expect(input.value).toBe('');
+    await user.type(input, replacement);
+    expect(input.value).toBe(replacement);
+    expect(useWorkbookStore.getState().ticketForms[model.id][field as 'party' | 'patta' | 'qty']).toBe(replacement);
+  });
+
   it('keeps numeric worker entry and Enter/up/down navigation while retaining the draft on remount', () => {
     const model: any = { id: 'model-one', name: 'Model', party: '15', color: 'Blue', size: 'M',
       operations: [{ id: 'op-one', name: 'Yeng tikish', rate: 5 }, { id: 'op-two', name: 'Ikkinchi', rate: 7 }], pattaOpsOrder: ['Yeng tikish', 'Ikkinchi'], hisobQuantities: {} };
@@ -103,7 +161,10 @@ describe('Patta worker assignment and allocation editor interactions', () => {
     render(<PattaView model={model} />);
     expect((screen.getByRole('spinbutton', { name: 'Yeng tikish worker ID' }) as HTMLInputElement).value).toBe('1');
     expect((screen.getByRole('spinbutton', { name: 'Ikkinchi worker ID' }) as HTMLInputElement).value).toBe('2');
+    expect((screen.getByLabelText('Kiritish sanasi') as HTMLInputElement).value).toBe(formatDateIso());
+    expect((screen.getByLabelText('Kiritish sanasi') as HTMLInputElement).readOnly).toBe(true);
     expect(useWorkbookStore.getState().ticketForms['model-one']).toMatchObject({
+      date: formatDateIso(),
       qty: '100', entries: { 'Yeng tikish': '1', Ikkinchi: '2' }
     });
   });

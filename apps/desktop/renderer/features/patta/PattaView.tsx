@@ -37,6 +37,13 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const syncDeleteOperation = useWorkbookStore((s) => s.syncDeleteOperation);
   const reorderOperations = useWorkbookStore((s) => s.reorderOperations);
   const openModal = useWorkbookStore((s) => s.openModal);
+  const manuallyEditedFields = useRef(new Map<string, Set<string>>());
+  const updateNumberField = (field: 'party' | 'patta' | 'qty', value: string) => {
+    const fields = manuallyEditedFields.current.get(model.id) || new Set<string>();
+    fields.add(field);
+    manuallyEditedFields.current.set(model.id, fields);
+    updateTicketField(model.id, field, value);
+  };
   const selectedPattaTicket = useMemo(() => (submittedTickets || []).find((ticket) =>
     ticket.modelId === model.id && String(ticket.partyNumber) === String(form.party).trim()
     && Number(ticket.pattaNumber) === Number(form.patta)
@@ -49,25 +56,27 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
   // Active operation row tracking for focus outline
 
-  // Helper to parse printedAt into YYYY-MM-DD for date input
-  const parseToIsoDate = (val: string | undefined): string | null => {
-    if (!val) return null;
-    const trimmed = val.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-    if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return trimmed.slice(0, 10);
-    const dmy = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
-    if (dmy) {
-      return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
-    }
-    const d = new Date(trimmed);
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    return null;
-  };
+  // Entry date is today, not the printed party's date or a saved draft's date.
+  useEffect(() => {
+    const refreshDate = () => {
+      const today = formatDateIso();
+      if (useWorkbookStore.getState().ticketForms[model.id]?.date !== today) {
+        updateTicketField(model.id, 'date', today);
+      }
+    };
+    refreshDate();
+    const timer = window.setInterval(refreshDate, 60_000);
+    window.addEventListener('focus', refreshDate);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshDate);
+    };
+  }, [model.id, form.date, updateTicketField]);
 
   // 1. Initial resolution: default to active or latest printed party and next unsubmitted patta
   useEffect(() => {
     const history = printedPartyHistory || [];
-    if (!form.party) {
+    if (!form.party && !manuallyEditedFields.current.get(model.id)?.has('party')) {
       const activeParty = history.find((h) => h.modelId === model.id && !h.isClosed)
         || history.filter((h) => h.modelId === model.id).slice(-1)[0];
       if (activeParty) {
@@ -77,14 +86,14 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         );
         const nextPatta = (activeParty.pattaStartNumber || 1) + submittedForParty.length;
         const maxPatta = activeParty.pattaEndNumber || ((activeParty.pattaStartNumber || 1) + activeParty.pattaCount - 1);
-        if (!form.patta && nextPatta <= maxPatta) {
+        if (!form.patta && !manuallyEditedFields.current.get(model.id)?.has('patta') && nextPatta <= maxPatta) {
           updateTicketField(model.id, 'patta', String(nextPatta));
         }
       }
     }
   }, [model.id, form.party, form.patta, printedPartyHistory, submittedTickets, updateTicketField]);
 
-  // 2. Comprehensive Auto-fill: Sana, Rang, Razmer, and Ish soni from printed party history
+  // 2. Auto-fill Rang, Razmer, and Ish soni from printed party history
   useEffect(() => {
     const history = printedPartyHistory || [];
     let matchedParty = history.find(
@@ -93,8 +102,9 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
     const pNum = parseInt(form.patta || '', 10);
 
-    // If no party match, but patta number is given, search by patta range
-    if (!matchedParty && !isNaN(pNum) && pNum > 0) {
+    // Infer only an untouched empty party. A partial or explicitly cleared
+    // party is user input, not permission to restore the previous patta's party.
+    if (!matchedParty && !form.party && !manuallyEditedFields.current.get(model.id)?.has('party') && !isNaN(pNum) && pNum > 0) {
       matchedParty = history.find((h) => {
         if (h.modelId !== model.id) return false;
         const start = h.pattaStartNumber ?? 1;
@@ -108,14 +118,6 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
 
     if (!matchedParty) return;
 
-    // Auto-fill Sana (Date)
-    if (matchedParty.printedAt) {
-      const isoDate = parseToIsoDate(matchedParty.printedAt);
-      if (isoDate && form.date !== isoDate) {
-        updateTicketField(model.id, 'date', isoDate);
-      }
-    }
-
     // Auto-fill Rang (Color)
     if (matchedParty.color && form.color !== matchedParty.color) {
       updateTicketField(model.id, 'color', matchedParty.color);
@@ -124,7 +126,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     // Auto-fill Ish soni (Quantity)
     const perPatta = matchedParty.ishSoniPerPatta
       || (matchedParty.pattaCount > 0 ? Math.round(matchedParty.ishSoni / matchedParty.pattaCount) : matchedParty.ishSoni);
-    if (perPatta > 0 && (!form.qty || form.qty === '0')) {
+    if (perPatta > 0 && !manuallyEditedFields.current.get(model.id)?.has('qty') && (!form.qty || form.qty === '0')) {
       updateTicketField(model.id, 'qty', String(perPatta));
     }
 
@@ -158,7 +160,6 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     model.id,
     form.party,
     form.patta,
-    form.date,
     form.color,
     form.size,
     form.qty,
@@ -495,10 +496,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 <label className="patta-right-label">Sana</label>
                 <input
                   type="date"
-                  value={form.date}
+                  aria-label="Kiritish sanasi"
+                  value={form.date || formatDateIso()}
                   min={hasActivePeriod ? currentPeriod?.startDate : undefined}
                   max={hasActivePeriod ? currentPeriod?.endDate : undefined}
-                  onChange={(e) => updateTicketField(model.id, 'date', e.target.value)}
+                  readOnly
                   onFocus={() => handleCellFocus('D2', form.date)}
                   className="patta-input patta-input-wide"
                 />
@@ -524,9 +526,10 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 </label>
                 <input
                   ref={partyInputRef}
+                  aria-label="Partiya raqami"
                   type="text"
-                  value={form.party && (form.party.includes('6632') || form.party.includes('Мато Партия')) ? '' : form.party}
-                  onChange={(e) => updateTicketField(model.id, 'party', e.target.value)}
+                  value={form.party ?? ''}
+                  onChange={(e) => updateNumberField('party', e.target.value)}
                   onKeyDown={handlePartyKeyDown}
                   onFocus={() => handleCellFocus('C3', form.party)}
                   className="patta-input patta-input-short"
@@ -572,9 +575,10 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 </label>
                 <input
                   ref={pattaInputRef}
+                  aria-label="Patta raqami"
                   type="text"
                   value={form.patta !== undefined ? form.patta : ''}
-                  onChange={(e) => updateTicketField(model.id, 'patta', e.target.value)}
+                  onChange={(e) => updateNumberField('patta', e.target.value)}
                   onKeyDown={handlePattaKeyDown}
                   onFocus={() => handleCellFocus('C4', form.patta || '')}
                   className="patta-input patta-input-short"
@@ -609,10 +613,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                 </div>
                 <input
                   ref={qtyInputRef}
+                  aria-label="Ish soni"
                   type="number"
                   disabled={hasBlockingError}
                   value={form.qty || ''}
-                  onChange={(e) => updateTicketField(model.id, 'qty', e.target.value)}
+                  onChange={(e) => updateNumberField('qty', e.target.value)}
                   onKeyDown={handleQtyKeyDown}
                   onWheel={(e) => e.currentTarget.blur()}
                   onFocus={() => handleCellFocus('C5', String(form.qty || ''))}

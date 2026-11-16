@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTicketSlice } from '../createTicketSlice';
 import { resetSessionGuardForTests } from '../../sessionGuard';
 import { cancelDebouncedSave } from '../../helpers/debounceSave';
+import { formatDateIso } from '../../../utils/formatters';
 
 function makeSlice() {
   let state: any = {
@@ -140,7 +141,7 @@ describe(' ticket command routing', () => {
        size: 'M',
        color: 'Black',
        konveyer: '',
-       effectiveDate: '2026-09-23',
+       effectiveDate: formatDateIso(),
       entries: [expect.objectContaining({ opName: 'Sew', workerId: 1 })]
     }));
     expect(command.commandId).toMatch(/^[0-9a-f-]{36}$/i);
@@ -227,7 +228,7 @@ describe(' ticket command routing', () => {
     expect(SubmitTicketCommand.mock.calls[0][0].entries[0].rateSnapshot).toBe(rate);
   });
 
-  it('carries an old-dated printed patta into the current open period', async () => {
+  it('uses the entry day instead of an old draft date for a printed patta in the current open period', async () => {
     const SubmitTicketCommand = vi.fn().mockResolvedValue({ success: true, result: { committed: true } });
     vi.stubGlobal('window', {
       electronAPI: {
@@ -243,7 +244,7 @@ describe(' ticket command routing', () => {
 
     expect(result).toBe(false); // The mocked command does not include projection reload data.
     expect(SubmitTicketCommand).toHaveBeenCalledWith(expect.objectContaining({
-      effectiveDate: '2026-09-23', periodId: 'period-current', partyRecordId: 'party-a'
+      effectiveDate: formatDateIso(), periodId: 'period-current', partyRecordId: 'party-a'
     }));
   });
 

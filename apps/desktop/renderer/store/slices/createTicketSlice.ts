@@ -300,7 +300,7 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
     const companyId = state.licenseStatus?.companyId;
     const initialLicenseStatus = state.licenseStatus;
     const partyRecordId = validation.partyOwner?.id ?? null;
-    const effectiveDate = form.date || formatDateIso();
+    const effectiveDate = formatDateIso();
     const activePeriod = state.periods?.find((period) => !period.isClosed)
       || (state.currentPeriod?.id !== 'period_default' && !state.currentPeriod?.isClosed ? state.currentPeriod : null);
     const isPrintedPattaCarryForward = Boolean(validation.partyOwner?.id);
