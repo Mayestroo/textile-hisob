@@ -1,8 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { claimWorkerBinding, getWorkerForEnrollment, getWorkerProfile, unbindWorkerTelegramBinding } = require('../workerService.cjs');
+const { claimWorkerBinding, getWorkerForEnrollment, getWorkerProfile, getWorkerTickets, unbindWorkerTelegramBinding } = require('../workerService.cjs');
 
 describe('worker binding credential enforcement', () => {
+  it('scopes ticket history to the bound worker and accounting period, not its original print date', async () => {
+    const ticket = { ticket_id: 'carried', model_name: 'Current model', period_id: 'P', qty: '100', my_qty: '8' };
+    const client = { query: vi.fn(async (sql: string, params: any[]) => {
+      if (sql.includes('FROM worker_telegram_bindings b')) {
+        expect(params).toEqual(['123', 'tenant-a', 27]);
+        return { rows: [{ worker_id: 27, status: 'ACTIVE' }] };
+      }
+      if (sql.includes('FROM periods')) return { rows: [{ id: 'P' }] };
+      expect(sql).toContain('t.period_id = $3');
+      expect(sql).toContain('e.worker_id = $2');
+      expect(sql).toContain('SUM(e.qty)::TEXT AS my_qty');
+      expect(sql).not.toContain('t.submitted_at >=');
+      expect(params).toEqual(['tenant-a', 27, 'P', 50]);
+      return { rows: [ticket] };
+    }), release: vi.fn() };
+    expect(await getWorkerTickets({ connect: async () => client }, { companyId: 'tenant-a', workerId: 27, telegramId: '123' }, 100))
+      .toEqual({ workerId: 27, tickets: [ticket] });
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('does not expose all historical tickets when no open accounting period exists', async () => {
+    const client = { query: vi.fn(async (sql: string) => ({ rows: sql.includes('FROM worker_telegram_bindings b')
+      ? [{ worker_id: 27, status: 'ACTIVE' }] : [] })), release: vi.fn() };
+    expect(await getWorkerTickets({ connect: async () => client }, { companyId: 'tenant-a', workerId: 27, telegramId: '123' }))
+      .toEqual({ workerId: 27, tickets: [] });
+    expect(client.query).toHaveBeenCalledTimes(2);
+  });
+
   it('returns reducer-owned piecework, Oklad, gross, Magazin and net to the bound worker profile', async () => {
     const client = { query: vi.fn(async (sql: string) => ({ rows: sql.includes('FROM worker_telegram_bindings b')
       ? [{ worker_id: 180, company_id: 'comp_novda', worker_name: 'Worker 180', status: 'ACTIVE', staj: 25000 }]

@@ -1548,13 +1548,19 @@ describePostgresIntegration('Authoritative Server Sync & PostgreSQL Integration 
       });
       expect(crossCompany.statusCode).toBe(401);
 
+      // A late-entered printed patta belongs to its accounting period even
+      // when its retained timestamp predates that period.
+      await pool.query('UPDATE tickets SET submitted_at=$1 WHERE company_id=$2 AND id=$3',
+        ['2020-01-01T12:00:00Z', COMPANY_A, ticketId]);
       const tickets = await app.inject({
         method: 'GET',
         url: `/api/worker/tickets?companyId=${COMPANY_A}&workerId=1&telegramId=123456789&limit=10`,
         headers
       });
       expect(JSON.parse(tickets.payload).tickets).toHaveLength(1);
-      expect(JSON.parse(tickets.payload).tickets[0]).toMatchObject({ ticket_id: ticketId, my_operations: 'Tikish' });
+      expect(JSON.parse(tickets.payload).tickets[0]).toMatchObject({
+        ticket_id: ticketId, my_operations: 'Tikish', my_qty: '4', period_id: 'period-worker-test'
+      });
     });
   });
 });

@@ -100,23 +100,23 @@
       submittedTickets: [],
       ticketQuery: readWorkerTicketSearch(),
       calculations: {
-        gross: 0,
-        avans: 0,
-        jarima: 0,
-        staj: 0,
-        net: 0,
-        pieces: 0,
+        gross: null,
+        avans: null,
+        jarima: null,
+        staj: null,
+        net: null,
+        pieces: null,
         modelsBreakdown: {}
       },
       isLoading: false
     };
 
     function formatMoney(num) {
-      return (Number(num) || 0).toLocaleString('uz-UZ') + " so'm";
+      return num == null || !Number.isFinite(Number(num)) ? 'Noma’lum' : Number(num).toLocaleString('uz-UZ') + " so'm";
     }
 
     function formatNumber(num) {
-      return (Number(num) || 0).toLocaleString('uz-UZ');
+      return num == null || !Number.isFinite(Number(num)) ? '—' : Number(num).toLocaleString('uz-UZ');
     }
 
     function escapeHtml(str) {
@@ -189,24 +189,30 @@
 
         if (!currentTgId || !companyId || !/^\d+$/.test(targetWorkerId || '') || !/^\d{1,24}$/.test(currentTgId)
           || !/^\d+$/.test(expiresAt || '') || !/^[a-f0-9]{64}$/.test(workerAuthToken || '')) {
-          if (!isSilent) renderError("Xavfsizlik cheklovi: Ushbu sahifaga faqat rasmiy Telegram botdagi tugma orqali kirish mumkin.");
+          renderError("Xavfsizlik cheklovi: Ushbu sahifaga faqat rasmiy Telegram botdagi tugma orqali kirish mumkin.");
           return;
         }
 
         if (tgUser?.id && String(tgUser.id) !== String(paramTelegramId)) {
-          if (!isSilent) renderError("Xavfsizlik cheklovi: Ushbu havola boshqa Telegram akkauntiga tegishli! Birovning hisobiga kirish taqiqlangan.");
+          renderError("Xavfsizlik cheklovi: Ushbu havola boshqa Telegram akkauntiga tegishli! Birovning hisobiga kirish taqiqlangan.");
           return;
         }
 
         const profileResponse = await fetchWorkerApi('/api/worker/profile');
         const profileResult = await profileResponse.json();
         if (!profileResponse.ok || !profileResult?.success || !profileResult.profile) {
-          if (!isSilent) renderError("Shaxsiy ma'lumotlarni yuklab bo'lmadi. Bot orqali qayta kiring.");
+          renderError("Shaxsiy ma'lumotlarni yuklab bo'lmadi. Bot orqali qayta kiring.");
           return;
         }
         const profile = profileResult.profile;
         if (String(profile.worker_id) !== String(targetWorkerId) || profile.company_id !== companyId) {
-          if (!isSilent) renderError("Xavfsizlik cheklovi: server qaytargan ishchi yoki korxona mos kelmadi.");
+          renderError("Xavfsizlik cheklovi: server qaytargan ishchi yoki korxona mos kelmadi.");
+          return;
+        }
+        const payrollFields = ['gross', 'pieceworkGross', 'oklad', 'magazin', 'avans', 'jarima', 'staj', 'net', 'pieces'];
+        if (!['COMPLETE', 'INCOMPLETE', 'UNAVAILABLE'].includes(profile.accountingStatus)
+          || payrollFields.some((field) => profile[field] == null || profile[field] === '' || !Number.isFinite(Number(profile[field])))) {
+          renderError('Server hisob-kitob ma’lumotlarini to‘liq qaytarmadi. Keyinroq qayta urinib ko‘ring.');
           return;
         }
 
@@ -219,14 +225,14 @@
           isClosed: Boolean(profile.period.isClosed)
         } : { name: profile.period_name, isClosed: false };
         state.calculations = {
-          gross: Number(profile.gross) || 0,
-          pieceworkGross: Number(profile.pieceworkGross) || 0,
-          oklad: Number(profile.oklad) || 0,
-          magazin: Number(profile.magazin) || 0,
-          avans: Number(profile.avans) || 0,
-          jarima: Number(profile.jarima) || 0,
-          staj: Number(profile.staj) || 0,
-          net: Number(profile.net) || 0,
+          gross: Number(profile.gross),
+          pieceworkGross: Number(profile.pieceworkGross),
+          oklad: Number(profile.oklad),
+          magazin: Number(profile.magazin),
+          avans: Number(profile.avans),
+          jarima: Number(profile.jarima),
+          staj: Number(profile.staj),
+          net: Number(profile.net),
           accountingStatus: profile.accountingStatus,
           unknownEntryCount: Number(profile.unknownEntryCount) || 0,
           unresolvedAdjustmentCount: Number(profile.unresolvedAdjustmentCount) || 0,
@@ -238,15 +244,15 @@
         renderHeader();
         renderHero();
         renderOperations();
+        const status = document.getElementById('workerDataStatus');
+        if (status) status.textContent = `Serverdan yangilandi: ${new Date().toLocaleTimeString('uz-UZ')}`;
 
         // Fetch tickets in background
         await fetchWorkerTickets();
 
       } catch (err) {
-        if (!isSilent) {
-          console.warn('Worker data request failed.');
-          renderError("Ma'lumotlarni yuklashda xatolik yuz berdi. Internet aloqasini tekshiring.");
-        }
+        console.warn('Worker data request failed.');
+        renderError("Ma'lumotlarni yuklashda xatolik yuz berdi. Internet aloqasini tekshiring.");
       } finally {
         state.isLoading = false;
         if (refreshBtn) refreshBtn.classList.remove('spinning');
@@ -328,6 +334,12 @@
       if (stajEl) document.getElementById('stajAmount').textContent = formatMoney(c.staj);
       const totalPiecesEl = document.getElementById('totalPiecesCount');
       if (totalPiecesEl) totalPiecesEl.textContent = formatNumber(c.pieces);
+      if (unavailable) {
+        for (const id of ['netPayAmount', 'grossPayAmount', 'grossTotalAmount', 'okladAmount', 'magazinAmount', 'avansAmount', 'jarimaAmount', 'stajAmount']) {
+          const element = document.getElementById(id);
+          if (element) element.textContent = '—';
+        }
+      }
     }
 
     function renderOperations() {
@@ -349,7 +361,7 @@
       const opsPiecesTotal = document.getElementById('opsPiecesTotal');
       if (opsPiecesTotal) opsPiecesTotal.textContent = `${formatNumber(state.calculations.pieces)} dona`;
       const opsNetPayTotal = document.getElementById('opsNetPayTotal');
-      if (opsNetPayTotal) opsNetPayTotal.textContent = state.currentPeriod ? `${formatNumber(state.calculations.net)} so'm` : '—';
+      if (opsNetPayTotal) opsNetPayTotal.textContent = state.currentPeriod && state.calculations.accountingStatus !== 'UNAVAILABLE' ? `${formatNumber(state.calculations.net)} so'm` : '—';
       const pName = state.currentPeriod?.name?.replace(/^\d{4}\s*—\s*/, '') || '';
       const opsPeriodLabel = document.getElementById('opsPeriodLabel');
       if (opsPeriodLabel) opsPeriodLabel.textContent = pName ? `${pName} · jami` : 'Davr tanlanmagan';
@@ -398,11 +410,17 @@
           const response = await res.json();
           if (!res.ok || !response?.success) throw new Error('WORKER_TICKETS_UNAVAILABLE');
           const myTickets = Array.isArray(response.tickets) ? response.tickets : [];
+          if (!Array.isArray(response.tickets) || (response.workerId != null && Number(response.workerId) !== state.workerId)) {
+            throw new Error('WORKER_TICKETS_INVALID');
+          }
           state.submittedTickets = myTickets;
           renderWorkerTickets();
 
         } catch (e) {
           console.warn('Tickets error:', e);
+          state.submittedTickets = [];
+          document.getElementById('ticketsCountBadge').textContent = '—';
+          document.getElementById('ticketFilterCount').textContent = 'Pattalar yuklanmagan';
           ticketsListEl.innerHTML = '<div class="empty-state">Pattalarni yuklashda xatolik yuz berdi.</div>';
         }
       }
@@ -410,7 +428,7 @@
       function renderWorkerTickets() {
         const ticketsListEl = document.getElementById('ticketsList');
         const query = state.ticketQuery.trim().toLocaleLowerCase();
-        const matches = state.submittedTickets.filter((ticket) => !query || [ticket.model_id, ticket.patta_number,
+        const matches = state.submittedTickets.filter((ticket) => !query || [ticket.model_name, ticket.model_id, ticket.patta_number,
           ticket.party_number, ticket.size, ticket.color, ticket.my_operations, ticket.submitted_at]
           .some((value) => String(value ?? '').toLocaleLowerCase().includes(query)));
         document.getElementById('ticketsCountBadge').textContent = matches.length;
@@ -424,18 +442,19 @@
             html += `
               <div class="ticket-item">
                 <div class="ticket-top">
-                  <span class="ticket-badge-id">${escapeHtml(t.model_id || 'Model')} &bull; Patta #${escapeHtml(t.patta_number || 1)}</span>
+                  <span class="ticket-badge-id">${escapeHtml(t.model_name || t.model_id || '—')} &bull; Patta #${escapeHtml(t.patta_number ?? '—')}</span>
                   <span class="ticket-time">⏱️ ${escapeHtml(t.submitted_at || '')}</span>
                 </div>
                 <div class="ticket-tags">
                   <span class="ticket-tag">Partiya: ${escapeHtml(t.party_number || '-')}</span>
                   <span class="ticket-tag">Razmer: ${escapeHtml(t.size || '-')}</span>
                   <span class="ticket-tag">Rang: ${escapeHtml(t.color || '-')}</span>
-                  <span class="ticket-tag" style="color: var(--success); font-weight: 700;">Soni: ${formatNumber(t.qty || 0)} dona</span>
+                  <span class="ticket-tag">Patta hajmi: ${formatNumber(t.qty)} dona</span>
+                  <span class="ticket-tag" style="color: var(--success); font-weight: 700;">Bajargan ishim: ${formatNumber(t.my_qty)} dona</span>
                 </div>
                 <div class="ticket-my-op">
                   <span>Bajarilgan chok:</span>
-                  <span style="font-weight: 700; color: var(--accent);">${escapeHtml(t.my_operations || 'Tikuv')}</span>
+                  <span style="font-weight: 700; color: var(--accent);">${escapeHtml(t.my_operations || '—')}</span>
                 </div>
               </div>
             `;
@@ -444,6 +463,21 @@
       }
 
       function renderError(msg) {
+        state.worker = null;
+        state.currentPeriod = null;
+        state.submittedTickets = [];
+        state.calculations = { modelsBreakdown: {} };
+        for (const id of ['workerNameHeader', 'periodNameText', 'aboutWorkerId', 'aboutWorkerName', 'aboutCompanyId',
+          'netPayAmount', 'grossPayAmount', 'avansAmount', 'jarimaAmount', 'okladAmount', 'grossTotalAmount',
+          'magazinAmount', 'stajAmount', 'totalPiecesCount', 'operationsCount', 'modelsCountBadge', 'opsCountBadge',
+          'opsPiecesTotal', 'opsNetPayTotal', 'ticketsCountBadge', 'ticketFilterCount']) {
+          const element = document.getElementById(id);
+          if (element) element.textContent = '—';
+        }
+        document.getElementById('workerDataStatus').textContent = msg;
+        document.getElementById('netPaySubtitle').textContent = msg;
+        document.getElementById('opsFullList').textContent = msg;
+        document.getElementById('ticketsList').textContent = msg;
         document.getElementById('modelsBreakdownList').innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">⚠️</div>
@@ -700,7 +734,7 @@
           return;
         } catch (e) {}
       }
-      alert('So‘rov yuborildi. Admin tasdiqlagach hisobingiz ochiladi.');
+      alert('So‘rov yuborilmadi. Rasmiy Telegram bot orqali qayta kiring.');
     });
 
     // Auto-refresh: Automatically update worked amounts in real-time

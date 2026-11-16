@@ -63,6 +63,8 @@
   </div>
 
   <div id="dashboardContainer">
+  <div id="workerDataStatus" role="status" aria-live="polite">Serverdan ma’lumotlar yuklanmoqda…</div>
+  <button id="refreshBtn" type="button" class="ops-section-link">Yangilash</button>
   <main class="container">
       <div id="tabContentHome">
       <!-- Greeting & Month -->
@@ -85,7 +87,7 @@
         <div class="hero-amount-line">
           <span class="hero-amount" id="netPayAmount"></span>
         </div>
-        <div class="hero-subtitle" id="netPaySubtitle" style="display: none;"></div>
+        <div class="hero-subtitle" id="netPaySubtitle"></div>
 
         <div class="hero-subgrid">
           <div class="hero-subgrid-col">

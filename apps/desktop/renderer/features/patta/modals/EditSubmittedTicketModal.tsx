@@ -17,7 +17,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
   const licenseStatus = useWorkbookStore((s) => s.licenseStatus);
   const currentPeriod = useWorkbookStore((s) => s.currentPeriod);
   const selectedArchiveFilename = useWorkbookStore((s) => s.selectedArchiveFilename);
-  const payrollCompanyId = useWorkbookStore((s) => s.payrollValuation.companyId);
+  const payrollCompanyId = useWorkbookStore((s) => s.payrollValuation?.companyId);
   const canEditTickets = useAuthStore((s) => s.permissions.includes('edit:patta'));
   const authUserId = useAuthStore((s) => s.user?.uid || '');
   const authRole = useAuthStore((s) => s.role || '');
@@ -152,7 +152,7 @@ export const EditSubmittedTicketModal: React.FC = () => {
     if (periodEditClosed || !latest.submittedTickets.some((item) => item.id === ticket.id && item.periodId === ticket.periodId)
       || (jumpContext && (latest.licenseStatus?.companyId !== jumpContext.companyId
         || ((latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId && (latest.submittedTickets.find((item) => item.id === ticket.id) as any)?.companyId !== jumpContext.companyId)
-        || (latest.payrollValuation.companyId && latest.payrollValuation.companyId !== jumpContext.companyId)
+        || (latest.payrollValuation?.companyId && latest.payrollValuation.companyId !== jumpContext.companyId)
         || latest.currentPeriod.id !== jumpContext.periodId
         || (latest.licenseStatus?.activationId || latest.licenseStatus?.machineId || '') !== jumpContext.activationId))
       || (jumpContext && (actor.user?.uid || '') !== jumpContext.authUserId)

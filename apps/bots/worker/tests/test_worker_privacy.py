@@ -34,15 +34,17 @@ class WorkerPrivacyTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
         patch.object(bot, "WORKER_WEBAPP_URL", "https://example.invalid/worker-app").start()
         patch.object(bot, "WORKER_AUTH_HMAC_SECRET", "fixture-only-hmac").start()
+        patch.object(bot, "DEFAULT_COMPANY_ID", "company-a").start()
         self.telegram = patch.object(bot, "telegram_api", return_value={"ok": True}).start()
         self.binding = BINDING
+        self.profile = copy.deepcopy(PROFILE)
         self.api = patch.object(bot, "api_request", side_effect=self.api_response).start()
 
     def api_response(self, method, route, payload=None, query=None):
         if route.startswith("/api/worker/bindings/by-telegram/"):
             return {"success": True, "binding": self.binding}
         if route == "/api/worker/profile":
-            return {"success": True, "profile": PROFILE}
+            return {"success": True, "profile": self.profile}
         if route == "/api/worker/tickets":
             return {"success": True, "tickets": [{"model_id": "Fixture model", "patta_number": 2,
                 "party_number": 4, "size": "M", "qty": 3, "my_operations": "Sew"}]}
@@ -147,6 +149,27 @@ class WorkerPrivacyTests(unittest.TestCase):
             self.telegram.reset_mock()
             bot.send_profile(USER['id'], str(USER['id']), BINDING)
         self.assertIn('Hisob to‘liq emas', self.telegram.call_args.args[1]['text'])
+
+    def test_finances_are_fetched_again_for_the_bound_worker_on_each_command(self):
+        bot.process_update(update('/hisob'))
+        self.assertIn('12 195', self.telegram.call_args.args[1]['text'])
+        self.profile['net'] = 9876
+        bot.process_update(update('/hisob'))
+        self.assertIn('9 876', self.telegram.call_args.args[1]['text'])
+        self.api.assert_any_call('GET', '/api/worker/profile', query={
+            'companyId': 'company-a', 'workerId': 27, 'telegramId': '123456789'})
+
+    def test_missing_or_invalid_amounts_are_not_presented_as_real_zero(self):
+        self.assertEqual(bot.format_money(None), 'Noma’lum')
+        self.assertEqual(bot.format_money('invalid'), 'Noma’lum')
+        self.assertEqual(bot.format_money(0), "0 so'm")
+
+    def test_missing_company_configuration_never_substitutes_a_hardcoded_tenant(self):
+        self.binding = None
+        with patch.object(bot, "DEFAULT_COMPANY_ID", ""):
+            bot.process_update(update('/start'))
+        self.assertNotIn(str(USER['id']), bot.USER_STATES)
+        self.assertIn('WORKER_COMPANY_NOT_CONFIGURED', self.telegram.call_args.args[1]['text'])
 
     def test_start_requests_contact_before_opening_onboarding_webapp(self):
         with patch.object(bot, "get_worker_binding", return_value=None), patch.object(bot, "DEFAULT_COMPANY_ID", "company-a"):

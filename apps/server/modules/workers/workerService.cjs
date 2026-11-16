@@ -288,22 +288,24 @@ async function getWorkerTickets(pool, input, limit = 8) {
   try {
     const worker = await resolveBoundWorker(client, params);
     const periodResult = await client.query(
-      `SELECT start_date::text AS start_date, end_date::text AS end_date FROM periods
-       WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC LIMIT 1`,
+      `SELECT id FROM periods
+       WHERE company_id = $1 AND is_closed = 0 ORDER BY start_date DESC, id DESC LIMIT 1`,
       [params.companyId]
     );
     const period = periodResult.rows[0] || null;
+    if (!period) return { workerId: worker.worker_id, tickets: [] };
     const result = await client.query(
-      `SELECT t.id AS ticket_id, t.model_id, t.party_number, t.patta_number, t.size, t.color,
+      `SELECT t.id AS ticket_id, t.model_id, m.name AS model_name, t.period_id, t.party_number, t.patta_number, t.size, t.color,
               t.qty::TEXT AS qty, t.submitted_at,
-              STRING_AGG(e.op_name, ', ' ORDER BY e.op_name) AS my_operations
-       FROM tickets t JOIN ticket_entries e ON e.company_id = t.company_id AND e.ticket_id = t.id
-       WHERE t.company_id = $1 AND e.worker_id = $2 AND t.status = 'CONFIRMED' AND t.is_closed = 0
-         AND ($3::DATE IS NULL OR t.submitted_at >= $3::DATE)
-         AND ($4::DATE IS NULL OR t.submitted_at < ($4::DATE + INTERVAL '1 day'))
-       GROUP BY t.id, t.model_id, t.party_number, t.patta_number, t.size, t.color, t.qty, t.submitted_at
-       ORDER BY t.submitted_at DESC LIMIT $5`,
-      [params.companyId, params.workerId, period?.start_date || null, period?.end_date || null, safeLimit]
+              SUM(e.qty)::TEXT AS my_qty,
+              STRING_AGG(DISTINCT e.op_name, ', ' ORDER BY e.op_name) AS my_operations
+        FROM tickets t JOIN ticket_entries e ON e.company_id = t.company_id AND e.ticket_id = t.id
+        LEFT JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
+        WHERE t.company_id = $1 AND e.worker_id = $2 AND t.status = 'CONFIRMED' AND t.is_closed = 0
+          AND t.period_id = $3
+        GROUP BY t.id, t.model_id, m.name, t.period_id, t.party_number, t.patta_number, t.size, t.color, t.qty, t.submitted_at
+        ORDER BY t.submitted_at DESC, t.id DESC LIMIT $4`,
+      [params.companyId, params.workerId, period.id, safeLimit]
     );
     return { workerId: worker.worker_id, tickets: result.rows };
   } finally {

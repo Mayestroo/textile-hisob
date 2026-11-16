@@ -79,7 +79,7 @@ describe('worker web authentication compatibility', () => {
 
     expect(webApp).toContain('id="stajAmount"');
     expect(webApp).toContain('Sof = Jami - Avans - Jarima - Staj');
-    expect(script).toContain("staj: Number(profile.staj) || 0");
+    expect(script).toContain("staj: Number(profile.staj)");
     expect(script).toContain("getElementById('stajAmount').textContent = formatMoney(c.staj)");
   });
 

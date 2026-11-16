@@ -33,6 +33,30 @@ describe('Patta worker assignment and allocation editor interactions', () => {
   });
   afterEach(() => cleanup());
 
+  it.each([undefined, null])('opens and saves a scoped ticket while payroll valuation is %s', async (payrollValuation) => {
+    const jumpContext = { companyId: 'company-one', periodId: 'period-open', activationId: 'activation',
+      authUserId: useAuthStore.getState().user?.uid || '', authRole: 'accountant' };
+    useWorkbookStore.setState({ payrollValuation: payrollValuation as any,
+      modalState: { type: 'edit_ticket', data: { ...ticket, jumpContext } } });
+    render(<EditSubmittedTicketModal />);
+    expect(await screen.findByRole('heading', { name: 'Patta #8 ni tahrirlash' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Saqlash va hisoblarni yangilash/ }));
+    await waitFor(() => expect(updateSubmittedTicket).toHaveBeenCalledWith('ticket-one', [
+      expect.objectContaining({ entryId: 'entry-ali', workerId: 1, qty: 40 })
+    ]));
+  });
+
+  it('still blocks a mismatched company when payroll valuation is unavailable', async () => {
+    useWorkbookStore.setState({ payrollValuation: undefined as any,
+      modalState: { type: 'edit_ticket', data: { ...ticket, jumpContext: {
+        companyId: 'other-company', periodId: 'period-open', activationId: 'activation',
+        authUserId: useAuthStore.getState().user?.uid || '', authRole: 'accountant'
+      } } } });
+    render(<EditSubmittedTicketModal />);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(updateSubmittedTicket).not.toHaveBeenCalled();
+  });
+
   it('resumes 40/100, adds Vali to complete 100, and submits actual worker quantities', async () => {
     render(<EditSubmittedTicketModal />);
     await screen.findByDisplayValue('40');

@@ -135,17 +135,21 @@ def get_worker_recent_tickets(company_id, worker_id, telegram_id, limit=8):
 
 
 def format_money(amount):
+    if amount is None:
+        return "Noma’lum"
     try:
-        return f"{int(round(float(amount or 0))):,}".replace(",", " ") + " so'm"
+        return f"{int(round(float(amount))):,}".replace(",", " ") + " so'm"
     except (TypeError, ValueError, OverflowError):
-        return "0 so'm"
+        return "Noma’lum"
 
 
 def format_number(amount):
+    if amount is None:
+        return "—"
     try:
-        return f"{int(round(float(amount or 0))):,}".replace(",", " ")
+        return f"{int(round(float(amount))):,}".replace(",", " ")
     except (TypeError, ValueError, OverflowError):
-        return "0"
+        return "—"
 
 
 def telegram_api(method, payload):
@@ -240,9 +244,9 @@ def send_tickets(chat_id, telegram_id, binding):
     lines = ["<b>OXIRGI PATTALAR</b>"]
     for ticket in tickets:
         lines.append(
-            f"\n🏷 {escape(ticket.get('model_id'))} · Patta #{escape(ticket.get('patta_number'))}"
+            f"\n🏷 {escape(ticket.get('model_name') or ticket.get('model_id'))} · Patta #{escape(ticket.get('patta_number'))}"
             f"\nPartiya: {escape(ticket.get('party_number'))} · Razmer: {escape(ticket.get('size') or '-')} · Rang: {escape(ticket.get('color') or '-')}"
-            f"\nChok: {escape(ticket.get('my_operations') or '')} · Soni: {escape(ticket.get('qty'))} dona"
+            f"\nChok: {escape(ticket.get('my_operations') or '')} · Bajarilgan ish: {escape(ticket.get('my_qty') if ticket.get('my_qty') is not None else '—')} dona"
             f"\n{escape(ticket.get('submitted_at'))}"
         )
     send_message(chat_id, "".join(lines), main_keyboard(binding, telegram_id))
@@ -262,7 +266,9 @@ def begin_registration(chat_id, user):
             main_keyboard(binding, telegram_id),
         )
         return
-    USER_STATES[telegram_id] = {"step": "WAITING_CONTACT", "company_id": DEFAULT_COMPANY_ID or "comp_novda"}
+    if not DEFAULT_COMPANY_ID:
+        raise RuntimeError("WORKER_COMPANY_NOT_CONFIGURED")
+    USER_STATES[telegram_id] = {"step": "WAITING_CONTACT", "company_id": DEFAULT_COMPANY_ID}
     reply_markup = {
         "keyboard": [[{"text": "📱 Telefon raqamni ulashish", "request_contact": True}]],
         "resize_keyboard": True,
@@ -282,9 +288,12 @@ def send_onboarding_webapp(chat_id, user, state):
     if not WORKER_WEBAPP_URL:
         send_message(chat_id, "Web App manzili sozlanmagan. Korxona ma'muriyatiga murojaat qiling.")
         return
-    expires, token = worker_web_token(state.get("company_id") or "comp_novda", 0, telegram_id)
+    company_id = state.get("company_id")
+    if not company_id:
+        raise RuntimeError("WORKER_COMPANY_NOT_CONFIGURED")
+    expires, token = worker_web_token(company_id, 0, telegram_id)
     params = urllib.parse.urlencode({
-        "onboarding": "1", "companyId": state.get("company_id") or "comp_novda",
+        "onboarding": "1", "companyId": company_id,
         "telegramId": telegram_id, "expiresAt": expires, "authToken": token,
     })
     url = f"{WORKER_WEBAPP_URL}{'&' if '?' in WORKER_WEBAPP_URL else '?'}{params}"
@@ -421,7 +430,9 @@ def process_update(update):
             payload = json.loads(web_app_data.get("data", "{}"))
             if payload.get("action") == "bind_request":
                 worker_id = int(payload.get("workerId"))
-                company_id = payload.get("companyId") or DEFAULT_COMPANY_ID or "comp_novda"
+                company_id = payload.get("companyId") or DEFAULT_COMPANY_ID
+                if not company_id:
+                    raise RuntimeError("WORKER_COMPANY_NOT_CONFIGURED")
                 binding = save_worker_binding(
                     telegram_id,
                     worker_id,
@@ -466,7 +477,7 @@ def process_update(update):
         try:
             api_request("POST", "/api/worker/onboarding-contact", {
                 "telegramId": telegram_id,
-                "companyId": state.get("company_id") or "comp_novda",
+                "companyId": state["company_id"],
                 "phoneNumber": phone,
                 "contactName": state["contact_name"],
             })
