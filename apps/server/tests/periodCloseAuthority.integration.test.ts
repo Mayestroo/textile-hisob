@@ -111,6 +111,34 @@ describe('authoritative period-close enforcement', () => {
     expect(fallbackResult.status).toBe('APPLIED');
   });
 
+  it('accounts an unentered printed patta in the captured open period despite its closed work date', async () => {
+    await pool.query(`INSERT INTO periods (id, company_id, start_date, is_closed)
+      VALUES ('september', $1, '2026-09-01', 0)`, [companyId]);
+    const payload = {
+      ...ticket('00000000-0000-4000-8000-000000000408', 'op-period-carry', '2026-08-17'),
+      periodId: 'september', allocationVersion: 1
+    };
+    const operation = descriptor('SubmitTicket', payload.operationId, payload.ticketId, payload);
+    const result = (await send(operation)).json().results[0];
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'APPLIED', periodId: 'september' });
+    expect((await pool.query(`SELECT period_id, is_closed FROM tickets WHERE company_id=$1 AND id=$2`,
+      [companyId, payload.ticketId])).rows[0]).toMatchObject({ period_id: 'september', is_closed: 0 });
+    expect((await pool.query(`SELECT is_closed FROM periods WHERE company_id=$1 AND id='august-closed'`,
+      [companyId])).rows[0].is_closed).toBe(1);
+    expect((await send(operation)).json().results[0]).toMatchObject({ status: 'APPLIED' });
+  });
+
+  it.each(['august-closed', 'missing-period'])('rejects carry-forward into unavailable period %s', async (periodId) => {
+    const payload = {
+      ...ticket('00000000-0000-4000-8000-000000000409', 'op-period-carry-invalid', '2026-08-17'),
+      periodId, allocationVersion: 1
+    };
+    const result = (await send(descriptor('SubmitTicket', payload.operationId, payload.ticketId, payload))).json().results[0];
+    expect(result, JSON.stringify(result)).toMatchObject({ status: 'REJECTED', error: { code: 'PERIOD_SCOPE_MISMATCH' } });
+    expect((await pool.query('SELECT id FROM tickets WHERE company_id=$1 AND id=$2',
+      [companyId, payload.ticketId])).rows).toHaveLength(0);
+  });
+
   it('preserves recurring STAJ across authoritative close and freezes the archived amount', async () => {
     const { loadPayroll } = require('../modules/workers/payrollValuation.cjs');
     await pool.query('UPDATE workers SET staj=140000 WHERE company_id=$1 AND id=1', [companyId]);

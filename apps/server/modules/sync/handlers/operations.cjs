@@ -635,7 +635,13 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
     : null;
   const partyRecordId = partyAlias?.rows[0]?.canonical_party_id || requestedPartyRecordId;
 
-  await assertServerPeriodOpen(client, companyId, payload.effectiveDate, submittedAt);
+  // Match the desktop command: a printed patta can retain its original work
+  // date while being entered in a captured open accounting period. The party
+  // evidence and requested open period are validated below before any insert.
+  const carryForwardPrintedPatta = Boolean(payload.periodId && partyRecordId);
+  if (!carryForwardPrintedPatta) {
+    await assertServerPeriodOpen(client, companyId, payload.effectiveDate, submittedAt);
+  }
   const effectiveDate = businessDate(payload.effectiveDate, submittedAt);
 
   const activationPolicy = await client.query(`
