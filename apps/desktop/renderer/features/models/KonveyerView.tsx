@@ -75,7 +75,7 @@ export const KonveyerView: React.FC = () => {
 
   const displayWorkers = useMemo(() => [
     ...workers,
-    ...payrollValuation.workers
+    ...(Array.isArray(payrollValuation?.workers) ? payrollValuation.workers : [])
       .filter((item) => !workers.some((worker) => worker.id === Number(item.workerId)))
       .map((item) => ({
         id: Number(item.workerId),
