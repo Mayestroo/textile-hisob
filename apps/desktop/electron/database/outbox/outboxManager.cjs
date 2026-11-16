@@ -581,6 +581,40 @@ function recoverVoidedPattaDuplicateTickets(db, companyId) {
   return recovered;
 }
 
+// Re-send the original command, never manufacture another ticket or move its
+// captured accounting period. Called only when the server advertises the fix.
+function recoverPrintedPattaCarryForwardTickets(db, companyId) {
+  return db.transaction(() => {
+    const operations = db.prepare(`SELECT * FROM local_outbox WHERE company_id = ?
+      AND command_type = 'SubmitTicket' AND status IN ('CONFLICT', 'DEAD_LETTER')
+      AND attempt_count = 1`).all(companyId);
+    let recovered = 0;
+    for (const operation of operations) {
+      let error;
+      let payload;
+      try {
+        error = JSON.parse(operation.last_error || operation.error_message || '{}');
+        payload = JSON.parse(operation.payload_json);
+      } catch { continue; }
+      if (error?.code !== 'PERIOD_CLOSED' || !payload.periodId || !payload.partyRecordId
+        || payload.companyId !== companyId || payload.operationId !== operation.operation_id
+        || payload.ticketId !== operation.entity_id
+        || computePayloadHash(canonicalStringify(payload)) !== operation.payload_hash) continue;
+      const ticket = db.prepare(`SELECT period_id, party_record_id, status, server_revision FROM tickets
+        WHERE company_id = ? AND id = ?`).get(companyId, payload.ticketId);
+      if (!ticket || ticket.status !== 'PENDING_SYNC' || Number(ticket.server_revision) !== 0
+        || ticket.period_id !== payload.periodId || ticket.party_record_id !== payload.partyRecordId) continue;
+      if (!db.prepare('SELECT 1 FROM periods WHERE company_id = ? AND id = ? AND is_closed = 0')
+        .get(companyId, payload.periodId)) continue;
+      if (!db.prepare('SELECT 1 FROM parties WHERE company_id = ? AND id = ?')
+        .get(companyId, payload.partyRecordId)) continue;
+      updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_PRINTED_PATTA_CARRY_FORWARD_UNCHANGED');
+      recovered++;
+    }
+    return recovered;
+  }).immediate();
+}
+
 function recoverPeriodScopeMismatchTickets(db, companyId) {
   const operations = db.prepare(`SELECT * FROM local_outbox
     WHERE company_id = ? AND command_type = 'SubmitTicket' AND status = 'DEAD_LETTER'
@@ -894,6 +928,7 @@ module.exports = {
   recoverVoidedPattaDuplicateTickets,
   recoverLegacyPattaBatches,
   recoverPeriodScopeMismatchTickets,
+  recoverPrintedPattaCarryForwardTickets,
   recoverCapturedTicketProvenanceTickets,
   recoverStrandedSendingOperations
 };

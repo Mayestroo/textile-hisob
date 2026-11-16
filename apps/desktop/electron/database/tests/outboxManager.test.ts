@@ -16,6 +16,7 @@ const {
   acknowledgeAllocationCancellation,
   rejectAllocationCancellation,
   recoverPeriodScopeMismatchTickets,
+  recoverPrintedPattaCarryForwardTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
 } = require('../outbox/outboxManager.cjs');
@@ -308,6 +309,43 @@ describe('outbox server-acceptance reconciliation', () => {
       .toEqual({ status: 'DEAD_LETTER' });
     expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op-do-not-retry-repeatedly'))
       .toEqual({ status: 'DEAD_LETTER' });
+  });
+
+  it('retries a closed-date printed patta unchanged only once and only with matching open-period evidence', () => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('carry-model', ?, 'Model', '[]', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO parties (id, company_id, party_number, physical_party_number, model_id, status, created_at, updated_at)
+      VALUES ('carry-party', ?, '1', '1', 'carry-model', 'ACTIVE', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, server_revision, created_at, updated_at)
+      VALUES ('carry-period', ?, 'Current', '2026-09-01', 0, 'OPEN', 1, ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, period_id, party_record_id, party_number,
+      patta_number, qty, status, submitted_at, created_at)
+      VALUES ('carry-ticket', ?, 'carry-model', 'carry-period', 'carry-party', '1', 1, 1, 'PENDING_SYNC', ?, ?)`)
+      .run(companyId, now, now);
+    const payloadJson = canonicalStringify({ companyId, operationId: 'carry-op', ticketId: 'carry-ticket',
+      periodId: 'carry-period', partyRecordId: 'carry-party', effectiveDate: '2026-08-17' });
+    const payloadHash = computePayloadHash(payloadJson);
+    insertOutboxOperation(db, { operation_id: 'carry-op', company_id: companyId, command_type: 'SubmitTicket',
+      entity_type: 'ticket', entity_id: 'carry-ticket', payload_json: payloadJson, payload_hash: payloadHash,
+      status: 'DEAD_LETTER', attempt_count: 1, last_error: JSON.stringify({ code: 'PERIOD_CLOSED' }) });
+
+    db.prepare("UPDATE periods SET is_closed=1 WHERE id='carry-period'").run();
+    expect(recoverPrintedPattaCarryForwardTickets(db, companyId)).toBe(0);
+    db.prepare("UPDATE periods SET is_closed=0 WHERE id='carry-period'").run();
+    db.prepare("UPDATE tickets SET period_id='other' WHERE id='carry-ticket'").run();
+    expect(recoverPrintedPattaCarryForwardTickets(db, companyId)).toBe(0);
+    db.prepare("UPDATE tickets SET period_id='carry-period' WHERE id='carry-ticket'").run();
+    expect(recoverPrintedPattaCarryForwardTickets(db, 'other-company')).toBe(0);
+    expect(recoverPrintedPattaCarryForwardTickets(db, companyId)).toBe(1);
+    expect(db.prepare("SELECT status, payload_json, payload_hash FROM local_outbox WHERE operation_id='carry-op'").get())
+      .toEqual({ status: 'PENDING', payload_json: payloadJson, payload_hash: payloadHash });
+    expect(recoverPrintedPattaCarryForwardTickets(db, companyId)).toBe(0);
+    db.prepare("UPDATE local_outbox SET status='DEAD_LETTER', attempt_count=2, last_error=? WHERE operation_id='carry-op'")
+      .run(JSON.stringify({ code: 'PERIOD_CLOSED' }));
+    expect(recoverPrintedPattaCarryForwardTickets(db, companyId)).toBe(0);
+    expect(db.prepare('SELECT COUNT(*) n FROM tickets').get().n).toBe(1);
   });
 
   it('does not requeue a mismatched captured period as the current open period', () => {
