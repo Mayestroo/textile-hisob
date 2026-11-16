@@ -354,21 +354,27 @@ function createAdminDashboardService(options = {}) {
         ORDER BY p.company_id, qty DESC, model_name ASC
       `, [companyId, targetDate]),
       pool.query(`
-        SELECT 
-          e.company_id,
-          COALESCE(c.company_name, e.company_id) AS company_name,
+        -- Count issued pieces once per accepted ticket, not once per worker
+        -- operation. Aggregate entries separately so splits cannot multiply qty.
+        SELECT
+          t.company_id,
+          COALESCE(c.company_name, t.company_id) AS company_name,
           t.model_id,
           COALESCE(m.name, t.model_id, 'Noma''lum') AS model_name,
-          COUNT(e.id)::int AS entry_count,
-          COALESCE(SUM(e.qty), 0)::numeric AS qty
-        FROM ticket_entries e
-        LEFT JOIN tickets t ON t.company_id = e.company_id AND t.id = e.ticket_id
-        LEFT JOIN activation_companies c ON c.company_id = e.company_id
+          COALESCE(SUM(entries.entry_count), 0)::int AS entry_count,
+          COALESCE(SUM(t.qty), 0)::numeric AS qty
+        FROM tickets t
+        CROSS JOIN LATERAL (
+          SELECT COUNT(e.id) AS entry_count FROM ticket_entries e
+          WHERE e.company_id = t.company_id AND e.ticket_id = t.id
+        ) entries
+        LEFT JOIN activation_companies c ON c.company_id = t.company_id
         LEFT JOIN models m ON m.company_id = t.company_id AND m.id = t.model_id
-        WHERE ($1::VARCHAR IS NULL OR e.company_id = $1)
-          AND (COALESCE(e.created_at, NOW()) AT TIME ZONE 'Asia/Tashkent')::date = $2::date
-        GROUP BY e.company_id, c.company_name, t.model_id, m.name
-        ORDER BY e.company_id, qty DESC, model_name ASC
+        WHERE ($1::VARCHAR IS NULL OR t.company_id = $1)
+          AND t.status = 'CONFIRMED'
+          AND (t.submitted_at AT TIME ZONE 'Asia/Tashkent')::date = $2::date
+        GROUP BY t.company_id, c.company_name, t.model_id, m.name
+        ORDER BY t.company_id, qty DESC, model_name ASC
       `, [companyId, targetDate]),
       pool.query(`
         SELECT company_id, telegram_id

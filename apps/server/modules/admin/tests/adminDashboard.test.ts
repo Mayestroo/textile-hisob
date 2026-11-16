@@ -234,6 +234,27 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(cutSql).toContain("COALESCE(p.printed_at, p.created_at) AT TIME ZONE 'Asia/Tashkent'");
     expect(cutSql).not.toContain('FROM tickets');
     expect(query.mock.calls[1][0]).toContain('FROM ticket_entries e');
+    const enteredSql = query.mock.calls[1][0];
+    expect(enteredSql).toContain('SUM(t.qty)');
+    expect(enteredSql).not.toContain('SUM(e.qty)');
+    expect(enteredSql).toContain('CROSS JOIN LATERAL');
+    expect(enteredSql).toContain("t.status = 'CONFIRMED'");
+    expect(enteredSql).toContain("t.submitted_at AT TIME ZONE 'Asia/Tashkent'");
+    expect(enteredSql).not.toContain('e.created_at');
+  });
+
+  it('reports 684 + 112 pieces independently of the 10 + 15 allocation entries', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [
+        { company_id: 'comp_novda', model_id: 'm1', model_name: 'DZ_Cayshab-349-Model', entry_count: 10, qty: '684' },
+        { company_id: 'comp_novda', model_id: 'm2', model_name: 'DZ-008-1', entry_count: 15, qty: '112' }
+      ] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ company_id: 'comp_novda', company_name: 'Novda' }] });
+    const { report } = await serviceFor(query).dailyProductionReport({ companyId: 'comp_novda', date: '2026-11-16' });
+    expect(report.enteredProduction).toMatchObject({ totalQty: 796, totalEntries: 25,
+      byModel: [{ qty: 684, entryCount: 10 }, { qty: 112, entryCount: 15 }] });
   });
 
   it('reports issued pattas even when no work entries have been submitted', async () => {

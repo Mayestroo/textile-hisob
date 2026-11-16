@@ -260,6 +260,7 @@ def format_daily_report_message(report, date_str=None):
 
     lines.append("")
     lines.append(f"📥 <b>Kiritilgan umumiy ish soni:</b> {entered_qty} dona" + (f" ({entered_ops} ta operatsiya)" if entered_ops else ""))
+    lines.append("<i>(Har bir qabul qilingan patta bir marta sanaladi; operatsiyalarga ko‘paytirilmaydi)</i>")
 
     if entered_models:
         lines.append("<b>Modellar bo'yicha kiritilgan ish sonlari:</b>")

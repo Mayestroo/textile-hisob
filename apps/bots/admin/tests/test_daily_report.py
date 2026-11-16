@@ -71,6 +71,19 @@ def test_format_daily_report_message_full():
     assert "Брайс-Турси: <b>330</b> dona (16 ta operatsiya)" in message
 
 
+def test_entered_pieces_are_not_multiplied_by_operation_count():
+    report = {"companyName": "Novda", "enteredProduction": {
+        "totalQty": 796, "totalEntries": 25, "byModel": [
+            {"modelName": "DZ_Cayshab-349-Model", "qty": 684, "entryCount": 10},
+            {"modelName": "DZ-008-1", "qty": 112, "entryCount": 15}
+        ]}}
+    message = admin_bot.format_daily_report_message(report, '2026-11-16')
+    assert 'Kiritilgan umumiy ish soni:</b> 796 dona (25 ta operatsiya)' in message
+    assert 'DZ_Cayshab-349-Model: <b>684</b> dona (10 ta operatsiya)' in message
+    assert 'DZ-008-1: <b>112</b> dona (15 ta operatsiya)' in message
+    assert '8 520' not in message
+
+
 def test_format_daily_report_message_empty():
     report = {
         "companyId": "comp_novda",

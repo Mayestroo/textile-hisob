@@ -124,6 +124,33 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     fetchImpl.mockClear();
   });
 
+  it('counts 684 + 112 entered pieces once despite 25 operation entries and different sync/edit dates', async () => {
+    await pool.query(`INSERT INTO models (id, company_id, name, operations_json)
+      VALUES ('model-2', $1, 'DZ-008-1', '[]')`, [COMPANY_ID]);
+    const first = '00000000-0000-4000-8000-000000000611';
+    const second = '00000000-0000-4000-8000-000000000612';
+    await pool.query(`INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id,
+      patta_number, qty, status, submitted_at, period_id) VALUES
+      ($1, $3, 'model-1', '35', 'party-1', 218, 684, 'CONFIRMED', '2026-11-15T19:00:00Z', 'period-current'),
+      ($2, $3, 'model-2', '35', 'party-1', 1118, 112, 'CONFIRMED', '2026-11-16T18:59:59Z', 'period-current')`,
+      [first, second, COMPANY_ID]);
+    for (const [id, count, qty] of [[first, 10, 684], [second, 15, 112]]) {
+      await pool.query(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, qty, created_at)
+        SELECT $1 || '-entry-' || n, $1, $2, 'Operation ' || n, $3, $4, '2026-11-17T12:00:00Z'
+        FROM generate_series(1, $5::int) n`, [id, COMPANY_ID, WORKER_ID, qty, count]);
+    }
+    // Edited/imported entries must not turn yesterday's or voided tickets into
+    // today's production, even when their entry rows were written today.
+    await pool.query(`UPDATE tickets SET submitted_at='2026-11-16T12:00:00Z', status='VOIDED'
+      WHERE company_id=$1 AND id=$2`, [COMPANY_ID, TICKET_ID]);
+    const response = await app.inject({ method: 'GET',
+      url: `/internal/admin/daily-report?date=2026-11-16&companyId=${COMPANY_ID}`,
+      headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().report.enteredProduction).toMatchObject({ totalQty: 796, totalEntries: 25,
+      byModel: [{ modelId: 'model-1', qty: 684, entryCount: 10 }, { modelId: 'model-2', qty: 112, entryCount: 15 }] });
+  });
+
   it('counts printed party quantities and pattas independently of submitted work', async () => {
     await pool.query(`INSERT INTO parties
       (id, company_id, party_number, physical_party_number, model_id, patta_count, total_ish_soni, ish_soni, printed_at, created_at)
