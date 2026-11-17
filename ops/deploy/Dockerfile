@@ -20,6 +20,7 @@ COPY packages/domain/legacyPattaBatch.cjs ./packages/domain/legacyPattaBatch.cjs
 COPY packages/domain/pattaFinishScope.cjs ./packages/domain/pattaFinishScope.cjs
 COPY packages/domain/payrollReducer.cjs ./packages/domain/payrollReducer.cjs
 COPY packages/domain/stajDebtLedger.cjs ./packages/domain/stajDebtLedger.cjs
+COPY packages/domain/syncConflictSemantics.cjs ./packages/domain/syncConflictSemantics.cjs
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \

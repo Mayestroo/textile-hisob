@@ -82,6 +82,19 @@ describe('safe conflict reconciliation (SQLite + simulated authenticated inspect
     expect(await reconcileEquivalentConflicts(db, companyId, item.client)).toBe(0);
   });
 
+  it('confirms the existing local row in place when the server kept the same ticket UUID', async () => {
+    const item = fixture();
+    (item.snapshot as any).ticketId = localId;
+    (item.result as any).canonicalEntityId = localId;
+    expect(await reconcileEquivalentConflicts(db, companyId, item.client)).toBe(1);
+    expect(db.prepare('SELECT id, status, server_revision FROM tickets WHERE id=?').get(localId))
+      .toEqual({ id: localId, status: 'CONFIRMED', server_revision: 1 });
+    expect(db.prepare('SELECT COUNT(*) n FROM tickets WHERE status=?').get('CONFIRMED').n).toBe(1);
+    expect(db.prepare('SELECT id, qty FROM ticket_entries WHERE ticket_id=? ORDER BY qty').all(localId))
+      .toEqual([{ id: 'server-entry-1', qty: 40 }, { id: 'server-entry-2', qty: 60 }]);
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id=?').get('op').status).toBe('SUPERSEDED');
+  });
+
   it('resolves an identical model revision without overwriting server data or faking acceptance', async () => {
     const item = fixture('UpsertModel');
     expect(await reconcileEquivalentConflicts(db, companyId, item.client)).toBe(1);

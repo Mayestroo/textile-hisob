@@ -20,6 +20,7 @@ function descriptor(type = 'UpsertModel') {
 }
 
 async function inspect(op: any, overrides: any = {}) {
+  const operationsToInspect = Array.isArray(op) ? op : [op];
   const query = vi.fn(async (sql: string, params: any[] = []) => {
     if (sql.includes('FROM operations_dedup')) return { rows: overrides.accepted ? [{}] : [] };
     if (sql.includes('FROM allocation_resolution_fences')) return { rows: overrides.cancelled ? [{}] : [] };
@@ -44,7 +45,7 @@ async function inspect(op: any, overrides: any = {}) {
   const app = Fastify();
   app.addHook('preHandler', async (request: any) => { request.auth = { companyId: tenant }; });
   app.post('/inspect', createConflictInspectionHandler({ connect: async () => ({ query, release() {} }) }));
-  try { return { response: await app.inject({ method: 'POST', url: '/inspect', payload: { operations: [op] } }), query }; }
+  try { return { response: await app.inject({ method: 'POST', url: '/inspect', payload: { operations: operationsToInspect } }), query }; }
   finally { await app.close(); }
 }
 
@@ -78,6 +79,16 @@ describe('authenticated conflict inspection (real handler, query doubles)', () =
   it.each([{ accepted: true }, { cancelled: true }])('does not supersede acceptance/cancellation authority: %j', async (overrides) => {
     const { response } = await inspect(descriptor(), overrides);
     expect(response.json().results[0].status).not.toBe('EQUIVALENT');
+  });
+
+  it('does not let one historical validation refusal hide other conflicts in the batch', async () => {
+    const invalid: any = descriptor('SubmitTicket');
+    invalid.payload.entries = [];
+    invalid.payloadHash = computePayloadHash(canonicalStringify(invalid.payload));
+    const { response } = await inspect([invalid, descriptor()]);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().results.map((result: any) => result.status)).toEqual(['NOT_ELIGIBLE', 'EQUIVALENT']);
+    expect(response.json().results[0]).toMatchObject({ operationId: invalid.operationId, reason: 'INVALID_ENTRIES' });
   });
 
   it('rejects cross-company and altered-payload requests without reading their facts', async () => {

@@ -46,7 +46,12 @@ async function inspectConflict(client, companyId, operation) {
     const result = await client.query(`SELECT t.* FROM tickets t
       JOIN periods period ON period.company_id=t.company_id AND period.id=t.period_id AND period.is_closed=0
       WHERE t.company_id=$1 AND t.party_record_id=$2 AND t.patta_number=$3
-        AND t.status='CONFIRMED' AND t.is_closed=0`, [companyId, payload.partyRecordId, payload.pattaNumber]);
+        AND t.status='CONFIRMED' AND t.is_closed=0
+      ORDER BY t.server_revision DESC, t.id
+      LIMIT 2`, [companyId, payload.partyRecordId, payload.pattaNumber]);
+    // Let the database unique index prove there is exactly one live fact.
+    // Ambiguous ledger state must never be resolved by picking a row arbitrarily.
+    if (result.rows.length > 1) return { status: 'NOT_ELIGIBLE' };
     const ticket = result.rows[0];
     if (!ticket) return { status: 'NOT_FOUND' };
     const entries = await client.query(`SELECT id, op_name, worker_id, worker_name_snapshot, qty, rate_snapshot, brak
@@ -83,8 +88,19 @@ function createConflictInspectionHandler(pool) {
       await acquireCompanyChangeLock(client, req.auth.companyId);
       const results = [];
       for (const operation of operations) {
-        const result = await inspectConflict(client, req.auth.companyId, operation);
-        results.push({ companyId: req.auth.companyId, operationId: operation.operationId, payloadHash: operation.payloadHash, ...result });
+        try {
+          const result = await inspectConflict(client, req.auth.companyId, operation);
+          results.push({ companyId: req.auth.companyId, operationId: operation.operationId, payloadHash: operation.payloadHash, ...result });
+        } catch (error) {
+          // Historical payloads can be rejected by a stricter validator long
+          // after they were captured. Leave that one conflict untouched
+          // instead of blocking independent inspection of its batch peers.
+          if (error[Symbol.for('hisob.sync.applicationError')] !== true) throw error;
+          results.push({ companyId: req.auth.companyId,
+            operationId: typeof operation?.operationId === 'string' ? operation.operationId : null,
+            payloadHash: typeof operation?.payloadHash === 'string' ? operation.payloadHash : null,
+            status: 'NOT_ELIGIBLE', reason: error.code });
+        }
       }
       await client.query('COMMIT');
       return reply.header('Cache-Control', 'no-store').send({ success: true, results });
