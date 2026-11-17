@@ -111,6 +111,14 @@ Worker Telegram enrollment requires a configured PIN by default. The
 owner-controlled `NOVDA_WORKER_PIN_REQUIRED=false` override disables the PIN
 check for all worker bindings; use it only when explicitly authorized.
 
+The daily production report can also post to Telegram channels. Add the admin
+bot to each channel as an administrator, then set
+`NOVDA_ADMIN_REPORT_CHANNEL_IDS` in `compose.env` to a comma-separated list of
+chat IDs (for example `-1001234567890` or `@channel_username`). Set
+`NOVDA_ADMIN_REPORT_CHANNEL_COMPANY_ID` to scope channel posts to one company;
+leave it empty only when every company report may go to the channel. Channel
+posts omit the private-chat WebApp button.
+
 For Internet sync without an operator-managed reverse proxy, create a separate
 Cloudflare Tunnel for Novda and route `sync.novdatextile.uz` to
 `http://novda-api:3474`. Store that tunnel's token in

@@ -23,6 +23,8 @@ ADMIN_API_TOKEN = ""
 API_BASE_URL = ""
 ADMIN_WEBAPP_URL = ""
 ADMIN_WEBAPP_SESSION_SECRET = ""
+ADMIN_REPORT_CHANNEL_IDS = []
+ADMIN_REPORT_CHANNEL_COMPANY_ID = ""
 TASHKENT_TZ = timezone(timedelta(hours=5))
 LAST_DAILY_REPORT_DATE = None
 PORT = int(os.environ.get("PORT", "8080"))
@@ -278,6 +280,16 @@ def format_daily_report_message(report, date_str=None):
     return "\n".join(lines)
 
 
+def daily_report_channel_targets(report):
+    if not ADMIN_REPORT_CHANNEL_IDS:
+        return []
+    if ADMIN_REPORT_CHANNEL_COMPANY_ID:
+        company_id = str(report.get("companyId") or "")
+        if company_id != ADMIN_REPORT_CHANNEL_COMPANY_ID:
+            return []
+    return list(ADMIN_REPORT_CHANNEL_IDS)
+
+
 def send_daily_production_reports(target_date=None, target_company_id=None, target_telegram_id=None):
     today_tashkent = datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d")
     date_query = target_date or today_tashkent
@@ -313,6 +325,15 @@ def send_daily_production_reports(target_date=None, target_company_id=None, targ
                 sent_count += 1
             except Exception as error:
                 print(f"DAILY_REPORT_SEND_FAILED admin_id={admin_id} error={html.escape(str(error))}", flush=True)
+
+        if not target_telegram_id:
+            for channel_id in daily_report_channel_targets(report):
+                try:
+                    # Inline WebApp buttons are not allowed in channel posts.
+                    send_message(channel_id, msg_text)
+                    sent_count += 1
+                except Exception as error:
+                    print(f"DAILY_REPORT_CHANNEL_SEND_FAILED channel_id={channel_id} error={html.escape(str(error))}", flush=True)
 
     return sent_count
 
@@ -637,11 +658,18 @@ def run_polling():
 def configure():
     global BOT_TOKEN, ADMIN_API_TOKEN, API_BASE_URL
     global ADMIN_WEBAPP_URL, ADMIN_WEBAPP_SESSION_SECRET, CONFIGURATION_READY
+    global ADMIN_REPORT_CHANNEL_IDS, ADMIN_REPORT_CHANNEL_COMPANY_ID
     BOT_TOKEN = read_secret("ADMIN_BOT_TOKEN", "ADMIN_BOT_TOKEN_FILE")
     ADMIN_API_TOKEN = read_secret("NOVDA_ADMIN_API_TOKEN")
     API_BASE_URL = os.environ.get("NOVDA_ADMIN_API_URL", "").strip()
     ADMIN_WEBAPP_URL = os.environ.get("ADMIN_WEBAPP_URL", "").strip()
     ADMIN_WEBAPP_SESSION_SECRET = read_secret("NOVDA_ADMIN_WEBAPP_SESSION_SECRET")
+    ADMIN_REPORT_CHANNEL_IDS = [
+        chat_id.strip()
+        for chat_id in os.environ.get("NOVDA_ADMIN_REPORT_CHANNEL_IDS", "").split(",")
+        if chat_id.strip()
+    ]
+    ADMIN_REPORT_CHANNEL_COMPANY_ID = os.environ.get("NOVDA_ADMIN_REPORT_CHANNEL_COMPANY_ID", "").strip()
     webapp_url_ready = is_canonical_admin_webapp_url(ADMIN_WEBAPP_URL)
     CONFIGURATION_READY = bool(
         BOT_TOKEN and ADMIN_API_TOKEN and API_BASE_URL

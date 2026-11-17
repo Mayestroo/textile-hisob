@@ -21,8 +21,12 @@ def reset_daily_report_state():
     admin_bot.LAST_DAILY_REPORT_DATE = None
     admin_bot.BOT_TOKEN = "test_token"
     admin_bot.ADMIN_API_TOKEN = "test_api_token"
+    admin_bot.ADMIN_REPORT_CHANNEL_IDS = []
+    admin_bot.ADMIN_REPORT_CHANNEL_COMPANY_ID = ""
     yield
     admin_bot.LAST_DAILY_REPORT_DATE = None
+    admin_bot.ADMIN_REPORT_CHANNEL_IDS = []
+    admin_bot.ADMIN_REPORT_CHANNEL_COMPANY_ID = ""
 
 
 def test_format_number():
@@ -172,6 +176,108 @@ def test_send_daily_production_reports_delivery(mock_api, mock_send):
     assert mock_send.call_count == 1
     recipients = {call.args[0] for call in mock_send.call_args_list}
     assert recipients == {"274466315"}
+
+
+@patch("admin_bot.send_message")
+@patch("admin_bot.api_request")
+def test_send_daily_production_reports_to_channel(mock_api, mock_send):
+    admin_bot.ADMIN_REPORT_CHANNEL_IDS = ["-1001234567890"]
+    admin_bot.ADMIN_REPORT_CHANNEL_COMPANY_ID = "comp_novda"
+    mock_api.return_value = {
+        "reports": [
+            {
+                "companyId": "comp_novda",
+                "companyName": "Novda",
+                "adminTelegramIds": ["274466315"],
+                "cutProduction": {"totalQty": 500, "totalTickets": 10, "byModel": []},
+                "enteredProduction": {"totalQty": 300, "totalEntries": 15, "byModel": []},
+            }
+        ]
+    }
+
+    sent = admin_bot.send_daily_production_reports(target_date="2026-11-10")
+    assert sent == 2
+    recipients = {str(call.args[0]) for call in mock_send.call_args_list}
+    assert recipients == {"274466315", "-1001234567890"}
+    channel_call = next(
+        call for call in mock_send.call_args_list if str(call.args[0]) == "-1001234567890"
+    )
+    # Channel posts must not carry the private-chat WebApp keyboard.
+    assert len(channel_call.args) == 2
+
+
+@patch("admin_bot.send_message")
+@patch("admin_bot.api_request")
+def test_channel_is_scoped_to_configured_company(mock_api, mock_send):
+    admin_bot.ADMIN_REPORT_CHANNEL_IDS = ["-1001234567890"]
+    admin_bot.ADMIN_REPORT_CHANNEL_COMPANY_ID = "comp_novda"
+    mock_api.return_value = {
+        "reports": [
+            {
+                "companyId": "comp_other",
+                "companyName": "Other",
+                "adminTelegramIds": ["274466315"],
+                "cutProduction": {"totalQty": 10, "totalTickets": 1, "byModel": []},
+                "enteredProduction": {"totalQty": 5, "totalEntries": 1, "byModel": []},
+            }
+        ]
+    }
+
+    sent = admin_bot.send_daily_production_reports(target_date="2026-11-10")
+    assert sent == 1
+    recipients = {str(call.args[0]) for call in mock_send.call_args_list}
+    assert recipients == {"274466315"}
+
+
+@patch("admin_bot.send_message")
+@patch("admin_bot.api_request")
+def test_targeted_report_does_not_post_to_channel(mock_api, mock_send):
+    admin_bot.ADMIN_REPORT_CHANNEL_IDS = ["-1001234567890"]
+    mock_api.return_value = {
+        "reports": [
+            {
+                "companyId": "comp_novda",
+                "companyName": "Novda",
+                "adminTelegramIds": ["274466315"],
+                "cutProduction": {"totalQty": 500, "totalTickets": 10, "byModel": []},
+                "enteredProduction": {"totalQty": 300, "totalEntries": 15, "byModel": []},
+            }
+        ]
+    }
+
+    sent = admin_bot.send_daily_production_reports(
+        target_date="2026-11-10", target_telegram_id="999001"
+    )
+    assert sent == 1
+    recipients = {str(call.args[0]) for call in mock_send.call_args_list}
+    assert recipients == {"999001"}
+
+
+@patch("admin_bot.send_message")
+@patch("admin_bot.api_request")
+def test_channel_failure_does_not_block_admin_delivery(mock_api, mock_send):
+    admin_bot.ADMIN_REPORT_CHANNEL_IDS = ["-1001234567890"]
+    mock_api.return_value = {
+        "reports": [
+            {
+                "companyId": "comp_novda",
+                "companyName": "Novda",
+                "adminTelegramIds": ["274466315"],
+                "cutProduction": {"totalQty": 500, "totalTickets": 10, "byModel": []},
+                "enteredProduction": {"totalQty": 300, "totalEntries": 15, "byModel": []},
+            }
+        ]
+    }
+
+    def deliver(chat_id, text, reply_markup=None):
+        if str(chat_id) == "-1001234567890":
+            raise RuntimeError("TELEGRAM_API_REJECTED")
+        return {}
+
+    mock_send.side_effect = deliver
+    sent = admin_bot.send_daily_production_reports(target_date="2026-11-10")
+    assert sent == 1
+    assert {str(call.args[0]) for call in mock_send.call_args_list} == {"274466315", "-1001234567890"}
 
 
 @patch("admin_bot.api_request")

@@ -167,6 +167,8 @@ services:
       NOVDA_ADMIN_WEBAPP_SESSION_SECRET_FILE: /run/secrets/admin-webapp-session-secret
       ADMIN_WEBAPP_URL: ${NOVDA_ADMIN_WEBAPP_URL:-https://sync.novdatextile.uz/admin-app}
       ADMIN_BOT_TOKEN_FILE: /run/secrets/admin-bot-token
+      NOVDA_ADMIN_REPORT_CHANNEL_IDS: ${NOVDA_ADMIN_REPORT_CHANNEL_IDS:-}
+      NOVDA_ADMIN_REPORT_CHANNEL_COMPANY_ID: ${NOVDA_ADMIN_REPORT_CHANNEL_COMPANY_ID:-}
     depends_on:
       novda-api:
         condition: service_healthy
