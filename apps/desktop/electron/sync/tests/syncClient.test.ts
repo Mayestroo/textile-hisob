@@ -48,6 +48,35 @@ describe(' SyncClient bootstrap request', () => {
     expect(JSON.parse(options.body)).toEqual({ operations });
   });
 
+  it('uses authenticated conflict inspection and tolerates older servers without clearing conflicts', async () => {
+    const operations = [{ operationId: 'conflict-op', payloadHash: 'a'.repeat(64) }];
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ success: true, results: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const client = new SyncClient({ baseUrl: 'https://sync.example.test', token: 'device-secret', deviceId: 'machine-1' });
+    await expect(client.inspectConflicts(operations)).resolves.toEqual({ success: true, results: [] });
+    const [url, options] = fetch.mock.calls[0] as any;
+    expect(url).toBe('https://sync.example.test/api/sync/conflicts/inspect');
+    expect(options.headers.Authorization).toBe('Bearer device-secret');
+    expect(JSON.parse(options.body)).toEqual({ operations });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
+    await expect(client.inspectConflicts(operations)).resolves.toEqual({ success: true, results: [] });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
+    await expect(client.inspectConflicts(operations)).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('bounds large conflict inspections and safely splits on the server body limit', async () => {
+    const operations = Array.from({ length: 4 }, (_, index) => ({ operationId: `inspect-${index}`, payload: 'x'.repeat(450) }));
+    const fetch = vi.fn(async (_url: string, options: any) => {
+      if (Buffer.byteLength(options.body, 'utf8') > 800) return new Response('{}', { status: 413 });
+      return new Response(JSON.stringify({ success: true, results: JSON.parse(options.body).operations.map((op: any) => ({ operationId: op.operationId })) }));
+    });
+    vi.stubGlobal('fetch', fetch);
+    const client = new SyncClient({ baseUrl: 'https://sync.example.test', token: 'device-secret', maxOperationBatchBytes: 1200 });
+    const response = await client.inspectConflicts(operations);
+    expect(response.results.map((item: any) => item.operationId)).toEqual(operations.map(item => item.operationId));
+    expect(fetch.mock.calls.every(([, options]) => Buffer.byteLength(options.body, 'utf8') <= 1200)).toBe(true);
+  });
+
   it('splits large operation lists into bounded requests and preserves result order', async () => {
     const operations = Array.from({ length: 25 }, (_, index) => ({
       operationId: `op-batch-${index}`,

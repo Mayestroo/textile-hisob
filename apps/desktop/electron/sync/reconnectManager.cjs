@@ -10,6 +10,7 @@ const {
   listOutboxReconciliationCandidates,
   recoverStrandedSendingOperations,
   recoverPeriodScopeMismatchTickets,
+  recoverFreeModeTicketReviews,
   recoverPrintedPattaCarryForwardTickets,
   recoverCapturedTicketProvenanceTickets,
   recoverVoidedPattaDuplicateTickets,
@@ -191,6 +192,14 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   // ----------------------------------------------------
   const recoveredOps = recoverStrandedSendingOperations(db, companyId);
   const recoveredCount = recoveredOps.length;
+  // Resolve exact duplicate facts before pulling: a provisional patta can
+  // otherwise occupy the unique key needed by its authoritative server row.
+  try {
+    await require('./conflictReconciliation.cjs').reconcileEquivalentConflicts(db, companyId, syncClient, options);
+  } catch (error) {
+    if (options.isContextCurrent && !options.isContextCurrent()) throw error;
+    options.onConflictInspectionError?.(error);
+  }
 
   // ----------------------------------------------------
   // STEP 1 & 2: Pull remote authoritative changes & apply
@@ -199,6 +208,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   let voidedPattaReuseSupported = false;
   let legacyPattaBatchReplaySupported = false;
   let printedPattaCarryForwardSupported = false;
+  let freeModeTicketsSupported = false;
   let purgeRebootstrapped = false;
   let rebootstrapStats = null;
   try { while (hasMore) {
@@ -220,6 +230,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     if (pullRes.capabilities?.voidedPattaReuse === true) voidedPattaReuseSupported = true;
     if (pullRes.capabilities?.legacyPattaBatchReplayV1 === true) legacyPattaBatchReplaySupported = true;
     if (pullRes.capabilities?.printedPattaCarryForwardV1 === true) printedPattaCarryForwardSupported = true;
+    if (pullRes.capabilities?.freeModeTicketsV1 === true) freeModeTicketsSupported = true;
     db.prepare(`INSERT INTO local_meta(key, value, updated_at) VALUES('patta_lifecycle_v1', ?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(pullRes.capabilities?.pattaLifecycleV1 === true ? '1' : '0', new Date().toISOString());
@@ -256,6 +267,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     : 0;
   const recoveredPeriodScopeMismatchCount = recoverPeriodScopeMismatchTickets(db, companyId);
   if (printedPattaCarryForwardSupported) recoverPrintedPattaCarryForwardTickets(db, companyId);
+  if (freeModeTicketsSupported) recoverFreeModeTicketReviews(db, companyId);
   const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
   const recoveredLegacyPattaBatchCount = legacyPattaBatchReplaySupported ? recoverLegacyPattaBatches(db, companyId) : 0;
   const deferredPartyArchives = legacyPattaBatchReplaySupported

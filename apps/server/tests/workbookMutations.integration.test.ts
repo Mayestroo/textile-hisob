@@ -493,7 +493,7 @@ let splitPartyId: string | null = null;
     await pool!.query(`UPDATE parties SET status = 'CLOSED', is_closed = 1 WHERE company_id = $1 AND id = 'ticket-edit-party'`, [companyId]);
   });
 
-  it('routes free-mode work without canonical issuance to review instead of accepting it', async () => {
+  it('accepts free-mode work without a synthetic party while preserving strict validation', async () => {
     const partyCountBefore = Number((await pool!.query('SELECT COUNT(*)::int AS count FROM parties WHERE company_id = $1', [companyId])).rows[0].count);
     await pool!.query(`INSERT INTO company_batch_settings (company_id, available_sizes_json) VALUES ($1, '[]')
       ON CONFLICT (company_id) DO UPDATE SET available_sizes_json = EXCLUDED.available_sizes_json`, [companyId]);
@@ -519,9 +519,9 @@ let splitPartyId: string | null = null;
       qty: 5, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601 }]
     });
 
-    expect(result).toMatchObject({ status: 'CONFLICT', error: { code: 'ALLOCATION_REVIEW_REQUIRED' } });
-    expect((await pool!.query('SELECT id FROM tickets WHERE company_id = $1 AND id = $2', [companyId, ticketId])).rows)
-      .toEqual([]);
+    expect(result).toMatchObject({ status: 'APPLIED', periodId: 'period_2026_09' });
+    expect((await pool!.query('SELECT party_record_id FROM tickets WHERE company_id = $1 AND id = $2', [companyId, ticketId])).rows)
+      .toEqual([{ party_record_id: null }]);
     expect((await pool!.query('SELECT COUNT(*)::int AS count FROM parties WHERE company_id = $1', [companyId])).rows[0].count).toBe(partyCountBefore);
 
     await pool!.query('UPDATE activation_companies SET require_ticket_validation = TRUE WHERE company_id = $1', [companyId]);
@@ -541,9 +541,18 @@ let splitPartyId: string | null = null;
       partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false,
       qty: 3, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601 }]
     });
-    expect(perTicketFreeResult).toMatchObject({ status: 'CONFLICT', error: { code: 'ALLOCATION_REVIEW_REQUIRED' } });
-    expect((await pool!.query('SELECT id FROM tickets WHERE company_id = $1 AND id = $2', [companyId, perTicketFreeId])).rows)
-      .toEqual([]);
+    expect(perTicketFreeResult).toMatchObject({ status: 'APPLIED', periodId: 'period_2026_09' });
+    expect((await pool!.query('SELECT party_record_id, patta_number FROM tickets WHERE company_id = $1 AND id = $2', [companyId, perTicketFreeId])).rows)
+      .toEqual([{ party_record_id: null, patta_number: 0 }]);
+    const otherFreeId = '00000000-0000-4000-8000-000000000904';
+    expect(await apply('SubmitTicket', 'ticket', otherFreeId, {
+      commandId: 'cmd-another-free', operationId: 'op-another-free', companyId,
+      ticketId: otherFreeId, modelId: 'free-model', partyNumber: "No'malum Partiya",
+      partyRecordId: null, pattaNumber: 0, strictParty: false, strictPatta: false,
+      periodId: 'period_2026_09', allocationVersion: 1,
+      qty: 3, effectiveDate: '2026-09-25', entries: [{ opName: 'Cut', workerId: 601, qty: 3 }]
+    })).toMatchObject({ status: 'APPLIED' });
+    expect((await pool!.query('SELECT COUNT(*)::int AS count FROM parties WHERE company_id = $1', [companyId])).rows[0].count).toBe(partyCountBefore);
   });
 
   it('closes a period atomically, rolls parties, stores an archive, and archives history without deletes', async () => {

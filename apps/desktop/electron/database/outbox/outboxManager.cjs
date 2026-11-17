@@ -656,6 +656,47 @@ function recoverPeriodScopeMismatchTickets(db, companyId) {
   return recovered;
 }
 
+// Retry only the obsolete unlinked-party refusal, after the server advertises
+// free-mode support. Keep the original IDs, payload, hash and accounting period.
+function recoverFreeModeTicketReviews(db, companyId) {
+  return db.transaction(() => {
+    const operations = db.prepare(`SELECT op.* FROM local_outbox op
+      WHERE op.company_id = ? AND op.command_type = 'SubmitTicket' AND op.status = 'CONFLICT'
+        AND op.attempt_count = 1
+        AND NOT EXISTS (SELECT 1 FROM allocation_resolution_intents intent
+          WHERE intent.company_id = op.company_id AND intent.original_operation_id = op.operation_id)`)
+      .all(companyId);
+    let recovered = 0;
+    for (const operation of operations) {
+      let payload;
+      let error;
+      let date;
+      try {
+        payload = JSON.parse(operation.payload_json);
+        error = JSON.parse(operation.last_error || operation.error_message || '{}');
+        date = businessDate(payload.effectiveDate, payload.submittedAt);
+      } catch { continue; }
+      if (error?.code !== 'ALLOCATION_REVIEW_REQUIRED'
+        || error.message !== 'This ticket has no canonical printed-party link; preserve it for reconciliation instead of applying it'
+        || payload.strictParty !== false || payload.partyRecordId != null || !payload.periodId
+        || payload.companyId !== companyId || payload.operationId !== operation.operation_id
+        || payload.ticketId !== operation.entity_id
+        || computePayloadHash(canonicalStringify(payload)) !== operation.payload_hash) continue;
+      const ticket = db.prepare(`SELECT status, server_revision, model_id, period_id, party_record_id, qty
+        FROM tickets WHERE company_id = ? AND id = ?`).get(companyId, payload.ticketId);
+      if (!ticket || ticket.status !== 'PENDING_SYNC' || Number(ticket.server_revision) !== 0
+        || ticket.party_record_id != null || ticket.model_id !== payload.modelId
+        || ticket.period_id !== payload.periodId || Number(ticket.qty) !== payload.qty) continue;
+      const period = db.prepare(`SELECT id FROM periods WHERE company_id = ? AND id = ? AND is_closed = 0
+        AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)`).get(companyId, payload.periodId, date, date);
+      if (!period) continue;
+      updateOperationStatus(db, companyId, operation.operation_id, 'PENDING', 'RETRY_FREE_MODE_TICKET_UNCHANGED');
+      recovered++;
+    }
+    return recovered;
+  }).immediate();
+}
+
 // Retry only batch05B's obsolete provenance refusals after verifying the exact
 // queued capture against the local fact. Closed-period intent stays visible.
 function recoverCapturedTicketProvenanceTickets(db, companyId) {
@@ -928,6 +969,7 @@ module.exports = {
   recoverVoidedPattaDuplicateTickets,
   recoverLegacyPattaBatches,
   recoverPeriodScopeMismatchTickets,
+  recoverFreeModeTicketReviews,
   recoverPrintedPattaCarryForwardTickets,
   recoverCapturedTicketProvenanceTickets,
   recoverStrandedSendingOperations

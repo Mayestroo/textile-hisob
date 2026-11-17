@@ -183,6 +183,31 @@ class SyncClient {
     return this.postJson('/api/sync/allocation-review/cancel', request, 'Allocation cancellation failed');
   }
 
+  async inspectConflicts(operations) {
+    if (!operations.length) return { success: true, results: [] };
+    const split = async () => {
+      const middle = Math.ceil(operations.length / 2);
+      const left = await this.inspectConflicts(operations.slice(0, middle));
+      const right = await this.inspectConflicts(operations.slice(middle));
+      return { success: true, results: [...left.results, ...right.results] };
+    };
+    const body = JSON.stringify({ operations });
+    if (operations.length > 1 && (operations.length > 25 || Buffer.byteLength(body, 'utf8') > this.maxOperationBatchBytes)) {
+      return split();
+    }
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/api/sync/conflicts/inspect`, {
+      method: 'POST', headers: this.getHeaders(), body
+    });
+    // An older VPS cannot establish equivalence. Never clear a conflict locally
+    // just because the optional inspection endpoint is unavailable.
+    if (res.status === 404) return { success: true, results: [] };
+    if (res.status === 413 && operations.length > 1) return split();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SyncError('Conflict inspection failed', data.error?.code || 'CONFLICT_INSPECTION_FAILED', res.status);
+    if (data.success !== true || !Array.isArray(data.results)) throw new SyncError('Invalid conflict inspection response', 'INVALID_CONFLICT_INSPECTION_RESPONSE', res.status);
+    return data;
+  }
+
   async getAllocationReviewHistory(operationId) {
     const url = `${this.baseUrl}/api/sync/allocation-review/history/${encodeURIComponent(operationId)}`;
     const res = await this.fetchWithTimeout(url, { method: 'GET', headers: this.getHeaders() });

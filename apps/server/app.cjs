@@ -4,6 +4,7 @@ const fastify = require('fastify');
 const { getServerPool } = require('./infrastructure/db.cjs');
 const { createAuthMiddleware } = require('./auth/auth.cjs');
 const { createOperationsHandler, createOperationStatusHandler } = require('./modules/sync/handlers/operations.cjs');
+const { createConflictInspectionHandler } = require('./modules/sync/handlers/conflictInspection.cjs');
 const { createChangeFeedHandler } = require('./modules/sync/handlers/changeFeed.cjs');
 const { createBootstrapHandler } = require('./modules/sync/handlers/bootstrap.cjs');
 const { createLeasesHandler } = require('./modules/sync/handlers/leases.cjs');
@@ -96,6 +97,7 @@ function buildFastifyServer(options = {}) {
     // Distributed Operations Endpoint
     apiScope.post('/api/sync/operations', { preHandler: businessMutationFence }, operationsHandler);
     apiScope.post('/api/sync/operations/status', operationStatusHandler);
+    apiScope.post('/api/sync/conflicts/inspect', createConflictInspectionHandler(pool));
     apiScope.post('/api/sync/allocation-review/cancel', { preHandler: businessMutationFence }, createAllocationResolutionHandler(pool, { testHookBeforeCommit: options.allocationResolutionTestHook }));
     apiScope.get('/api/staj-debts/reviews', async (req, reply) => {
       try { requireReviewer(req, req.auth.companyId); return reply.send({ success: true, reviews: await listDebtReviews(pool, req.auth.companyId) }); }

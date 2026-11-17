@@ -16,6 +16,7 @@ const {
   acknowledgeAllocationCancellation,
   rejectAllocationCancellation,
   recoverPeriodScopeMismatchTickets,
+  recoverFreeModeTicketReviews,
   recoverPrintedPattaCarryForwardTickets,
   recoverVoidedPattaDuplicateTickets,
   supersedeBatchSettingsAlreadyApplied
@@ -346,6 +347,53 @@ describe('outbox server-acceptance reconciliation', () => {
       .run(JSON.stringify({ code: 'PERIOD_CLOSED' }));
     expect(recoverPrintedPattaCarryForwardTickets(db, companyId)).toBe(0);
     expect(db.prepare('SELECT COUNT(*) n FROM tickets').get().n).toBe(1);
+  });
+
+  it.each(['eligible', 'strict', 'closed-period', 'cancelled', 'changed-hash', 'other-review', 'changed-local-qty'])
+    ('recovers only unchanged, open-period free-mode reviews: %s', (scenario) => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('free-model', ?, 'Model', '[]', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, status, server_revision, created_at, updated_at)
+      VALUES ('free-period', ?, 'Current', '2026-11-01', 0, 'OPEN', 1, ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, period_id, party_record_id, party_number,
+      patta_number, qty, status, submitted_at, created_at)
+      VALUES ('free-ticket', ?, 'free-model', 'free-period', NULL, 'Unknown', 0, 5, 'PENDING_SYNC', ?, ?)`)
+      .run(companyId, now, now);
+    const payloadJson = canonicalStringify({ companyId, operationId: 'free-op', ticketId: 'free-ticket',
+      modelId: 'free-model', periodId: 'free-period', partyRecordId: null, qty: 5,
+      strictParty: scenario === 'strict', strictPatta: false, effectiveDate: '2026-11-16' });
+    const payloadHash = computePayloadHash(payloadJson);
+    const operation = { operation_id: 'free-op', company_id: companyId, command_type: 'SubmitTicket',
+      entity_type: 'ticket', entity_id: 'free-ticket', payload_json: payloadJson,
+      payload_hash: scenario === 'changed-hash' ? '0'.repeat(64) : payloadHash,
+      status: 'CONFLICT', attempt_count: 1, last_error: JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED',
+        message: 'This ticket has no canonical printed-party link; preserve it for reconciliation instead of applying it' }) };
+    if (scenario === 'changed-hash') {
+      // Simulate a damaged legacy row directly; the normal insert API correctly
+      // refuses a bad hash and existing intent cannot legally be overwritten.
+      db.prepare(`INSERT INTO local_outbox (operation_id, company_id, command_type, entity_type, entity_id,
+        payload_json, payload_hash, status, attempt_count, last_error, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(operation.operation_id, companyId,
+          operation.command_type, operation.entity_type, operation.entity_id, payloadJson, operation.payload_hash,
+          operation.status, operation.attempt_count, operation.last_error, now, now);
+    } else insertOutboxOperation(db, operation);
+    if (scenario === 'closed-period') db.prepare("UPDATE periods SET is_closed=1 WHERE id='free-period'").run();
+    if (scenario === 'cancelled') queueAllocationCancellation(db, companyId, 'free-op', 'Do not apply');
+    if (scenario === 'other-review') db.prepare("UPDATE local_outbox SET last_error=? WHERE operation_id='free-op'")
+      .run(JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED', message: 'Quantity mismatch' }));
+    if (scenario === 'changed-local-qty') db.prepare("UPDATE tickets SET qty=6 WHERE id='free-ticket'").run();
+    expect(recoverFreeModeTicketReviews(db, 'other-company')).toBe(0);
+    expect(recoverFreeModeTicketReviews(db, companyId)).toBe(scenario === 'eligible' ? 1 : 0);
+    expect(db.prepare("SELECT payload_json FROM local_outbox WHERE operation_id='free-op'").get().payload_json).toBe(payloadJson);
+    if (scenario === 'eligible') {
+      expect(db.prepare("SELECT status, payload_hash FROM local_outbox WHERE operation_id='free-op'").get())
+        .toEqual({ status: 'PENDING', payload_hash: payloadHash });
+      expect(recoverFreeModeTicketReviews(db, companyId)).toBe(0);
+      expect(db.prepare("SELECT status, party_record_id FROM tickets WHERE id='free-ticket'").get())
+        .toEqual({ status: 'PENDING_SYNC', party_record_id: null });
+    }
   });
 
   it('does not requeue a mismatched captured period as the current open period', () => {

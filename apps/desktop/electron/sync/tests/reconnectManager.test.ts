@@ -157,6 +157,45 @@ describe('reconnect accepted-operation reconciliation', () => {
     expect(pushOperations).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('retries free-mode review only after the server advertises support=%s', async (supported) => {
+    const db = databaseManager.getCompanyDatabase(userData, companyId);
+    const now = '2026-11-16T10:00:00Z';
+    const ticketId = '00000000-0000-4000-8000-000000009200';
+    db.prepare(`INSERT INTO models (id, company_id, name, operations_json, created_at, updated_at)
+      VALUES ('free-model', ?, 'Free Model', '[]', ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO periods (id, company_id, name, start_date, is_closed, created_at, updated_at)
+      VALUES ('free-period', ?, 'Current', '2026-11-01', 0, ?, ?)`).run(companyId, now, now);
+    db.prepare(`INSERT INTO tickets (id, company_id, model_id, period_id, party_record_id, party_number,
+      patta_number, qty, status, submitted_at, created_at)
+      VALUES (?, ?, 'free-model', 'free-period', NULL, 'Unknown', 0, 5, 'PENDING_SYNC', ?, ?)`)
+      .run(ticketId, companyId, now, now);
+    const payload = { operationId: 'free-op', companyId, ticketId, modelId: 'free-model', periodId: 'free-period',
+      partyRecordId: null, partyNumber: 'Unknown', pattaNumber: 0, strictParty: false, strictPatta: false,
+      qty: 5, effectiveDate: '2026-11-16', entries: [{ opName: 'Sew', workerId: 1, qty: 5 }] };
+    const payloadJson = canonicalStringify(payload);
+    const hash = computePayloadHash(payloadJson);
+    insertOutboxOperation(db, { operation_id: 'free-op', company_id: companyId, command_type: 'SubmitTicket',
+      entity_type: 'ticket', entity_id: ticketId, payload_json: payloadJson, payload_hash: hash,
+      status: 'CONFLICT', attempt_count: 1, last_error: JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED',
+        message: 'This ticket has no canonical printed-party link; preserve it for reconciliation instead of applying it' }) });
+    const pushOperations = vi.fn(async (ops: any[]) => ({ results: ops.map((op) => ({
+      operationId: op.operationId, payloadHash: op.payloadHash, periodId: 'free-period',
+      status: 'APPLIED', serverRevision: 1, cursor: '1'
+    })) }));
+    const client = { pushOperations,
+      getOperationStatuses: async () => ({ results: [{ operationId: 'free-op', status: 'NOT_FOUND' }] }),
+      pullChanges: async () => ({ items: [], nextCursor: '0', hasMore: false, capabilities: { freeModeTicketsV1: supported } }) };
+    await executeReconnectProtocol(db, companyId, client);
+    expect(pushOperations).toHaveBeenCalledTimes(supported ? 1 : 0);
+    expect(getOperation(db, companyId, 'free-op')).toMatchObject({
+      payload_json: payloadJson, payload_hash: hash, status: supported ? 'SYNCED' : 'CONFLICT'
+    });
+    expect(db.prepare('SELECT status, party_record_id FROM tickets WHERE company_id=? AND id=?').get(companyId, ticketId))
+      .toEqual({ status: supported ? 'CONFIRMED' : 'PENDING_SYNC', party_record_id: null });
+    await executeReconnectProtocol(db, companyId, client);
+    expect(pushOperations).toHaveBeenCalledTimes(supported ? 1 : 0);
+  });
+
   it('does not open a SQLite write transaction for an unchanged empty poll', async () => {
     const db = databaseManager.getCompanyDatabase(userData, companyId);
     db.prepare(`INSERT INTO company_patta_sequences(company_id, next_patta_number, updated_at)

@@ -343,7 +343,7 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
 
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
-      const entryId = ticketEntryId(ticketId, i);
+      const entryId = e.entryId || ticketEntryId(ticketId, i);
       entryStmt.run(
         entryId,
         ticketId,
@@ -353,7 +353,7 @@ function applyTicketChange(db, companyId, ticketId, changeType, payload, entityR
         e.workerNameSnapshot || null,
         e.rateSnapshot !== undefined ? e.rateSnapshot : null,
         e.brak || null,
-        qty,
+        e.qty ?? qty,
         now
       );
     }
@@ -800,6 +800,8 @@ function applyBatchSettingsChange(db, companyId, payload, entityRevision = 1) {
 module.exports = {
   getLocalCursor,
   setLocalCursor,
+  applyTicketChange,
+  applyModelChange,
   applyWorkerChange,
   applyChangesBatch
 };

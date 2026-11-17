@@ -463,7 +463,16 @@ function resolveTicketValidationMode(payload = {}, companyPolicy = null) {
 
 async function assertCanonicalTicketIssuance(client, companyId, ticket, commandType) {
   if (!ticket.party_record_id) {
-    throw createOpError('ALLOCATION_REVIEW_REQUIRED', `${commandType} has no canonical printed-party link; preserve this operation for reconciliation instead of applying it`);
+    // An accepted free-mode ticket is its own quantity authority. Editing it
+    // must not invent a printed party or change its recorded accounting scope.
+    const qty = Number(ticket.qty);
+    if (!ticket.period_id || !Number.isSafeInteger(qty) || qty <= 0) {
+      throw createOpError('ALLOCATION_REVIEW_REQUIRED', `${commandType} has no verifiable free-mode quantity or accounting period`);
+    }
+    const period = await client.query(`SELECT id FROM periods
+      WHERE company_id = $1 AND id = $2 AND is_closed = 0`, [companyId, ticket.period_id]);
+    if (!period.rows.length) throw createOpError('TICKET_NOT_EDITABLE', 'Free-mode ticket accounting period is not open');
+    return qty;
   }
   const result = await client.query(`SELECT ish_soni_per_patta
     FROM parties WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, ticket.party_record_id]);
@@ -480,7 +489,7 @@ async function assertCanonicalTicketIssuance(client, companyId, ticket, commandT
 async function executeUpdateTicket(client, companyId, operationId, payload) {
   const ticketId = payload.ticketId;
   await client.query(`SELECT pg_advisory_xact_lock(hashtext($1 || ':ticket:' || $2))`, [companyId, ticketId]);
-  const ticketResult = await client.query(`SELECT id, model_id, qty, status, is_closed, server_revision, party_record_id, party_number, patta_number
+  const ticketResult = await client.query(`SELECT id, model_id, qty, status, is_closed, server_revision, party_record_id, party_number, patta_number, period_id
     FROM tickets WHERE company_id = $1 AND id = $2 FOR UPDATE`, [companyId, ticketId]);
   const ticket = ticketResult.rows[0];
   if (!ticket) throw createOpError('TICKET_NOT_FOUND', `Ticket "${ticketId}" was not found`);
@@ -658,6 +667,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
     strictParty: requestedStrictParty,
     strictPatta: requestedStrictPatta
   }, companyPolicy);
+  const isFreeModeTicket = !strictParty && !partyRecordId;
   if (strictParty && !partyRecordId) {
     throw createOpError('PARTY_RECORD_REQUIRED', 'A printed party is required while strict ticket validation is enabled');
   }
@@ -757,8 +767,8 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
     if (party.party_number !== partyNumber || canonicalPartyModelId !== modelId) {
       throw createOpError('PARTY_IDENTITY_MISMATCH', 'Ticket party identity does not match its printed party record');
     }
-    // Explicit worker allocations are accepted only against persisted issuance
-    // evidence. The ticket's client-provided qty is a claim, not its authority.
+    // A linked printed ticket must still match authoritative issuance even if
+    // a validation switch is off. Only unlinked free-mode work uses entered qty.
     const issuedQty = Number(party.ish_soni_per_patta);
     if (!Number.isSafeInteger(issuedQty) || issuedQty <= 0) {
       throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'This printed party has no reliable per-patta issued quantity; preserve this operation for review');
@@ -770,8 +780,6 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
       && (Number(pattaNumber) < Number(party.patta_start_number) || Number(pattaNumber) > Number(party.patta_end_number))) {
       throw createOpError('PATTA_NUMBER_OUT_OF_RANGE', 'Ticket patta number is outside the assigned party-series range');
     }
-  } else {
-    throw createOpError('ALLOCATION_REVIEW_REQUIRED', 'This ticket has no canonical printed-party link; preserve it for reconciliation instead of applying it');
   }
 
   const serverRevision = 1;
@@ -781,7 +789,7 @@ async function executeSubmitTicket(client, companyId, operationId, payload, cano
   // evidence. Keep the no-period fallback only for legacy payloads; never turn
   // a newly entered ticket into an unattributed fact when period authority is
   // unavailable.
-  if (!periodId && Number(payload.allocationVersion) >= 1) {
+  if (!periodId && (isFreeModeTicket || Number(payload.allocationVersion) >= 1)) {
     throw createOpError('ALLOCATION_REVIEW_REQUIRED',
       'New ticket has no verifiable open accounting period; preserve this operation for review');
   }
