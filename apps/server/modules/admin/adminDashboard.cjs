@@ -343,6 +343,7 @@ function createAdminDashboardService(options = {}) {
           p.model_id,
           COALESCE(m.name, p.model_name, p.model_id, 'Noma''lum') AS model_name,
           COALESCE(SUM(p.patta_count), 0)::int AS ticket_count,
+          COUNT(DISTINCT COALESCE(NULLIF(p.physical_party_number, ''), p.party_number))::int AS party_count,
           COALESCE(SUM(COALESCE(p.total_ish_soni, p.ish_soni)), 0)::numeric AS qty
         FROM parties p
         LEFT JOIN activation_companies c ON c.company_id = p.company_id
@@ -364,6 +365,8 @@ function createAdminDashboardService(options = {}) {
           COALESCE(SUM(entries.entry_count), 0)::int AS entry_count,
           COALESCE(SUM(t.qty), 0)::numeric AS qty
         FROM tickets t
+        JOIN periods period ON period.company_id = t.company_id
+          AND period.id = t.period_id AND period.is_closed = 0
         CROSS JOIN LATERAL (
           SELECT COUNT(e.id) AS entry_count FROM ticket_entries e
           WHERE e.company_id = t.company_id AND e.ticket_id = t.id
@@ -435,13 +438,15 @@ function createAdminDashboardService(options = {}) {
       const comp = getOrCreateCompany(row.company_id, row.company_name);
       const qty = normalizeNumeric(row.qty);
       const ticketCount = parseCount(row.ticket_count);
+      const partyCount = parseCount(row.party_count);
       comp.cutProduction.totalQty += qty;
       comp.cutProduction.totalTickets += ticketCount;
       comp.cutProduction.byModel.push({
         modelId: row.model_id,
         modelName: row.model_name,
         qty,
-        ticketCount
+        ticketCount,
+        partyCount
       });
     }
     for (const row of entryResult.rows) {

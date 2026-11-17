@@ -143,6 +143,18 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     // today's production, even when their entry rows were written today.
     await pool.query(`UPDATE tickets SET submitted_at='2026-11-16T12:00:00Z', status='VOIDED'
       WHERE company_id=$1 AND id=$2`, [COMPANY_ID, TICKET_ID]);
+    await pool.query(`INSERT INTO periods (id, company_id, name, start_date, end_date, is_closed, status)
+      VALUES ('period-closed', $1, 'Closed', '2026-08-01', '2026-08-31', 1, 'CLOSED')`, [COMPANY_ID]);
+    // Neither closed/unattributed work entered today nor older work in the
+    // open period belongs to today's open-period production.
+    await pool.query(`INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id,
+      patta_number, qty, status, submitted_at, period_id) VALUES
+      ('00000000-0000-4000-8000-000000000621', $1, 'model-1', '35', 'party-1', 300, 999,
+        'CONFIRMED', '2026-11-16T12:00:00Z', 'period-closed'),
+      ('00000000-0000-4000-8000-000000000622', $1, 'model-1', '35', 'party-1', 301, 999,
+        'CONFIRMED', '2026-11-16T12:00:00Z', NULL),
+      ('00000000-0000-4000-8000-000000000623', $1, 'model-1', '35', 'party-1', 302, 999,
+        'CONFIRMED', '2026-11-15T18:59:59Z', 'period-current')`, [COMPANY_ID]);
     const response = await app.inject({ method: 'GET',
       url: `/internal/admin/daily-report?date=2026-11-16&companyId=${COMPANY_ID}`,
       headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' } });
@@ -168,7 +180,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().report.cutProduction).toEqual({
       totalQty: 1460, totalTickets: 30,
-      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 1460, ticketCount: 30 }]
+      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 1460, ticketCount: 30, partyCount: 3 }]
     });
     expect(response.json().report.enteredProduction).toEqual({ totalQty: 0, totalEntries: 0, byModel: [] });
   });
@@ -193,7 +205,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().report.cutProduction).toEqual({
       totalQty: 450, totalTickets: 10,
-      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 450, ticketCount: 10 }]
+      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 450, ticketCount: 10, partyCount: 4 }]
     });
   });
 

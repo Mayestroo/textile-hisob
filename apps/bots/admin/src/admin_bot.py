@@ -235,12 +235,11 @@ def format_daily_report_message(report, date_str=None):
 
     entered = report.get("enteredProduction") or {}
     entered_qty = format_number(entered.get("totalQty", 0))
-    entered_ops = entered.get("totalEntries", 0)
     entered_models = entered.get("byModel", [])
 
     lines = [
         "📊 <b>Kunlik ishlab chiqarish hisoboti</b>",
-        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (16:55)",
+        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (16:50)",
         f"🏢 <b>Kompaniya:</b> {html.escape(str(company_name))}",
         "",
         f"✂️ <b>Bichilgan son:</b> {cut_qty} dona" + (f" ({cut_tickets} ta patta)" if cut_tickets else ""),
@@ -253,25 +252,28 @@ def format_daily_report_message(report, date_str=None):
             m_name = html.escape(str(item.get("modelName") or "Noma'lum"))
             m_qty = format_number(item.get("qty", 0))
             m_pattas = item.get("ticketCount", 0)
-            patta_str = f" ({m_pattas} ta patta)" if m_pattas else ""
+            details = []
+            if item.get("partyCount") is not None:
+                details.append(f"{format_number(item['partyCount'])} ta partiya")
+            if m_pattas:
+                details.append(f"{m_pattas} ta patta")
+            patta_str = f" ({', '.join(details)})" if details else ""
             lines.append(f"  • {m_name}: <b>{m_qty}</b> dona{patta_str}")
     else:
         lines.append("<i>(Bugun bichilgan modellar yo'q)</i>")
 
     lines.append("")
-    lines.append(f"📥 <b>Kiritilgan umumiy ish soni:</b> {entered_qty} dona" + (f" ({entered_ops} ta operatsiya)" if entered_ops else ""))
-    lines.append("<i>(Har bir qabul qilingan patta bir marta sanaladi; operatsiyalarga ko‘paytirilmaydi)</i>")
+    lines.append(f"📥 <b>Kiritilgan umumiy ish soni:</b> {entered_qty} dona")
+    lines.append("<i>(Faqat ochiq davrga tegishli, hisobot sanasida kiritilgan pattalar; har bir patta bir marta sanaladi)</i>")
 
     if entered_models:
         lines.append("<b>Modellar bo'yicha kiritilgan ish sonlari:</b>")
         for item in entered_models:
             m_name = html.escape(str(item.get("modelName") or "Noma'lum"))
             m_qty = format_number(item.get("qty", 0))
-            m_ops = item.get("entryCount", 0)
-            op_str = f" ({m_ops} ta operatsiya)" if m_ops else ""
-            lines.append(f"  • {m_name}: <b>{m_qty}</b> dona{op_str}")
+            lines.append(f"  • {m_name}: <b>{m_qty}</b> dona")
     else:
-        lines.append("<i>(Bugun kiritilgan ishlar yo'q)</i>")
+        lines.append("<i>(Ochiq davrda shu sanada kiritilgan ishlar yo'q)</i>")
 
     return "\n".join(lines)
 
@@ -319,7 +321,7 @@ def check_and_send_daily_reports(now=None):
     global LAST_DAILY_REPORT_DATE
     now_dt = datetime.now(TASHKENT_TZ) if now is None else now
     today_str = now_dt.strftime("%Y-%m-%d")
-    if (now_dt.hour, now_dt.minute) >= (16, 55) and LAST_DAILY_REPORT_DATE != today_str:
+    if (now_dt.hour, now_dt.minute) >= (16, 50) and LAST_DAILY_REPORT_DATE != today_str:
         sent = send_daily_production_reports(target_date=today_str)
         LAST_DAILY_REPORT_DATE = today_str
         return sent

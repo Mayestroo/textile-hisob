@@ -178,8 +178,8 @@ describe(' admin dashboard PostgreSQL projections', () => {
       // 1. cut query
       .mockResolvedValueOnce({
         rows: [
-          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm1', model_name: 'DZ-008-1', ticket_count: 5, qty: '800' },
-          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm2', model_name: 'Брайс-Турси', ticket_count: 2, qty: '200' }
+          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm1', model_name: 'DZ-008-1', ticket_count: 5, party_count: 2, qty: '800' },
+          { company_id: 'comp_novda', company_name: 'Novda Textile', model_id: 'm2', model_name: 'Брайс-Турси', ticket_count: 2, party_count: 1, qty: '200' }
         ]
       })
       // 2. entry query
@@ -214,8 +214,8 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(result.report.cutProduction.totalQty).toBe(1000);
     expect(result.report.cutProduction.totalTickets).toBe(7);
     expect(result.report.cutProduction.byModel).toEqual([
-      { modelId: 'm1', modelName: 'DZ-008-1', qty: 800, ticketCount: 5 },
-      { modelId: 'm2', modelName: 'Брайс-Турси', qty: 200, ticketCount: 2 }
+      { modelId: 'm1', modelName: 'DZ-008-1', qty: 800, ticketCount: 5, partyCount: 2 },
+      { modelId: 'm2', modelName: 'Брайс-Турси', qty: 200, ticketCount: 2, partyCount: 1 }
     ]);
 
     // Kiritilgan son: total 500 dona (12 ta operatsiya)
@@ -230,6 +230,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
     const cutSql = query.mock.calls[0][0];
     expect(cutSql).toContain('FROM parties p');
     expect(cutSql).toContain('SUM(p.patta_count)');
+    expect(cutSql).toContain("COUNT(DISTINCT COALESCE(NULLIF(p.physical_party_number, ''), p.party_number))");
     expect(cutSql).toContain('COALESCE(p.total_ish_soni, p.ish_soni)');
     expect(cutSql).toContain("COALESCE(p.printed_at, p.created_at) AT TIME ZONE 'Asia/Tashkent'");
     expect(cutSql).not.toContain('FROM tickets');
@@ -238,6 +239,8 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(enteredSql).toContain('SUM(t.qty)');
     expect(enteredSql).not.toContain('SUM(e.qty)');
     expect(enteredSql).toContain('CROSS JOIN LATERAL');
+    expect(enteredSql).toContain('period.company_id = t.company_id');
+    expect(enteredSql).toContain('period.id = t.period_id AND period.is_closed = 0');
     expect(enteredSql).toContain("t.status = 'CONFIRMED'");
     expect(enteredSql).toContain("t.submitted_at AT TIME ZONE 'Asia/Tashkent'");
     expect(enteredSql).not.toContain('e.created_at');

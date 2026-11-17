@@ -43,8 +43,8 @@ def test_format_daily_report_message_full():
             "totalQty": 1250,
             "totalTickets": 25,
             "byModel": [
-                {"modelId": "m1", "modelName": "DZ-008-1", "qty": 800, "ticketCount": 16},
-                {"modelId": "m2", "modelName": "Брайс-Турси", "qty": 450, "ticketCount": 9},
+                {"modelId": "m1", "modelName": "DZ-008-1", "qty": 800, "ticketCount": 16, "partyCount": 3},
+                {"modelId": "m2", "modelName": "Брайс-Турси", "qty": 450, "ticketCount": 9, "partyCount": 2},
             ],
         },
         "enteredProduction": {
@@ -60,15 +60,16 @@ def test_format_daily_report_message_full():
     message = admin_bot.format_daily_report_message(report)
 
     assert "📊 <b>Kunlik ishlab chiqarish hisoboti</b>" in message
-    assert "📅 <b>Sana:</b> 10.11.2026 (16:55)" in message
+    assert "📅 <b>Sana:</b> 10.11.2026 (16:50)" in message
     assert "🏢 <b>Kompaniya:</b> Novda Textile" in message
     assert "✂️ <b>Bichilgan son:</b> 1 250 dona (25 ta patta)" in message
     assert "(Bugun chiqarilgan pattalardagi umumiy ish soni)" in message
-    assert "DZ-008-1: <b>800</b> dona (16 ta patta)" in message
-    assert "Брайс-Турси: <b>450</b> dona (9 ta patta)" in message
-    assert "📥 <b>Kiritilgan umumiy ish soni:</b> 980 dona (48 ta operatsiya)" in message
-    assert "DZ-008-1: <b>650</b> dona (32 ta operatsiya)" in message
-    assert "Брайс-Турси: <b>330</b> dona (16 ta operatsiya)" in message
+    assert "DZ-008-1: <b>800</b> dona (3 ta partiya, 16 ta patta)" in message
+    assert "Брайс-Турси: <b>450</b> dona (2 ta partiya, 9 ta patta)" in message
+    assert "📥 <b>Kiritilgan umumiy ish soni:</b> 980 dona" in message
+    assert "DZ-008-1: <b>650</b> dona" in message
+    assert "Брайс-Турси: <b>330</b> dona" in message
+    assert 'ta operatsiya' not in message
 
 
 def test_entered_pieces_are_not_multiplied_by_operation_count():
@@ -78,9 +79,10 @@ def test_entered_pieces_are_not_multiplied_by_operation_count():
             {"modelName": "DZ-008-1", "qty": 112, "entryCount": 15}
         ]}}
     message = admin_bot.format_daily_report_message(report, '2026-11-16')
-    assert 'Kiritilgan umumiy ish soni:</b> 796 dona (25 ta operatsiya)' in message
-    assert 'DZ_Cayshab-349-Model: <b>684</b> dona (10 ta operatsiya)' in message
-    assert 'DZ-008-1: <b>112</b> dona (15 ta operatsiya)' in message
+    assert 'Kiritilgan umumiy ish soni:</b> 796 dona' in message
+    assert 'DZ_Cayshab-349-Model: <b>684</b> dona' in message
+    assert 'DZ-008-1: <b>112</b> dona' in message
+    assert 'ta operatsiya' not in message
     assert '8 520' not in message
 
 
@@ -97,7 +99,7 @@ def test_format_daily_report_message_empty():
     assert "✂️ <b>Bichilgan son:</b> 0 dona" in message
     assert "<i>(Bugun bichilgan modellar yo'q)</i>" in message
     assert "📥 <b>Kiritilgan umumiy ish soni:</b> 0 dona" in message
-    assert "<i>(Bugun kiritilgan ishlar yo'q)</i>" in message
+    assert "<i>(Ochiq davrda shu sanada kiritilgan ishlar yo'q)</i>" in message
 
 
 def test_format_daily_report_message_html_escape():
@@ -123,14 +125,14 @@ def test_format_daily_report_message_html_escape():
 def test_check_and_send_daily_reports_trigger_logic(mock_send):
     mock_send.return_value = 2
 
-    # Case 1: 16:54:59 (before 16:55) -> Should NOT send
-    dt_before = datetime(2026, 11, 10, 16, 54, 59, tzinfo=TASHKENT_TZ)
+    # Case 1: 16:49:59 (before 16:50) -> Should NOT send
+    dt_before = datetime(2026, 11, 10, 16, 49, 59, tzinfo=TASHKENT_TZ)
     assert admin_bot.check_and_send_daily_reports(now=dt_before) == 0
     assert mock_send.call_count == 0
     assert admin_bot.LAST_DAILY_REPORT_DATE is None
 
-    # Case 2: 16:55 -> Should send once
-    dt_report = datetime(2026, 11, 10, 16, 55, 0, tzinfo=TASHKENT_TZ)
+    # Case 2: 16:50 -> Should send once
+    dt_report = datetime(2026, 11, 10, 16, 50, 0, tzinfo=TASHKENT_TZ)
     assert admin_bot.check_and_send_daily_reports(now=dt_report) == 2
     assert mock_send.call_count == 1
     mock_send.assert_called_with(target_date="2026-11-10")
@@ -141,8 +143,8 @@ def test_check_and_send_daily_reports_trigger_logic(mock_send):
     assert admin_bot.check_and_send_daily_reports(now=dt_18_05) == 0
     assert mock_send.call_count == 1
 
-    # Case 4: 16:55 next day -> Should send for new date
-    dt_next_report = datetime(2026, 11, 11, 16, 55, 0, tzinfo=TASHKENT_TZ)
+    # Case 4: 16:50 next day -> Should send for new date
+    dt_next_report = datetime(2026, 11, 11, 16, 50, 0, tzinfo=TASHKENT_TZ)
     assert admin_bot.check_and_send_daily_reports(now=dt_next_report) == 2
     assert mock_send.call_count == 2
     mock_send.assert_called_with(target_date="2026-11-11")
