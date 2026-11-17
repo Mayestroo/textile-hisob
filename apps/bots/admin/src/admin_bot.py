@@ -239,10 +239,10 @@ def format_daily_report_message(report, date_str=None):
 
     lines = [
         "📊 <b>Kunlik ishlab chiqarish hisoboti</b>",
-        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (16:50)",
+        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (16:30)",
         f"🏢 <b>Kompaniya:</b> {html.escape(str(company_name))}",
         "",
-        f"✂️ <b>Bichilgan son:</b> {cut_qty} dona" + (f" ({cut_tickets} ta patta)" if cut_tickets else ""),
+        f"✂️ <b>BICHILGAN SON:</b> {cut_qty} dona" + (f" ({cut_tickets} ta patta)" if cut_tickets else ""),
         "<i>(Bugun chiqarilgan pattalardagi umumiy ish soni)</i>",
     ]
 
@@ -263,7 +263,7 @@ def format_daily_report_message(report, date_str=None):
         lines.append("<i>(Bugun bichilgan modellar yo'q)</i>")
 
     lines.append("")
-    lines.append(f"📥 <b>Kiritilgan umumiy ish soni:</b> {entered_qty} dona")
+    lines.append(f"📥 <b>KIRITILGAN UMUMIY ISH SONI:</b> {entered_qty} dona")
     lines.append("<i>(Faqat ochiq davrga tegishli, hisobot sanasida kiritilgan pattalar; har bir patta bir marta sanaladi)</i>")
 
     if entered_models:
@@ -321,7 +321,7 @@ def check_and_send_daily_reports(now=None):
     global LAST_DAILY_REPORT_DATE
     now_dt = datetime.now(TASHKENT_TZ) if now is None else now
     today_str = now_dt.strftime("%Y-%m-%d")
-    if (now_dt.hour, now_dt.minute) >= (16, 50) and LAST_DAILY_REPORT_DATE != today_str:
+    if (now_dt.hour, now_dt.minute) >= (16, 30) and LAST_DAILY_REPORT_DATE != today_str:
         sent = send_daily_production_reports(target_date=today_str)
         LAST_DAILY_REPORT_DATE = today_str
         return sent
