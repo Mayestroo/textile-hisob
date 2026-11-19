@@ -178,12 +178,19 @@ function registerWorkerRoutes(app, options = {}) {
       const binding = await workerService.claimWorkerBinding(pool, {
         telegramId, companyId, workerId, username: String(request.body?.username || '')
       }, { pinRequired: false });
-      await pool.query(
-        `UPDATE workers SET phone_number = $3, profile_photo = $4,
-           profile_photo_updated_at = CASE WHEN $4 IS NOT NULL THEN NOW() ELSE profile_photo_updated_at END
-         WHERE company_id = $1 AND id = $2`,
-        [companyId, workerId, contact.rows[0].phone_number, photo]
-      );
+      if (photo) {
+        await pool.query(
+          `UPDATE workers SET phone_number = $3, profile_photo = $4, profile_photo_updated_at = NOW()
+           WHERE company_id = $1 AND id = $2`,
+          [companyId, workerId, contact.rows[0].phone_number, photo]
+        );
+      } else {
+        await pool.query(
+          `UPDATE workers SET phone_number = $3
+           WHERE company_id = $1 AND id = $2`,
+          [companyId, workerId, contact.rows[0].phone_number]
+        );
+      }
       await pool.query('DELETE FROM worker_onboarding_contacts WHERE telegram_id = $1', [telegramId]);
       return reply.code(201).header('Cache-Control', 'no-store').send({ success: true, binding });
     } catch (error) { return sendWorkerError(reply, error); }
