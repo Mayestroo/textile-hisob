@@ -215,7 +215,7 @@ services:
       WORKER_BOT_TOKEN_FILE: /run/secrets/worker-bot-token
       WORKER_AUTH_HMAC_SECRET_FILE: /run/secrets/worker-auth-hmac-secret
       WORKER_WEBAPP_URL: ${NOVDA_WORKER_WEBAPP_URL:-https://sync.novdatextile.uz/worker-app}
-      DEFAULT_COMPANY_ID: ${NOVDA_WORKER_DEFAULT_COMPANY_ID:-}
+      DEFAULT_COMPANY_ID: ${NOVDA_WORKER_DEFAULT_COMPANY_ID:-comp_novda}
     depends_on:
       novda-api:
         condition: service_healthy
