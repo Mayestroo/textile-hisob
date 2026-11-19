@@ -132,7 +132,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
     await pool.query(`INSERT INTO tickets (id, company_id, model_id, party_number, party_record_id,
       patta_number, qty, status, submitted_at, period_id) VALUES
       ($1, $3, 'model-1', '35', 'party-1', 218, 684, 'CONFIRMED', '2026-11-15T19:00:00Z', 'period-current'),
-      ($2, $3, 'model-2', '35', 'party-1', 1118, 112, 'CONFIRMED', '2026-11-16T18:59:59Z', 'period-current')`,
+      ($2, $3, 'model-2', '35', 'party-1', 1118, 112, 'CONFIRMED', '2026-11-16T10:00:00Z', 'period-current')`,
       [first, second, COMPANY_ID]);
     for (const [id, count, qty] of [[first, 10, 684], [second, 15, 112]]) {
       await pool.query(`INSERT INTO ticket_entries (id, ticket_id, company_id, op_name, worker_id, qty, created_at)
