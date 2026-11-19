@@ -225,10 +225,16 @@ def format_number(val):
 
 def format_daily_report_message(report, date_str=None):
     company_name = report.get("companyName") or report.get("companyId") or "Kompaniya"
-    date_display = date_str or report.get("date") or datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y")
-    if isinstance(date_display, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_display):
-        parts = date_display.split("-")
+    raw_date = date_str or report.get("date") or datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d")
+    if isinstance(raw_date, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw_date.strip()):
+        raw_date = raw_date.strip()
+        prev_dt = datetime.strptime(raw_date, "%Y-%m-%d") - timedelta(days=1)
+        prev_display = prev_dt.strftime("%d.%m.%Y")
+        parts = raw_date.split("-")
         date_display = f"{parts[2]}.{parts[1]}.{parts[0]}"
+    else:
+        date_display = str(raw_date)
+        prev_display = date_display
 
     cut = report.get("cutProduction") or {}
     cut_qty = format_number(cut.get("totalQty", 0))
@@ -241,11 +247,11 @@ def format_daily_report_message(report, date_str=None):
 
     lines = [
         "📊 <b>Kunlik ishlab chiqarish hisoboti</b>",
-        f"📅 <b>Sana:</b> {html.escape(str(date_display))} (16:30)",
+        f"📅 <b>Davr:</b> {html.escape(prev_display)} 16:30 → {html.escape(date_display)} 16:30",
         f"🏢 <b>Kompaniya:</b> {html.escape(str(company_name))}",
         "",
         f"✂️ <b>BICHILGAN SON:</b> {cut_qty} dona" + (f" ({cut_tickets} ta patta)" if cut_tickets else ""),
-        "<i>(Bugun chiqarilgan pattalardagi umumiy ish soni)</i>",
+        "<i>(Ko'rsatilgan davrda chiqarilgan pattalardagi umumiy ish soni)</i>",
     ]
 
     if cut_models:
@@ -259,14 +265,14 @@ def format_daily_report_message(report, date_str=None):
                 details.append(f"{format_number(item['partyCount'])} ta partiya")
             if m_pattas:
                 details.append(f"{m_pattas} ta patta")
-            patta_str = f" ({', '.join(details)})" if details else ""
+            patta_str = (" (" + ", ".join(details) + ")") if details else ""
             lines.append(f"  • {m_name}: <b>{m_qty}</b> dona{patta_str}")
     else:
-        lines.append("<i>(Bugun bichilgan modellar yo'q)</i>")
+        lines.append("<i>(Ko'rsatilgan davrda bichilgan modellar yo'q)</i>")
 
     lines.append("")
     lines.append(f"📥 <b>KIRITILGAN UMUMIY ISH SONI:</b> {entered_qty} dona")
-    lines.append("<i>(Faqat ochiq davrga tegishli, hisobot sanasida kiritilgan pattalar; har bir patta bir marta sanaladi)</i>")
+    lines.append("<i>(Faqat ochiq davrga tegishli, ko'rsatilgan vaqt oralig'ida kiritilgan pattalar; har bir patta bir marta sanaladi)</i>")
 
     if entered_models:
         lines.append("<b>Modellar bo'yicha kiritilgan ish sonlari:</b>")
@@ -275,11 +281,9 @@ def format_daily_report_message(report, date_str=None):
             m_qty = format_number(item.get("qty", 0))
             lines.append(f"  • {m_name}: <b>{m_qty}</b> dona")
     else:
-        lines.append("<i>(Ochiq davrda shu sanada kiritilgan ishlar yo'q)</i>")
+        lines.append("<i>(Ko'rsatilgan davrda ochiq davrga tegishli kiritilgan ishlar yo'q)</i>")
 
     return "\n".join(lines)
-
-
 def daily_report_channel_targets(report):
     if not ADMIN_REPORT_CHANNEL_IDS:
         return []

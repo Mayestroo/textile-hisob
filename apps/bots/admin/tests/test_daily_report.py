@@ -64,10 +64,10 @@ def test_format_daily_report_message_full():
     message = admin_bot.format_daily_report_message(report)
 
     assert "📊 <b>Kunlik ishlab chiqarish hisoboti</b>" in message
-    assert "📅 <b>Sana:</b> 10.11.2026 (16:30)" in message
+    assert "📅 <b>Davr:</b> 09.11.2026 16:30 → 10.11.2026 16:30" in message
     assert "🏢 <b>Kompaniya:</b> Novda Textile" in message
     assert "✂️ <b>BICHILGAN SON:</b> 1 250 dona (25 ta patta)" in message
-    assert "(Bugun chiqarilgan pattalardagi umumiy ish soni)" in message
+    assert "Ko'rsatilgan davrda chiqarilgan pattalardagi umumiy ish soni" in message
     assert "DZ-008-1: <b>800</b> dona (3 ta partiya, 16 ta patta)" in message
     assert "Брайс-Турси: <b>450</b> dona (2 ta partiya, 9 ta patta)" in message
     assert "📥 <b>KIRITILGAN UMUMIY ISH SONI:</b> 980 dona" in message
@@ -101,9 +101,9 @@ def test_format_daily_report_message_empty():
 
     message = admin_bot.format_daily_report_message(report)
     assert "✂️ <b>BICHILGAN SON:</b> 0 dona" in message
-    assert "<i>(Bugun bichilgan modellar yo'q)</i>" in message
+    assert "<i>(Ko'rsatilgan davrda bichilgan modellar yo'q)</i>" in message
     assert "📥 <b>KIRITILGAN UMUMIY ISH SONI:</b> 0 dona" in message
-    assert "<i>(Ochiq davrda shu sanada kiritilgan ishlar yo'q)</i>" in message
+    assert "<i>(Ko'rsatilgan davrda ochiq davrga tegishli kiritilgan ishlar yo'q)</i>" in message
 
 
 def test_format_daily_report_message_html_escape():

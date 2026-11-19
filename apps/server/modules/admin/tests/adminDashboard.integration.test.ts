@@ -154,7 +154,7 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
       ('00000000-0000-4000-8000-000000000622', $1, 'model-1', '35', 'party-1', 301, 999,
         'CONFIRMED', '2026-11-16T12:00:00Z', NULL),
       ('00000000-0000-4000-8000-000000000623', $1, 'model-1', '35', 'party-1', 302, 999,
-        'CONFIRMED', '2026-11-15T18:59:59Z', 'period-current')`, [COMPANY_ID]);
+        'CONFIRMED', '2026-11-15T06:29:59Z', 'period-current')`, [COMPANY_ID]);
     const response = await app.inject({ method: 'GET',
       url: `/internal/admin/daily-report?date=2026-11-16&companyId=${COMPANY_ID}`,
       headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' } });
@@ -203,9 +203,11 @@ describePostgresIntegration(' Admin Dashboard PostgreSQL integration', () => {
       headers: { 'x-novda-admin-token': 'admin-dashboard-service-test-token' }
     });
     expect(response.statusCode).toBe(200);
+    // Window [2026-11-12 16:30+05, 2026-11-13 16:30+05): start+before+legacy+zero in, end+after+other out
+    // Expected: 100+700+200+0 = 1000, totalTickets: 2+7+4+1 = 14, partyCount: 4
     expect(response.json().report.cutProduction).toEqual({
-      totalQty: 450, totalTickets: 10,
-      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 450, ticketCount: 10, partyCount: 4 }]
+      totalQty: 1000, totalTickets: 14,
+      byModel: [{ modelId: 'model-1', modelName: 'Fixture Model', qty: 1000, ticketCount: 14, partyCount: 4 }]
     });
   });
 

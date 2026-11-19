@@ -233,6 +233,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(cutSql).toContain("COUNT(DISTINCT COALESCE(NULLIF(p.physical_party_number, ''), p.party_number))");
     expect(cutSql).toContain('COALESCE(p.total_ish_soni, p.ish_soni)');
     expect(cutSql).toContain("COALESCE(p.printed_at, p.created_at) AT TIME ZONE 'Asia/Tashkent'");
+    expect(cutSql).toContain("INTERVAL '16 hours 30 minutes'");
     expect(cutSql).not.toContain('FROM tickets');
     expect(query.mock.calls[1][0]).toContain('FROM ticket_entries e');
     const enteredSql = query.mock.calls[1][0];
@@ -243,6 +244,7 @@ describe(' admin dashboard PostgreSQL projections', () => {
     expect(enteredSql).toContain('period.id = t.period_id AND period.is_closed = 0');
     expect(enteredSql).toContain("t.status = 'CONFIRMED'");
     expect(enteredSql).toContain("t.submitted_at AT TIME ZONE 'Asia/Tashkent'");
+    expect(enteredSql).toContain("INTERVAL '16 hours 30 minutes'");
     expect(enteredSql).not.toContain('e.created_at');
   });
 
