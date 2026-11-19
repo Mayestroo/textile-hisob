@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import admin_bot
+import admin_bot  # pyrefly: ignore[missing-import]
 
 
 TASHKENT_TZ = timezone(timedelta(hours=5))
