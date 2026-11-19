@@ -60,6 +60,20 @@ describe('worker web authentication compatibility', () => {
     expect(verifyWorkerWebToken({ ...params, expiresAt: String(expiresAt - 601) }, token, 'test-worker-secret', expiresAt - 600)).toBe(false);
   });
 
+  it('validates onboarding token with workerId: 0', () => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 600;
+    const python = spawnSync(process.env.PYTHON || 'python', ['-c', PYTHON.replace('27', '0'), ROOT, String(expiresAt)], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, WORKER_BOT_TOKEN: '', NOVDA_WORKER_API_TOKEN: '', WORKER_AUTH_HMAC_SECRET: '' }
+    });
+    expect(python.error).toBeUndefined();
+    expect(python.status, python.stderr).toBe(0);
+    const { token } = JSON.parse(python.stdout);
+    const params = { companyId: 'company-a', workerId: 0, telegramId: '123456789', expiresAt: String(expiresAt) };
+    expect(verifyWorkerWebToken(params, token, 'test-worker-secret')).toBe(true);
+  });
+
   it('does not offer confirmation as a fallback when a worker PIN is not configured', () => {
     const python = spawnSync(process.env.PYTHON || 'python', ['-c', PYTHON_UNPROTECTED_BINDING, ROOT], {
       cwd: ROOT,

@@ -27,7 +27,7 @@ function verifyWorkerWebToken(params, suppliedToken, secret, nowSeconds = Math.f
   if (!Number.isSafeInteger(expiresAt) || expiresAt < nowSeconds || expiresAt > nowSeconds + 20 * 60) return false;
   const normalized = {
     companyId: String(params.companyId || ''),
-    workerId: String(params.workerId || ''),
+    workerId: String(params.workerId ?? ''),
     telegramId: String(params.telegramId || ''),
     expiresAt
   };
@@ -166,10 +166,10 @@ function registerWorkerRoutes(app, options = {}) {
       if (!Number.isSafeInteger(workerId) || workerId < 1) {
         return reply.code(400).send({ success: false, error: { code: 'INVALID_WORKER_ID' } });
       }
-      const photoMatch = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(request.body?.photo || ''));
-      if (!photoMatch) return reply.code(400).send({ success: false, error: { code: 'WORKER_PHOTO_REQUIRED' } });
-      const photo = Buffer.from(photoMatch[1], 'base64');
-      if (!photo.length || photo.length > 300 * 1024) return reply.code(413).send({ success: false, error: { code: 'WORKER_PHOTO_SIZE_INVALID' } });
+      const rawPhoto = request.body?.photo;
+      const photoMatch = rawPhoto ? /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(rawPhoto)) : null;
+      const photo = photoMatch ? Buffer.from(photoMatch[1], 'base64') : null;
+      if (photo && (!photo.length || photo.length > 300 * 1024)) return reply.code(413).send({ success: false, error: { code: 'WORKER_PHOTO_SIZE_INVALID' } });
       const contact = await pool.query(
         'SELECT phone_number FROM worker_onboarding_contacts WHERE telegram_id = $1 AND company_id = $2',
         [telegramId, companyId]
@@ -179,7 +179,8 @@ function registerWorkerRoutes(app, options = {}) {
         telegramId, companyId, workerId, username: String(request.body?.username || '')
       }, { pinRequired: false });
       await pool.query(
-        `UPDATE workers SET phone_number = $3, profile_photo = $4, profile_photo_updated_at = NOW()
+        `UPDATE workers SET phone_number = $3, profile_photo = $4,
+           profile_photo_updated_at = CASE WHEN $4 IS NOT NULL THEN NOW() ELSE profile_photo_updated_at END
          WHERE company_id = $1 AND id = $2`,
         [companyId, workerId, contact.rows[0].phone_number, photo]
       );

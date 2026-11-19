@@ -277,7 +277,9 @@ def begin_registration(chat_id, user):
     send_message(
         chat_id,
         "Assalomu alaykum!\n\n"
-        "Davom etish uchun telefon raqamingizni ulashing. Keyingi bosqichlar — suratga olish va "
+        # "Davom etish uchun telefon raqamingizni ulashing. Keyingi bosqichlar — suratga olish va "
+        # "Ishchi ID kiritish — Web App ichida bajariladi:",
+        "Davom etish uchun telefon raqamingizni ulashing. Keyingi bosqich — "
         "Ishchi ID kiritish — Web App ichida bajariladi:",
         reply_markup,
     )
@@ -297,8 +299,9 @@ def send_onboarding_webapp(chat_id, user, state):
         "telegramId": telegram_id, "expiresAt": expires, "authToken": token,
     })
     url = f"{WORKER_WEBAPP_URL}{'&' if '?' in WORKER_WEBAPP_URL else '?'}{params}"
-    send_message(chat_id, "Rahmat! Endi Web App’ni ochib, kamera ruxsatini bering va Ishchi ID raqamingizni kiriting.", {
-        "inline_keyboard": [[{"text": "📸 Web App’ni ochish", "web_app": {"url": url}}]]
+    # send_message(chat_id, "Rahmat! Endi Web App’ni ochib, kamera ruxsatini bering va Ishchi ID raqamingizni kiriting.", {
+    send_message(chat_id, "Rahmat! Endi Web App’ni ochib, Ishchi ID raqamingizni kiriting.", {
+        "inline_keyboard": [[{"text": "📱 Web App’ni ochish", "web_app": {"url": url}}]]
     })
 
 

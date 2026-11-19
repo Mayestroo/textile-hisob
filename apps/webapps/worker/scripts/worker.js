@@ -524,7 +524,9 @@
       if (idInput && initialId) idInput.value = initialId;
       if (foundName && initialName) foundName.textContent = initialName;
       if (foundCard) foundCard.style.display = initialName ? 'flex' : 'none';
-      if (cameraCard) cameraCard.style.display = isWorkerOnboarding ? 'flex' : 'none';
+      // Suratga olish vaqtincha o'chirilgan
+      // if (cameraCard) cameraCard.style.display = isWorkerOnboarding ? 'flex' : 'none';
+      if (cameraCard) cameraCard.style.display = 'none';
     }
 
     function hideWorkerBindScreen() {
@@ -660,7 +662,9 @@
     function updateOnboardingSubmit() {
       const submitBtn = document.getElementById('workerSubmitRequestBtn');
       if (submitBtn && isWorkerOnboarding) {
-        submitBtn.disabled = !onboardingPhoto || !/^\d{1,9}$/.test(workerIdInput?.value.trim() || '');
+        // Suratga olish vaqtincha o'chirilgan
+        // submitBtn.disabled = !onboardingPhoto || !/^\d{1,9}$/.test(workerIdInput?.value.trim() || '');
+        submitBtn.disabled = !/^\d{1,9}$/.test(workerIdInput?.value.trim() || '');
       }
     }
     if (workerIdInput) {
@@ -682,7 +686,8 @@
             if (data.success && data.worker && data.worker.worker_name) {
               if (foundName) foundName.textContent = data.worker.worker_name;
               if (foundCard) foundCard.style.display = 'flex';
-              if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
+              // if (submitBtn) submitBtn.disabled = isWorkerOnboarding ? (!onboardingPhoto || !/^\d{1,9}$/.test(val)) : false;
+              if (submitBtn) submitBtn.disabled = !/^\d{1,9}$/.test(val);
               return;
             }
           }
@@ -699,7 +704,8 @@
         const submit = document.getElementById('workerSubmitRequestBtn');
         const status = document.getElementById('workerCameraStatus');
         const currentTgId = tg?.initDataUnsafe?.user?.id ? String(tg.initDataUnsafe.user.id) : paramTelegramId;
-        if (!onboardingPhoto || !currentTgId || !/^\d{1,9}$/.test(val || '')) return;
+        // if (!onboardingPhoto || !currentTgId || !/^\d{1,9}$/.test(val || '')) return;
+        if (!currentTgId || !/^\d{1,9}$/.test(val || '')) return;
         submit.disabled = true;
         if (status) status.textContent = 'Profil saqlanmoqda…';
         try {
@@ -709,7 +715,7 @@
             cache: 'no-store',
             referrerPolicy: 'no-referrer',
             body: JSON.stringify({ companyId, telegramId: currentTgId, expiresAt, workerId: Number(val),
-              username: tg?.initDataUnsafe?.user?.username || '', photo: onboardingPhoto })
+              username: tg?.initDataUnsafe?.user?.username || '', photo: onboardingPhoto || null })
           });
           const result = await response.json();
           if (!response.ok || !result.success) throw new Error(result.error?.code || 'SAQLASH_XATOSI');
