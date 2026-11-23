@@ -5,12 +5,11 @@
  * Creates or updates a server operator (admin / accountant) who can sign in on
  * a desktop to review and cancel held allocations ("Ko'rib chiqish").
  *
- * Run on the VPS, next to the server's DATABASE_URL:
- *   OPERATOR_PASSWORD='...' node scripts/maintenance/provision-operator.cjs \
- *     --company comp_novda --id admin --name "Admin" --role admin
+ * Runs inside the production API container, which already has DATABASE_URL:
+ *   docker compose --project-name novda-prod --env-file /srv/novda/secrets/compose.env  *     -f ops/deploy/compose.yaml exec -e OPERATOR_PASSWORD novda-api  *     node ops/deploy/provisionOperator.cjs --company comp_novda --id admin --name "Admin" --role admin
  *
  * The password is read from OPERATOR_PASSWORD (or stdin when unset) so it does
- * not end up in shell history or the process list. Minimum length: 8.
+ * not end up in the process list. Minimum length: 8.
  */
 
 const { Pool } = require('pg');
