@@ -22,7 +22,8 @@ import { confirmAndArchivePartyHistoryRecord } from './pattaHistoryActions';
 import { formatTicketDateTime, formatUzbekDate } from '../../utils/formatters';
 import { getElectronApi, resolveElectronRuntimeMode } from '../../store/runtimeMode';
 import { useAuthStore } from '../../store/authStore';
-import { AllocationReviewPanel } from './AllocationReviewPanel';
+import { useAllocationReviewCount } from '../review/useAllocationReviewCount';
+import { SYSTEM_SHEETS } from '../../constants/sheetConstants';
 
 export const PattaHisobView: React.FC = () => {
   const availableSizes = useWorkbookStore((s) => s.availableSizes);
@@ -37,6 +38,8 @@ export const PattaHisobView: React.FC = () => {
   const companyId = licenseStatus?.companyId || 'company_main';
   const authUserId = useAuthStore((s) => s.user?.uid || '');
   const authRole = useAuthStore((s) => s.role || '');
+  const reviewCount = useAllocationReviewCount();
+  const setActiveSheet = useWorkbookStore((s) => s.setActiveSheet);
 
   const deletePrintedPartyRecord = useWorkbookStore((s) => s.deletePrintedPartyRecord);
   const deleteSubmittedTicket = useWorkbookStore((s) => s.deleteSubmittedTicket);
@@ -318,7 +321,10 @@ export const PattaHisobView: React.FC = () => {
   // Expected slot metadata may come from the print template; submission identity,
   // accepted state and actual quantity always come from the journal selector.
   const journalPartyRows = useMemo(() => {
-    const rows = new Map<string, ReturnType<typeof buildPartyTicketsList>>();
+    const rows = new Map<string, Array<ReturnType<typeof buildPartyTicketsList>[number] & { inReview?: boolean }>>();
+    // Never-accepted submissions held for allocation review, by party/patta.
+    const reviewKeys = new Set((submittedTickets || []).filter((ticket) => ticket.allocationReview && ticket.partyRecordId)
+      .map((ticket) => `${ticket.partyRecordId}:${ticket.pattaNumber}`));
     for (const party of printedPartyHistory) {
       const template = buildPartyTicketsList(party, [], activeSizes, true, false);
       const byNumber = new Map(template.map((row) => [row.pattaNumber, row]));
@@ -326,11 +332,12 @@ export const PattaHisobView: React.FC = () => {
         const expected = byNumber.get(item.pattaNumber);
         return { ...expected, pattaNumber: item.pattaNumber, id: item.ticketId || undefined,
           isSubmitted: item.accepted, enteredQty: item.accepted ? item.actualQuantity ?? 0 : 0,
-          expectedQty: expected?.expectedQty ?? 0, size: expected?.size || '', deficit: item.accepted ? (expected?.expectedQty ?? 0) - (item.actualQuantity ?? 0) : (expected?.expectedQty ?? 0) };
+          expectedQty: expected?.expectedQty ?? 0, size: expected?.size || '', deficit: item.accepted ? (expected?.expectedQty ?? 0) - (item.actualQuantity ?? 0) : (expected?.expectedQty ?? 0),
+          inReview: !item.accepted && reviewKeys.has(`${party.id}:${item.pattaNumber}`) };
       }));
     }
     return rows;
-  }, [printedPartyHistory, activeSizes, lifecycleItems]);
+  }, [printedPartyHistory, activeSizes, lifecycleItems, submittedTickets]);
 
   // Search and health filtering happen on canonical cohort items before tabs,
   // badges, aggregates, pagination, or expanded rows consume the result.
@@ -654,7 +661,12 @@ export const PattaHisobView: React.FC = () => {
   return (
     <div className="phase-b-view phase-b-patta-journal" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div className="patta-hisob-scroll">
-        <AllocationReviewPanel companyId={companyId} canCancel={['accountant', 'admin'].includes(String(authRole).toLowerCase())} />
+        {reviewCount > 0 && (
+          <div role="status" style={{ margin: '12px 16px', padding: '10px 14px', border: '1px solid #f0c36d', borderRadius: 10, background: '#fffbeb', color: '#78350f', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span><b>{reviewCount} ta patta</b> server tomonidan qabul qilinmadi va ko‘rib chiqishni kutmoqda.</span>
+            <button type="button" style={{ marginLeft: 'auto' }} onClick={() => setActiveSheet(SYSTEM_SHEETS.KORIB_CHIQISH)}>Ko‘rib chiqish sahifasini ochish</button>
+          </div>
+        )}
         {/* Top Header */}
         <div className="patta-hisob-header">
           <div className="patta-hisob-header-left">
@@ -1323,6 +1335,8 @@ export const PattaHisobView: React.FC = () => {
                                                       ) : (
                                                         <span className="ticket-badge complete">Topshirildi</span>
                                                       )
+                                                    ) : (t as { inReview?: boolean }).inReview ? (
+                                                      <span className="ticket-badge mismatch" title="Server qabul qilmadi; «Ko‘rib chiqish» sahifasiga qarang">Ko‘rib chiqishda</span>
                                                     ) : (
                                                       <span className="ticket-badge pending">Kutilmoqda</span>
                                                     )}

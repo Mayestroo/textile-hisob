@@ -48,11 +48,11 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const selectedPattaTicket = useMemo(() => (submittedTickets || []).find((ticket) =>
     ticket.modelId === model.id && String(ticket.partyNumber) === String(form.party).trim()
     && Number(ticket.pattaNumber) === Number(form.patta)
-    && !['VOIDED', 'PENDING_DELETE'].includes(ticket.status || '')
+    && !['VOIDED', 'PENDING_DELETE'].includes(ticket.status || '') && !ticket.allocationReview
   ), [submittedTickets, model.id, form.party, form.patta]);
 
   const currentPartyStr = String(form.party || '1');
-  const { isNonExistentParty, isWrongModelParty, hasBlockingError, errorBannerText } =
+  const { isNonExistentParty, isWrongModelParty, hasBlockingError, errorBannerText, reviewTicket } =
     getTicketPartyStatus(form, model, printedPartyHistory, submittedTickets, { strictParty, strictPatta });
 
   // Active operation row tracking for focus outline
@@ -872,6 +872,15 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
         </div>
 
         {/* Footer */}
+        {reviewTicket && !hasBlockingError && (
+          <section role="status" aria-label="Ko‘rib chiqishdagi patta" style={{ margin: '12px 20px', padding: 14, border: '1px solid #f0c36d', borderRadius: 'var(--radius-md)', background: '#fffbeb', color: '#78350f' }}>
+            <strong>Bu patta serverda ko‘rib chiqishda</strong>
+            <div style={{ marginTop: 4 }}>
+              Partiya {reviewTicket.partyNumber} · Patta #{reviewTicket.pattaNumber} oldin {reviewTicket.qty} dona bilan kiritilgan, server uni qabul qilmagan.
+              To‘g‘ri ma’lumot bilan qayta jo‘natsangiz, eski yozuv shu yangi yozuv bilan almashtiriladi.
+            </div>
+          </section>
+        )}
         {selectedPattaTicket && (
           <section aria-label="Patta operatsiya taqsimotlari" style={{ margin: '12px 20px', padding: 14, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

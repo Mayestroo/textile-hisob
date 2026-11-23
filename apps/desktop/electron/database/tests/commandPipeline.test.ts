@@ -76,6 +76,43 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     expect(db.prepare('SELECT qty FROM tickets WHERE id = ?').get(command.ticketId).qty).toBe(410);
   });
 
+  it('replaces a patta held for allocation review with a corrected entry, and refuses any other replacement', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`UPDATE parties SET ish_soni_per_patta = 410, patta_count = 1 WHERE id = 'party_12'`).run();
+    const base = {
+      companyId: companyA, modelId: 'model_101', partyRecordId: 'party_12', partyNumber: '12', pattaNumber: 680,
+      qty: 410, allocationVersion: 1, entries: [{ opName: 'Tikish', workerId: 1, qty: 409, rateSnapshot: 2 }]
+    };
+    const heldId = '00000000-0000-4000-8000-000000000681';
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      ...base, commandId: 'cmd-held', operationId: 'op-held', ticketId: heldId });
+
+    // Not held for review yet: replacement is refused.
+    const corrected = { ...base, commandId: 'cmd-fix', operationId: 'op-fix', ticketId: '00000000-0000-4000-8000-000000000682', replacesTicketId: heldId };
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, corrected))
+      .toThrow(expect.objectContaining({ code: 'REPLACEMENT_NOT_ELIGIBLE' }));
+
+    const reviewError = JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED', message: 'Ticket quantity does not match authoritative issuance' });
+    db.prepare(`UPDATE local_outbox SET status = 'CONFLICT', last_error = ?, error_message = ? WHERE operation_id = 'op-held'`)
+      .run(reviewError, reviewError);
+    const projection = require('../readers/projectionReader.cjs').loadWorkbookProjectionFromSqlite(db, companyA);
+    expect(projection.submittedTickets.find((ticket: any) => ticket.id === heldId)).toMatchObject({ allocationReview: true });
+
+    // A different patta may not replace it.
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, { ...corrected, pattaNumber: 679 }))
+      .toThrow(expect.objectContaining({ code: 'REPLACEMENT_NOT_ELIGIBLE' }));
+
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, corrected);
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(heldId).status).toBe('VOIDED');
+    expect(db.prepare('SELECT status, last_error FROM local_outbox WHERE operation_id = ?').get('op-held'))
+      .toEqual({ status: 'SUPERSEDED', last_error: 'SUPERSEDED_BY_CORRECTED_TICKET' });
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(corrected.ticketId).status).toBe('PENDING_SYNC');
+    // The replacement link is local bookkeeping, not part of the server payload.
+    expect(JSON.parse(db.prepare('SELECT payload_json FROM local_outbox WHERE operation_id = ?').get('op-fix').payload_json))
+      .not.toHaveProperty('replacesTicketId');
+  });
+
   it('accepts a 40/60 split for one patta operation and rejects duplicate or over-issued allocations', () => {
     seedCompany(companyA);
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);

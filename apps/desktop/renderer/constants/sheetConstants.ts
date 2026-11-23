@@ -7,6 +7,7 @@ export const SYSTEM_SHEETS = {
   OPERATSIYA_NARXLARI: 'Operatsiya-narxlari',
   AMALLAR_JURNALI: 'Amallar-jurnali',
   MODEL_OLCHAMLARI: 'Model-olchamlari',
+  KORIB_CHIQISH: 'Korib-chiqish',
 } as const;
 
 export const SYSTEM_SHEET_NAMES = [
@@ -18,6 +19,7 @@ export const SYSTEM_SHEET_NAMES = [
   SYSTEM_SHEETS.OPERATSIYA_NARXLARI,
   SYSTEM_SHEETS.AMALLAR_JURNALI,
   SYSTEM_SHEETS.MODEL_OLCHAMLARI,
+  SYSTEM_SHEETS.KORIB_CHIQISH,
 ] as const;
 
 export const DEFAULT_ACTIVE_SHEET = SYSTEM_SHEETS.UMUMIY;

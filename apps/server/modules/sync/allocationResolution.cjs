@@ -109,7 +109,11 @@ async function listOpenAllocationReviews(pool, req) {
   const result = await pool.query(`
     SELECT c.original_operation_id, c.command_type, c.entity_id, c.original_payload_hash,
       c.original_payload_json, c.review_reason, c.recorded_at,
-      p.ish_soni_per_patta, p.model_name
+      p.ish_soni_per_patta, p.model_name,
+      EXISTS (SELECT 1 FROM tickets t WHERE t.company_id = c.company_id
+        AND t.id <> c.entity_id AND t.status <> 'VOIDED'
+        AND t.party_record_id = c.original_payload_json->>'partyRecordId'
+        AND t.patta_number::text = c.original_payload_json->>'pattaNumber') AS corrected
     FROM allocation_review_candidates c
     LEFT JOIN parties p ON p.company_id = c.company_id
       AND p.id = c.original_payload_json->>'partyRecordId'
@@ -131,7 +135,9 @@ async function listOpenAllocationReviews(pool, req) {
       reason: row.review_reason,
       recordedAt: row.recorded_at instanceof Date ? row.recorded_at.toISOString() : row.recorded_at,
       issuedQty: Number.isSafeInteger(issued) && issued > 0 ? issued : null,
-      modelName: row.model_name || null
+      modelName: row.model_name || null,
+      // The same patta was since accepted through a corrected entry.
+      corrected: row.corrected === true
     };
   });
 }

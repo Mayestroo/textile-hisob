@@ -1,4 +1,5 @@
 import {
+  ClipboardCheck,
   ChevronsLeft,
   ChevronsRight,
   Copy,
@@ -25,6 +26,7 @@ import { OperationRatesModal } from '../../features/models/modals/OperationRates
 import { useWorkbookStore } from '../../store/workbookStore';
 import { ModelConfig, SubmittedTicketRecord } from '../../types/workbook';
 import { isModelNarxsiz } from '../../domain/modelRateStatus';
+import { useAllocationReviewCount } from '../../features/review/useAllocationReviewCount';
 export { isModelNarxsiz } from '../../domain/modelRateStatus';
 
 interface ContextMenuState {
@@ -130,6 +132,8 @@ export const SheetTabs: React.FC = () => {
   const [renameValue, setRenameValue] = useState('');
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const reviewCount = useAllocationReviewCount();
 
   // Auto-close drawer whenever a sheet is selected
   const handleSheetClick = useCallback((name: string) => {
@@ -511,6 +515,23 @@ export const SheetTabs: React.FC = () => {
             >
               <FileText size={17} strokeWidth={2} className="excel-sidebar-nav-icon" />
               <span className="excel-sidebar-nav-label">Patta-hisob (jurnal)</span>
+            </button>
+
+            {/* 3b. Ko‘rib chiqish — server qabul qilmagan pattalar */}
+            <button
+              type="button"
+              className={`excel-sidebar-nav-item ${activeSheet === SYSTEM_SHEETS.KORIB_CHIQISH ? 'active' : ''}`}
+              onClick={() => handleSheetClick(SYSTEM_SHEETS.KORIB_CHIQISH)}
+              onContextMenu={(e) => handleTabContextMenu(e, SYSTEM_SHEETS.KORIB_CHIQISH)}
+              title={reviewCount > 0 ? `${reviewCount} ta patta ko‘rib chiqishni kutmoqda` : 'Server qabul qilmagan pattalarni ko‘rib chiqish'}
+            >
+              <ClipboardCheck size={17} strokeWidth={2} className="excel-sidebar-nav-icon" />
+              <span className="excel-sidebar-nav-label">Ko‘rib chiqish</span>
+              {reviewCount > 0 && (
+                <span aria-label={`${reviewCount} ta ochiq`} style={{ marginLeft: 'auto', background: '#dc2626', color: '#fff', borderRadius: 10, padding: '0 6px', fontSize: 12, fontWeight: 700 }}>
+                  {reviewCount}
+                </span>
+              )}
             </button>
 
             {/* 4. Konveyer */}

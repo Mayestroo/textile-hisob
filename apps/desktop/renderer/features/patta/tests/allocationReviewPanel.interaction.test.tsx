@@ -55,6 +55,7 @@ describe('allocation review panel server resolution actions', () => {
   it('does not offer cancellation to a typer and explains who resolves it', async () => {
     render(<AllocationReviewPanel companyId="company-1" />);
     expect(await screen.findByText(/faqat admin yoki hisobchi bekor qila oladi/)).toBeTruthy();
+    expect(screen.getByText(/qayta jo‘natsangiz, eski yozuv almashtiriladi/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Bekor qilish' })).toBeNull();
     expect(serverList).not.toHaveBeenCalled();
   });

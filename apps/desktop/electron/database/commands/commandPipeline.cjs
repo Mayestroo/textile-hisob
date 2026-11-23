@@ -18,7 +18,7 @@ const { ticketEntryId } = require('../../../../../packages/contracts/ticketEntry
 
 const { isSafeCompanyId } = require('../core/companyPath.cjs');
 const { getCompanyDatabase } = require('../core/databaseManager.cjs');
-const { insertOutboxOperation, getOperation } = require('../outbox/outboxManager.cjs');
+const { insertOutboxOperation, getOperation, updateOperationStatus, getTicketSubmitEvidence } = require('../outbox/outboxManager.cjs');
 const { rebuildCompanyProjections } = require('../readers/projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('../core/canonicalPayload.cjs');
 const { assertPeriodOpen } = require('../../../../../packages/domain/periodWriteGuard.cjs');
@@ -179,6 +179,9 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
   const pattaNumber = command.pattaNumber;
 
   const qty = assertPositiveSafeInteger(command.qty, 'qty');
+  const replacesTicketId = command.replacesTicketId === undefined || command.replacesTicketId === null || command.replacesTicketId === ''
+    ? null
+    : assertCanonicalTicketUuid(command.replacesTicketId);
 
   if (!Array.isArray(command.entries) || command.entries.length === 0) {
     throw createCommandError('INVALID_ENTRIES', 'Ticket entries must be a non-empty array');
@@ -313,6 +316,27 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
     const existingTicket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
     if (existingTicket) {
       throw createCommandError('DUPLICATE_TICKET_ID', `Ticket with ID "${ticketId}" already exists`);
+    }
+
+    // A corrected entry may replace this patta's earlier ticket only when the
+    // server never accepted it and holds it for allocation review. The held
+    // evidence stays on the server for the reviewer; locally it stops counting.
+    if (replacesTicketId) {
+      const replaced = db.prepare(`SELECT id, model_id, party_number, patta_number, status FROM tickets
+        WHERE company_id = ? AND id = ?`).get(companyId, replacesTicketId);
+      const evidence = getTicketSubmitEvidence(db, companyId, replacesTicketId);
+      if (!replaced || replaced.status !== 'PENDING_SYNC' || !evidence.inAllocationReview
+        || replaced.model_id !== modelId || String(replaced.party_number) !== String(partyNumber)
+        || Number(replaced.patta_number) !== pattaNumber) {
+        throw createCommandError('REPLACEMENT_NOT_ELIGIBLE',
+          'Faqat server ko‘rib chiqishga olgan, shu partiya va pattaga tegishli ticketni almashtirish mumkin');
+      }
+      db.prepare(`UPDATE tickets SET status = 'VOIDED' WHERE company_id = ? AND id = ?`).run(companyId, replacesTicketId);
+      const heldOperations = db.prepare(`SELECT operation_id FROM local_outbox WHERE company_id = ? AND entity_type = 'ticket'
+        AND entity_id = ? AND status IN ('PENDING', 'CONFLICT', 'DEAD_LETTER')`).all(companyId, replacesTicketId);
+      for (const held of heldOperations) {
+        updateOperationStatus(db, companyId, held.operation_id, 'SUPERSEDED', 'SUPERSEDED_BY_CORRECTED_TICKET');
+      }
     }
 
     // 3. Validate foreign keys and model operations schema

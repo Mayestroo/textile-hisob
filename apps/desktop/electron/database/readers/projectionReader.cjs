@@ -428,7 +428,17 @@ function loadWorkbookProjectionFromSqlite(db, companyId) {
    const workers = loadWorkersFromSqlite(db, companyId, visiblePeriod?.id || null);
   const printedPartyHistory = loadPartiesFromSqlite(db, companyId);
   const batchSettings = loadBatchSettingsFromSqlite(db, companyId, models);
-  const submittedTickets = visibleTickets.map(toSubmittedTicket);
+  // Tickets whose submission the server holds for allocation review were never
+  // accepted. Mark them so the Patta screen can let the operator re-enter the
+  // patta correctly instead of reporting it as already submitted.
+  const reviewTicketIds = new Set(db.prepare(`SELECT entity_id FROM local_outbox
+    WHERE company_id = ? AND command_type = 'SubmitTicket' AND status = 'CONFLICT'
+      AND (last_error LIKE '%ALLOCATION_REVIEW_REQUIRED%' OR error_message LIKE '%ALLOCATION_REVIEW_REQUIRED%')`)
+    .all(companyId).map((row) => row.entity_id));
+  const submittedTickets = visibleTickets.map((fact) => ({
+    ...toSubmittedTicket(fact),
+    ...(reviewTicketIds.has(fact.ticketId) && fact.status === 'PENDING_SYNC' ? { allocationReview: true } : {})
+  }));
   const nextPattaNumber = Number(db.prepare(`SELECT next_patta_number FROM company_patta_sequences WHERE company_id = ?`)
     .get(companyId)?.next_patta_number || 1);
   const reusablePattaRanges = db.prepare(`SELECT COALESCE(p.patta_start_number, r.patta_start_number) AS patta_start_number,

@@ -15,6 +15,8 @@ export interface TicketValidationResult {
     qty?: number;
   }>;
   partyOwner?: PrintedPartyRecord;
+  /** A never-accepted ticket for the same patta, held for allocation review, that this entry corrects. */
+  replacesTicket?: SubmittedTicketRecord;
 }
 
 export interface TicketPartyStatus {
@@ -26,8 +28,22 @@ export interface TicketPartyStatus {
   actualPattaNum: number;
   isExceededPattaNum: boolean;
   alreadySubmittedTicket?: SubmittedTicketRecord;
+  /** Held for allocation review; re-entering the patta replaces it. */
+  reviewTicket?: SubmittedTicketRecord;
   hasBlockingError: boolean;
   errorBannerText: string;
+}
+
+/**
+ * Splits tickets into those that occupy a patta and those held for allocation
+ * review. A held ticket was never accepted by the server, so it must not block
+ * the operator from entering the same patta again with corrected data.
+ */
+function splitReviewTickets(tickets: SubmittedTicketRecord[] | undefined) {
+  const active: SubmittedTicketRecord[] = [];
+  const review: SubmittedTicketRecord[] = [];
+  for (const ticket of tickets || []) (ticket.allocationReview ? review : active).push(ticket);
+  return { active, review };
 }
 
 /** The authoritative per-patta issued quantity of a printed party, if known. */
@@ -73,6 +89,8 @@ export function getTicketPartyStatus(
   const strictPatta = options?.strictPatta ?? options?.requireTicketValidation !== false;
   const currentPartyStr = String(form.party || '');
   const currentPattaNum = parseInt(form.patta || '0', 10) || 0;
+  const { active: activeTickets, review: reviewTickets } = splitReviewTickets(submittedTickets);
+  submittedTickets = activeTickets;
 
   if (!strictParty && !strictPatta) {
     let alreadySubmittedTicket: SubmittedTicketRecord | undefined;
@@ -84,6 +102,8 @@ export function getTicketPartyStatus(
           s.pattaNumber === currentPattaNum
       );
     }
+    const reviewTicket = currentPartyStr && currentPattaNum > 0 ? reviewTickets.find((s) =>
+      s.modelId === model.id && String(s.partyNumber) === currentPartyStr && s.pattaNumber === currentPattaNum) : undefined;
     const hasBlockingError = !!alreadySubmittedTicket;
     let errorBannerText = '';
     if (alreadySubmittedTicket) {
@@ -99,6 +119,7 @@ export function getTicketPartyStatus(
       actualPattaNum: currentPattaNum || 1,
       isExceededPattaNum: false,
       alreadySubmittedTicket,
+      reviewTicket,
       hasBlockingError,
       errorBannerText
     };
@@ -145,6 +166,9 @@ export function getTicketPartyStatus(
     isDuplicateTicketRecord(s, partyOwner, model.id, currentPartyStr, [actualPattaNum, currentPattaNum])
   );
 
+  const reviewTicket = reviewTickets.find((s) =>
+    isDuplicateTicketRecord(s, partyOwner, model.id, currentPartyStr, [actualPattaNum, currentPattaNum]));
+
   const hasBlockingError = isNonExistentParty || isWrongModelParty || isExceededPattaNum || isArchivedInPreviousPeriod || !!alreadySubmittedTicket;
 
   let errorBannerText = '';
@@ -171,6 +195,7 @@ export function getTicketPartyStatus(
     actualPattaNum,
     isExceededPattaNum,
     alreadySubmittedTicket,
+    reviewTicket,
     hasBlockingError,
     errorBannerText
   };
@@ -190,6 +215,8 @@ export function validateTicketForSubmission(
   const strictParty = options?.strictParty ?? options?.requireTicketValidation !== false;
   const strictPatta = options?.strictPatta ?? options?.requireTicketValidation !== false;
   const isStrict = strictParty || strictPatta;
+  const { active: activeTickets, review: reviewTickets } = splitReviewTickets(submittedTickets);
+  submittedTickets = activeTickets;
 
   const qty = Number(form.qty);
   if (!Number.isSafeInteger(qty) || qty <= 0) {
@@ -315,11 +342,14 @@ export function validateTicketForSubmission(
       }
     }
 
+    const replacesTicket = currentPartyStr && actualPattaNum > 0 ? reviewTickets.find((s) =>
+      s.modelId === model.id && String(s.partyNumber) === currentPartyStr && s.pattaNumber === actualPattaNum) : undefined;
     return {
       isValid: true,
       actualPattaNum,
       filledEntries,
-      partyOwner: undefined
+      partyOwner: undefined,
+      ...(replacesTicket ? { replacesTicket } : {})
     };
   }
 
@@ -406,10 +436,13 @@ export function validateTicketForSubmission(
     };
   }
 
+  const replacesTicket = reviewTickets.find((s) =>
+    isDuplicateTicketRecord(s, partyOwner, model.id, currentPartyStr, [actualPattaNum]));
   return {
     isValid: true,
     actualPattaNum,
     filledEntries,
-    partyOwner
+    partyOwner,
+    ...(replacesTicket ? { replacesTicket } : {})
   };
 }

@@ -12,6 +12,7 @@ const PattaHisobView = React.lazy(() => import('./features/patta/PattaHisobView'
 const KonveyerView = React.lazy(() => import('./features/models/KonveyerView').then(m => ({ default: m.KonveyerView })));
 const ModellarJamiView = React.lazy(() => import('./features/models/ModellarJamiView').then(m => ({ default: m.ModellarJamiView })));
 const AmallarJurnaliView = React.lazy(() => import('./features/journal/AmallarJurnaliView').then(m => ({ default: m.AmallarJurnaliView })));
+const AllocationReviewView = React.lazy(() => import('./features/review/AllocationReviewView').then(m => ({ default: m.AllocationReviewView })));
 const ModelSizesView = React.lazy(() => import('./features/models/ModelSizesView').then(m => ({ default: m.ModelSizesView })));
 
 import { NewOperationModal } from './features/models/modals/NewOperationModal';
@@ -251,6 +252,22 @@ export const App: React.FC = () => {
           }
         >
           <PattaHisobView />
+        </PermissionGuard>
+      );
+    }
+
+    if (activeSheet === SYSTEM_SHEETS.KORIB_CHIQISH) {
+      return (
+        <PermissionGuard
+          permission="view:patta"
+          fallback={
+            <AccessDenied
+              requiredPermission="view:patta"
+              message="Ko‘rib chiqish sahifasi patta bilan ishlaydigan xodimlar uchun ochiq."
+            />
+          }
+        >
+          <AllocationReviewView />
         </PermissionGuard>
       );
     }
