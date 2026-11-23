@@ -42,6 +42,7 @@ export function reconnectRequiresProjectionReload(result: any): boolean {
     details.recoveredVoidedPattaDuplicateCount,
     details.recoveredPeriodScopeMismatchCount,
     details.recoveredCapturedTicketCount,
+    details.recoveredNeverAcceptedDeleteCount,
     details.reconciledCount,
     details.pulledFinal,
     details.pushed?.synced,

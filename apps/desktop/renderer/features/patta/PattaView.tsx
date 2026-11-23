@@ -38,6 +38,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const reorderOperations = useWorkbookStore((s) => s.reorderOperations);
   const openModal = useWorkbookStore((s) => s.openModal);
   const manuallyEditedFields = useRef(new Map<string, Set<string>>());
+  const qtyPartyRef = useRef(new Map<string, string | undefined>());
   const updateNumberField = (field: 'party' | 'patta' | 'qty', value: string) => {
     const fields = manuallyEditedFields.current.get(model.id) || new Set<string>();
     fields.add(field);
@@ -126,7 +127,16 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
     // Auto-fill Ish soni (Quantity)
     const perPatta = matchedParty.ishSoniPerPatta
       || (matchedParty.pattaCount > 0 ? Math.round(matchedParty.ishSoni / matchedParty.pattaCount) : matchedParty.ishSoni);
-    if (perPatta > 0 && !manuallyEditedFields.current.get(model.id)?.has('qty') && (!form.qty || form.qty === '0')) {
+    // A different printed party has a different issued quantity: a value left
+    // over from the previous party (typed or auto-filled) is not this patta's
+    // quantity and would be refused by the server, so refresh it.
+    const partyChanged = qtyPartyRef.current.get(model.id) !== matchedParty.id;
+    if (partyChanged) {
+      qtyPartyRef.current.set(model.id, matchedParty.id);
+      manuallyEditedFields.current.get(model.id)?.delete('qty');
+    }
+    if (perPatta > 0 && String(perPatta) !== String(form.qty || '')
+      && (partyChanged || (!manuallyEditedFields.current.get(model.id)?.has('qty') && (!form.qty || form.qty === '0')))) {
       updateTicketField(model.id, 'qty', String(perPatta));
     }
 

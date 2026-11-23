@@ -322,10 +322,19 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
     }
 
     const partyRow = partyRecordId
-      ? db.prepare('SELECT id FROM parties WHERE id = ? AND company_id = ?').get(partyRecordId, companyId)
+      ? db.prepare('SELECT id, party_number, ish_soni_per_patta FROM parties WHERE id = ? AND company_id = ?').get(partyRecordId, companyId)
       : null;
     if (partyRecordId && !partyRow) {
       throw createCommandError('PARTY_NOT_FOUND', `Party "${partyRecordId}" not found for company "${companyId}"`);
+    }
+    // The server accepts a linked printed ticket only at its issued per-patta
+    // quantity; anything else is parked for accountant review. Refuse it here
+    // so the operator can correct it instead of creating a stuck sync conflict.
+    const issuedQty = partyRow ? Number(partyRow.ish_soni_per_patta) : NaN;
+    if (partyRow && Number.isSafeInteger(issuedQty) && issuedQty > 0 && qty !== issuedQty) {
+      throw createCommandError('ISSUED_QUANTITY_MISMATCH',
+        `Partiya ${partyRow.party_number || partyNumber} har bir pattasi ${issuedQty} dona qilib chiqarilgan, ish soni ${qty} kiritildi. `
+        + `Ish sonini ${issuedQty} qiling; kam tikilgan bo‘lsa, ishchilar taqsimotiga kamroq miqdor yozing.`);
     }
 
     let modelOps = [];

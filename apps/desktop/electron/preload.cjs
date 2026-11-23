@@ -46,6 +46,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   AllocationReviewRetry: (options) => ipcRenderer.invoke('allocation-review-retry', options),
   AllocationReviewCancel: (options) => ipcRenderer.invoke('allocation-review-cancel', options),
   AllocationReviewHistory: (options) => ipcRenderer.invoke('allocation-review-history', options),
+  AllocationReviewServerList: (options) => ipcRenderer.invoke('allocation-review-server-list', options),
+  AllocationReviewServerCancel: (options) => ipcRenderer.invoke('allocation-review-server-cancel', options),
   StajDebtHistory: (options) => ipcRenderer.invoke('staj-debt-history', options),
   StajDebtReviews: (options) => ipcRenderer.invoke('staj-debt-reviews', options),
   RebuildProjections: (companyId) => ipcRenderer.invoke('rebuild-projections', companyId),

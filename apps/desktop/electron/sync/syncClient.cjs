@@ -208,6 +208,15 @@ class SyncClient {
     return data;
   }
 
+  async listOpenAllocationReviews() {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/api/sync/allocation-review/open`, { method: 'GET', headers: this.getHeaders() });
+    // An older VPS has no company-wide list; fall back to this device's evidence.
+    if (res.status === 404) return { success: true, reviews: [], unsupported: true };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new SyncError(data.error?.message || 'Review list failed', data.error?.code || 'ALLOCATION_REVIEW_LIST_FAILED', res.status);
+    return data;
+  }
+
   async getAllocationReviewHistory(operationId) {
     const url = `${this.baseUrl}/api/sync/allocation-review/history/${encodeURIComponent(operationId)}`;
     const res = await this.fetchWithTimeout(url, { method: 'GET', headers: this.getHeaders() });

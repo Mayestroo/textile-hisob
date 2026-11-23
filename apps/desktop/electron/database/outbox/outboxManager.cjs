@@ -281,6 +281,41 @@ function listPendingAllocationCancellations(db, companyId) {
   return db.prepare(`SELECT * FROM allocation_resolution_intents WHERE company_id=? AND status='PENDING' ORDER BY created_at`).all(companyId);
 }
 
+/**
+ * Applies a reviewer's server-side cancellation to this device's copy of the
+ * held allocation. The server fences the exact (operationId, payloadHash), so
+ * the original can never be accepted later: its outbox row is closed and, for a
+ * never-accepted submission, the provisional ticket is voided so the patta can
+ * be entered again with the correct quantity.
+ */
+function settleServerCancelledAllocation(db, companyId, operationId, payloadHash) {
+  return db.transaction(() => {
+    const op = getOperation(db, companyId, operationId);
+    if (!op || op.payload_hash !== payloadHash || !['SubmitTicket', 'UpdateTicket'].includes(op.command_type)) return false;
+    if (op.status === 'SUPERSEDED') return false;
+    if (!['PENDING', 'CONFLICT', 'DEAD_LETTER'].includes(op.status)) return false;
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE local_outbox SET status='SUPERSEDED', last_error='SERVER_CANCELLED',
+      error_message='Authoritatively cancelled by accountant; stale replay fenced by server', updated_at=?
+      WHERE company_id=? AND operation_id=?`).run(now, companyId, operationId);
+    if (op.command_type === 'SubmitTicket') {
+      db.prepare(`UPDATE tickets SET status='VOIDED' WHERE company_id=? AND id=?
+        AND status IN ('PENDING_SYNC','PENDING_DELETE','CONFIRMED')
+        AND NOT EXISTS (SELECT 1 FROM local_outbox s WHERE s.company_id=tickets.company_id AND s.entity_id=tickets.id
+          AND s.command_type='SubmitTicket' AND s.status='SYNCED')`).run(companyId, op.entity_id);
+      // Later local edits/deletes of a ticket that will never exist on the
+      // server cannot succeed; close them with the same explanation.
+      const followers = db.prepare(`SELECT operation_id FROM local_outbox WHERE company_id=? AND entity_type='ticket'
+        AND entity_id=? AND operation_id<>? AND status IN ('PENDING','CONFLICT','DEAD_LETTER')`)
+        .all(companyId, op.entity_id, operationId);
+      for (const follower of followers) {
+        updateOperationStatus(db, companyId, follower.operation_id, 'SUPERSEDED', 'SUPERSEDED_AFTER_SERVER_CANCELLATION');
+      }
+    }
+    return true;
+  })();
+}
+
 function acknowledgeAllocationCancellation(db, companyId, resolutionOperationId, result) {
   return db.transaction(() => {
     const intent = db.prepare(`SELECT * FROM allocation_resolution_intents WHERE company_id=? AND resolution_operation_id=?`).get(companyId, resolutionOperationId);
@@ -290,9 +325,7 @@ function acknowledgeAllocationCancellation(db, companyId, resolutionOperationId,
     if (!original || original.payload_hash !== intent.original_payload_hash) throw new Error('Local original allocation evidence changed');
     if (original.status !== 'SUPERSEDED') {
       validateOutboxTransition(original.status, 'SUPERSEDED');
-      db.prepare(`UPDATE local_outbox SET status='SUPERSEDED', last_error='SERVER_CANCELLED',
-        error_message='Authoritatively cancelled by accountant; stale replay fenced by server', updated_at=?
-        WHERE company_id=? AND operation_id=?`).run(new Date().toISOString(), companyId, intent.original_operation_id);
+      settleServerCancelledAllocation(db, companyId, intent.original_operation_id, intent.original_payload_hash);
     }
     db.prepare(`UPDATE allocation_resolution_intents SET status='ACKNOWLEDGED',result_json=?,updated_at=?
       WHERE company_id=? AND resolution_operation_id=?`).run(JSON.stringify(result), new Date().toISOString(), companyId, resolutionOperationId);
@@ -526,6 +559,81 @@ function isVoidedPattaUniqueViolation(errorValue) {
   } catch {
     return false;
   }
+}
+
+function parseOutboxError(operation) {
+  try { return JSON.parse(operation?.last_error || operation?.error_message || '{}') || {}; } catch { return {}; }
+}
+
+/**
+ * Describes whether a local ticket was ever accepted by the server, judged only
+ * from its own SubmitTicket outbox evidence. A CONFLICT is "never applied" only
+ * when the server itself refused the command; local post-ACK checks also use
+ * CONFLICT and must not be mistaken for a refusal.
+ */
+const SERVER_REFUSED_SUBMIT_CODES = new Set(['ALLOCATION_REVIEW_REQUIRED', 'DUPLICATE_TICKET_ID', '23505',
+  'IDEMPOTENCY_CONFLICT', 'ISSUED_QUANTITY_MISMATCH', 'ISSUED_QUANTITY_UNAVAILABLE']);
+
+function getTicketSubmitEvidence(db, companyId, ticketId) {
+  const submit = db.prepare(`SELECT operation_id, status, last_error, error_message FROM local_outbox
+    WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
+    ORDER BY rowid DESC LIMIT 1`).get(companyId, ticketId);
+  if (!submit) return { submit: null, neverApplied: false, inAllocationReview: false };
+  const error = parseOutboxError(submit);
+  const inAllocationReview = submit.status === 'CONFLICT' && error.code === 'ALLOCATION_REVIEW_REQUIRED';
+  const neverApplied = submit.status === 'DEAD_LETTER'
+    || (submit.status === 'CONFLICT' && SERVER_REFUSED_SUBMIT_CODES.has(String(error.code)));
+  return { submit, error, neverApplied, inAllocationReview };
+}
+
+/**
+ * A DeleteTicket that the server refused must restore the fact to the state it
+ * had before the local delete. A ticket whose submission was never accepted was
+ * PENDING_SYNC, not CONFIRMED; restoring it as CONFIRMED fabricates acceptance.
+ */
+function restoreStatusAfterRefusedDelete(db, companyId, ticketId) {
+  const { submit } = getTicketSubmitEvidence(db, companyId, ticketId);
+  const restored = submit && submit.status !== 'SYNCED' ? 'PENDING_SYNC' : 'CONFIRMED';
+  return db.prepare(`UPDATE tickets SET status = ? WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
+    .run(restored, companyId, ticketId).changes;
+}
+
+/**
+ * Settles DeleteTicket operations the server answered with TICKET_NOT_FOUND for
+ * a ticket whose own submission was never accepted. The server's answer proves
+ * there is nothing to delete remotely:
+ *  - a dead-lettered/refused submission is discarded locally (VOIDED);
+ *  - a submission held for allocation review stays visible for the accountant
+ *    (PENDING_SYNC) and is resolved only through the review panel.
+ * The redundant delete is SUPERSEDED so it no longer counts as a sync failure.
+ */
+function recoverNeverAcceptedTicketDeletes(db, companyId) {
+  return db.transaction(() => {
+    const deletes = db.prepare(`SELECT operation_id, entity_id, status, last_error, error_message FROM local_outbox
+      WHERE company_id = ? AND command_type = 'DeleteTicket' AND entity_type = 'ticket'
+        AND status IN ('DEAD_LETTER', 'CONFLICT') ORDER BY rowid`).all(companyId);
+    let recovered = 0;
+    for (const op of deletes) {
+      if (parseOutboxError(op).code !== 'TICKET_NOT_FOUND') continue;
+      const evidence = getTicketSubmitEvidence(db, companyId, op.entity_id);
+      if (!evidence.submit || (!evidence.neverApplied && !evidence.inAllocationReview)) continue;
+      if (evidence.inAllocationReview) {
+        db.prepare(`UPDATE tickets SET status = 'PENDING_SYNC' WHERE company_id = ? AND id = ?
+          AND status IN ('CONFIRMED', 'PENDING_DELETE')`).run(companyId, op.entity_id);
+      } else {
+        db.prepare(`UPDATE tickets SET status = 'VOIDED' WHERE company_id = ? AND id = ? AND status <> 'VOIDED'`)
+          .run(companyId, op.entity_id);
+        if (['CONFLICT', 'DEAD_LETTER'].includes(evidence.submit.status)) {
+          updateOperationStatus(db, companyId, evidence.submit.operation_id, 'SUPERSEDED', 'SUPERSEDED_AFTER_LOCAL_TICKET_DISCARD');
+        }
+      }
+      updateOperationStatus(db, companyId, op.operation_id, 'SUPERSEDED', JSON.stringify({
+        code: 'SUPERSEDED_TICKET_NEVER_ACCEPTED', cause: 'TICKET_NOT_FOUND'
+      }));
+      recovered++;
+    }
+    return recovered;
+  }).immediate();
 }
 
 function recoverLegacyPattaBatches(db, companyId) {
@@ -959,6 +1067,7 @@ module.exports = {
   queueAllocationCancellation,
   listPendingAllocationCancellations,
   acknowledgeAllocationCancellation,
+  settleServerCancelledAllocation,
   rejectAllocationCancellation,
   acknowledgeOutboxOperation,
   updateOperationStatus,
@@ -968,6 +1077,9 @@ module.exports = {
   supersedeBatchSettingsAlreadyApplied,
   recoverVoidedPattaDuplicateTickets,
   recoverLegacyPattaBatches,
+  recoverNeverAcceptedTicketDeletes,
+  getTicketSubmitEvidence,
+  restoreStatusAfterRefusedDelete,
   recoverPeriodScopeMismatchTickets,
   recoverFreeModeTicketReviews,
   recoverPrintedPattaCarryForwardTickets,

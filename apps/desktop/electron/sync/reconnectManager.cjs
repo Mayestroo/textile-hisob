@@ -15,6 +15,8 @@ const {
   recoverCapturedTicketProvenanceTickets,
   recoverVoidedPattaDuplicateTickets,
   recoverLegacyPattaBatches,
+  recoverNeverAcceptedTicketDeletes,
+  settleServerCancelledAllocation,
   supersedeBatchSettingsAlreadyApplied
 } = require('../database/outbox/outboxManager.cjs');
 
@@ -38,6 +40,11 @@ async function reconcileAcceptedOutboxOperations(db, companyId, syncClient) {
     db.transaction(() => {
       for (const candidate of candidates) {
         const result = results.get(candidate.operation_id);
+        // A reviewer cancelled this held allocation (possibly from another PC).
+        if (result?.status === 'CANCELLED' && result.payloadHash === candidate.payload_hash) {
+          if (settleServerCancelledAllocation(db, companyId, candidate.operation_id, candidate.payload_hash)) reconciledCount++;
+          continue;
+        }
         if (result?.status !== 'APPLIED' || result.payloadHash !== candidate.payload_hash) continue;
         const op = db.prepare(`SELECT command_type, entity_type, entity_id, base_revision, causal_sequence FROM local_outbox
           WHERE company_id = ? AND operation_id = ?`).get(companyId, candidate.operation_id);
@@ -269,6 +276,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
   if (printedPattaCarryForwardSupported) recoverPrintedPattaCarryForwardTickets(db, companyId);
   if (freeModeTicketsSupported) recoverFreeModeTicketReviews(db, companyId);
   const recoveredCapturedTicketCount = recoverCapturedTicketProvenanceTickets(db, companyId);
+  const recoveredNeverAcceptedDeleteCount = recoverNeverAcceptedTicketDeletes(db, companyId);
   const recoveredLegacyPattaBatchCount = legacyPattaBatchReplaySupported ? recoverLegacyPattaBatches(db, companyId) : 0;
   const deferredPartyArchives = legacyPattaBatchReplaySupported
     ? await require('./deferredPartyArchiveRecovery.cjs').recoverDeferredPartyArchives(db, companyId, syncClient)
@@ -330,6 +338,7 @@ async function executeReconnectProtocol(db, companyId, syncClient, options = {})
     recoveredPeriodScopeMismatchCount,
     recoveredCapturedTicketCount,
     recoveredLegacyPattaBatchCount,
+    recoveredNeverAcceptedDeleteCount,
     deferredPartyArchives,
     reconciledCount,
     pushed: pushRes,

@@ -144,11 +144,31 @@ function createOperationStatusHandler(pool) {
       WHERE company_id = $1 AND operation_id = ANY($2::varchar[])
     `, [companyId, operations.map((operation) => operation.operationId)]);
     const acceptedById = new Map(rows.rows.map((row) => [row.operation_id, row]));
+    // A reviewer may cancel an allocation held for review from another device.
+    // Report that final decision so the submitting device can settle its copy.
+    const unaccepted = operations.filter((operation) => !acceptedById.has(operation.operationId));
+    const fences = unaccepted.length ? await pool.query(`
+      SELECT original_operation_id, original_payload_hash, resolution_operation_id, reason, created_at
+      FROM allocation_resolution_fences
+      WHERE company_id = $1 AND original_operation_id = ANY($2::varchar[])
+    `, [companyId, unaccepted.map((operation) => operation.operationId)]) : { rows: [] };
+    const fenceById = new Map(fences.rows.map((row) => [row.original_operation_id, row]));
 
     return reply.send({
       success: true,
       results: operations.map((operation) => {
         const accepted = acceptedById.get(operation.operationId);
+        const fence = fenceById.get(operation.operationId);
+        if (!accepted && fence && fence.original_payload_hash === operation.payloadHash) {
+          return {
+            operationId: operation.operationId,
+            payloadHash: fence.original_payload_hash,
+            status: 'CANCELLED',
+            resolutionOperationId: fence.resolution_operation_id,
+            reason: fence.reason,
+            cancelledAt: fence.created_at instanceof Date ? fence.created_at.toISOString() : fence.created_at
+          };
+        }
         if (!accepted) return { operationId: operation.operationId, status: 'NOT_FOUND' };
         if (accepted.payload_hash !== operation.payloadHash) {
           return { operationId: operation.operationId, status: 'IDEMPOTENCY_CONFLICT' };
