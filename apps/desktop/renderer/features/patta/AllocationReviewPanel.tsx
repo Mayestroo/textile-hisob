@@ -30,6 +30,7 @@ type ServerReviewRow = {
   recordedAt: string;
   issuedQty: number | null;
   modelName: string | null;
+  corrected?: boolean;
 };
 
 type ReviewItem = {
@@ -43,6 +44,7 @@ type ReviewItem = {
   modelName: string | null;
   local: LocalReviewRow | null;
   onServer: boolean;
+  corrected: boolean;
 };
 
 const RECENT_CANCELLED_MS = 3 * 24 * 60 * 60 * 1000;
@@ -70,7 +72,7 @@ export function describeReviewReason(rawReason: string, qty: unknown, issuedQty:
   return text || 'Server sabab tafsilotini yubormagan.';
 }
 
-export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: boolean }> = ({ companyId, canCancel = false }) => {
+export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: boolean; variant?: 'inline' | 'page' }> = ({ companyId, canCancel = false, variant = 'inline' }) => {
   const models = useWorkbookStore((s) => s.models);
   const printedPartyHistory = useWorkbookStore((s) => s.printedPartyHistory);
   const [localRows, setLocalRows] = useState<LocalReviewRow[]>([]);
@@ -125,7 +127,7 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
       byId.set(row.operationId, {
         operationId: row.operationId, commandType: row.commandType, payloadHash: row.payloadHash,
         payload: row.payload || {}, rawReason: row.reason, createdAt: row.recordedAt,
-        issuedQty: row.issuedQty, modelName: row.modelName, local: null, onServer: true
+        issuedQty: row.issuedQty, modelName: row.modelName, local: null, onServer: true, corrected: Boolean(row.corrected)
       });
     }
     for (const row of localRows) {
@@ -141,7 +143,8 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
         issuedQty: existing?.issuedQty ?? null,
         modelName: existing?.modelName ?? null,
         local: row,
-        onServer: Boolean(existing)
+        onServer: Boolean(existing),
+        corrected: Boolean(existing?.corrected)
       });
     }
     return [...byId.values()].map((item) => {
@@ -194,7 +197,12 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
     finally { setLoading(false); }
   };
 
-  if (items.length === 0 && !error && !notice) return null;
+  if (items.length === 0 && !error && !notice) {
+    if (variant !== 'page') return null;
+    return <section aria-label="Taqsimot nizolarini ko‘rib chiqish" style={{ margin: '12px 20px', padding: 24, border: '1px dashed var(--border-subtle, #cbd5e1)', borderRadius: 10, textAlign: 'center', color: 'var(--text-muted, #64748b)' }}>
+      {loading ? 'Yuklanmoqda…' : 'Ko‘rib chiqish talab qiladigan patta yo‘q.'}
+    </section>;
+  }
   const openCount = items.filter((item) => item.local?.status !== 'SUPERSEDED').length;
 
   return <section aria-label="Taqsimot nizolarini ko‘rib chiqish" style={{ margin: '12px 16px', padding: 16, border: '1px solid #f0c36d', borderRadius: 10, background: '#fffbeb' }}>
@@ -206,7 +214,7 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
     <p style={{ margin: '6px 0 0', fontSize: 13, color: '#92400e' }}>
       {canCancel
         ? 'Server bu pattalarni qabul qilmadi. Tekshirib, «Bekor qilish» tugmasini bosing — keyin patta to‘g‘ri ma’lumot bilan qayta kiritiladi.'
-        : 'Server bu pattalarni qabul qilmadi. Ularni faqat admin yoki hisobchi bekor qila oladi; bekor qilingach, bu yerdan avtomatik o‘chadi va pattani to‘g‘ri miqdor bilan qayta kiritasiz.'}
+        : 'Server bu pattalarni qabul qilmadi. Pattani «Patta» oynasida to‘g‘ri miqdor bilan qayta jo‘natsangiz, eski yozuv almashtiriladi. Server yozuvini faqat admin yoki hisobchi bekor qila oladi.'}
     </p>
     {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
     {notice && <p role="status" style={{ color: '#047857' }}>{notice}</p>}
@@ -232,6 +240,9 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
           {item.commandType === 'UpdateTicket' && <> · <i>(tahrirlash)</i></>}
         </div>
         <div><b>Sabab:</b> {describeReviewReason(item.rawReason, p.qty, item.issuedQty)}</div>
+        {item.corrected && !cancelled && <div style={{ color: '#047857', fontWeight: 600 }}>
+          Bu patta to‘g‘ri ma’lumot bilan qayta kiritilgan va server qabul qilgan — eski yozuvni bekor qilish mumkin.
+        </div>}
         {row?.cancellation_status === 'REJECTED' && <p role="alert">Bekor qilish rad etildi ({row.cancellation_result?.code || 'SERVER_REJECTED'}): {row.cancellation_result?.message || 'Server sababni qaytarmadi'}. Asl ish ko‘rib chiqishda qoladi; zarur bo‘lsa vakolatli tuzatish yo‘lini tanlang.</p>}
         {entries.length > 0 && <table style={{ marginTop: 6, borderCollapse: 'collapse', fontSize: 13 }}>
           <thead><tr><th style={{ textAlign: 'left', paddingRight: 16 }}>Operatsiya</th><th style={{ textAlign: 'left', paddingRight: 16 }}>Ishchi</th><th style={{ textAlign: 'right' }}>Dona</th></tr></thead>

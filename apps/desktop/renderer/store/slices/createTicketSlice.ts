@@ -396,7 +396,9 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
             konveyer: form.konveyer || '',
             entries: filledEntries,
             effectiveDate,
-            submittedAt: new Date().toISOString()
+            submittedAt: new Date().toISOString(),
+            // Corrects a never-accepted ticket held for allocation review.
+            ...(validation.replacesTicket?.id ? { replacesTicketId: validation.replacesTicket.id } : {})
           });
         } catch (error) {
           const rejected = makeMutationResult(

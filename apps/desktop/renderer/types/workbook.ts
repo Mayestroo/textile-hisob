@@ -101,6 +101,8 @@ export interface SubmittedTicketRecord {
   partyRecordId?: string | null; // NULL in  free mode: no fabricated printed party record.
   periodId?: string;
   status?: 'CONFIRMED' | 'PENDING_SYNC' | 'PENDING_DELETE' | 'VOIDED' | 'CONFLICT';
+  /** Never accepted: the server holds this submission for allocation review. */
+  allocationReview?: boolean;
   serverRevision?: number;
   isClosed?: boolean;           // Partiya yakunlanganda yopilgan holati
   konveyer?: string;
