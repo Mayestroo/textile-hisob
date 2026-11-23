@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { getElectronApi } from '../../store/runtimeMode';
 import { useWorkbookStore } from '../../store/workbookStore';
+import { OperatorLoginForm } from '../review/OperatorLoginForm';
 
 /** Local outbox evidence held on this PC. */
 type LocalReviewRow = {
@@ -48,6 +49,15 @@ type ReviewItem = {
 };
 
 const RECENT_CANCELLED_MS = 3 * 24 * 60 * 60 * 1000;
+const OPERATOR_REQUIRED_CODES = ['ALLOCATION_REVIEW_UNAUTHORIZED', 'OPERATOR_AUTH_REQUIRED', 'OPERATOR_REAUTH_REQUIRED'];
+
+/** IPC failures carry the message as a string; HTTP bodies nest it. */
+function errorText(result: any, fallback: string): string {
+  if (typeof result?.error === 'string' && result.error.trim()) return result.error;
+  return result?.error?.message || fallback;
+}
+
+type ServerAccess = 'idle' | 'ok' | 'operator_required' | 'unsupported' | 'error';
 
 function parseReason(row: LocalReviewRow): string {
   const raw = row.last_error || row.error_message || '';
@@ -83,6 +93,8 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
   const [history, setHistory] = useState<Record<string, any[]>>({});
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [serverAccess, setServerAccess] = useState<ServerAccess>('idle');
+  const [serverError, setServerError] = useState('');
 
   const refresh = useCallback(async () => {
     const api = getElectronApi() as any;
@@ -90,7 +102,7 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
     setLoading(true);
     try {
       const result = await api.AllocationReviewList({ companyId });
-      if (!result?.success) throw new Error(result?.error?.message || 'Ko‘rib chiqish ro‘yxati yuklanmadi');
+      if (!result?.success) throw new Error(errorText(result, 'Ko‘rib chiqish ro‘yxati yuklanmadi'));
       const now = Date.now();
       const local: LocalReviewRow[] = (result.conflicts || []).filter((row: LocalReviewRow) => row.status !== 'SUPERSEDED'
         || now - Date.parse(row.updated_at || row.created_at) < RECENT_CANCELLED_MS);
@@ -98,7 +110,15 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
       let server: ServerReviewRow[] = [];
       if (canCancel && typeof api.AllocationReviewServerList === 'function') {
         const serverResult = await api.AllocationReviewServerList({ companyId });
-        if (serverResult?.success) server = serverResult.reviews || [];
+        if (serverResult?.success) {
+          server = serverResult.reviews || [];
+          setServerAccess(serverResult.unsupported ? 'unsupported' : 'ok');
+          setServerError('');
+        } else {
+          // Never hide this: an empty list here would look like "nothing to review".
+          setServerAccess(OPERATOR_REQUIRED_CODES.includes(serverResult?.code) ? 'operator_required' : 'error');
+          setServerError(errorText(serverResult, 'Serverdan ro‘yxat olinmadi'));
+        }
       }
       setServerRows(server);
       if (canCancel && typeof api.AllocationReviewHistory === 'function') {
@@ -160,7 +180,7 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
     setLoading(true); setNotice(''); setError('');
     try {
       const result = await api?.AllocationReviewRetry?.({ companyId, operationId });
-      if (!result?.success) throw new Error(result?.error?.message || 'Qayta yuborish uchun chiqarish hali tasdiqlanmagan');
+      if (!result?.success) throw new Error(errorText(result, 'Qayta yuborish uchun chiqarish hali tasdiqlanmagan'));
       const dispatch = await api?.SyncDispatch?.(companyId);
       await refresh();
       setNotice(dispatch?.success === false
@@ -183,7 +203,10 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
         ? await api?.AllocationReviewCancel?.({ companyId, operationId: item.operationId, reason })
         : await api?.AllocationReviewServerCancel?.({ companyId, operationId: item.operationId, payloadHash: item.payloadHash,
           payload: item.payload, commandType: item.commandType, reason });
-      if (!result?.success) throw new Error(result?.error?.message || 'Bekor qilish so‘rovi yuborilmadi');
+      if (!result?.success) {
+        if (OPERATOR_REQUIRED_CODES.includes(result?.code)) setServerAccess('operator_required');
+        throw new Error(errorText(result, 'Bekor qilish so‘rovi yuborilmadi'));
+      }
       if (result.status === 'CANCELLED') {
         setNotice(item.local
           ? 'Server bekor qilishni tasdiqladi. Patta endi to‘g‘ri miqdor bilan qayta kiritilishi mumkin.'
@@ -197,15 +220,39 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
     finally { setLoading(false); }
   };
 
+  const signOut = async () => {
+    const api = getElectronApi() as any;
+    try { await api?.OperatorRevoke?.(companyId); } catch { /* local session is cleared by main on success only */ }
+    setServerAccess('operator_required');
+    setServerRows([]);
+  };
+
+  const accessBlock = canCancel ? (
+    serverAccess === 'operator_required'
+      ? <OperatorLoginForm companyId={companyId} onSignedIn={() => { setNotice('Operator sifatida kirildi.'); void refresh(); }} />
+      : serverAccess === 'error'
+        ? <p role="alert" style={{ margin: '12px 20px', color: '#b91c1c' }}>Serverdan boshqa kompyuterlardagi yozuvlar olinmadi: {serverError}. Faqat shu kompyuterdagi yozuvlar ko‘rsatilmoqda.</p>
+        : serverAccess === 'unsupported'
+          ? <p role="note" style={{ margin: '12px 20px', color: '#92400e' }}>Server eski versiyada: boshqa kompyuterlardagi yozuvlarni ko‘rsatib bo‘lmaydi. Serverni yangilang.</p>
+          : serverAccess === 'ok' && variant === 'page'
+            ? <div style={{ margin: '8px 20px 0', fontSize: 13, color: 'var(--text-muted, #64748b)' }}>
+                Operator sifatida kirilgan. <button type="button" onClick={() => void signOut()} style={{ marginLeft: 6 }}>Chiqish</button>
+              </div>
+            : null
+  ) : null;
+
   if (items.length === 0 && !error && !notice) {
-    if (variant !== 'page') return null;
-    return <section aria-label="Taqsimot nizolarini ko‘rib chiqish" style={{ margin: '12px 20px', padding: 24, border: '1px dashed var(--border-subtle, #cbd5e1)', borderRadius: 10, textAlign: 'center', color: 'var(--text-muted, #64748b)' }}>
-      {loading ? 'Yuklanmoqda…' : 'Ko‘rib chiqish talab qiladigan patta yo‘q.'}
-    </section>;
+    if (variant !== 'page') return accessBlock;
+    return <>
+      {accessBlock}
+      {serverAccess !== 'operator_required' && <section aria-label="Taqsimot nizolarini ko‘rib chiqish" style={{ margin: '12px 20px', padding: 24, border: '1px dashed var(--border-subtle, #cbd5e1)', borderRadius: 10, textAlign: 'center', color: 'var(--text-muted, #64748b)' }}>
+        {loading ? 'Yuklanmoqda…' : 'Ko‘rib chiqish talab qiladigan patta yo‘q.'}
+      </section>}
+    </>;
   }
   const openCount = items.filter((item) => item.local?.status !== 'SUPERSEDED').length;
 
-  return <section aria-label="Taqsimot nizolarini ko‘rib chiqish" style={{ margin: '12px 16px', padding: 16, border: '1px solid #f0c36d', borderRadius: 10, background: '#fffbeb' }}>
+  return <>{accessBlock}<section aria-label="Taqsimot nizolarini ko‘rib chiqish" style={{ margin: '12px 16px', padding: 16, border: '1px solid #f0c36d', borderRadius: 10, background: '#fffbeb' }}>
     <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <AlertTriangle size={18} aria-hidden="true" />
       <strong>Patta taqsimoti — ko‘rib chiqish talab qilinadi{openCount ? ` (${openCount})` : ''}</strong>
@@ -281,5 +328,5 @@ export const AllocationReviewPanel: React.FC<{ companyId: string; canCancel?: bo
         </details>}
       </article>;
     })}
-  </section>;
+  </section></>;
 };

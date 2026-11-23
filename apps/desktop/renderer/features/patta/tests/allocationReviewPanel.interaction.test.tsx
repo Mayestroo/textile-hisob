@@ -78,6 +78,34 @@ describe('allocation review panel server resolution actions', () => {
     expect(status.textContent).not.toContain('Server bekor qilishni tasdiqladi');
   });
 
+  it('asks a reviewer to sign in as operator instead of silently showing an empty list', async () => {
+    list.mockResolvedValue({ success: true, conflicts: [] });
+    serverList.mockResolvedValueOnce({ success: false, code: 'ALLOCATION_REVIEW_UNAUTHORIZED', error: 'Active company accountant/admin operator session required' })
+      .mockResolvedValue({ success: true, reviews: [{ operationId: 'remote-op', commandType: 'SubmitTicket', ticketId: 't-1',
+        payloadHash: 'c'.repeat(64), payload: { partyNumber: '205', pattaNumber: 680, qty: 409, entries: [] }, issuedQty: 410,
+        modelName: 'Kofta', recordedAt: '2026-11-23T07:34:29Z', reason: 'Ticket quantity does not match authoritative issuance' }] });
+    const login = vi.fn().mockResolvedValue({ success: true, session: { operatorId: 'admin' } });
+    (window as any).electronAPI.OperatorLogin = login;
+    render(<AllocationReviewPanel companyId="company-1" canCancel variant="page" />);
+    fireEvent.change(await screen.findByLabelText('Operator login'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Operator paroli'), { target: { value: 'secret-pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kirish' }));
+    await waitFor(() => expect(login).toHaveBeenCalledWith('company-1', 'admin', 'secret-pass'));
+    expect(await screen.findByText(/kiritilgan 409 dona/)).toBeTruthy();
+    expect(screen.queryByLabelText('Operator login')).toBeNull();
+  });
+
+  it('shows a rejected operator login', async () => {
+    list.mockResolvedValue({ success: true, conflicts: [] });
+    serverList.mockResolvedValue({ success: false, code: 'ALLOCATION_REVIEW_UNAUTHORIZED', error: 'operator required' });
+    (window as any).electronAPI.OperatorLogin = vi.fn().mockResolvedValue({ success: false, code: 'OPERATOR_AUTH_REJECTED', error: 'Invalid operator credentials' });
+    render(<AllocationReviewPanel companyId="company-1" canCancel variant="page" />);
+    fireEvent.change(await screen.findByLabelText('Operator login'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Operator paroli'), { target: { value: 'wrong-pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kirish' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Login yoki parol noto‘g‘ri');
+  });
+
   it('translates the known server reasons', () => {
     expect(describeReviewReason('no reliable per-patta issued quantity', 5, null)).toContain('ishonchli');
   });
