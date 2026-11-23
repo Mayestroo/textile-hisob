@@ -56,6 +56,26 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     }
   }
 
+  it('refuses a printed ticket whose qty differs from the party issued per-patta quantity', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`UPDATE parties SET ish_soni_per_patta = 410, patta_count = 1 WHERE id = 'party_12'`).run();
+    const command = {
+      commandId: 'cmd-qty-409', operationId: 'op-qty-409', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000000680', modelId: 'model_101', partyRecordId: 'party_12',
+      partyNumber: '12', pattaNumber: 680, qty: 409, allocationVersion: 1,
+      entries: [{ opName: 'Tikish', workerId: 1, qty: 409, rateSnapshot: 2 }]
+    };
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, command))
+      .toThrow(expect.objectContaining({ code: 'ISSUED_QUANTITY_MISMATCH' }));
+    expect(db.prepare('SELECT COUNT(*) AS count FROM local_outbox').get().count).toBe(0);
+
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, {
+      ...command, commandId: 'cmd-qty-410', operationId: 'op-qty-410', qty: 410
+    });
+    expect(db.prepare('SELECT qty FROM tickets WHERE id = ?').get(command.ticketId).qty).toBe(410);
+  });
+
   it('accepts a 40/60 split for one patta operation and rejects duplicate or over-issued allocations', () => {
     seedCompany(companyA);
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);

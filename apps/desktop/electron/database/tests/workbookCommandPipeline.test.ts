@@ -296,6 +296,117 @@ describe(' workbook local command pipeline', () => {
       .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: ticketId })]));
   });
 
+  function seedUnacceptedSubmit(db: any, ticketId: string, operationId: string, status: string, error: Record<string, any>) {
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO tickets (
+      id, company_id, model_id, party_number, party_record_id, patta_number, qty, status, submitted_at, created_at
+    ) VALUES (?, ?, 'model_one', '205', NULL, 680, 409, 'PENDING_SYNC', ?, ?)`).run(ticketId, companyId, now, now);
+    const payloadJson = canonicalStringify({ ticketId, companyId, operationId });
+    db.prepare(`INSERT INTO local_outbox (
+      operation_id, company_id, command_type, entity_type, entity_id, base_revision,
+      payload_json, payload_hash, status, created_at, updated_at, last_error, error_message
+    ) VALUES (?, ?, 'SubmitTicket', 'ticket', ?, 0, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(operationId, companyId, ticketId, payloadJson, computePayloadHash(payloadJson), status, now, now,
+        JSON.stringify(error), JSON.stringify(error));
+  }
+
+  it('refuses to queue a server delete for a ticket held in allocation review', () => {
+    const db = seedModel();
+    const ticketId = '11111111-1111-4111-8111-111111111120';
+    seedUnacceptedSubmit(db, ticketId, 'op_review_submit', 'CONFLICT', { code: 'ALLOCATION_REVIEW_REQUIRED',
+      message: 'Ticket quantity does not match authoritative issuance; preserve this operation for correction and review' });
+
+    expect(() => workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'DeleteTicket', commandId: 'cmd_delete_review', operationId: 'op_delete_review',
+      companyId, entityId: ticketId, payload: { ticketId }
+    })).toThrow(expect.objectContaining({ code: 'ALLOCATION_REVIEW_PENDING' }));
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('PENDING_SYNC');
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM local_outbox WHERE command_type = 'DeleteTicket'`).get().count).toBe(0);
+  });
+
+  it('discards a server-refused duplicate patta locally instead of sending DeleteTicket', () => {
+    const db = seedModel();
+    const ticketId = '11111111-1111-4111-8111-111111111121';
+    seedUnacceptedSubmit(db, ticketId, 'op_dup_submit', 'CONFLICT', { code: 'DUPLICATE_TICKET_ID', message: 'exists' });
+
+    const result = workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'DeleteTicket', commandId: 'cmd_delete_dup', operationId: 'op_delete_dup',
+      companyId, entityId: ticketId, payload: { ticketId }
+    });
+    expect(result).toMatchObject({ status: 'DELETED_LOCALLY', localOnly: true });
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('VOIDED');
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_dup_submit').status).toBe('SUPERSEDED');
+  });
+
+  it('settles a TICKET_NOT_FOUND delete for a never-accepted ticket instead of restoring it as CONFIRMED', async () => {
+    const db = seedModel();
+    const ticketId = '11111111-1111-4111-8111-111111111122';
+    seedUnacceptedSubmit(db, ticketId, 'op_pending_submit', 'PENDING', {});
+    workbookCommandPipeline.executeWorkbookCommand(userData, companyId, {
+      commandType: 'DeleteTicket', commandId: 'cmd_delete_nf', operationId: 'op_delete_nf',
+      companyId, entityId: ticketId, payload: { ticketId }
+    });
+    // The submit is refused into review while the delete is in flight.
+    db.prepare(`UPDATE local_outbox SET status = 'CONFLICT', last_error = ?, error_message = ? WHERE operation_id = 'op_pending_submit'`)
+      .run(JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED' }), JSON.stringify({ code: 'ALLOCATION_REVIEW_REQUIRED' }));
+
+    const summary = await outboxDispatcher.dispatchOutbox(db, companyId, {
+      pushOperations: async (ops: any[]) => ({ results: ops.map((op) => ({ operationId: op.operationId, status: 'REJECTED',
+        error: { code: 'TICKET_NOT_FOUND', message: `Ticket "${ticketId}" was not found` } })) })
+    });
+
+    expect(summary.deadLetter).toBe(0);
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('PENDING_SYNC');
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_delete_nf').status).toBe('SUPERSEDED');
+    expect(db.prepare('SELECT status FROM local_outbox WHERE operation_id = ?').get('op_pending_submit').status).toBe('CONFLICT');
+  });
+
+  it('recovers already dead-lettered TICKET_NOT_FOUND deletes of refused submissions', () => {
+    const db = seedModel();
+    const ticketId = '11111111-1111-4111-8111-111111111123';
+    seedUnacceptedSubmit(db, ticketId, 'op_dead_submit', 'DEAD_LETTER', { code: '23505', message: 'idx_tickets_party_patta' });
+    db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE id = ?`).run(ticketId);
+    const payloadJson = canonicalStringify({ ticketId, operationId: 'op_dead_delete' });
+    const error = JSON.stringify({ code: 'TICKET_NOT_FOUND' });
+    db.prepare(`INSERT INTO local_outbox (operation_id, company_id, command_type, entity_type, entity_id, base_revision,
+      payload_json, payload_hash, status, created_at, updated_at, last_error, error_message)
+      VALUES ('op_dead_delete', ?, 'DeleteTicket', 'ticket', ?, 1, ?, ?, 'DEAD_LETTER', ?, ?, ?, ?)`)
+      .run(companyId, ticketId, payloadJson, computePayloadHash(payloadJson), new Date().toISOString(), new Date().toISOString(), error, error);
+
+    expect(outboxManager.recoverNeverAcceptedTicketDeletes(db, companyId)).toBe(1);
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('VOIDED');
+    expect(outboxManager.getOutboxDiagnostics(db, companyId).deadLetterCount).toBe(0);
+  });
+
+  it('settles a review held on this PC when the server reports a cancellation made on another PC', async () => {
+    const db = seedModel();
+    const ticketId = '11111111-1111-4111-8111-111111111124';
+    seedUnacceptedSubmit(db, ticketId, 'op_remote_cancel', 'CONFLICT', { code: 'ALLOCATION_REVIEW_REQUIRED' });
+    const hash = db.prepare('SELECT payload_hash FROM local_outbox WHERE operation_id = ?').get('op_remote_cancel').payload_hash;
+    const { reconcileAcceptedOutboxOperations } = require('../../sync/reconnectManager.cjs');
+
+    const count = await reconcileAcceptedOutboxOperations(db, companyId, {
+      getOperationStatuses: async (ops: any[]) => ({ results: ops.map((op) => op.operationId === 'op_remote_cancel'
+        ? { operationId: op.operationId, payloadHash: op.payloadHash, status: 'CANCELLED', resolutionOperationId: 'res-1' }
+        : { operationId: op.operationId, status: 'NOT_FOUND' }) })
+    });
+
+    expect(count).toBe(1);
+    expect(db.prepare('SELECT status, last_error FROM local_outbox WHERE operation_id = ?').get('op_remote_cancel'))
+      .toEqual({ status: 'SUPERSEDED', last_error: 'SERVER_CANCELLED' });
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('VOIDED');
+    // A receipt for different content never settles the local evidence.
+    expect(outboxManager.settleServerCancelledAllocation(db, companyId, 'op_remote_cancel', hash)).toBe(false);
+  });
+
+  it('ignores a cancellation receipt whose payload hash does not match local evidence', () => {
+    const db = seedModel();
+    const ticketId = '11111111-1111-4111-8111-111111111125';
+    seedUnacceptedSubmit(db, ticketId, 'op_hash_mismatch', 'CONFLICT', { code: 'ALLOCATION_REVIEW_REQUIRED' });
+    expect(outboxManager.settleServerCancelledAllocation(db, companyId, 'op_hash_mismatch', 'f'.repeat(64))).toBe(false);
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId).status).toBe('PENDING_SYNC');
+  });
+
   it('updates ticket entries locally and restores the previous assignments if the server rejects the edit', async () => {
     const db = seedModel();
     const now = new Date().toISOString();

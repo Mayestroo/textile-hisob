@@ -98,6 +98,54 @@ async function readAudit(pool, companyId, originalOperationId) {
   return result.rows;
 }
 
+/**
+ * Open allocation-review items for the whole company. The evidence is recorded
+ * by whichever device submitted it, so a reviewer on another PC can only act on
+ * it through the server. Cancelled or since-accepted operations are excluded.
+ */
+async function listOpenAllocationReviews(pool, req) {
+  const companyId = req.auth?.companyId;
+  assertReviewer(req, companyId);
+  const result = await pool.query(`
+    SELECT c.original_operation_id, c.command_type, c.entity_id, c.original_payload_hash,
+      c.original_payload_json, c.review_reason, c.recorded_at,
+      p.ish_soni_per_patta, p.model_name
+    FROM allocation_review_candidates c
+    LEFT JOIN parties p ON p.company_id = c.company_id
+      AND p.id = c.original_payload_json->>'partyRecordId'
+    WHERE c.company_id = $1
+      AND NOT EXISTS (SELECT 1 FROM allocation_resolution_fences f
+        WHERE f.company_id = c.company_id AND f.original_operation_id = c.original_operation_id)
+      AND NOT EXISTS (SELECT 1 FROM operations_dedup d
+        WHERE d.company_id = c.company_id AND d.operation_id = c.original_operation_id)
+    ORDER BY c.recorded_at ASC
+    LIMIT 200`, [companyId]);
+  return result.rows.map((row) => {
+    const issued = Number(row.ish_soni_per_patta);
+    return {
+      operationId: row.original_operation_id,
+      commandType: row.command_type,
+      ticketId: row.entity_id,
+      payloadHash: row.original_payload_hash,
+      payload: row.original_payload_json,
+      reason: row.review_reason,
+      recordedAt: row.recorded_at instanceof Date ? row.recorded_at.toISOString() : row.recorded_at,
+      issuedQty: Number.isSafeInteger(issued) && issued > 0 ? issued : null,
+      modelName: row.model_name || null
+    };
+  });
+}
+
+function createAllocationReviewListHandler(pool) {
+  return async (req, reply) => {
+    try {
+      return reply.send({ success: true, reviews: await listOpenAllocationReviews(pool, req) });
+    } catch (error) {
+      return reply.code(error.statusCode || 500).send({ success: false, error: { code: error.code || 'ALLOCATION_REVIEW_LIST_FAILED', message: error.statusCode ? error.message : 'Allocation review list unavailable' } });
+    }
+  };
+}
+
 function createAllocationResolutionHandler(pool, options = {}) {
   return async (req, reply) => {
     try {
@@ -109,4 +157,5 @@ function createAllocationResolutionHandler(pool, options = {}) {
   };
 }
 
-module.exports = { cancelAllocation, createAllocationResolutionHandler, readAudit };
+module.exports = { cancelAllocation, createAllocationResolutionHandler, createAllocationReviewListHandler,
+  listOpenAllocationReviews, readAudit };

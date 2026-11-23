@@ -689,6 +689,40 @@ if (isSyncEnabled) {
     } catch (err) { return ErrorResponse(err, 'ALLOCATION_CANCELLATION_FAILED'); }
   });
 
+  // Company-wide review list for accountant/admin: items submitted on any PC.
+  ipcMain.handle('allocation-review-server-list', async (event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      const result = await createSyncClient(ready.companyId).listOpenAllocationReviews();
+      return { success: true, reviews: result.reviews || [], unsupported: Boolean(result.unsupported) };
+    } catch (err) { return ErrorResponse(err, 'ALLOCATION_REVIEW_LIST_FAILED'); }
+  });
+
+  // Cancels an item from the server's own immutable evidence, so a reviewer
+  // can resolve work held on another device. That device settles its copy on
+  // its next sync through the operation-status CANCELLED receipt.
+  ipcMain.handle('allocation-review-server-cancel', async (event, args) => {
+    try {
+      const ready = assertRuntimeReady(args?.companyId);
+      const { operationId, payloadHash, payload, commandType } = args || {};
+      const reason = typeof args?.reason === 'string' ? args.reason.trim() : '';
+      if (typeof operationId !== 'string' || !operationId || typeof payloadHash !== 'string' || !payload
+        || typeof payload !== 'object' || !['SubmitTicket', 'UpdateTicket'].includes(commandType) || !reason) {
+        throw Object.assign(new Error('Sabab va ko‘rib chiqish dalili talab qilinadi'), { code: 'INVALID_ALLOCATION_CANCELLATION' });
+      }
+      const result = await createSyncClient(ready.companyId).cancelAllocationReview({
+        companyId: ready.companyId, originalOperationId: operationId, originalPayloadHash: payloadHash,
+        originalPayload: payload, commandType, resolutionOperationId: require('crypto').randomUUID(),
+        reason, previousStatus: 'CONFLICT'
+      });
+      if (result?.status !== 'CANCELLED') throw Object.assign(new Error('Server bekor qilishni tasdiqlamadi'), { code: 'ALLOCATION_CANCELLATION_UNCONFIRMED' });
+      // If the held operation also lives on this PC, settle it right away.
+      outboxManager.settleServerCancelledAllocation(ready.db, ready.companyId, operationId, payloadHash);
+      try { rebuildCompanyProjections(app.getPath('userData'), ready.companyId); } catch {}
+      return { success: true, status: 'CANCELLED', result };
+    } catch (err) { return ErrorResponse(err, 'ALLOCATION_CANCELLATION_FAILED'); }
+  });
+
   ipcMain.handle('allocation-review-history', async (event, args) => {
     try {
       const ready = assertRuntimeReady(args?.companyId);

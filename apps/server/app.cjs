@@ -13,7 +13,7 @@ const { registerActivationRoutes } = require('./modules/activation/activationRou
 const { registerWorkerRoutes } = require('./modules/workers/workerRoutes.cjs');
 const { registerAdminDashboardRoutes } = require('./modules/admin/adminDashboardRoutes.cjs');
 const { getPeriodArchive } = require('./modules/sync/workbookOperations.cjs');
-const { createAllocationResolutionHandler, readAudit } = require('./modules/sync/allocationResolution.cjs');
+const { createAllocationResolutionHandler, createAllocationReviewListHandler, readAudit } = require('./modules/sync/allocationResolution.cjs');
 const { createWorker } = require('./modules/workers/workerCreation.cjs');
 const { mutationFenceEnabled, createBusinessMutationFence } = require('./modules/sync/businessMutationFence.cjs');
 const { getDebtHistory, listDebtReviews, requireReviewer } = require('./modules/sync/stajDebtOperations.cjs');
@@ -110,6 +110,7 @@ function buildFastifyServer(options = {}) {
         return reply.send({ success: true, ...(await getDebtHistory(pool, req.auth.companyId, req.params.debtId)) });
       } catch (error) { return reply.code(error.statusCode || 403).send({ success: false, error: { code: error.code || 'STAJ_DEBT_UNAUTHORIZED', message: error.message } }); }
     });
+    apiScope.get('/api/sync/allocation-review/open', createAllocationReviewListHandler(pool));
     apiScope.get('/api/sync/allocation-review/history/:operationId', async (req, reply) => {
       const operator = req.auth?.operator;
       if (!operator || !operator.isActive || operator.companyId !== req.auth.companyId || !['admin', 'accountant'].includes(operator.role)) {

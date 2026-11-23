@@ -30,6 +30,12 @@ export interface TicketPartyStatus {
   errorBannerText: string;
 }
 
+/** The authoritative per-patta issued quantity of a printed party, if known. */
+export function getIssuedPattaQuantity(party: PrintedPartyRecord | null | undefined): number | null {
+  const issued = Number(party?.ishSoniPerPatta);
+  return Number.isSafeInteger(issued) && issued > 0 ? issued : null;
+}
+
 export function isDuplicateTicketRecord(
   ticket: SubmittedTicketRecord,
   partyOwner: PrintedPartyRecord | null | undefined,
@@ -382,6 +388,21 @@ export function validateTicketForSubmission(
       errorType: 'error',
       title: 'Bu patta allaqachon kiritilgan!',
       message: `Partiya ${currentPartyStr}, Patta ${actualPattaNum} allaqachon hisobga o'tkazilgan (${formatTicketDateTime(alreadySubmitted)} da, ${alreadySubmitted.qty} dona). Bitta patta ikki marta kiritilishi mumkin emas!`
+    };
+  }
+
+  // A printed patta's quantity is fixed by its issuance. The server refuses a
+  // linked ticket whose qty differs and holds it for accountant review, so the
+  // mismatch must be caught here. Fewer finished pieces are recorded through
+  // smaller worker allocations, not by changing the patta quantity.
+  const issuedQty = partyOwner ? getIssuedPattaQuantity(partyOwner) : null;
+  if (issuedQty !== null && qty !== issuedQty) {
+    return {
+      isValid: false,
+      errorType: 'error',
+      title: 'Ish soni xato!',
+      message: `Partiya ${currentPartyStr} har bir pattasi ${issuedQty} dona qilib chiqarilgan, siz ${qty} kiritdingiz. `
+        + `Ish sonini ${issuedQty} qiling; kam tikilgan bo‘lsa, ishchilar taqsimotiga kamroq miqdor yozing.`
     };
   }
 

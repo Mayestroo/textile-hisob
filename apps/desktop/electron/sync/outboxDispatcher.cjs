@@ -1,6 +1,7 @@
 'use strict';
 
-const { updateOperationStatus, getOperation, acknowledgeOutboxOperation } = require('../database/outbox/outboxManager.cjs');
+const { updateOperationStatus, getOperation, acknowledgeOutboxOperation, restoreStatusAfterRefusedDelete,
+  recoverNeverAcceptedTicketDeletes } = require('../database/outbox/outboxManager.cjs');
 const { rebuildCompanyProjections } = require('../database/readers/projectionReader.cjs');
 const { applyWorkerChange } = require('./changeFeedApplier.cjs');
 
@@ -408,8 +409,7 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
         factsUpdated++;
       }
       if (op.command_type === 'DeleteTicket') {
-        db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
-          .run(companyId, op.entity_id);
+        restoreStatusAfterRefusedDelete(db, companyId, op.entity_id);
         factsUpdated++;
       } else if (op.command_type === 'UpdateTicket') {
         // A feed may already have installed a newer authoritative server revision.
@@ -439,8 +439,13 @@ async function dispatchOutbox(db, companyId, syncClient, options = {}) {
       const errJson = JSON.stringify(res.error || { code: 'REJECTED' });
       updateOperationStatus(db, companyId, op.operation_id, 'DEAD_LETTER', errJson);
       if (op.command_type === 'DeleteTicket') {
-        db.prepare(`UPDATE tickets SET status = 'CONFIRMED' WHERE company_id = ? AND id = ? AND status = 'PENDING_DELETE'`)
-          .run(companyId, op.entity_id);
+        restoreStatusAfterRefusedDelete(db, companyId, op.entity_id);
+        // The server has no such ticket. When its own submission was never
+        // accepted, the delete is redundant: settle it instead of reporting it.
+        if (errorCode === 'TICKET_NOT_FOUND') {
+          recoverNeverAcceptedTicketDeletes(db, companyId);
+          if (getOperation(db, companyId, op.operation_id)?.status === 'SUPERSEDED') deadLetter--;
+        }
         factsUpdated++;
       } else if (op.command_type === 'UpdateTicket' && restoreTicketEntries(db, companyId, op)) {
         factsUpdated++;

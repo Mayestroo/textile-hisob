@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const { isSafeCompanyId } = require('../core/companyPath.cjs');
 const { getCompanyDatabase } = require('../core/databaseManager.cjs');
-const { insertOutboxOperation, getOperation, updateOperationStatus } = require('../outbox/outboxManager.cjs');
+const { insertOutboxOperation, getOperation, updateOperationStatus, getTicketSubmitEvidence } = require('../outbox/outboxManager.cjs');
 const { rebuildCompanyProjections } = require('../readers/projectionReader.cjs');
 const { canonicalStringify, computePayloadHash } = require('../core/canonicalPayload.cjs');
 const { validateCausalOrdering } = require('./commandPipeline.cjs');
@@ -1418,10 +1418,15 @@ function executeWorkbookCommand(baseUserDataPath, activeCompanyId, command, opti
     let localOnlyDelete = false;
     let effectiveBaseRevision;
     if (normalized.commandType === 'DeleteTicket') {
-      const submitOperation = db.prepare(`SELECT operation_id, status FROM local_outbox
-        WHERE company_id = ? AND command_type = 'SubmitTicket' AND entity_type = 'ticket' AND entity_id = ?
-        ORDER BY created_at DESC LIMIT 1`).get(normalized.companyId, normalized.entityId);
-      if (submitOperation?.status === 'DEAD_LETTER') {
+      // A ticket the server never accepted has nothing to delete remotely;
+      // sending DeleteTicket would only come back as TICKET_NOT_FOUND.
+      const submitEvidence = getTicketSubmitEvidence(db, normalized.companyId, normalized.entityId);
+      if (submitEvidence.inAllocationReview) {
+        throw createCommandError('ALLOCATION_REVIEW_PENDING',
+          'Bu patta serverda ko‘rib chiqishda (ish soni chiqarilgan miqdorga mos emas). '
+          + 'Uni «Patta taqsimoti — ko‘rib chiqish» panelidan hisobchi bekor qilishi kerak.');
+      }
+      if (submitEvidence.neverApplied) {
         const current = db.prepare('SELECT status, server_revision FROM tickets WHERE company_id = ? AND id = ?')
           .get(normalized.companyId, normalized.entityId);
         if (!current) throw createCommandError('TICKET_NOT_FOUND', `Ticket "${normalized.entityId}" was not found`);
