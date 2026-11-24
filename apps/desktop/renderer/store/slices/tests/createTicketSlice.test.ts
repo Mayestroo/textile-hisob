@@ -365,6 +365,46 @@ describe(' ticket command routing', () => {
     expect(SubmitTicketCommand.mock.calls[0][0].commandId).toBeDefined();
   });
 
+  it('refuses a corrected payload for the same model while its patta is still saving', async () => {
+    let resolveCommand: (value: { success: boolean }) => void = () => {};
+    let resolveProjection: (value: any) => void = () => {};
+    const SubmitTicketCommand = vi.fn().mockImplementation(() => new Promise((resolve) => { resolveCommand = resolve; }));
+    const dbRead = vi.fn().mockImplementation(() => new Promise((resolve) => { resolveProjection = resolve; }));
+    vi.stubGlobal('window', { electronAPI: {
+      getRuntimeMode: vi.fn().mockResolvedValue({ success: true, mode: 'sync' }), SubmitTicketCommand, dbRead
+    } });
+    const { slice, state } = makeSlice();
+    state().workers.push({ id: 13, name: 'Worker M' });
+
+    const first = slice.jonatish('model-a');
+    expect(state().submittingTicketModelIds).toEqual({ 'model-a': true });
+
+    // The operator fixes a worker code while the first save is still running.
+    state().ticketForms['model-a'] = { ...state().ticketForms['model-a'], entries: { Sew: 13 } };
+    await expect(slice.jonatish('model-a')).resolves.toBe(false);
+    expect(state().addNotification).toHaveBeenCalledWith('warning', 'Patta saqlanmoqda', expect.any(String));
+
+    await vi.waitFor(() => expect(SubmitTicketCommand).toHaveBeenCalledTimes(1));
+    resolveCommand({ success: true });
+    // The committed form advances before the slow projection reload finishes.
+    await vi.waitFor(() => expect(dbRead).toHaveBeenCalled());
+    expect(state().ticketForms['model-a']).toMatchObject({ qty: '', entries: {} });
+    expect(state().submittingTicketModelIds).toEqual({ 'model-a': true });
+
+    resolveProjection({ success: true, data: {
+      companyId: 'company-a', workers: [{ id: 1, name: 'Worker A' }],
+      models: [{ id: 'model-a', name: 'Model A', operations: [{ name: 'Sew', rate: 2 }], hisobQuantities: {} }],
+      printedPartyHistory: [], submittedTickets: [], periods: [],
+      ticketForms: { 'model-a': { party: '1', patta: '1', qty: '5', entries: { Sew: 1 } } },
+      currentPeriod: { id: 'period_default', name: 'Default', startDate: '2026-09-01', isClosed: false }
+    } });
+    await expect(first).resolves.toBe(true);
+    expect(SubmitTicketCommand).toHaveBeenCalledTimes(1);
+    // The projection's older stored draft must not bring the submitted values back.
+    expect(state().ticketForms['model-a']).toMatchObject({ qty: '', entries: {} });
+    await vi.waitFor(() => expect(state().submittingTicketModelIds).toEqual({}));
+  });
+
   it('does not hydrate a stale company projection after an in-flight switch', async () => {
     let resolveProjection: (value: any) => void = () => {};
     const dbRead = vi.fn().mockImplementation(() => new Promise((resolve) => {
@@ -388,7 +428,9 @@ describe(' ticket command routing', () => {
     });
 
     await expect(resultPromise).resolves.toBe(false);
-    expect(set).not.toHaveBeenCalled();
+    // Only the submission lock and the committed form advance may be written;
+    // the stale company's projection must never be applied.
+    expect(set.mock.calls.some(([next]: any[]) => next && typeof next === 'object' && 'submittedTickets' in next)).toBe(false);
     expect(state().addNotification).toHaveBeenCalledWith('error', '_SESSION_CHANGED', expect.any(String));
   });
 });

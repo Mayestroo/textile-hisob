@@ -106,11 +106,24 @@ function scheduleTicketFormPersistence(
 }
 
 export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice> = (set, get) => {
-  const inFlightSubmissions = new Map<string, Promise<boolean>>();
+  // One submission per model at a time. The form stays on screen until the
+  // command commits and the projection reloads (seconds on a large company);
+  // a correction typed in that window must not become a second ticket for the
+  // same patta, so a different payload is refused instead of submitted.
+  const inFlightSubmissions = new Map<string, { fingerprint: string; submission: Promise<boolean> }>();
+  const setSubmitting = (modelId: string, submitting: boolean) => {
+    const current = get().submittingTicketModelIds || {};
+    if (Boolean(current[modelId]) === submitting) return;
+    const next = { ...current };
+    if (submitting) next[modelId] = true;
+    else delete next[modelId];
+    set({ submittingTicketModelIds: next });
+  };
 
   return ({
   ticketForms: {},
   submittedTickets: [],
+  submittingTicketModelIds: {},
 
   updateTicketField: (modelId: string, field: keyof TicketFormState, value: any) => {
     const state = get();
@@ -326,8 +339,16 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
       effectiveDate
     });
-    const existingSubmission = inFlightSubmissions.get(fingerprint);
-    if (existingSubmission) return existingSubmission;
+    const inFlight = inFlightSubmissions.get(model.id);
+    if (inFlight) {
+      if (inFlight.fingerprint === fingerprint) return inFlight.submission;
+      state.addNotification(
+        'warning',
+        'Patta saqlanmoqda',
+        'Oldingi patta hali saqlanmoqda. Saqlangach xato bo‘lsa, uni «Tahrirlash» orqali tuzating — qayta jo‘natmang.'
+      );
+      return Promise.resolve(false);
+    }
 
     const submission = (async (): Promise<boolean> => {
       const eAPI = getElectronApi();
@@ -420,6 +441,13 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
           return false;
         }
 
+        // The ticket is committed: advance the form now so the operator sees
+        // the save immediately instead of the submitted values during reload.
+        set({ ticketForms: updatedForms });
+        if (typeof eAPI.TicketDraftSave === 'function') {
+          void eAPI.TicketDraftSave({ companyId, modelId: model.id, form: updatedForms[model.id] }).catch(() => {});
+        }
+
         let projection: any;
         try {
           projection = await reloadProjection(eAPI, companyId);
@@ -435,12 +463,8 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
         }
 
         if (!isCurrentSession()) return rejectStaleSession();
-        set(projection);
-        if (!isCurrentSession()) return rejectStaleSession();
-        set({ ticketForms: updatedForms });
-        if (typeof eAPI.TicketDraftSave === 'function') {
-          void eAPI.TicketDraftSave({ companyId, modelId: model.id, form: updatedForms[model.id] }).catch(() => {});
-        }
+        // Keep the already-advanced form; the projection's stored draft may be older.
+        set({ ...projection, ticketForms: get().ticketForms });
         requestReconnect(eAPI, companyId);
         state.addNotification(
           'info',
@@ -493,11 +517,14 @@ export const createTicketSlice: StateCreator<WorkbookStore, [], [], TicketSlice>
       return true;
     })();
 
-    inFlightSubmissions.set(fingerprint, submission);
-    void submission.then(
-      () => { if (inFlightSubmissions.get(fingerprint) === submission) inFlightSubmissions.delete(fingerprint); },
-      () => { if (inFlightSubmissions.get(fingerprint) === submission) inFlightSubmissions.delete(fingerprint); }
-    );
+    inFlightSubmissions.set(model.id, { fingerprint, submission });
+    setSubmitting(model.id, true);
+    const release = () => {
+      if (inFlightSubmissions.get(model.id)?.submission !== submission) return;
+      inFlightSubmissions.delete(model.id);
+      setSubmitting(model.id, false);
+    };
+    void submission.then(release, release);
     return submission;
   },
 

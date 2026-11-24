@@ -31,6 +31,9 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
   const updateTicketField = useWorkbookStore((s) => s.updateTicketField);
   const clearTicketForm = useWorkbookStore((s) => s.clearTicketForm);
   const jonatish = useWorkbookStore((s) => s.jonatish);
+  // While a patta is being saved its values stay on screen; edits then would
+  // read as a new entry for the same patta, so the form is read-only.
+  const isSubmitting = useWorkbookStore((s) => Boolean(s.submittingTicketModelIds?.[model.id]));
   const addNotification = useWorkbookStore((s) => s.addNotification);
   const setActiveCell = useWorkbookStore((s) => s.setActiveCell);
   const syncNewOperation = useWorkbookStore((s) => s.syncNewOperation);
@@ -494,6 +497,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   data-patta-konveyer-input="true"
                   type="text"
                   value={form.konveyer || ''}
+                  readOnly={isSubmitting}
                   onChange={(e) => updateTicketField(model.id, 'konveyer', e.target.value)}
                   onKeyDown={handleKonveyerKeyDown}
                   onFocus={() => handleCellFocus('C2', form.konveyer || '')}
@@ -539,6 +543,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   aria-label="Partiya raqami"
                   type="text"
                   value={form.party ?? ''}
+                  readOnly={isSubmitting}
                   onChange={(e) => updateNumberField('party', e.target.value)}
                   onKeyDown={handlePartyKeyDown}
                   onFocus={() => handleCellFocus('C3', form.party)}
@@ -558,6 +563,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   type="text"
                   disabled={hasBlockingError}
                   value={form.color || ''}
+                  readOnly={isSubmitting}
                   onChange={(e) => updateTicketField(model.id, 'color', e.target.value)}
                   onFocus={() => handleCellFocus('D5', form.color || '')}
                   className="patta-input patta-input-wide"
@@ -588,6 +594,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   aria-label="Patta raqami"
                   type="text"
                   value={form.patta !== undefined ? form.patta : ''}
+                  readOnly={isSubmitting}
                   onChange={(e) => updateNumberField('patta', e.target.value)}
                   onKeyDown={handlePattaKeyDown}
                   onFocus={() => handleCellFocus('C4', form.patta || '')}
@@ -607,6 +614,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   type="text"
                   disabled={hasBlockingError}
                   value={form.size || ''}
+                  readOnly={isSubmitting}
                   onChange={(e) => updateTicketField(model.id, 'size', e.target.value)}
                   onFocus={() => handleCellFocus('E5', form.size || '')}
                   className="patta-input patta-input-wide"
@@ -627,6 +635,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                   type="number"
                   disabled={hasBlockingError}
                   value={form.qty || ''}
+                  readOnly={isSubmitting}
                   onChange={(e) => updateNumberField('qty', e.target.value)}
                   onKeyDown={handleQtyKeyDown}
                   onWheel={(e) => e.currentTarget.blur()}
@@ -743,6 +752,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                         type="number"
                         disabled={hasBlockingError}
                         value={workerIdVal}
+                        readOnly={isSubmitting}
                         onChange={(e) => updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: e.target.value })}
                         onKeyDown={(e) => handleWorkerIdKeyDown(e, idx)}
                         onWheel={(e) => e.currentTarget.blur()}
@@ -756,7 +766,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
                           Draftda oldingi taqsimot bor.{' '}
                           <button
                             type="button"
-                            disabled={hasBlockingError || !workerIdVal}
+                            disabled={hasBlockingError || isSubmitting || !workerIdVal}
                             onClick={() => updateTicketField(model.id, 'entries', { ...(form.entries || {}), [opName]: workerIdVal })}
                             style={{ border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
                           >
@@ -910,6 +920,7 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
             <button
               type="button"
               className="patta-btn-cancel"
+              disabled={isSubmitting}
               onClick={handleCancel}
             >
               Bekor qilish
@@ -918,10 +929,12 @@ export const PattaView: React.FC<PattaViewProps> = ({ model }) => {
               type="button"
               className="patta-btn-submit"
               onClick={handleSubmit}
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
               title="Kiritilgan ma'lumotlarni hisobga jo'natish (Enter)"
             >
               <Send size={14} />
-              <span>Jo'natish</span>
+              <span>{isSubmitting ? 'Saqlanmoqda…' : "Jo'natish"}</span>
             </button>
           </div>
         </div>

@@ -113,6 +113,40 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
       .not.toHaveProperty('replacesTicketId');
   });
 
+  it('refuses a second ticket for an occupied printed patta, as the server unique index would', () => {
+    seedCompany(companyA);
+    const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
+    db.prepare(`UPDATE parties SET ish_soni_per_patta = 63, patta_count = 8 WHERE id = 'party_12'`).run();
+    const first = {
+      commandId: 'cmd-patta-1705', operationId: 'op-patta-1705', companyId: companyA,
+      ticketId: '00000000-0000-4000-8000-000000001705', modelId: 'model_101', partyRecordId: 'party_12',
+      partyNumber: '12', pattaNumber: 1705, qty: 63, allocationVersion: 1,
+      entries: [{ opName: 'Tikish', workerId: 1, qty: 63, rateSnapshot: 2 }]
+    };
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, first);
+
+    // The same patta re-sent with a corrected worker must not become a second ticket.
+    const corrected = {
+      ...first, commandId: 'cmd-patta-1705-b', operationId: 'op-patta-1705-b',
+      ticketId: '00000000-0000-4000-8000-000000011705',
+      entries: [{ opName: 'Tikish', workerId: 2, qty: 63, rateSnapshot: 2 }]
+    };
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, corrected))
+      .toThrow(expect.objectContaining({ code: 'DUPLICATE_PATTA' }));
+    expect(db.prepare('SELECT COUNT(*) AS count FROM tickets WHERE patta_number = 1705').get().count).toBe(1);
+    expect(db.prepare(`SELECT COUNT(*) AS count FROM local_outbox WHERE command_type = 'SubmitTicket'`).get().count).toBe(1);
+
+    // A queued delete still holds the patta on the server.
+    db.prepare(`UPDATE tickets SET status = 'PENDING_DELETE' WHERE id = ?`).run(first.ticketId);
+    expect(() => commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, corrected))
+      .toThrow(expect.objectContaining({ code: 'DUPLICATE_PATTA', message: expect.stringContaining('o‘chirilishi') }));
+
+    // Once voided, the patta is free again.
+    db.prepare(`UPDATE tickets SET status = 'VOIDED' WHERE id = ?`).run(first.ticketId);
+    commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, corrected);
+    expect(db.prepare('SELECT status FROM tickets WHERE id = ?').get(corrected.ticketId).status).toBe('PENDING_SYNC');
+  });
+
   it('accepts a 40/60 split for one patta operation and rejects duplicate or over-issued allocations', () => {
     seedCompany(companyA);
     const db = databaseManager.getCompanyDatabase(tempUserDataDir, companyA);
@@ -440,8 +474,10 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     }).toThrow(/DUPLICATE_TICKET_ID/);
   });
 
-  it('different ticketIds with the same display tuple remain distinct facts', () => {
+  it('different ticketIds with the same free-mode display tuple remain distinct facts', () => {
     seedCompany(companyA);
+    // Without a printed party record there is no patta uniqueness (the server
+    // index applies only to linked tickets); a linked duplicate is refused.
     const cmd1 = {
       commandId: 'cmd_dup_bk1',
       operationId: 'op_dup_bk1',
@@ -449,7 +485,6 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
       ticketId: '00000000-0000-4000-8000-000000000007',
       modelId: 'model_101',
       partyNumber: 'BK-Party',
-      partyRecordId: 'party_BK-Party',
       pattaNumber: 7,
       qty: 30,
       entries: [{ workerId: 1, opName: 'Bichish' }]
@@ -457,16 +492,10 @@ describe('Phase 2 Step 3: Local Transactional Command Pipeline & Durable Outbox 
     commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, cmd1);
 
     const cmd2 = {
+      ...cmd1,
       commandId: 'cmd_dup_bk2',
       operationId: 'op_dup_bk2',
-      companyId: companyA,
-      ticketId: '00000000-0000-4000-8000-000000000008', // different ticketId
-      modelId: 'model_101',
-      partyNumber: 'BK-Party', // same party
-      partyRecordId: 'party_BK-Party',
-      pattaNumber: 7, // same patta
-      qty: 30,
-      entries: [{ workerId: 1, opName: 'Bichish' }]
+      ticketId: '00000000-0000-4000-8000-000000000008' // different ticketId, same party and patta
     };
 
     const result = commandPipeline.executeSubmitTicketCommand(tempUserDataDir, companyA, cmd2);
