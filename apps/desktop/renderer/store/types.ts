@@ -76,6 +76,8 @@ export interface WorkerSlice {
 export interface TicketSlice {
   ticketForms: Record<string, TicketFormState>;
   submittedTickets: SubmittedTicketRecord[];
+  /** Models whose patta submission is still being written and reloaded; their form is read-only meanwhile. */
+  submittingTicketModelIds: Record<string, true>;
   updateTicketField: (modelId: string, field: keyof TicketFormState, value: any) => void;
   setTicketWorker: (modelId: string, opName: string, workerId: string | number) => void;
   clearTicketForm: (modelId: string) => void;

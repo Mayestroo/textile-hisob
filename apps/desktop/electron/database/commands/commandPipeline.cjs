@@ -339,6 +339,21 @@ function executeSubmitTicketCommand(baseUserDataPath, activeCompanyId, command, 
       }
     }
 
+    // Mirror the server's idx_tickets_party_patta: a printed patta is occupied
+    // by any non-voided ticket. Refuse a second one here, where it can still be
+    // corrected, instead of queuing a submission the server must reject.
+    if (partyRecordId) {
+      const occupant = db.prepare(`SELECT id, status FROM tickets
+        WHERE company_id = ? AND party_record_id = ? AND patta_number = ? AND status <> 'VOIDED'
+        LIMIT 1`).get(companyId, partyRecordId, pattaNumber);
+      if (occupant) {
+        // A pending delete still occupies the patta on the server until it syncs.
+        throw createCommandError('DUPLICATE_PATTA', occupant.status === 'PENDING_DELETE'
+          ? `Partiya ${partyNumber}, patta ${pattaNumber} o‘chirilishi hali serverga yetmagan. Sinxronlangach qayta kiriting.`
+          : `Partiya ${partyNumber}, patta ${pattaNumber} allaqachon kiritilgan. Xato bo‘lsa, mavjud pattani tahrirlang.`);
+      }
+    }
+
     // 3. Validate foreign keys and model operations schema
     const modelRow = db.prepare('SELECT id, operations_json FROM models WHERE id = ? AND company_id = ?').get(modelId, companyId);
     if (!modelRow) {
